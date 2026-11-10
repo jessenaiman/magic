@@ -1,0 +1,333 @@
+//! Lightweight `VectorCraft` / `DesignCraft`-style MCP tool router for Magic Studio.
+//!
+//! Exposes a single canonical tool surface (no duplicate legacy alias pairs) and delegates all
+//! timeline, compositor, cutout, vector, and layout engine work to `<craft>-cli` tools (`FilmCraft`,
+//! `EffectCraft`, `DesignCraft`, `PhotoCraft`, `VectorCraft`, and headless `anicraft-cli`).
+
+use crate::Backend;
+use rmcp::handler::server::{router::tool::ToolRouter, wrapper::Parameters};
+use rmcp::model::{CallToolResult, ContentBlock as Content};
+use rmcp::{ServerHandler, ServiceExt, tool, tool_handler, tool_router};
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
+use std::sync::{Arc, Mutex};
+
+#[derive(Clone)]
+pub struct Server {
+    backend: Arc<Mutex<Box<dyn Backend + Send>>>,
+    tool_router: ToolRouter<Self>,
+}
+
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct ListParams {
+    filter: Option<String>,
+    enabled_only: Option<bool>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct RunParams {
+    /// Engine command ID (e.g. `"file.open"`, `"storyboard.check"`, `"character.puppet.rig_face"`).
+    command: String,
+    params: Option<Value>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct BatchParams {
+    steps: Vec<RunParams>,
+    stop_on_error: Option<bool>,
+}
+
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct DocInspectParams {
+    /// `"all"` (default), `"project"`, `"storyboard"`, or `"timeline"`.
+    target: Option<String>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct FilePathParams {
+    /// Path to the `.magic` project file.
+    path: Option<String>,
+}
+
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct ElementsParams {
+    prefix: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct ClickParams {
+    id: Option<String>,
+    x: Option<f64>,
+    y: Option<f64>,
+    button: Option<String>,
+    count: Option<u32>,
+    modifiers: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct PointParams {
+    id: Option<String>,
+    x: Option<f64>,
+    y: Option<f64>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct DragParams {
+    from: PointParams,
+    to: PointParams,
+    steps: Option<u32>,
+    modifiers: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct ScrollParams {
+    id: Option<String>,
+    x: Option<f64>,
+    y: Option<f64>,
+    dx: Option<f64>,
+    dy: Option<f64>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct KeyParams {
+    key: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct TypeParams {
+    text: String,
+    id: Option<String>,
+}
+
+#[derive(Debug, Default, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct ShotParams {
+    path: Option<String>,
+    /// When `true` (default), captures the live desktop window (`--connect`).
+    /// When `false`, renders the storyboard spread at `page` headlessly via `designcraft-cli`.
+    window: Option<bool>,
+    page: Option<usize>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct ControlParams {
+    method: String,
+    params: Option<Value>,
+}
+
+fn compact(value: Value) -> Value {
+    match value {
+        Value::Object(map) => Value::Object(map.into_iter().filter(|(_, v)| !v.is_null()).map(|(k, v)| (k, compact(v))).collect()),
+        other => other,
+    }
+}
+
+fn output(result: Result<Value, String>) -> CallToolResult {
+    match result {
+        Ok(value) => CallToolResult::success(vec![Content::text(value.to_string())]),
+        Err(error) => CallToolResult::error(vec![Content::text(error)]),
+    }
+}
+
+impl Server {
+    pub fn new(backend: impl Backend + Send + 'static) -> Self {
+        Self { backend: Arc::new(Mutex::new(Box::new(backend))), tool_router: Self::tool_router() }
+    }
+
+    pub fn serve(&mut self) -> Result<(), String> {
+        tokio::runtime::Runtime::new().map_err(|e| e.to_string())?.block_on(async {
+            let service = ServiceExt::serve(self.clone(), rmcp::transport::stdio()).await.map_err(|e| e.to_string())?;
+            service.waiting().await.map_err(|e| e.to_string())?;
+            Ok(())
+        })
+    }
+
+    async fn run(&self, id: &str, params: Value) -> Result<Value, String> {
+        if !params.is_object() {
+            return Err("params must be an object".into());
+        }
+        let backend = self.backend.clone();
+        let id = id.to_owned();
+        tokio::task::spawn_blocking(move || {
+            let mut backend = backend.lock().map_err(|e| e.to_string())?;
+            if (id.starts_with("ui.") || matches!(id.as_str(), "app.quit" | "app.restart" | "app.hide")) && !backend.is_live() {
+                return Err("UI tools require a live `magic --control 9876` window (`magic-cli mcp --connect 127.0.0.1:9876`)".into());
+            }
+            backend.execute(&id, params)
+        })
+        .await
+        .map_err(|e| e.to_string())?
+    }
+}
+
+#[tool_router]
+impl Server {
+    #[tool(description = "List engine command IDs, labels and parameter schemas (`{filter?, enabled_only?}`).")]
+    async fn list_commands(&self, Parameters(p): Parameters<ListParams>) -> CallToolResult {
+        output(self.run("command.list", json!({"filter": p.filter.unwrap_or_default()})).await.map(|v| {
+            let commands = v.get("commands").unwrap_or(&v).as_array().cloned().unwrap_or_default();
+            json!(commands.into_iter().filter(|c| !p.enabled_only.unwrap_or(false) || c["enabled"] == true).collect::<Vec<_>>())
+        }))
+    }
+
+    #[tool(description = "Run one engine command (`{command, params?}`) in the selected backend.")]
+    async fn run_command(&self, Parameters(p): Parameters<RunParams>) -> CallToolResult {
+        let cmd = p.command.trim();
+        if cmd.is_empty() {
+            return output(Err("provide a non-empty `command` ID".into()));
+        }
+        output(self.run(cmd, p.params.unwrap_or_else(|| json!({}))).await)
+    }
+
+    #[tool(description = "Run multiple engine commands sequentially (`{steps: [{command, params?}], stop_on_error?}`).")]
+    async fn run_batch(&self, Parameters(p): Parameters<BatchParams>) -> CallToolResult {
+        let mut results = Vec::new();
+        let mut completed = 0;
+        let mut failed = 0;
+        for step in p.steps {
+            let cmd = step.command.trim();
+            if cmd.is_empty() {
+                failed += 1;
+                results.push(json!({"ok": false, "error": "empty command ID"}));
+                if p.stop_on_error.unwrap_or(true) {
+                    break;
+                }
+                continue;
+            }
+            match self.run(cmd, step.params.unwrap_or_else(|| json!({}))).await {
+                Ok(value) => {
+                    completed += 1;
+                    results.push(json!({"ok": true, "result": value}));
+                }
+                Err(error) => {
+                    failed += 1;
+                    results.push(json!({"ok": false, "error": error}));
+                    if p.stop_on_error.unwrap_or(true) {
+                        break;
+                    }
+                }
+            }
+        }
+        let value = json!({"completed": completed, "failed": failed, "results": results});
+        if failed > 0 { CallToolResult::error(vec![Content::text(value.to_string())]) } else { output(Ok(value)) }
+    }
+
+    #[tool(
+        description = "Inspect open `.magic` project, DesignCraft storyboard readiness, and FilmCraft timeline (`all` | `project` | `storyboard` | `timeline`)."
+    )]
+    async fn inspect_document(&self, Parameters(p): Parameters<DocInspectParams>) -> CallToolResult {
+        let res = match p.target.as_deref().unwrap_or("all") {
+            "project" => self.run("workshop.status", json!({})).await,
+            "storyboard" => self.run("storyboard.check", json!({})).await,
+            "timeline" | "sequence" => self.run("video.timeline", json!({})).await,
+            "all" => match self.run("workshop.status", json!({})).await {
+                Ok(project) => Ok(json!({
+                    "project": project,
+                    "storyboard": self.run("storyboard.check", json!({})).await.unwrap_or(Value::Null),
+                    "timeline": self.run("video.timeline", json!({})).await.unwrap_or(Value::Null),
+                })),
+                Err(e) => Err(e),
+            },
+            other => Err(format!("unknown target `{other}` (expected all | project | storyboard | timeline)")),
+        };
+        output(res)
+    }
+
+    #[tool(description = "Open a `.magic` project file (`file.open`).")]
+    async fn open_file(&self, Parameters(p): Parameters<FilePathParams>) -> CallToolResult {
+        let Some(path) = p.path.filter(|s| !s.trim().is_empty()) else {
+            return output(Err("open_file requires `path`".into()));
+        };
+        output(self.run("file.open", json!({"path": path})).await)
+    }
+
+    #[tool(description = "Save the open `.magic` project (`file.save`), or save to `path` (`file.saveAs`).")]
+    async fn save_file(&self, Parameters(p): Parameters<FilePathParams>) -> CallToolResult {
+        match p.path.filter(|s| !s.trim().is_empty()) {
+            Some(path) => output(self.run("file.saveAs", json!({"path": path})).await),
+            None => output(self.run("file.save", json!({})).await),
+        }
+    }
+
+    #[tool(description = "Inspect the live desktop UI state. Requires `--connect` to a running `magic --control 9876` window.")]
+    async fn inspect_ui(&self) -> CallToolResult {
+        output(self.run("ui.inspect", json!({})).await)
+    }
+
+    #[tool(description = "List live DOM element IDs, labels, enabled state and bounds. Requires `--connect`.")]
+    async fn ui_elements(&self, Parameters(p): Parameters<ElementsParams>) -> CallToolResult {
+        output(self.run("ui.elements", json!({"prefix": p.prefix})).await)
+    }
+
+    #[tool(description = "Click a visible enabled element by ID from ui_elements, or window coordinates x,y. Requires `--connect`.")]
+    async fn ui_click(&self, Parameters(p): Parameters<ClickParams>) -> CallToolResult {
+        output(self.run("ui.click", compact(json!(p))).await)
+    }
+
+    #[tool(description = "Drag between `from` and `to` (`{id}` or `{x, y}`). Requires `--connect`.")]
+    async fn ui_drag(&self, Parameters(p): Parameters<DragParams>) -> CallToolResult {
+        let params = json!({"from": compact(json!(p.from)), "to": compact(json!(p.to)), "steps": p.steps, "modifiers": p.modifiers});
+        output(self.run("ui.drag", compact(params)).await)
+    }
+
+    #[tool(description = "Scroll an element or point by dx,dy pixels. Requires `--connect`.")]
+    async fn ui_scroll(&self, Parameters(p): Parameters<ScrollParams>) -> CallToolResult {
+        output(self.run("ui.scroll", compact(json!(p))).await)
+    }
+
+    #[tool(description = "Send a key or chord (Enter, Tab, Escape, ArrowDown, Ctrl+K) to the focused element. Requires `--connect`.")]
+    async fn ui_key(&self, Parameters(p): Parameters<KeyParams>) -> CallToolResult {
+        output(self.run("ui.key", json!({"key": p.key})).await)
+    }
+
+    #[tool(description = "Type text into the focused text field, or into `id`. Requires `--connect`.")]
+    async fn ui_type(&self, Parameters(p): Parameters<TypeParams>) -> CallToolResult {
+        output(self.run("ui.type", compact(json!(p))).await)
+    }
+
+    #[tool(
+        description = "Capture a PNG (`{window: true, path?}` for the live window via `--connect`, or `{window: false, page?}` for a headless DesignCraft storyboard spread)."
+    )]
+    async fn screenshot(&self, Parameters(p): Parameters<ShotParams>) -> CallToolResult {
+        if p.window == Some(false) {
+            return output(self.run("storyboard.thumbnail", json!({"page": p.page.unwrap_or(0), "scale": 1.0})).await);
+        }
+        output(self.run("ui.screenshot", compact(json!({"path": p.path}))).await)
+    }
+
+    #[tool(
+        description = "Call a live shell control method (`ui.set_view`, `ui.playback`, `ui.focus`, `ui.effectcraft`, `ui.filmcraft`, `app.quit`). Requires `--connect`."
+    )]
+    async fn ui_control(&self, Parameters(p): Parameters<ControlParams>) -> CallToolResult {
+        if !p.method.starts_with("ui.") && !matches!(p.method.as_str(), "app.quit" | "app.restart" | "app.hide") {
+            return output(Err("Use run_command for engine commands".into()));
+        }
+        output(self.run(&p.method, p.params.unwrap_or_else(|| json!({}))).await)
+    }
+}
+
+#[tool_handler(router = self.tool_router)]
+impl ServerHandler for Server {
+    fn get_info(&self) -> rmcp::model::ServerConfig {
+        rmcp::model::ServerConfig::new(rmcp::model::ServerCapabilities::builder().enable_tools().build())
+            .with_server_info(rmcp::model::Implementation::new("magic", env!("CARGO_PKG_VERSION")))
+            .with_instructions(
+                "Magic Studio is a lightweight coordinator shell over DesignCraft, PhotoCraft, VectorCraft, EffectCraft, and FilmCraft. Use list_commands then run_command / run_batch, plus inspect_document / open_file / save_file. Start `magic --control 9876` and connect with `magic-cli mcp --connect 127.0.0.1:9876` to watch the live window update (`inspect_ui`, `ui_elements`, `ui_click`, `screenshot`). For frame-accurate timeline or compositor timing, invoke FilmCraft (`video.*` / `filmcraft-cli`) or EffectCraft (`effect.exec` / `effectcraft-cli`)."
+                    .to_string(),
+            )
+    }
+}

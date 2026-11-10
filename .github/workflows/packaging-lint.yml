@@ -1,0 +1,21 @@
+name: Packaging Lint
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packaging/**"
+      - ".github/workflows/packaging-lint.yml"
+      - ".github/workflows/release.yml"
+  pull_request:
+    paths:
+      - "packaging/**"
+      - ".github/workflows/packaging-lint.yml"
+      - ".github/workflows/release.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  packaging-lint:
+    uses: storytold/craft-common-actions/.github/workflows/packaging-lint.yml@main

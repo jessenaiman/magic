@@ -1,0 +1,411 @@
+/* ==========================================================================
+ * Magic Studio — Tauri Base Control & Responsive Alignment System
+ * Guarantees identical vertical centering, height tokens, responsive padding,
+ * and icon + single-word label discipline across every toolbar, rail, and form.
+ * ========================================================================== */
+
+:root {
+  --ctrl-h-xs: clamp(22px, 2.3vw, 24px);
+  --ctrl-h-sm: clamp(26px, 2.7vw, 28px);
+  --ctrl-h-md: clamp(30px, 3vw, 32px);
+
+  --ctrl-px-xs: 7px;
+  --ctrl-px-sm: 10px;
+  --ctrl-px-md: 12px;
+
+  --ctrl-gap-xs: 4px;
+  --ctrl-gap-sm: 6px;
+  --ctrl-gap-md: 7px;
+
+  --ctrl-row-gap: clamp(6px, 0.7vw, 8px);
+  --ctrl-group-gap: 4px;
+  --ctrl-bar-px: clamp(10px, 1.1vw, 14px);
+  --ctrl-bar-py: clamp(5px, 0.6vw, 7px);
+  --ctrl-radius: 7px;
+  --ctrl-icon: 14px;
+  --ctrl-font: 12.5px;
+  --ctrl-font-sm: 11.5px;
+  --ctrl-font-xs: 11px;
+}
+
+/* 1. Canonical <Button> & <IconButton> */
+.ui-btn,
+button.start,
+button.ghost,
+button.primary-emerald,
+button.magic-btn-icon,
+.stage-assets-toggle {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  margin: 0;
+  height: var(--ctrl-h-md);
+  min-height: var(--ctrl-h-md);
+  padding: 0 var(--ctrl-px-md);
+  gap: var(--ctrl-gap-sm);
+  border-radius: var(--ctrl-radius);
+  border: 1px solid var(--line, #2b3b50);
+  background: var(--surface, #141c28);
+  color: var(--text, #e9eef6);
+  font-family: inherit;
+  font-size: var(--ctrl-font);
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  flex-shrink: 0;
+  cursor: pointer;
+  user-select: none;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease, filter 120ms ease;
+}
+
+.ui-btn:hover:not(:disabled),
+button.ghost:hover:not(:disabled),
+button.magic-btn-icon:hover:not(:disabled) {
+  border-color: var(--accent, #35e1c0);
+  background: color-mix(in srgb, var(--accent, #35e1c0) 10%, var(--surface-2, #1c2a3b));
+  color: var(--text, #e9eef6);
+}
+
+.ui-btn:focus-visible,
+.ui-select:focus-visible,
+.ui-input:focus-visible,
+.ui-segmented-item:focus-visible {
+  outline: 1.5px solid var(--accent, #35e1c0);
+  outline-offset: 2px;
+}
+
+.ui-btn:disabled,
+button:disabled {
+  opacity: 0.42;
+  cursor: default;
+}
+
+/* Variants */
+.ui-btn--primary,
+button.start,
+button.primary-emerald {
+  background: var(--accent, #35e1c0);
+  border-color: var(--accent, #35e1c0);
+  color: var(--accent-ink, #081217);
+  font-weight: 700;
+}
+
+.ui-btn--primary:hover:not(:disabled),
+button.start:hover:not(:disabled),
+button.primary-emerald:hover:not(:disabled) {
+  transform: none;
+  background: color-mix(in srgb, var(--accent, #35e1c0) 88%, white);
+  border-color: color-mix(in srgb, var(--accent, #35e1c0) 88%, white);
+  color: var(--accent-ink, #081217);
+}
+
+.ui-btn--ghost,
+button.ghost {
+  background: rgba(20, 28, 40, 0.72);
+  border-color: var(--line, #2b3b50);
+  color: var(--muted, #9cafc6);
+}
+
+.ui-btn--subtle {
+  background: transparent;
+  border-color: transparent;
+  color: var(--muted, #9cafc6);
+}
+
+.ui-btn--subtle:hover:not(:disabled) {
+  background: var(--surface-2, #1c2a3b);
+  border-color: var(--line, #2b3b50);
+  color: var(--text, #e9eef6);
+}
+
+.ui-btn--danger {
+  background: color-mix(in srgb, var(--danger, #e0524a) 14%, var(--surface, #141c28));
+  border-color: color-mix(in srgb, var(--danger, #e0524a) 55%, var(--line, #2b3b50));
+  color: #ffb4ae;
+}
+
+.ui-btn--danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger, #e0524a) 26%, var(--surface, #141c28));
+  border-color: var(--danger, #e0524a);
+}
+
+.ui-btn.is-active,
+button.ghost.active {
+  background: color-mix(in srgb, var(--accent, #35e1c0) 16%, var(--surface-2, #1c2a3b));
+  border-color: var(--accent, #35e1c0);
+  color: var(--accent, #35e1c0);
+}
+
+/* Sizes */
+.ui-btn--sm {
+  height: var(--ctrl-h-sm);
+  min-height: var(--ctrl-h-sm);
+  padding: 0 var(--ctrl-px-sm);
+  gap: var(--ctrl-gap-xs);
+  font-size: var(--ctrl-font-sm);
+}
+
+.ui-btn--xs {
+  height: var(--ctrl-h-xs);
+  min-height: var(--ctrl-h-xs);
+  padding: 0 var(--ctrl-px-xs);
+  gap: var(--ctrl-gap-xs);
+  font-size: var(--ctrl-font-xs);
+  border-radius: 6px;
+}
+
+.ui-btn--icon {
+  width: var(--ctrl-h-md);
+  padding: 0;
+}
+.ui-btn--sm.ui-btn--icon {
+  width: var(--ctrl-h-sm);
+}
+.ui-btn--xs.ui-btn--icon {
+  width: var(--ctrl-h-xs);
+}
+
+.ui-btn--full {
+  width: 100%;
+}
+
+/* Inner SVG, Single-Word Label, and Compact Count Badge */
+.ui-icon,
+.ui-btn svg,
+button.ghost svg,
+button.start svg {
+  width: var(--ctrl-icon);
+  height: var(--ctrl-icon);
+  flex-shrink: 0;
+  display: block;
+}
+
+.ui-btn--xs .ui-icon,
+.ui-btn--xs svg {
+  width: 12.5px;
+  height: 12.5px;
+}
+
+.ui-btn-custom-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.ui-btn-label {
+  display: inline-block;
+  line-height: 1;
+  letter-spacing: 0.01em;
+}
+
+.ui-btn-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 17px;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  color: currentColor;
+  font-size: 10.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.ui-btn--primary .ui-btn-badge {
+  background: rgba(8, 18, 23, 0.2);
+}
+
+/* 2. Normalized Select & Text Input Controls (Exact Same Baseline & Height as Buttons) */
+.ui-select,
+.ui-input,
+.film-head select,
+.film-export-settings select,
+.film-export-settings input:not([type="checkbox"]):not([type="range"]),
+.sb-toolbar select,
+.sb-rail select,
+.stage-assets-bar select {
+  box-sizing: border-box;
+  height: var(--ctrl-h-md);
+  min-height: var(--ctrl-h-md);
+  margin: 0;
+  padding: 0 10px;
+  border-radius: var(--ctrl-radius);
+  border: 1px solid var(--line, #2b3b50);
+  background: var(--surface, #141c28);
+  color: var(--text, #e9eef6);
+  font-family: inherit;
+  font-size: var(--ctrl-font);
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.ui-select--sm {
+  height: var(--ctrl-h-sm);
+  min-height: var(--ctrl-h-sm);
+  padding: 0 8px;
+  font-size: var(--ctrl-font-sm);
+}
+
+.ui-select--xs {
+  height: var(--ctrl-h-xs);
+  min-height: var(--ctrl-h-xs);
+  padding: 0 6px;
+  font-size: var(--ctrl-font-xs);
+}
+
+/* 3. Toolbar, ControlGroup & Segmented Switch */
+.ui-toolbar {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: var(--ctrl-row-gap);
+  padding: var(--ctrl-bar-py) var(--ctrl-bar-px);
+  min-height: calc(var(--ctrl-h-md) + 2 * var(--ctrl-bar-py));
+}
+
+.ui-toolbar--between {
+  justify-content: space-between;
+}
+
+.ui-toolbar--start {
+  justify-content: flex-start;
+}
+
+.ui-toolbar--end {
+  justify-content: flex-end;
+}
+
+.ui-toolbar--wrap {
+  flex-wrap: wrap;
+}
+
+.ui-toolbar--dense {
+  padding: 4px 10px;
+  min-height: calc(var(--ctrl-h-sm) + 8px);
+}
+
+.ui-control-group {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ctrl-group-gap);
+  min-width: 0;
+}
+
+.ui-segmented {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--ctrl-radius);
+  border: 1px solid var(--line, #2b3b50);
+  background: var(--bg, #0b1017);
+  height: var(--ctrl-h-md);
+}
+
+.ui-segmented--sm {
+  height: var(--ctrl-h-sm);
+}
+
+.ui-segmented--xs {
+  height: var(--ctrl-h-xs);
+}
+
+.ui-segmented--full {
+  display: flex;
+  width: 100%;
+}
+
+.ui-segmented--full > .ui-segmented-item {
+  flex: 1 1 0;
+}
+
+.ui-segmented-item {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 100%;
+  margin: 0;
+  padding: 0 10px;
+  border: 0;
+  border-radius: calc(var(--ctrl-radius) - 2px);
+  background: transparent;
+  color: var(--muted, #9cafc6);
+  font-family: inherit;
+  font-size: var(--ctrl-font-sm);
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.ui-segmented-item:hover:not(:disabled) {
+  color: var(--text, #e9eef6);
+}
+
+.ui-segmented-item.is-active {
+  background: var(--surface-2, #1c2a3b);
+  color: var(--accent, #35e1c0);
+}
+
+/* 4. App Bar & Studio Moment Card Alignment Fixes */
+.app-bar,
+.app-identity-row,
+.top-mode-nav,
+.top-right-tools,
+.top-craft-dock,
+.film-actions,
+.stage-assets-header {
+  display: flex;
+  align-items: center;
+}
+
+.top-brand-btn,
+.top-project-pill,
+.top-icon-ghost,
+.top-mode-tab,
+.top-audio-pill,
+.craft-dock-btn,
+.film-export-icon {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--ctrl-h-sm);
+  min-height: var(--ctrl-h-sm);
+  margin: 0;
+  line-height: 1;
+}
+
+.film-export-icon {
+  height: var(--ctrl-h-md);
+  min-height: var(--ctrl-h-md);
+  width: var(--ctrl-h-md);
+  padding: 0;
+}
+
+.studio-moment-grid article footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+}
+
+@media (max-width: 900px) {
+  :root {
+    --ctrl-px-md: 9px;
+    --ctrl-px-sm: 8px;
+    --ctrl-font: 12px;
+  }
+}

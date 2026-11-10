@@ -1,0 +1,264 @@
+//! Single-responsibility catalog of ArtCraft applications and their upstream `--control`, CLI,
+//! and MCP contracts.
+//!
+//! Upstream references:
+//! - FilmCraft: <https://github.com/storytold/filmcraft/blob/main/docs/control-protocol.md>
+//! - DesignCraft: <https://github.com/storytold/designcraft/blob/main/docs/control-protocol.md>
+//! - EffectCraft: <https://github.com/storytold/effectcraft/blob/main/docs/agents.md>
+//! - PhotoCraft: <https://github.com/storytold/photocraft/blob/main/docs/control-protocol.md>
+//! - VectorCraft: <https://github.com/storytold/vectorcraft/blob/main/docs/control-protocol.md>
+//! - AniCraft (early alpha, CLI-only in Magic): <https://github.com/storytold/AniCraft>
+//! - TextureCraft: <https://github.com/storytold/texturecraft/blob/main/AGENTS.md>
+//! - DeckCraft: <https://github.com/storytold/deckcraft>
+
+use std::path::Path;
+
+use serde_json::{Value, json};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ControlAuth {
+    None,
+    InlineToken,
+    FirstFrameAuth,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ControlWire {
+    MethodParams,
+    /// AniCraft `anicraft-cli serve` JSON-lines protocol: `{"id": 1, "cmd": "...", "params": {...}}`.
+    CmdParams,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum CraftTarget {
+    Film,
+    Photo,
+    Effect,
+    Vector,
+    Design,
+    Deck,
+    Ani,
+    Texture,
+}
+
+impl CraftTarget {
+    pub const ALL: [CraftTarget; 8] = [
+        CraftTarget::Film,
+        CraftTarget::Photo,
+        CraftTarget::Effect,
+        CraftTarget::Vector,
+        CraftTarget::Design,
+        CraftTarget::Deck,
+        CraftTarget::Ani,
+        CraftTarget::Texture,
+    ];
+
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Film => "filmcraft",
+            Self::Photo => "photocraft",
+            Self::Effect => "effectcraft",
+            Self::Vector => "vectorcraft",
+            Self::Design => "designcraft",
+            Self::Deck => "deckcraft",
+            Self::Ani => "anicraft",
+            Self::Texture => "texturecraft",
+        }
+    }
+
+    pub const fn app_bin(self) -> &'static str {
+        self.name()
+    }
+
+    /// Companion `<product>-cli` executable name verified from `storytold/*` repositories.
+    pub const fn cli_name(self) -> &'static str {
+        match self {
+            Self::Film => "filmcraft-cli",
+            Self::Photo => "photocraft-cli",
+            Self::Effect => "effectcraft-cli",
+            Self::Vector => "vectorcraft-cli",
+            Self::Design => "designcraft-cli",
+            Self::Deck => "deckcraft-cli",
+            Self::Ani => "anicraft-cli",
+            Self::Texture => "texturecraft-cli",
+        }
+    }
+
+    /// Safety boundary: `AniCraft` is in early alpha (`storytold/AniCraft`), so Magic never opens
+    /// or attaches to its desktop GUI window. All live Studio UI components and window previews run
+    /// through `EffectCraft` and `FilmCraft` (plus `DesignCraft` / `PhotoCraft` / `VectorCraft`),
+    /// while `AniCraft` is invoked strictly headlessly via `anicraft-cli` (`info`, `commands`,
+    /// `exec`, `serve`, `render`, `render-seq`, `gif`, `mcp`).
+    pub const fn allows_live_ui(self) -> bool {
+        !matches!(self, Self::Ani)
+    }
+
+    pub fn from_name(raw: &str) -> Option<Self> {
+        let key = raw.trim().to_ascii_lowercase();
+        let base = key.strip_suffix("-cli").unwrap_or(&key);
+        Self::ALL.into_iter().find(|t| t.name() == base)
+    }
+
+    pub fn from_path(path: &Path) -> Option<Self> {
+        if let Ok(bytes) = std::fs::read(path)
+            && let Some(kind) = craft_doc::sniff(&bytes)
+        {
+            match kind {
+                craft_doc::Kind::PhotoCraft => return Some(Self::Photo),
+                craft_doc::Kind::VectorCraft => return Some(Self::Vector),
+                craft_doc::Kind::EffectCraft => return Some(Self::Effect),
+                _ => {}
+            }
+        }
+        let ext = path.extension()?.to_str()?.to_ascii_lowercase();
+        match ext.as_str() {
+            "fcproj" => Some(Self::Film),
+            "pcraft" | "psd" => Some(Self::Photo),
+            "ecproj" => Some(Self::Effect),
+            "vectorcraft" | "vcraft" | "drawcraft" | "svg" => Some(Self::Vector),
+            "designcraft" | "idml" => Some(Self::Design),
+            "deckcraft" | "pptx" => Some(Self::Deck),
+            "anicraft" | "ani" | "fla" | "xfl" => Some(Self::Ani),
+            "tcraft" => Some(Self::Texture),
+            _ => None,
+        }
+    }
+
+    pub const fn default_port(self) -> u16 {
+        match self {
+            Self::Film => 9875,
+            Self::Design => 9877,
+            Self::Effect => 9878,
+            Self::Photo => 9879,
+            Self::Vector => 9880,
+            Self::Ani => 9881,
+            Self::Texture => 9882,
+            Self::Deck => 9883,
+        }
+    }
+
+    pub const fn port_env(self) -> &'static str {
+        match self {
+            Self::Film => "FILMCRAFT_CONTROL_PORT",
+            Self::Photo => "PHOTOCRAFT_CONTROL_PORT",
+            Self::Effect => "EFFECTCRAFT_CONTROL_PORT",
+            Self::Vector => "VECTORCRAFT_CONTROL_PORT",
+            Self::Design => "DESIGNCRAFT_CONTROL_PORT",
+            Self::Deck => "DECKCRAFT_CONTROL_PORT",
+            Self::Ani => "ANICRAFT_CONTROL_PORT",
+            Self::Texture => "TEXTURECRAFT_CONTROL_PORT",
+        }
+    }
+
+    pub const fn token_env(self) -> &'static str {
+        match self {
+            Self::Film => "FILMCRAFT_CONTROL_TOKEN",
+            Self::Photo => "PHOTOCRAFT_CONTROL_TOKEN",
+            Self::Effect => "EFFECTCRAFT_CONTROL_TOKEN",
+            Self::Vector => "VECTORCRAFT_CONTROL_TOKEN",
+            Self::Design => "DESIGNCRAFT_CONTROL_TOKEN",
+            Self::Deck => "DECKCRAFT_CONTROL_TOKEN",
+            Self::Ani => "ANICRAFT_CONTROL_TOKEN",
+            Self::Texture => "TEXTURECRAFT_CONTROL_TOKEN",
+        }
+    }
+
+    pub const fn optional_in_doctor(self) -> bool {
+        matches!(self, Self::Deck | Self::Ani | Self::Texture)
+    }
+
+    pub const fn auth(self) -> ControlAuth {
+        match self {
+            Self::Film => ControlAuth::InlineToken,
+            Self::Photo | Self::Texture => ControlAuth::FirstFrameAuth,
+            Self::Design | Self::Deck | Self::Effect | Self::Vector | Self::Ani => ControlAuth::None,
+        }
+    }
+
+    pub const fn wire(self) -> ControlWire {
+        match self {
+            Self::Ani => ControlWire::CmdParams,
+            _ => ControlWire::MethodParams,
+        }
+    }
+
+    pub const fn uses_automation_roots(self) -> bool {
+        matches!(self, Self::Photo | Self::Vector)
+    }
+
+    pub const fn uses_token_file_flag(self) -> bool {
+        matches!(self, Self::Photo)
+    }
+
+    pub fn forbids_live_command(self, command: &str) -> bool {
+        self == Self::Photo && command.starts_with("file.")
+    }
+
+    pub fn control_envelope(self, command: &str, params: &Value) -> (String, Value) {
+        if self.wire() == ControlWire::CmdParams {
+            return (command.to_string(), params.clone());
+        }
+        if command.starts_with("ui.") || command.starts_with("app.") || command == "session.inspect" {
+            return (command.to_string(), params.clone());
+        }
+        match self {
+            Self::Texture => ("command.run".to_string(), json!({"id": command, "params": params})),
+            Self::Vector if command == "document.inspect" => ("document.inspect".to_string(), params.clone()),
+            _ => ("engine.execute".to_string(), json!({"command": command, "params": params})),
+        }
+    }
+
+    pub fn live_inspect_envelope(self) -> (String, Value) {
+        match self {
+            Self::Film => self.control_envelope("project.inspect", &json!({})),
+            Self::Effect => self.control_envelope("project.summary", &json!({})),
+            Self::Design | Self::Deck => self.control_envelope("document.inspect", &json!({})),
+            Self::Photo => ("ui.inspect".to_string(), json!({})),
+            Self::Vector => ("document.inspect".to_string(), json!({})),
+            Self::Texture => ("session.inspect".to_string(), json!({})),
+            Self::Ani => self.control_envelope("doc.info", &json!({})),
+        }
+    }
+
+    pub fn live_open_envelope(self, path: &Path) -> (String, Value) {
+        match self {
+            Self::Photo | Self::Vector => ("app.open".to_string(), json!({"path": path})),
+            _ => self.control_envelope("file.open", &json!({"path": path})),
+        }
+    }
+
+    pub fn live_save_envelope(self, doc: &Path) -> (String, Value) {
+        match self {
+            Self::Photo => ("app.save".to_string(), json!({"path": doc})),
+            Self::Vector => ("app.save".to_string(), json!({"path": doc, "wait": true})),
+            Self::Effect | Self::Texture | Self::Ani => self.control_envelope("file.save", &json!({"path": doc, "confirm": true})),
+            Self::Film | Self::Design | Self::Deck => self.control_envelope("file.save", &json!({})),
+        }
+    }
+
+    pub fn cli_control_hint(self, port: u16) -> String {
+        match self {
+            Self::Film => format!("filmcraft-cli --bridge 127.0.0.1:{port} exec project.inspect '{{}}'"),
+            Self::Effect => format!("effectcraft-cli --bridge {port} --json exec project.summary '{{}}'"),
+            Self::Design => format!("designcraft-cli app --port {port} --method document.inspect"),
+            Self::Deck => format!("deckcraft-cli app --port {port} --method document.inspect"),
+            Self::Photo => format!("photocraft-cli mcp --bridge 127.0.0.1:{port}"),
+            Self::Vector => format!("vectorcraft-cli mcp --connect 127.0.0.1:{port}"),
+            Self::Texture => format!("texturecraft-cli mcp --bridge 127.0.0.1:{port}"),
+            Self::Ani => "anicraft-cli serve".to_string(),
+        }
+    }
+
+    pub fn mcp_bridge_hint(self, port: u16) -> String {
+        match self {
+            Self::Design => format!("designcraft-cli mcp --connect 127.0.0.1:{port}"),
+            Self::Deck => format!("deckcraft-cli mcp --connect 127.0.0.1:{port}"),
+            Self::Vector => format!("vectorcraft-cli mcp --connect 127.0.0.1:{port}"),
+            Self::Effect => format!("effectcraft-cli mcp --bridge {port}"),
+            Self::Photo => format!("photocraft-cli mcp --bridge 127.0.0.1:{port}"),
+            Self::Texture => format!("texturecraft-cli mcp --bridge 127.0.0.1:{port}"),
+            Self::Film => format!("filmcraft --control {port}"),
+            Self::Ani => "anicraft-cli mcp".to_string(),
+        }
+    }
+}

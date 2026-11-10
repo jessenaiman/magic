@@ -1,0 +1,86 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/craft-util",
+    "crates/scribbles",
+    "crates/engine",
+    "crates/mcp",
+    "apps/magic",
+    "apps/magic-cli",
+    "apps/magic-tui",
+    "xtask",
+]
+
+[workspace.package]
+version = "0.17.0"
+edition = "2024"
+license = "LicenseRef-Magic-Studio-NonResale"
+rust-version = "1.95"
+repository = "https://github.com/jessenaiman/magic-studio-app"
+
+[workspace.dependencies]
+# Magic's own workspace crates
+craft-util = { path = "crates/craft-util" }
+craft-scribbles = { path = "crates/scribbles" }
+magic = { package = "magic-engine", path = "crates/engine" }
+magic-mcp = { path = "crates/mcp" }
+
+# Shared Craft foundation libraries (`storytold/craft-libs`) — sibling Craft apps (`filmcraft`,
+# `effectcraft`, `designcraft`, `photocraft`, `vectorcraft`, `deckcraft`, `anicraft`, `texturecraft`)
+# are never linked as Rust crates; Magic drives the system-installed binaries via `--control` and
+# `<product>-cli` through `crates/craft-util` and `crates/engine/src/craft_hub/`.
+craft-atomic = { git = "https://github.com/storytold/craft-libs" }
+craft-audio = { git = "https://github.com/storytold/craft-libs", features = ["decode", "peaks"] }
+craft-dialogs = { git = "https://github.com/storytold/craft-libs" }
+craft-doc = { git = "https://github.com/storytold/craft-libs" }
+craft-docpath = { git = "https://github.com/storytold/craft-libs" }
+craft-ecproj-format = { git = "https://github.com/storytold/craft-libs" }
+craft-keymap = { git = "https://github.com/storytold/craft-libs" }
+craft-media = { git = "https://github.com/storytold/craft-libs", default-features = false }
+craft-pcraft-format = { git = "https://github.com/storytold/craft-libs" }
+craft-settings = { git = "https://github.com/storytold/craft-libs" }
+craft-update = { git = "https://github.com/storytold/craft-libs" }
+craft-vectorcraft-format = { git = "https://github.com/storytold/craft-libs" }
+
+# Shared Craft AI integrations (`storytold/craft-ai-integrations`)
+craft-ai-client = { git = "https://github.com/storytold/craft-ai-integrations" }
+craft-ai-core = { git = "https://github.com/storytold/craft-ai-integrations" }
+craft-ai-native = { git = "https://github.com/storytold/craft-ai-integrations" }
+
+# CLI, TUI, MCP, desktop control, and system foundations
+clap = { version = "4", features = ["derive", "env"] }
+flate2 = "1"
+glam = "0.24"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+log = "0.4"
+rustix = { version = "1", features = ["fs", "net", "process"] }
+serde = { version = "1", features = ["derive", "rc"] }
+serde_json = "1"
+sha2 = "0.10"
+subtle = "2.6"
+thiserror = "2"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+cognitive_complexity = "deny"
+too_many_arguments = "deny"
+wildcard_imports = "deny"
+dbg_macro = "warn"
+todo = "warn"
+
+[profile.dev]
+opt-level = 1
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+opt-level = 2
+debug = false
+
+[profile.dev.package.symphonia-bundle-flac]
+overflow-checks = false
+
+[profile.release]
+lto = "thin"
+codegen-units = 1

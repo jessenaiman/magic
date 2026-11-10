@@ -1,0 +1,127 @@
+{
+  "model": "",
+  "note": "NOTE: This template is a working structure, not a final specification — follow it to the best of your ability and report any areas or commands that need improvement after use.",
+  "shared": "Match the attached reference's art style, design, materials, palette and proportions exactly; with no reference, use felt-plush storybook character art for 2D animation. Plain transparent background; if transparency is unavailable, use one perfectly flat solid pure magenta (#FF00FF) with no gradient, shading or glow anywhere on it, and no magenta in the character. No text, labels, frames, shadows or props. Nothing touches a cell or canvas edge. Clean solid silhouette edge with no loose fibres or specks. Every drawing of the character keeps the same design, palette, proportions and scale.",
+  "stance": "Animation-ready stance: standing upright, feet planted shoulder-width apart with a clear gap of background between the legs from the crotch to the floor, arms held slightly away from the body (about 20 degrees) with a clear gap between each arm and the body, hands open, head level. Every limb is fully visible and not overlapping another limb.",
+  "kinds": {
+    "new": {
+      "label": "New character",
+      "reference": "https://esotericsoftware.com/blog/How-to-cut-your-assets-for-animation",
+      "canvas": [1024, 1536],
+      "needs_reference": false,
+      "save_command": "project.add_asset",
+      "save_kind": "image",
+      "tags": ["character", "new", "front-view"],
+      "layout": "One full-body front view, centred horizontally, about 1300 px tall, feet on a baseline at y = 1440.",
+      "rules": ["stance"]
+    },
+    "image": {
+      "label": "Redraw for animation",
+      "reference": "https://esotericsoftware.com/blog/How-to-cut-your-assets-for-animation",
+      "canvas": [1024, 1536],
+      "needs_reference": true,
+      "save_command": "project.add_asset",
+      "save_kind": "image",
+      "tags": ["character", "redraw", "front-view"],
+      "layout": "Redraw the attached character exactly (same design, colours, clothing, materials) as one full-body front view, centred horizontally, about 1300 px tall, feet on a baseline at y = 1440.",
+      "rules": ["stance"]
+    },
+    "sheet": {
+      "label": "Turnaround sheet",
+      "reference": "https://esotericsoftware.com/spine-twitch",
+      "canvas": [1536, 1024],
+      "needs_reference": true,
+      "save_command": "project.add_asset",
+      "save_kind": "turnaround",
+      "tags": ["character", "turnaround", "sheet"],
+      "layout": "Four views of the attached character in one row of four equal cells (384 x 1024 px each), left to right: front, right profile, back, left profile. Each figure about 880 px tall, feet on one shared baseline at y = 960, same scale in every cell.",
+      "rules": ["stance"]
+    },
+    "poses": {
+      "label": "Pose sheet",
+      "reference": "https://schoolofmotion.com/blog/walk-cycle-after-effects",
+      "canvas": [1536, 1024],
+      "needs_reference": true,
+      "save_command": "project.add_asset",
+      "save_kind": "poses",
+      "tags": ["character", "poses", "sheet"],
+      "layout": "Six poses of the attached character in a grid of 3 columns x 2 rows of equal cells (512 x 512 px each): idle, walk, jump, wave, talk, cheer.",
+      "rules": []
+    },
+    "actions": {
+      "label": "Action frames",
+      "reference": "https://schoolofmotion.com/blog/walk-cycle-after-effects",
+      "canvas": [1536, 1024],
+      "needs_reference": true,
+      "save_command": "character.sprite",
+      "save_kind": "image",
+      "tags": ["character", "actions", "sprite-sheet"],
+      "layout": "{frames} consecutive animation frames of the attached character performing {action}, {view}, in a grid of 4 columns x 2 rows of equal cells (384 x 512 px each): {keys}.",
+      "actions": {
+        "walk": {"view": "side view facing right", "keys": "contact, down, passing, up, contact, down, passing, up"},
+        "run": {"view": "side view facing right", "keys": "contact, down, push-off, flight, contact, down, push-off, flight"},
+        "jump": {"view": "front view", "keys": "stand, crouch, take-off, rise, apex, fall, squash, recover"},
+        "wave": {"view": "front view", "keys": "rest, arm rising, hand up, wave left, wave right, wave left, wave right, lowering"},
+        "turn": {"view": "turning on the spot", "keys": "front, 3/4 right, right profile, 3/4 back right, back, 3/4 back left, left profile, 3/4 left"},
+        "sing": {"view": "front view, singing to camera", "keys": "rest, inhale, mouth open, high note, arm sweep, full extension, return, settle"}
+      },
+      "rules": []
+    },
+    "layers": {
+      "label": "Overlapping layers",
+      "reference": "https://tahoma2d.readthedocs.io/en/latest/creating_cutout_animation.html",
+      "canvas": [1536, 1536],
+      "needs_reference": true,
+      "save_command": "project.add_asset",
+      "save_kind": "layers",
+      "tags": ["character", "layers", "cutout"],
+      "layout": "The attached character separated into cut-out animation parts in a 3x3 grid of 512x512 cells: head; torso; near upper arm; near forearm; far upper arm; far forearm; near leg; far leg; empty cell.",
+      "rules": []
+    },
+    "parts_chroma": {
+      "label": "Chroma-green parts sheet (#00FF00)",
+      "reference": "https://esotericsoftware.com/blog/How-to-cut-your-assets-for-animation",
+      "canvas": [1024, 1024],
+      "needs_reference": true,
+      "save_command": "project.add_asset",
+      "save_kind": "parts_sheet",
+      "tags": ["character", "moppet", "parts-sheet", "chroma-green"],
+      "layout": "Exploded 2D puppet disassembly parts sheet of the attached character on a flat solid chroma-green (#00FF00) background in 6 non-overlapping regions with rounded overlap caps at each joint.",
+      "shared_override": "Match the attached reference's art style, design, materials, palette and proportions exactly. Use ONE perfectly flat solid pure chroma-green (#00FF00) background with no gradient or shadow.",
+      "rules": []
+    },
+    "poses_2x2": {
+      "label": "2x2 Moppet pose sheet (4 poses)",
+      "reference": "https://schoolofmotion.com/blog/walk-cycle-after-effects",
+      "canvas": [1024, 1024],
+      "needs_reference": true,
+      "save_command": "project.add_asset",
+      "save_kind": "poses",
+      "tags": ["character", "moppet", "pose-sheet", "2x2"],
+      "layout": "Four full-body poses of the attached character in a 2x2 grid of 512x512 cells: idle, talk_sing, walk_hop, celebration wave.",
+      "rules": []
+    },
+    "moppet": {
+      "label": "Moppet Maker pack (character + chroma parts + 2x2 poses)",
+      "reference": "https://esotericsoftware.com/blog/How-to-cut-your-assets-for-animation",
+      "canvas": [1024, 1024],
+      "needs_reference": false,
+      "save_command": "scribbles.ingest",
+      "save_kind": "moppet_pack",
+      "tags": ["character", "moppet", "pack", "rig-ready"],
+      "layout": "Three-part character bundle (front cutout, #00FF00 chroma parts sheet, 2x2 pose sheet) ingested into assets/characters/<id>/.",
+      "rules": ["stance"]
+    },
+    "custom": {
+      "label": "Custom",
+      "reference": "https://esotericsoftware.com/blog/How-to-cut-your-assets-for-animation",
+      "canvas": [1024, 1536],
+      "needs_reference": false,
+      "save_command": "project.add_asset",
+      "save_kind": "image",
+      "tags": ["custom", "illustration"],
+      "layout": "{prompt}",
+      "rules": []
+    }
+  }
+}

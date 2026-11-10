@@ -1,0 +1,70 @@
+name: Documentation & GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "book/**"
+      - "site/**"
+      - "docs/**"
+      - "README.md"
+      - ".github/workflows/mdbook.yml"
+  pull_request:
+    paths:
+      - "book/**"
+      - "site/**"
+      - "docs/**"
+      - ".github/workflows/mdbook.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-book:
+    name: Build PhotoCraft-Style mdBook & Pages Site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install mdBook
+        uses: taiki-e/install-action@v2
+        with:
+          tool: mdbook
+
+      - name: Build documentation
+        run: mdbook build book
+
+      - name: Assemble GitHub Pages bundle (landing site + /book/)
+        run: |
+          rm -rf _site
+          mkdir -p _site/book
+          cp -R site/. _site/
+          cp -R book/book/. _site/book/
+          touch _site/.nojekyll
+
+      - name: Upload GitHub Pages artifact
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy-pages:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: build-book
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

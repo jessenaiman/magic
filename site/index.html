@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Magic Studio — Song-Driven Storyboard, Puppet &amp; Kinetic Video for ArtCraft</title>
+  <meta name="description" content="Turn a recorded song into a DesignCraft storyboard, EffectCraft puppet &amp; kinetic-lyric animation, and a multi-track FilmCraft video." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Geist+Mono:wght@400;600&family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="site-nav">
+    <div class="nav-inner">
+      <a class="brand" href="./">
+        <span class="brand-spark" aria-hidden="true">✦</span>
+        <span class="brand-name">Magic Studio</span>
+        <span class="brand-pill">ArtCraft Ecosystem</span>
+      </a>
+      <nav class="nav-links" aria-label="Primary">
+        <a href="#pipeline">Pipeline</a>
+        <a href="#control">MCP &amp; <code>--control</code></a>
+        <a href="#license">License</a>
+        <a href="./book/">Developer Book</a>
+        <a class="btn-primary" href="https://github.com/jessenaiman/magic-studio-app">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="hero-inner">
+        <p class="eyebrow">Built on <code>storytold/craft-libs</code> · Coordinates DesignCraft, PhotoCraft, VectorCraft, EffectCraft &amp; FilmCraft</p>
+        <h1>Where a recorded song becomes a <em>living</em> storybook film.</h1>
+        <p class="lede">
+          Magic Studio is a lightweight desktop shell, CLI (<code>magic-cli</code>), and MCP server (<code>magic-cli mcp</code>) that turns one song recording into a reference-locked <strong>DesignCraft</strong> storyboard, expressive 11-pin <strong>EffectCraft</strong> puppet lip-sync, kinetic teaching lyrics, and a clean <code>V1</code>–<code>V4</code> <strong>FilmCraft</strong> timeline.
+        </p>
+        <div class="hero-actions">
+          <a class="btn-primary btn-lg" href="./book/">Read the mdBook</a>
+          <a class="btn-ghost btn-lg" href="./book/automation/mcp.html">Live <code>--control</code> &amp; MCP</a>
+          <a class="btn-ghost btn-lg" href="./book/development/gaps.html">Feature Gap Checklists</a>
+        </div>
+
+        <div class="terminal-card" role="region" aria-label="Quickstart CLI">
+          <div class="terminal-head">
+            <span class="dot red"></span><span class="dot amber"></span><span class="dot green"></span>
+            <span class="terminal-title">magic-cli · live --control &amp; MCP workflow</span>
+          </div>
+          <pre><code><span class="c"># 1. Watch Magic Studio live while your MCP client drives it</span>
+magic --control 9876 &amp;
+claude mcp add magic-app -- magic-cli mcp --connect 127.0.0.1:9876
+
+<span class="c"># 2. Start a song project (transcribes timing-reference.json + FilmCraft A1 + DesignCraft board)</span>
+magic-cli new --root ~/Videos/Magic --name "Rendered Yesterday" --audio song.wav --wizard
+
+<span class="c"># 3. Isolate character in PhotoCraft, rig 11-pin face in EffectCraft &amp; lip-sync visemes</span>
+magic-cli --project "Rendered Yesterday.magic" --save exec character.cut character=fox remove_background=true rig=true
+magic-cli --project "Rendered Yesterday.magic" --save exec character.puppet.rig_face character=fox
+magic-cli --project "Rendered Yesterday.magic" --save exec character.puppet.lipsync character=fox</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <section id="pipeline" class="section">
+      <div class="section-inner">
+        <div class="section-head">
+          <p class="eyebrow">Single-Responsibility Track Architecture</p>
+          <h2>Every Craft app does what it does best.</h2>
+          <p>Magic Studio never reimplements raster matting, vector tracing, puppet meshes, or NLE rendering in-process. Each domain owns its native ArtCraft file and publishes to an isolated <code>FilmCraft</code> track.</p>
+        </div>
+
+        <div class="grid-cards">
+          <article class="card">
+            <div class="card-tag tag-design">Storyboard · V1</div>
+            <h3>DesignCraft Production Book</h3>
+            <p>7-spread master <code>storyboard.designcraft</code> template (<code>A-Cover</code>, <code>B-World</code>, <code>C-Character</code>, <code>D-Motion</code>, Scenes) with locked, read-only fine-print <code>magic-cli</code> instructions on every frame and traffic-light readiness gating.</p>
+            <a href="https://github.com/storytold/designcraft">storytold/designcraft →</a>
+          </article>
+
+          <article class="card">
+            <div class="card-tag tag-photo">Cutout &amp; SVG</div>
+            <h3>PhotoCraft &amp; VectorCraft</h3>
+            <p>Subject isolation via <code>photocraft-cli</code> (<code>layer.removeBackground</code> + <code>select.refineEdge</code>) and background-free vector silhouettes via <code>vectorcraft-cli</code> (<code>imageTrace.make</code> with <code>ignoreWhite</code>).</p>
+            <a href="https://github.com/storytold/photocraft">storytold/photocraft →</a>
+          </article>
+
+          <article class="card">
+            <div class="card-tag tag-effect">Puppet &amp; Visemes · V2</div>
+            <h3>EffectCraft Puppet Controls</h3>
+            <p>11-pin facial &amp; mouth viseme rigs (<code>starch</code>, <code>position</code>, <code>advanced</code>, <code>bend</code>, and cascading <code>puppet.follow</code>) synced to <code>timing-reference.json</code> and exported as straight-alpha ProRes 4444 RGBA.</p>
+            <a href="https://github.com/storytold/effectcraft">storytold/effectcraft →</a>
+          </article>
+
+          <article class="card">
+            <div class="card-tag tag-lyrics">Lyrics V3 &amp; Motion V4</div>
+            <h3>Kinetic Words &amp; Action Cues</h3>
+            <p>Expressive word-by-word typography in <code>lettering/lyrics.ecproj</code> (<code>V3</code>) and vector trim-path song-action drawings in <code>motion/actions.ecproj</code> (<code>V4</code>), assembled non-destructively in <strong>FilmCraft</strong>.</p>
+            <a href="https://github.com/storytold/filmcraft">storytold/filmcraft →</a>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="control" class="section section-alt">
+      <div class="section-inner two-col">
+        <div>
+          <p class="eyebrow">Lightweight Shell · Real CLI Delegation</p>
+          <h2>Built to watch live with <code>--control</code>.</h2>
+          <p>
+            Start <code>magic --control 9876</code> and attach <code>magic-cli mcp --connect 127.0.0.1:9876</code>. Every tool call updates the Tauri workspace in real time while confining file access with <code>--automation-read-root</code> and <code>--automation-write-root</code>.
+          </p>
+          <ul class="check-list">
+            <li>Base Tauri control system enforcing crisp icons + single-word interactive buttons with zero toolbar baseline drift.</li>
+            <li>Loopback 64-hex token auth + immediate TCP stream close on HTTP/browser line-smuggling attempts.</li>
+            <li>Direct <code>ui.effectcraft</code> and <code>ui.filmcraft</code> bridges for frame-accurate timeline and compositor control (with early-alpha <code>AniCraft</code> locked to headless CLI only).</li>
+          </ul>
+        </div>
+        <div class="panel-box">
+          <h3>Documentation &amp; Wiki</h3>
+          <div class="doc-links">
+            <a href="./book/"><strong>Developer mdBook</strong><span>Architecture, formats, CLI &amp; security</span></a>
+            <a href="./book/automation/control-protocol.html"><strong>Control Protocol</strong><span>Every <code>--control</code> method + review checklist</span></a>
+            <a href="./book/development/gaps.html"><strong>Actionable Gap Lists</strong><span>Grouped <code>- [ ]</code> roadmap &amp; <code>// TODO:</code> items</span></a>
+            <a href="https://github.com/storytold/craft-wiki"><strong>ArtCraft Wiki</strong><span>Community user guides (<code>docs/wiki/magic/</code>)</span></a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="license" class="section">
+      <div class="section-inner license-banner">
+        <div>
+          <p class="eyebrow">Creator-Friendly · Anti-Resale Protection</p>
+          <h2>Make commercial videos freely. Never resold without permission.</h2>
+          <p>
+            Under the <strong>Magic Studio Source-Available Non-Resale License</strong>, anyone may create, publish, sell, and monetize videos and animations without restriction, inspect and modify the code, and publish non-commercial forks — while reselling Magic Studio or offering its design as a paid product/SaaS requires a special commercial license from Jesse Naiman.
+          </p>
+        </div>
+        <a class="btn-ghost" href="./book/project/licenses.html">Read License Summary →</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="nav-inner">
+      <span>© 2026 Jesse Naiman · Magic Studio Source-Available Non-Resale License</span>
+      <span>Powered by <a href="https://github.com/storytold/craft-libs">craft-libs</a> &amp; the <a href="https://github.com/storytold">ArtCraft Suite</a></span>
+    </div>
+  </footer>
+</body>
+</html>

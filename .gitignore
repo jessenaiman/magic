@@ -1,0 +1,252 @@
+# Rust build artifacts
+target/
+**/*.rs.bak
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.python-version
+.pytest_cache/
+.coverage
+.tox/
+
+# Node.js
+node_modules
+apps/magic-cli/ui/lyrics-built/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Build outputs
+dist/
+build/
+*.bundle.js
+apps/src-tauri/frontend/node_modules
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary
+/tmp/
+.tmp/
+
+# Exported binary assets (too large for git)
+exports/
+blender-skills/
+
+# Agent tooling installed into the checkout (per-agent skill copies and configs).
+# The repo's own skills under .agents/skills/ stay tracked; skills-lock.json records the rest.
+.agents/threejs-*/
+.agents/.threejs-*
+.agents/skills/*
+!.agents/skills/artcraft-suite/
+!.agents/skills/craft-app-lifecycle/
+!.agents/skills/magic/
+!.agents/skills/magic-pr/
+!.agents/skills/magic-ui/
+!.agents/skills/character-rigging/
+!.agents/skills/pose-library-design/
+!.agents/skills/rust-egui-craft-ui/
+.github/skills/
+.claude/
+.opencode/
+.commandcode/
+.hermes/
+.mcp.json.bak-*
+
+# Agent advisor config and stray media in the checkout root.
+/crew/.cast.lock
+WATCHDOG.yml
+/*.mp4
+
+# Generated from pinned Learning editor sources by the shell build.
+/apps/src-tauri/ui/vendor/learning/
+*.pyc
+*.pyo
+*.egg-info/
+# Local model downloads (e.g. Piper TTS voices, fetched at runtime — not source)
+*.onnx
+*.onnx.json
+# Test/IDE
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.trae/
+# Pipeline outputs (regenerable — never commit large media)
+output/
+tests/qa/output/
+# Project workspaces (generated assets, renders — all regenerable)
+projects/
+# Corpus directories (downloaded stock clips, thumbnails, embeddings —
+# regenerable from source APIs via corpus_builder). Explicit rule even
+# though most corpora live under projects/ since agents sometimes
+# build scratch corpora at the repo root.
+corpus/
+**/corpus/
+# User music library (personal royalty-free tracks — not part of repo)
+music_library/
+# Environment & credentials
+*.env
+.youtube-token.json
+# Google service-account / Vertex AI keys — never commit
+gcp-*.json
+*-service-account.json
+service-account*.json
+service_account*.json
+# Stray media downloads (test/scratch clips left in repo root)
+pexels_video_*.mp4
+# Scratch/debug scripts
+scratch/
+# Internal docs (strategy, handoffs, playbooks — not shipped)
+internal/
+# Local agent config (user-specific)
+.claude/memory/
+.claude/settings.local.json
+# Agent skills lock (local install tracking)
+skills-lock.json
+# Generated images (logo drafts — final logo lives in assets/)
+logo_*.png
+generated_image.png
+# Downloaded music files (Pixabay, Freesound — not source code)
+pixabay_music_*
+venv/
+.venv/
+# Local venvs
+venv/
+.venv/
+.venv-wan/
+
+# Git worktrees — not part of the main checkout.
+.worktrees/
+
+# Backlot local cache (thumbnails)
+.backlot/
+# Workspace-local third-party runtimes (for example the portable Blender LTS
+# used by blender_world). These are checksum-verified but never committed.
+.runtime/
+# Local Wan / diffusers GPU environment
+.venv-wan/
+
+
+#Ignore vscode AI rules
+.github/instructions/codacy.instructions.md
+
+# Tool output directories (reports and audits, not source)
+.archify/
+.codacy/
+.superpowers/
+docs/codacy-report.md
+
+# Native acceptance diagnostics/projects are disposable and never source.
+apps/src-tauri/acceptance/artifacts/
+
+/apps/src-tauri/ui/vendor/backstage/
+
+# TypeScript UI: ui/<name>.js is generated from ui/<name>.ts by build.rs (bun build)
+/apps/src-tauri/ui/resources.js
+/apps/src-tauri/ui/panel-header.js
+/apps/src-tauri/ui/studio-caption-compat.js
+/apps/src-tauri/ui/drawers.js
+/apps/src-tauri/ui/project-card.js
+/apps/src-tauri/ui/feedback.js
+/apps/src-tauri/ui/report.js
+/apps/src-tauri/ui/app-bar.js
+/apps/src-tauri/ui/clip-placement.js
+/apps/src-tauri/ui/timeline.js
+/apps/src-tauri/ui/image-prompt.js
+/apps/src-tauri/ui/motion-authoring.js
+/apps/src-tauri/ui/animation-jobs.js
+/apps/src-tauri/ui/home.js
+/apps/src-tauri/ui/companion-rails.js
+/apps/src-tauri/ui/song.js
+/apps/src-tauri/ui/theatre.js
+/apps/src-tauri/ui/backstage-terminal.js
+/apps/src-tauri/ui/storyboard.js
+/apps/src-tauri/ui/menu.js
+/apps/src-tauri/ui/asset-sheet-review.js
+/apps/src-tauri/ui/project.js
+/apps/src-tauri/ui/ui-commands.js
+/apps/src-tauri/ui/companions.js
+/apps/src-tauri/ui/analytics.js
+/apps/src-tauri/ui/sequence.js
+/apps/src-tauri/ui/agent.js
+/apps/src-tauri/ui/companion-boxes.js
+/apps/src-tauri/ui/companion-sprites.js
+/apps/src-tauri/ui/app.js
+/apps/src-tauri/ui/animation.js
+/apps/src-tauri/ui/character-stage.js
+/apps/src-tauri/ui/character-view.js
+/apps/src-tauri/ui/scribbles-dialog.js
+/apps/src-tauri/ui/film-view.js
+/apps/src-tauri/ui/animation-stage.js
+/apps/src-tauri/ui/words.js
+/apps/src-tauri/ui/words-design.js
+/apps/src-tauri/ui/words-flow.js
+
+/apps/src-tauri/ui/inspector-controls.js
+
+/.agent/
+/build-activity.log
+
+# Local Craft Anything study state; not application source.
+/craft.json
+/feed.json
+/usage.json
+/capture/
+/investigation.cany/
+
+# Large media directories — never source, regenerated or synced externally.
+media/
+animations/
+assets/
+
+# Magic projects, app documents and media are never source. Assets and animations live in
+# magic/ (assets/, animations/); .magic projects live in ~/.magic/projects.
+*.magic
+*.fcproj
+*.ecproj
+*.pcraft
+*.deckcraft
+*.vectorcraft
+*.tcraft
+*.scraft
+*.potx
+*.pptx
+*.psd
+*.glb
+*.gltf
+*.fbx
+*.blend
+*.blend1
+*.mov
+*.mp4
+*.webm
+*.wav
+*.mp3
+*.flac
+*.m4a
+*.steps.jsonl
+# Templates the code bundles are the exceptions.
+!/pipeline/templates/*.deckcraft
+!/references/storyboard/*.potx
+# Native examples shipped by the disconnected effect gallery.
+!/apps/magic/public/effect-gallery/*.ecproj
+!/apps/magic/public/effect-gallery/*.mp4
+apps/magic/gen/

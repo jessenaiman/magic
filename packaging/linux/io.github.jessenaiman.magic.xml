@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/vnd.artcraft.magic+json">
+    <comment>Magic Studio Project</comment>
+    <sub-class-of type="application/json"/>
+    <glob pattern="*.magic"/>
+    <icon name="io.github.jessenaiman.magic"/>
+  </mime-type>
+</mime-info>

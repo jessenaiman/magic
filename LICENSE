@@ -1,0 +1,34 @@
+Magic Studio Source-Available Non-Resale License
+Version 1.0 — Copyright (c) 2026 Jesse Naiman and Magic Studio Contributors
+
+1. Purpose
+Magic Studio (`magic`, `magic-cli`, `magic-mcp`, its UI layouts, `.figcraft` design files, and `.designcraft` storyboard templates, collectively the "Software") is made publicly available so artists, musicians, animators, educators, and developers can create videos freely, inspect how the studio works, modify the codebase, and collaborate on open forks — without allowing third parties to copy, repackage, or sell Magic Studio itself as a commercial software product or paid service.
+
+2. Unrestricted License for Videos & Creative Outputs (Commercial Video Creation Allowed)
+You own 100% of the videos, films, animations, storyboards, audio timings, character rigs, illustrations, and other media outputs ("Creative Outputs") you create using the Software. You may use, publish, broadcast, monetize, license, and sell your Creative Outputs for any personal, educational, studio, client, or commercial purpose without royalty, attribution requirement, or fee to the Licensor.
+
+3. Source Code Use, Modification & Public Fork Grant
+Subject to the restrictions in Section 4, Licensor grants you a worldwide, royalty-free, non-exclusive license to:
+(a) download, build, install, and run the Software to produce Creative Outputs;
+(b) read, study, and modify the Software's source code and templates; and
+(c) publish and share non-commercial forks, pull requests, bug fixes, and modifications, provided that:
+    (i) every copy or fork retains this `LICENSE` file, `NOTICE`, `ATTRIBUTION.md`, and `docs/brand/LICENSE-brand.txt` intact and unaltered; and
+    (ii) any modified fork clearly states that it is an unofficial fork and does not use the Magic Studio name, icon, or branding without written permission.
+
+4. Commercial Software & Resale Restrictions
+Without a separate written commercial license from Jesse Naiman, you may NOT:
+(a) sell, resell, license for a fee, rent, lease, or charge access fees for the Software, its UI/UX design, its `.figcraft` / `.designcraft` templates, or any derivative work or fork of the Software;
+(b) offer the Software (modified or unmodified) as a paid hosted service, cloud SaaS, managed studio platform, or paid plug-in/bundle; or
+(c) incorporate the Software's UI design, templates, or source code into a competing commercial software application or paid AI/video tool.
+
+5. Commercial Licensing Inquiries
+To request a commercial software, OEM, enterprise hosting, or resale license for Magic Studio, contact Jesse Naiman directly via https://github.com/jessenaiman/magic-studio-app.
+
+6. Third-Party Open-Source Components
+Magic Studio links to community-maintained open-source libraries — including `storytold/craft-libs` and crates from crates.io — which remain governed by their respective open-source licenses (`MIT OR Apache-2.0` and others as listed in `NOTICE` and `ATTRIBUTION.md`). Nothing in this License restricts your rights under the separate licenses of those upstream third-party libraries when obtained from their upstream repositories.
+
+7. Termination
+Your rights under Section 3 terminate automatically if you breach Section 4 or fail to comply with any condition of this License. Creative Outputs lawfully produced prior to termination remain yours under Section 2.
+
+8. Disclaimer of Warranty & Limitation of Liability
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
