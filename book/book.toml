@@ -3,7 +3,6 @@ title = "Magic Studio Documentation"
 authors = ["Jesse Naiman"]
 description = "Developer, architecture, file format, CLI, MCP, and control-protocol documentation for Magic Studio in the ArtCraft suite."
 language = "en"
-multilingual = false
 src = "src"
 
 [build]
@@ -13,8 +12,8 @@ create-missing = false
 [output.html]
 default-theme = "coal"
 preferred-dark-theme = "ayu"
-git-repository-url = "https://github.com/jessenaiman/magic-studio-app"
-edit-url-template = "https://github.com/jessenaiman/magic-studio-app/edit/main/book/{path}"
+git-repository-url = "https://github.com/jessenaiman/magic"
+edit-url-template = "https://github.com/jessenaiman/magic/edit/main/book/{path}"
 additional-css = ["theme/magic-book.css"]
 no-section-label = false
 
