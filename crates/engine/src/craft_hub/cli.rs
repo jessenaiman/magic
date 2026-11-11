@@ -7,9 +7,11 @@
 //!   `run [<p.ecproj>] --commands - [--save|--empty --save-as <out>] --json`,
 //!   `render-frame <p.ecproj|--template tpl.ectemplate> [--values v.json] --time <sec> --max-side <px> --out <f.png> --json`,
 //!   `render <p.ecproj|--template tpl.ectemplate> [--values v.json] [--comp <comp>] --out <out> [--format ...] --json`
+//! - `pdfcraft-cli`: `info`, `text`, `tools`, `ui --control ~/.pdfcraft-control.json`, `run --script <s.json> --root <dir> --report`
 //! - `designcraft-cli` / `deckcraft-cli`: `script - --in <doc> [--save <doc>]`, `run --in <doc>`
-//! - `photocraft-cli`: `run <doc|--new '{}'> --cmd <id> --params '<json>' [--out <doc> --in-place]`
-//! - `vectorcraft-cli`: `run [--in <doc>] --commands - [--export <doc>]`
+//! - `photocraft-cli`: `run <doc|--new '{}'> [--cmd <id> --params '<json>'] [--out <doc> --in-place]`,
+//!   `batch --actions <grade.json> --in <in_dir> --out <out_dir>`
+//! - `vectorcraft-cli`: `run [--in <doc>] [--commands -] [--export <doc>]`
 //! - `anicraft-cli` (headless only; pre-alpha): `info`, `commands`, `exec`, `serve`, `render`,
 //!   `render-seq`, `gif`, `mcp` (<https://github.com/storytold/AniCraft>)
 //! - `texturecraft-cli`: `run [<doc>|builtin:material_ball] <cmd> '<json>' [-o <doc>]`
@@ -127,14 +129,11 @@ pub fn exec_single(target: CraftTarget, doc: Option<&Path>, command: &str, param
             cmd.arg("--json");
         }
         CraftTarget::Vector => {
-            cmd.arg("run");
-            if let Some(path) = doc.filter(|p| p.is_file()) {
-                cmd.arg("--in").arg(path);
-            }
-            if save && let Some(path) = doc {
-                cmd.arg("--export").arg(path);
-            }
-            cmd.arg("--cmd").arg(command).arg("--params").arg(&params_str);
+            let steps = [(command, params.clone())];
+            let out_doc = if save { doc } else { None };
+            drop(_slot);
+            let mut list = exec_batch(CraftTarget::Vector, doc, out_doc, &steps)?;
+            return Ok(list.pop().unwrap_or_else(|| json!({"ok": true})));
         }
         CraftTarget::Photo => {
             if command == "info"
@@ -143,13 +142,16 @@ pub fn exec_single(target: CraftTarget, doc: Option<&Path>, command: &str, param
                 cmd.arg("info").arg(path);
             } else {
                 cmd.arg("run");
-                if let Some(path) = doc {
+                if let Some(path) = doc.filter(|p| craft_util::media::is_craft_doc_path(p)) {
                     cmd.arg(path);
                     if save {
                         cmd.arg("--out").arg(path).arg("--in-place");
                     }
                 } else {
                     cmd.arg("--new").arg("{}");
+                    if save && let Some(path) = doc {
+                        cmd.arg("--out").arg(path);
+                    }
                 }
                 cmd.arg("--cmd").arg(command).arg("--params").arg(&params_str);
             }
@@ -181,6 +183,7 @@ pub fn exec_single(target: CraftTarget, doc: Option<&Path>, command: &str, param
             } else {
                 let steps = [(command, params.clone())];
                 let out_doc = if save { doc } else { None };
+                drop(_slot);
                 let mut list = exec_batch(CraftTarget::Pdf, doc, out_doc, &steps)?;
                 return Ok(list.pop().unwrap_or_else(|| json!({"ok": true})));
             }
@@ -224,6 +227,7 @@ pub fn exec_single(target: CraftTarget, doc: Option<&Path>, command: &str, param
             } else {
                 let steps = [(command, params.clone())];
                 let out_doc = if save { doc } else { None };
+                drop(_slot);
                 let mut list = exec_batch(CraftTarget::Ani, doc, out_doc, &steps)?;
                 return Ok(list.pop().unwrap_or_else(|| json!({"ok": true})));
             }
@@ -339,7 +343,7 @@ pub fn exec_batch(target: CraftTarget, input: Option<&Path>, output: Option<&Pat
         }
         CraftTarget::Photo => {
             cmd.arg("run");
-            if let Some(src) = input {
+            if let Some(src) = input.filter(|p| craft_util::media::is_craft_doc_path(p)) {
                 cmd.arg(src);
             } else {
                 cmd.arg("--new").arg("{}");
@@ -382,6 +386,7 @@ pub fn exec_batch(target: CraftTarget, input: Option<&Path>, output: Option<&Pat
             stdin_bytes = Some(lines.join("\n").into_bytes());
         }
         CraftTarget::Texture => {
+            drop(_slot);
             let mut results = Vec::with_capacity(steps.len());
             let last_idx = steps.len().saturating_sub(1);
             for (idx, (id, params)) in steps.iter().enumerate() {
@@ -394,6 +399,57 @@ pub fn exec_batch(target: CraftTarget, input: Option<&Path>, output: Option<&Pat
     }
 
     run_piped_batch(target, cmd, stdin_bytes.as_deref())
+}
+
+/// Flatten any PhotoCraft-supported layered or HDR document (`.pcraft`, `.psd`, `.psb`, `.ora`,
+/// `.xcf`, `.kra`, `.pdn`, `.afphoto`, `.exr`, `.hdr`, `.fits`, `.heic`) to a flat PNG via
+/// `photocraft-cli run <doc> --out <out.png>`.
+pub fn export_photo_flat(doc: &Path, out_png: &Path) -> Result<()> {
+    let _slot = crate::workspace::acquire_tool_slot();
+    if let Some(parent) = out_png.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let mut cmd = cli_command(CraftTarget::Photo, None)?;
+    cmd.arg("run").arg(doc).arg("--out").arg(out_png);
+    let out = cmd.output().map_err(|e| EngineError::ExternalTool("photocraft-cli".into(), e.to_string()))?;
+    if !out.status.success() {
+        return Err(EngineError::ExternalTool("photocraft-cli".into(), String::from_utf8_lossy(&out.stderr).trim().to_string()));
+    }
+    Ok(())
+}
+
+/// Apply a PhotoCraft action list across an entire folder of images via native
+/// `photocraft-cli batch --actions <grade.json> --in <in_dir> --out <out_dir>`.
+pub fn run_photo_batch_actions(actions_file: &Path, in_dir: &Path, out_dir: &Path) -> Result<Value> {
+    let _slot = crate::workspace::acquire_tool_slot();
+    std::fs::create_dir_all(out_dir)?;
+    let mut cmd = cli_command(CraftTarget::Photo, None)?;
+    cmd.arg("batch")
+        .arg("--actions")
+        .arg(actions_file)
+        .arg("--in")
+        .arg(in_dir)
+        .arg("--out")
+        .arg(out_dir);
+    let out = cmd.output().map_err(|e| EngineError::ExternalTool("photocraft-cli".into(), e.to_string()))?;
+    parse_cli_value(CraftTarget::Photo, "batch", &out)
+}
+
+/// Render/export any VectorCraft-supported vector or Affinity document (`.vectorcraft`, `.ai`,
+/// `.eps`, `.svg`, `.svgz`, `.dxf`, `.emf`, `.wmf`, `.af`, `.afdesign`, `.afpub`) via native
+/// `vectorcraft-cli run --in <doc> --export <out>`.
+pub fn export_vector_flat(doc: &Path, out_file: &Path) -> Result<()> {
+    let _slot = crate::workspace::acquire_tool_slot();
+    if let Some(parent) = out_file.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let mut cmd = cli_command(CraftTarget::Vector, None)?;
+    cmd.arg("run").arg("--in").arg(doc).arg("--export").arg(out_file);
+    let out = cmd.output().map_err(|e| EngineError::ExternalTool("vectorcraft-cli".into(), e.to_string()))?;
+    if !out.status.success() {
+        return Err(EngineError::ExternalTool("vectorcraft-cli".into(), String::from_utf8_lossy(&out.stderr).trim().to_string()));
+    }
+    Ok(())
 }
 
 fn run_piped_batch(target: CraftTarget, mut cmd: Command, stdin_payload: Option<&[u8]>) -> Result<Vec<Value>> {
@@ -445,16 +501,11 @@ fn parse_batch_output(target: CraftTarget, out: &Output) -> Result<Vec<Value>> {
 }
 
 pub fn render_pdf_pages(doc: &Path, page: Option<usize>, scale: f64, destination: &Path) -> Result<()> {
-    let root_dir = doc
-        .parent()
-        .filter(|p| !p.as_os_str().is_empty())
-        .unwrap_or_else(|| Path::new("."));
     let step = match page {
         Some(index) => ("page_render", json!({"page": index + 1, "scale": scale, "out": destination})),
         None => ("page_render", json!({"scale": scale, "out_dir": destination})),
     };
     let _ = exec_batch(CraftTarget::Pdf, Some(doc), None, &[step])?;
-    let _ = root_dir;
     Ok(())
 }
 

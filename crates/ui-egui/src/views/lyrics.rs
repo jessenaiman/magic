@@ -221,7 +221,7 @@ fn draw_moment_film_reel(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                     }
                     // Cinema bottom caption band inside the 35mm reel frame
                     let band = Rect::from_min_max(
-                        Pos2::new(inner.min.x, (inner.max.y - 32.0).max(inner.min.y)),
+                        Pos2::new(inner.min.x, (inner.max,y - 32.0).max(inner.min.y)),
                         inner.max,
                     );
                     ui.painter().rect_filled(band, CornerRadius::same(2), Color32::from_rgba_unmultiplied(8, 12, 18, 222));

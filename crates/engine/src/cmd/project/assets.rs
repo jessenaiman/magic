@@ -1,5 +1,5 @@
-//! Project asset registration, provenance tracking, native `PhotoCraft`/`VectorCraft` subject isolation,
-//! and lightweight dimension inspection.
+//! Project asset registration, provenance tracking, native `PhotoCraft`/`VectorCraft`/`EffectCraft`
+//! preview extraction and subject isolation, and lightweight dimension inspection.
 
 use std::path::{Path, PathBuf};
 
@@ -8,7 +8,11 @@ use serde_json::{Value, json};
 use super::{cmd_project_save, ensure_default_asset_project};
 use crate::{CraftHub, EngineError, Result, Session};
 
-const IMAGE_EXTENSIONS: &[&str; 10] = &["png", "jpg", "jpeg", "webp", "svg", "gif", "bmp", "tif", "tiff", "exr"];
+const IMAGE_EXTENSIONS: &[&str; 33] = &[
+    "png", "jpg", "jpeg", "webp", "svg", "svgz", "gif", "bmp", "tif", "tiff", "exr", "hdr",
+    "fits", "qoi", "tga", "heic", "heif", "pcraft", "psd", "psb", "pdn", "ora", "xcf", "kra",
+    "af", "afdesign", "afphoto", "afpub", "vectorcraft", "vcraft", "drawcraft", "ai", "eps",
+];
 const MODEL_EXTENSIONS: &[&str; 2] = &["glb", "gltf"];
 
 pub(crate) fn project_index(s: &Session, params: &Value) -> Result<usize> {
@@ -25,9 +29,20 @@ pub(crate) fn asset_role(dir: Option<&Path>, path: Option<&Path>) -> &'static st
     }
 }
 
+fn preview_is_fresh(source: &Path, preview: &Path) -> bool {
+    if !preview.is_file() {
+        return false;
+    }
+    let src_meta_target = if source.is_dir() { source.join("manifest.json") } else { source.to_path_buf() };
+    match (std::fs::metadata(&src_meta_target).and_then(|m| m.modified()), std::fs::metadata(preview).and_then(|m| m.modified())) {
+        (Ok(sm), Ok(pm)) => pm >= sm,
+        _ => true,
+    }
+}
 
 /// Resolve the flat project preview `.png` and linked Craft file metadata for any project asset
-/// (`.pcraft` ZIP or directory bundle, `.vectorcraft`, `.ecproj`, `.fcproj`, or image with sibling Craft project).
+/// (`.pcraft` ZIP or directory bundle, `.psd`/`.psb`/`.ora`/`.xcf`/`.kra`/`.pdn`/`.af*`,
+/// `.vectorcraft`/`.ai`/`.eps`, `.ecproj`/`.ectemplate`, `.fcproj`, or image with sibling Craft project).
 pub(crate) fn resolve_asset_project_image(
     project_dir: Option<&Path>,
     asset_path: &Path,
@@ -38,29 +53,74 @@ pub(crate) fn resolve_asset_project_image(
         .map(|d| d.join("assets/.previews"))
         .unwrap_or_else(|| asset_path.parent().unwrap_or(Path::new(".")).join(".previews"));
     let preview_png = previews_dir.join(format!("{stem}.png"));
+    let linked_str = Some(asset_path.to_string_lossy().into_owned());
 
     match ext.as_str() {
-        "pcraft" | "psd" => {
-            if craft_util::media::extract_craft_preview(asset_path, &preview_png).unwrap_or(false) && preview_png.is_file() {
-                return (preview_png, Some(asset_path.to_string_lossy().into_owned()), Some("photocraft".into()));
+        "pcraft" | "psd" | "psb" | "pdn" | "ora" | "xcf" | "kra" | "afphoto" | "exr" | "hdr"
+        | "fits" | "qoi" | "tga" | "heic" | "heif" => {
+            if preview_is_fresh(asset_path, &preview_png) {
+                return (preview_png, linked_str, Some("photocraft".into()));
             }
-            return (asset_path.to_path_buf(), Some(asset_path.to_string_lossy().into_owned()), Some("photocraft".into()));
-        }
-        "vectorcraft" | "vcraft" | "drawcraft" | "svg" => {
             if craft_util::media::extract_craft_preview(asset_path, &preview_png).unwrap_or(false) && preview_png.is_file() {
-                return (preview_png, Some(asset_path.to_string_lossy().into_owned()), Some("vectorcraft".into()));
+                return (preview_png, linked_str, Some("photocraft".into()));
             }
-            return (asset_path.to_path_buf(), Some(asset_path.to_string_lossy().into_owned()), Some("vectorcraft".into()));
+            if CraftHub::export_photo_preview(asset_path, &preview_png).is_ok() && preview_png.is_file() {
+                return (preview_png, linked_str, Some("photocraft".into()));
+            }
+            (asset_path.to_path_buf(), linked_str, Some("photocraft".into()))
         }
-        "ecproj" => {
-            let sibling_png = asset_path.with_extension("png");
-            let img = if sibling_png.is_file() { sibling_png } else { asset_path.to_path_buf() };
-            return (img, Some(asset_path.to_string_lossy().into_owned()), Some("effectcraft".into()));
+        "vectorcraft" | "vcraft" | "drawcraft" | "svgz" | "ai" | "eps" | "dxf" | "emf" | "wmf"
+        | "af" | "afdesign" | "afpub" => {
+            if preview_is_fresh(asset_path, &preview_png) {
+                return (preview_png, linked_str, Some("vectorcraft".into()));
+            }
+            if craft_util::media::extract_craft_preview(asset_path, &preview_png).unwrap_or(false) && preview_png.is_file() {
+                return (preview_png, linked_str, Some("vectorcraft".into()));
+            }
+            if CraftHub::export_vector_preview(asset_path, &preview_png).is_ok() && preview_png.is_file() {
+                return (preview_png, linked_str, Some("vectorcraft".into()));
+            }
+            (asset_path.to_path_buf(), linked_str, Some("vectorcraft".into()))
+        }
+        "svg" => {
+            if preview_is_fresh(asset_path, &preview_png) {
+                return (preview_png, linked_str, Some("vectorcraft".into()));
+            }
+            if CraftHub::export_vector_preview(asset_path, &preview_png).is_ok() && preview_png.is_file() {
+                return (preview_png, linked_str, Some("vectorcraft".into()));
+            }
+            (asset_path.to_path_buf(), linked_str, Some("vectorcraft".into()))
+        }
+        "ecproj" | "ectemplate" => {
+            if preview_is_fresh(asset_path, &preview_png) {
+                return (preview_png, linked_str, Some("effectcraft".into()));
+            }
+            for sib in [
+                asset_path.with_file_name(format!("{stem}-preview.png")),
+                asset_path.with_extension("png"),
+            ] {
+                if sib.is_file() {
+                    return (sib, linked_str, Some("effectcraft".into()));
+                }
+            }
+            if craft_util::media::extract_craft_preview(asset_path, &preview_png).unwrap_or(false) && preview_png.is_file() {
+                return (preview_png, linked_str, Some("effectcraft".into()));
+            }
+            let rendered = if ext == "ectemplate" {
+                CraftHub::render_effect_template(asset_path, None, &preview_png, Some(0.0)).is_ok()
+            } else {
+                let first_comp = crate::cmd::character::ecproj_first_comp_name(asset_path);
+                CraftHub::render_effect_frame(asset_path, first_comp.as_deref(), 0.0, 960, &preview_png).is_ok()
+            };
+            if rendered && preview_png.is_file() {
+                return (preview_png, linked_str, Some("effectcraft".into()));
+            }
+            (asset_path.to_path_buf(), linked_str, Some("effectcraft".into()))
         }
         "fcproj" => {
             let sibling_png = asset_path.with_extension("png");
             let img = if sibling_png.is_file() { sibling_png } else { asset_path.to_path_buf() };
-            return (img, Some(asset_path.to_string_lossy().into_owned()), Some("filmcraft".into()));
+            (img, linked_str, Some("filmcraft".into()))
         }
         _ => {
             for (cand_ext, app) in [
@@ -93,6 +153,7 @@ pub fn cmd_project_list_assets(s: &mut Session, _: &Value) -> Result<Value> {
                 entry["project_image"] = json!(proj_img);
                 entry["linked_file"] = json!(linked_file.unwrap_or_else(|| p.to_string_lossy().into_owned()));
                 entry["craft_app"] = json!(craft_app);
+                entry["outline"] = json!(craft_util::media::craft_outline_summary(p));
             }
             Ok(entry)
         })
@@ -120,9 +181,14 @@ struct AssetRequest {
 }
 
 fn file_kind(path: &Path) -> Option<&'static str> {
+    if path.is_dir() && path.extension().is_some_and(|e| e.eq_ignore_ascii_case("pcraft")) {
+        return Some("image");
+    }
     let ext = path.extension()?.to_str()?.to_ascii_lowercase();
     if IMAGE_EXTENSIONS.contains(&ext.as_str()) {
         Some("image")
+    } else if matches!(ext.as_str(), "ecproj" | "ectemplate") {
+        Some("character")
     } else if MODEL_EXTENSIONS.contains(&ext.as_str()) {
         Some("model_3d")
     } else {
@@ -131,11 +197,11 @@ fn file_kind(path: &Path) -> Option<&'static str> {
 }
 
 fn asset_kind<'a>(requested: &'a str, path: &Path) -> Result<&'a str> {
-    let found = path.is_file().then(|| file_kind(path)).flatten();
+    let found = craft_util::media::is_craft_doc_path(path).then(|| file_kind(path)).flatten();
     match (requested, found) {
         ("auto", Some(kind)) => Ok(kind),
         ("image", Some("image")) | ("model_3d", Some("model_3d")) => Ok(requested),
-        ("image", _) => Err(EngineError::InvalidParams(format!("{} is not an image ({})", path.display(), IMAGE_EXTENSIONS.join(", ")))),
+        ("image", _) => Err(EngineError::InvalidParams(format!("{} is not a supported image or Craft artwork ({})", path.display(), IMAGE_EXTENSIONS.join(", ")))),
         ("model_3d", _) => Err(EngineError::InvalidParams(format!("{} is not a 3D model ({})", path.display(), MODEL_EXTENSIONS.join(", ")))),
         (kind, _) => Ok(kind),
     }
@@ -174,7 +240,7 @@ fn asset_request(s: &Session, params: &Value) -> Result<AssetRequest> {
 }
 
 fn outside_project_image(dir: &Path, source: &Path) -> bool {
-    !source.starts_with(dir) && file_kind(source) == Some("image")
+    !source.starts_with(dir) && source.is_file() && file_kind(source) == Some("image")
 }
 
 fn asset_destination_folder(dir: &Path, params: &Value) -> Result<(PathBuf, PathBuf)> {

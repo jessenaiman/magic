@@ -1,5 +1,6 @@
 //! Storyboard: printable reference document (`storyboard.pdf`) governed strictly by the
-//! `.designcraft` master (`Magic Studio Storyboard.designcraft`).
+//! `.designcraft` master (`Magic Studio Storyboard.designcraft`), with integrated `PhotoCraft`,
+//! `VectorCraft`, and `EffectCraft` asset/pose pipelines.
 //!
 //! Storyboard Rules:
 //! 1. The `.designcraft` master IS the rules (`doc["sections"]` defines section names and
@@ -18,7 +19,10 @@ pub use crud::{
     cmd_storyboard_open, cmd_storyboard_pages, cmd_storyboard_remove, cmd_storyboard_section,
     cmd_storyboard_set, cmd_storyboard_thumbnail,
 };
-pub use workflow::{cmd_storyboard_bulk_generate, cmd_storyboard_check, cmd_storyboard_wizard};
+pub use workflow::{
+    cmd_storyboard_bulk_generate, cmd_storyboard_check, cmd_storyboard_grade,
+    cmd_storyboard_wizard,
+};
 
 use std::collections::BTreeMap;
 use std::io::Read;
@@ -40,6 +44,10 @@ pub struct ImageLinkMeta {
     pub linked_file: Option<String>,
     pub asset_id: Option<String>,
     pub craft_app: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outline: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub time_sec: Option<f64>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -96,7 +104,7 @@ pub(crate) fn slot_cli_command(page: usize, label: &str, kind: &str) -> String {
     if kind == "text" {
         format!("magic-cli storyboard set page={page} label={label} text=\"...\"")
     } else {
-        format!("magic-cli storyboard set page={page} label={label} image=\"path/to/image.png\"")
+        format!("magic-cli storyboard set page={page} label={label} image=\"path/to/artwork.pcraft\"")
     }
 }
 
@@ -249,6 +257,8 @@ pub(crate) struct Slot {
     pub linked_file: Option<String>,
     pub asset_id: Option<String>,
     pub craft_app: Option<String>,
+    pub outline: Option<String>,
+    pub time_sec: Option<f64>,
     pub bounds: [f64; 4],
     pub locked: bool,
     pub filled: bool,
@@ -268,6 +278,8 @@ impl Slot {
             "linked_file": self.linked_file,
             "asset_id": self.asset_id,
             "craft_app": self.craft_app,
+            "outline": self.outline,
+            "time_sec": self.time_sec,
             "bounds": self.bounds,
             "locked": self.locked,
             "required": !self.locked,
@@ -345,12 +357,15 @@ pub(crate) fn sync_assets_into_state(s: &Session, state: &mut FieldState) {
         let Some(ref raw_path) = asset.path else { continue };
         let (proj_img, linked_file, craft_app) =
             crate::cmd::project::assets::resolve_asset_project_image(Some(project_dir), raw_path);
+        let outline = craft_util::media::craft_outline_summary(raw_path);
         let thumb_key = field_key(pg_idx, &format!("assets_thumb_{n}"));
         state.images.entry(thumb_key).or_insert_with(|| ImageLinkMeta {
             image: proj_img.to_string_lossy().into_owned(),
             linked_file: linked_file.clone().or_else(|| Some(raw_path.to_string_lossy().into_owned())),
             asset_id: Some(asset.id.clone()),
             craft_app: craft_app.clone(),
+            outline: outline.clone(),
+            time_sec: None,
         });
         let name_key = field_key(pg_idx, &format!("assets_name_{n}"));
         state.text.entry(name_key).or_insert_with(|| asset.name.clone());
@@ -361,7 +376,10 @@ pub(crate) fn sync_assets_into_state(s: &Session, state: &mut FieldState) {
                 .unwrap_or(raw_path)
                 .to_string_lossy();
             let app_tag = craft_app.as_deref().unwrap_or(asset.kind.as_str());
-            format!("{app_tag} · {rel}")
+            match outline.as_deref() {
+                Some(info) => format!("{app_tag} ({info}) · {rel}"),
+                None => format!("{app_tag} · {rel}"),
+            }
         });
     }
 }
@@ -471,6 +489,8 @@ pub(crate) fn parse_storyboard_pages(s: Option<&Session>, pdf_path: &Path) -> Ve
                     "linked_file": img_meta.as_ref().and_then(|m| m.linked_file.as_deref()),
                     "asset_id": img_meta.as_ref().and_then(|m| m.asset_id.as_deref()),
                     "craft_app": img_meta.as_ref().and_then(|m| m.craft_app.as_deref()),
+                    "outline": img_meta.as_ref().and_then(|m| m.outline.as_deref()),
+                    "time_sec": img_meta.as_ref().and_then(|m| m.time_sec),
                 }));
             }
 
@@ -487,6 +507,8 @@ pub(crate) fn parse_storyboard_pages(s: Option<&Session>, pdf_path: &Path) -> Ve
                 linked_file: img_meta.as_ref().and_then(|m| m.linked_file.clone()),
                 asset_id: img_meta.as_ref().and_then(|m| m.asset_id.clone()),
                 craft_app: img_meta.as_ref().and_then(|m| m.craft_app.clone()),
+                outline: img_meta.as_ref().and_then(|m| m.outline.clone()),
+                time_sec: img_meta.as_ref().and_then(|m| m.time_sec),
                 bounds: local_bounds,
                 locked,
                 filled,
@@ -518,18 +540,23 @@ pub(crate) fn parse_storyboard_pages(s: Option<&Session>, pdf_path: &Path) -> Ve
     pages
 }
 
-/// Rule 3: Gather the Storyboard's visual design prompts and placed reference images so ALL new
-/// media creation (`image.generate`, `scribbles`, `storyboard.bulk_generate`) uses Storyboard references.
-pub(crate) fn storyboard_media_references(s: &Session) -> (Option<String>, Vec<PathBuf>) {
+/// Rule 3: Gather Storyboard visual design prompts and placed reference images, optionally
+/// prioritizing `Characters` prompts and character images for character sheet/rig generation.
+pub(crate) fn storyboard_media_references_for(s: &Session, prefer_character: bool) -> (Option<String>, Vec<PathBuf>) {
     let Ok(pdf_path) = doc_path(s, &json!({})) else {
         return (None, Vec::new());
     };
     let pages = parse_storyboard_pages(Some(s), &pdf_path);
+    let keys: &[&str] = if prefer_character {
+        &["char_exact_prompt", "cover_overall_design", "world_location_prompt"]
+    } else {
+        &["cover_overall_design", "world_location_prompt", "char_exact_prompt"]
+    };
     let mut style_parts = Vec::new();
-    for key in ["cover_overall_design", "world_location_prompt", "char_exact_prompt"] {
+    for key in keys {
         if let Some(txt) = pages
             .iter()
-            .find_map(|pg| pg.slots.iter().find(|sl| sl.label == key && sl.filled)?.text.as_deref())
+            .find_map(|pg| pg.slots.iter().find(|sl| sl.label == *key && sl.filled)?.text.as_deref())
             .map(str::trim)
             .filter(|t| !t.is_empty())
         {
@@ -539,6 +566,18 @@ pub(crate) fn storyboard_media_references(s: &Session) -> (Option<String>, Vec<P
     let style_context = (!style_parts.is_empty()).then(|| style_parts.join(" | "));
 
     let mut refs = Vec::new();
+    if prefer_character {
+        for pg in &pages {
+            for sl in pg.slots.iter().filter(|sl| sl.kind == "image" && sl.filled && sl.label.starts_with("char_")) {
+                if let Some(p) = sl.image.as_deref().map(PathBuf::from).filter(|p| p.is_file())
+                    && !refs.contains(&p)
+                    && refs.len() < 5
+                {
+                    refs.push(p);
+                }
+            }
+        }
+    }
     for pg in &pages {
         for sl in pg.slots.iter().filter(|sl| sl.kind == "image" && sl.filled) {
             if let Some(p) = sl.image.as_deref().map(PathBuf::from).filter(|p| p.is_file())
@@ -550,4 +589,8 @@ pub(crate) fn storyboard_media_references(s: &Session) -> (Option<String>, Vec<P
         }
     }
     (style_context, refs)
+}
+
+pub(crate) fn storyboard_media_references(s: &Session) -> (Option<String>, Vec<PathBuf>) {
+    storyboard_media_references_for(s, false)
 }

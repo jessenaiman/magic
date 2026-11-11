@@ -1,6 +1,6 @@
 //! `CraftHub`: Single-Responsibility coordinator between Magic Studio and system-installed
-//! ArtCraft applications (`filmcraft`, `effectcraft`, `designcraft`, `photocraft`, `vectorcraft`,
-//! `deckcraft`, `anicraft-cli`, `texturecraft`).
+//! ArtCraft applications (`filmcraft`, `effectcraft`, `pdfcraft`, `designcraft`, `photocraft`,
+//! `vectorcraft`, `deckcraft`, `anicraft-cli`, `texturecraft`).
 //!
 //! Safety note: `AniCraft` (<https://github.com/storytold/AniCraft>) is early alpha; `CraftHub`
 //! invokes `anicraft-cli` strictly headlessly (rendering PNG frame sequences for `EffectCraft`),
@@ -18,6 +18,7 @@ use std::path::{Path, PathBuf};
 
 use serde_json::{Value, json};
 
+pub(crate) use cli::ScopedTempDir;
 pub use discovery::same_canonical_path;
 pub use target::CraftTarget;
 
@@ -74,7 +75,7 @@ impl CraftHub {
         };
         if Self::prefer_live_bridge()
             && in_place
-            && let Some(doc) = input.filter(|p| p.is_file())
+            && let Some(doc) = input.filter(|p| craft_util::media::is_craft_doc_path(p))
             && let Some(live_res) = control::try_live_batch(target, doc, steps, output.is_some())
         {
             return live_res;

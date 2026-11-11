@@ -266,7 +266,7 @@ pub fn fields_with_cat() -> Vec<(&'static str, Field)> {
             Field {
                 key: "project.storyboard_format",
                 label: "Storyboard document format",
-                kind: Kind::Choice(&[("designcraft", "DesignCraft (.designcraft + .pdf + .pptx)")]),
+                kind: Kind::Choice(&[("pdfcraft", "PDFCraft (storyboard.pdf from read-only .designcraft master)")]),
                 wired: true,
                 enabled_by: None,
             },

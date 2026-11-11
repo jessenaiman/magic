@@ -102,6 +102,14 @@ pub fn cmd_character_sprite(s: &mut Session, p: &Value) -> Result<Value> {
     }
     steps.push(step("file.saveAs", json!({"path": project})));
     effectcraft(&dir, None, &steps, true)?;
+    let preview_png = project.with_file_name(format!("{comp}-preview.png"));
+    let _ = super::effectcraft_frame(&project, &comp, 0.0, 960, &preview_png);
+    if s.project_path.is_some() && project.is_file() {
+        let _ = s.execute(
+            "project.add_asset",
+            json!({"path": project, "kind": "character", "name": format!("{id} {action}"), "if_not_exists": true, "load": false}),
+        );
+    }
 
     let anicraft_cli_available = CraftHub::is_installed(CraftTarget::Ani);
     let meta = json!({

@@ -5,7 +5,7 @@
 //! - FilmCraft (`:9876`, `FILMCRAFT_CONTROL_TOKEN`): <https://github.com/storytold/filmcraft/blob/main/docs/control-protocol.md>
 //! - EffectCraft (`:9877`, `mcp --autosave`): <https://github.com/storytold/effectcraft/blob/main/docs/control-protocol.md>
 //! - DesignCraft (`:7979`): <https://github.com/storytold/designcraft/blob/main/docs/control-protocol.md>
-//! - PDFCraft (`:7985`): <https://github.com/storytold/pdfcraft>
+//! - PDFCraft (`~/.pdfcraft-control.json`): <https://github.com/storytold/pdfcraft>
 //! - DeckCraft (`:7990`): <https://github.com/storytold/deckcraft>
 //! - PhotoCraft (`:9879`): <https://github.com/storytold/photocraft/blob/main/docs/control-protocol.md>
 //! - VectorCraft (`:9880`): <https://github.com/storytold/vectorcraft/blob/main/docs/control-protocol.md>
@@ -105,7 +105,11 @@ impl CraftTarget {
     }
 
     pub fn from_path(path: &Path) -> Option<Self> {
-        if let Ok(bytes) = std::fs::read(path)
+        if path.is_dir() && path.extension().is_some_and(|e| e.eq_ignore_ascii_case("pcraft")) {
+            return Some(Self::Photo);
+        }
+        if path.is_file()
+            && let Ok(bytes) = std::fs::read(path)
             && let Some(kind) = craft_doc::sniff(&bytes)
         {
             match kind {
@@ -118,9 +122,11 @@ impl CraftTarget {
         let ext = path.extension()?.to_str()?.to_ascii_lowercase();
         match ext.as_str() {
             "fcproj" | "fcgt" => Some(Self::Film),
-            "pcraft" | "psd" => Some(Self::Photo),
+            "pcraft" | "psd" | "psb" | "pdn" | "ora" | "xcf" | "kra" | "afphoto" | "exr" | "hdr"
+            | "fits" | "qoi" | "tga" | "heic" | "heif" => Some(Self::Photo),
             "ecproj" | "ectemplate" => Some(Self::Effect),
-            "vectorcraft" | "vcraft" | "drawcraft" | "svg" => Some(Self::Vector),
+            "vectorcraft" | "vcraft" | "drawcraft" | "svg" | "svgz" | "ai" | "eps" | "dxf"
+            | "emf" | "wmf" | "af" | "afdesign" | "afpub" => Some(Self::Vector),
             "designcraft" | "idml" => Some(Self::Design),
             "pdf" => Some(Self::Pdf),
             "deckcraft" | "pptx" => Some(Self::Deck),
@@ -287,6 +293,19 @@ impl CraftTarget {
             Self::Photo => "photocraft-cli mcp",
             Self::Texture => "texturecraft-cli mcp",
             Self::Ani => "anicraft-cli mcp",
+        }
+    }
+
+    /// Project-confined MCP server command matching PhotoCraft, VectorCraft, and PdfCraft docs.
+    pub fn mcp_confined_hint(self, root: &Path) -> String {
+        let r = root.display();
+        match self {
+            Self::Photo | Self::Vector => format!(
+                "{} mcp --automation-read-root {r} --automation-write-root {r}",
+                self.cli_name()
+            ),
+            Self::Pdf => format!("pdfcraft-cli mcp --compact --root {r}"),
+            _ => self.mcp_headless_hint().to_string(),
         }
     }
 }

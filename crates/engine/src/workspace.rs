@@ -150,12 +150,13 @@ fn find_first_with_ext(dir: &Path, exts: &[&str], depth: usize) -> Option<PathBu
         .collect();
     entries.sort();
     for entry in &entries {
-        if entry.is_file() && has_extension(entry, exts) {
+        if craft_util::media::is_craft_doc_path(entry) && has_extension(entry, exts) {
             return Some(entry.clone());
         }
     }
     for entry in &entries {
         if entry.is_dir()
+            && !craft_util::media::is_craft_doc_path(entry)
             && let Some(found) = find_first_with_ext(entry, exts, depth - 1)
         {
             return Some(found);
@@ -189,31 +190,11 @@ fn find_project_craft_doc(s: &crate::Session, target: CraftTarget) -> Option<Pat
                 .or_else(|| crate::cmd::project::workshop::video_project_path(dir))
                 .or_else(|| find_first_with_ext(dir, &["fcproj"], 3))
         }
-        CraftTarget::Photo => find_first_with_ext(dir, &["pcraft", "psd"], 4),
-        CraftTarget::Vector => find_first_with_ext(dir, &["vectorcraft", "vcraft", "drawcraft"], 4),
+        CraftTarget::Photo => find_first_with_ext(dir, &["pcraft", "psd", "psb", "ora", "xcf", "kra", "pdn"], 4),
+        CraftTarget::Vector => find_first_with_ext(dir, &["vectorcraft", "vcraft", "drawcraft", "svg", "ai"], 4),
         CraftTarget::Ani => find_first_with_ext(dir, &["anicraft", "ani"], 4),
         CraftTarget::Texture => find_first_with_ext(dir, &["tcraft", "mcraft"], 4),
     }
-}
-
-fn craft_doc_info(path: &Path) -> Option<Value> {
-    let bytes = std::fs::read(path).ok()?;
-    let info = craft_doc::info(&bytes, &craft_doc::Limits::default()).ok()?;
-    if !info.supported {
-        return Some(json!({
-            "kind": info.kind.extension(),
-            "version": info.version,
-            "generator": info.generator,
-            "supported": false,
-            "error": "document version is newer than supported craft-doc schema",
-        }));
-    }
-    Some(json!({
-        "kind": info.kind.extension(),
-        "version": info.version,
-        "generator": info.generator,
-        "supported": info.supported,
-    }))
 }
 
 /// Close sibling Craft apps spawned by Magic during this session (`Close apps opened by Magic`).
@@ -237,7 +218,7 @@ pub fn cmd_workspace_open(s: &mut crate::Session, params: &Value) -> Result<Valu
     let requested_app = params.get("app").and_then(Value::as_str).map(str::trim).filter(|a| !a.is_empty());
     if let Some(app) = requested_app {
         if let Some(target) = CraftTarget::from_name(app) {
-            let resolved_target = if target == CraftTarget::Photo && path.with_extension("pcraft").is_file() {
+            let resolved_target = if target == CraftTarget::Photo && craft_util::media::is_craft_doc_path(&path.with_extension("pcraft")) {
                 path.with_extension("pcraft")
             } else if target == CraftTarget::Vector && path.with_extension("vectorcraft").is_file() {
                 path.with_extension("vectorcraft")
@@ -253,7 +234,7 @@ pub fn cmd_workspace_open(s: &mut crate::Session, params: &Value) -> Result<Valu
     }
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or_default().to_ascii_lowercase();
     let app = match ext.as_str() {
-        "cadcraft" | "dxf" | "dwg" => "cadcraft",
+        "cadcraft" | "dwg" => "cadcraft",
         "mcraft" => "materialcraft",
         "solidcraft" | "step" | "stp" => "solidcraft",
         "soundcraft" => "soundcraft",
@@ -292,7 +273,7 @@ pub fn cmd_photo_exec(s: &mut crate::Session, p: &Value) -> Result<Value> {
     let save = p["save"].as_str().map(|out| resolve_workspace_path(s, out)).or_else(|| (!is_query).then(|| path.with_extension("pcraft")));
     let pairs: Vec<(&str, Value)> = owned.iter().map(|(id, params)| (id.as_str(), params.clone())).collect();
     let results = CraftHub::run_batch(CraftTarget::Photo, Some(&path), save.as_deref(), &pairs)?;
-    let info = save.as_deref().or(Some(path.as_path())).and_then(craft_doc_info);
+    let info = save.as_deref().or(Some(path.as_path())).and_then(craft_util::media::inspect_craft_envelope);
     Ok(json!({"ok": true, "path": path, "pcraft": save, "info": info, "results": results, "via": "photocraft"}))
 }
 
@@ -335,7 +316,7 @@ pub fn cmd_effect_exec(s: &mut crate::Session, p: &Value) -> Result<Value> {
     let save = p["save"].as_bool().unwrap_or(!read_only);
     let dir = path.parent().unwrap_or_else(|| Path::new("."));
     let results = crate::cmd::character::effectcraft(dir, path.is_file().then_some(path.as_path()), &steps, save)?;
-    let info = craft_doc_info(&path);
+    let info = craft_util::media::inspect_craft_envelope(&path);
     Ok(json!({"ok": true, "path": path, "info": info, "results": results, "via": "effectcraft"}))
 }
 
@@ -351,7 +332,7 @@ pub fn cmd_vector_exec(s: &mut crate::Session, p: &Value) -> Result<Value> {
         .or_else(|| (!is_query).then(|| path.with_extension("vectorcraft")));
     let pairs: Vec<(&str, Value)> = owned.iter().map(|(id, params)| (id.as_str(), params.clone())).collect();
     let results = CraftHub::run_batch(CraftTarget::Vector, path.is_file().then_some(path.as_path()), save.as_deref(), &pairs)?;
-    let info = save.as_deref().or(Some(path.as_path())).and_then(craft_doc_info);
+    let info = save.as_deref().or(Some(path.as_path())).and_then(craft_util::media::inspect_craft_envelope);
     Ok(json!({"ok": true, "path": path, "vectorcraft": save, "info": info, "results": results, "via": "vectorcraft"}))
 }
 

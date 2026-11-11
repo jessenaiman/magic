@@ -88,6 +88,7 @@ impl AutomationRoots {
                 | "file.saveAs"
                 | "storyboard.new"
                 | "storyboard.export"
+                | "storyboard.grade"
                 | "film.render"
                 | "video.render"
                 | "words.preview"

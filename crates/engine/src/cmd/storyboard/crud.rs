@@ -1,4 +1,6 @@
-//! Storyboard printable reference document (`storyboard.pdf`) CRUD & `PDFCraft` operations.
+//! Storyboard printable reference document (`storyboard.pdf`) CRUD & `PDFCraft` operations,
+//! integrated with `PhotoCraft` non-destructive layer prep, `VectorCraft` tracing, and
+//! `EffectCraft` animated character pose stamping.
 //!
 //! All section names and field rules come strictly from the `.designcraft` master (`!slot.locked`).
 //! Every placed asset/project stores its flat project preview image in the Storyboard alongside
@@ -83,53 +85,200 @@ fn find_page_preview_png(pdf_path: &Path, page_idx: usize) -> Option<PathBuf> {
     None
 }
 
+fn has_photocraft_slot_ops(p: &Value) -> bool {
+    p["remove_background"].as_bool() == Some(true)
+        || p["auto_tone"].as_bool() == Some(true)
+        || p["auto_contrast"].as_bool() == Some(true)
+        || p["auto_color"].as_bool() == Some(true)
+        || p.get("vibrance").is_some_and(|v| v.is_number())
+        || p.get("curves").is_some_and(Value::is_array)
+        || p.get("lut").and_then(Value::as_str).is_some_and(|s| !s.trim().is_empty())
+        || p.get("sharpen").is_some_and(|v| v.is_number())
+        || p.get("stroke").is_some_and(Value::is_object)
+        || p.get("drop_shadow").is_some_and(Value::is_object)
+}
+
+/// Stamp a character pose frame directly from an `EffectCraft` `.ecproj` (or `.pcraft` cutout)
+/// into `storyboard/craft/<fkey>.png`, linking back to the live character rig file.
+fn resolve_character_pose_for_storyboard(
+    s: &Session,
+    pdf_path: &Path,
+    p: &Value,
+    fkey: &str,
+) -> Result<ImageLinkMeta> {
+    let view = crate::cmd::character::View::from_params(s, p)?;
+    let time_sec = p["effect_time"].as_f64().or_else(|| p["time"].as_f64()).unwrap_or(0.0).max(0.0);
+    let action_opt = p["action"].as_str().map(str::trim).filter(|a| !a.is_empty());
+    let sprite_ec = action_opt.and_then(|act| {
+        let sp_dir = crate::workshop::project_dir(s)
+            .ok()?
+            .join("assets/characters")
+            .join(&view.id)
+            .join("sprites")
+            .join(act);
+        let cand = sp_dir.join(format!("{}-{act}.ecproj", view.id));
+        cand.is_file().then_some(cand)
+    });
+    let chosen_ec = sprite_ec.or_else(|| {
+        let ec = view.file("ecproj");
+        ec.is_file().then_some(ec)
+    });
+
+    if let Some(ecproj) = chosen_ec {
+        let craft_dir = pdf_path.with_file_name("storyboard").join("craft");
+        std::fs::create_dir_all(&craft_dir)?;
+        let pose_png = craft_dir.join(format!("{fkey}-pose.png"));
+        let comp = crate::cmd::character::ecproj_first_comp_name(&ecproj);
+        CraftHub::render_effect_frame(&ecproj, comp.as_deref(), time_sec, 1024, &pose_png)?;
+        return Ok(ImageLinkMeta {
+            image: pose_png.to_string_lossy().into_owned(),
+            linked_file: Some(ecproj.to_string_lossy().into_owned()),
+            asset_id: Some(view.id),
+            craft_app: Some("effectcraft".into()),
+            outline: craft_util::media::craft_outline_summary(&ecproj),
+            time_sec: Some(time_sec),
+        });
+    }
+
+    let photo_doc = view.require_photo_doc("character.cut")?;
+    let project_dir = s.project_path.as_deref().and_then(Path::parent);
+    let (proj_img, linked_file, craft_app) =
+        crate::cmd::project::assets::resolve_asset_project_image(project_dir, &photo_doc);
+    Ok(ImageLinkMeta {
+        image: proj_img.to_string_lossy().into_owned(),
+        linked_file: linked_file.or_else(|| Some(photo_doc.to_string_lossy().into_owned())),
+        asset_id: Some(view.id),
+        craft_app,
+        outline: craft_util::media::craft_outline_summary(&photo_doc),
+        time_sec: None,
+    })
+}
+
 /// Rule 4: Resolve any project asset or Craft document into `(flat_project_image_png, linked_file, asset_id, craft_app)`
-/// so Storyboard stores the flat project image together with metadata linking the files.
+/// and run optional `PhotoCraft` / `VectorCraft` / `EffectCraft` slot pipelines when requested via CLI.
 fn resolve_storyboard_image_with_link(
     s: &Session,
     pdf_path: &Path,
     raw: &str,
-    explicit_link: Option<&str>,
+    p: &Value,
+    fkey: &str,
 ) -> Result<ImageLinkMeta> {
+    let explicit_link = p.get("source_project").or_else(|| p.get("linked_file")).and_then(Value::as_str);
     let project_dir = s.project_path.as_deref().and_then(Path::parent);
-    if let Some(asset) = s.project_assets.iter().find(|a| a.id == raw || a.name == raw)
+    let matched_asset = s.project_assets.iter().find(|a| a.id == raw || a.name == raw);
+    let input = if let Some(asset) = matched_asset
         && let Some(ref apath) = asset.path
     {
-        let (proj_img, linked_file, craft_app) =
-            crate::cmd::project::assets::resolve_asset_project_image(project_dir, apath);
-        return Ok(ImageLinkMeta {
-            image: proj_img.to_string_lossy().into_owned(),
-            linked_file: explicit_link
-                .map(str::to_owned)
-                .or(linked_file)
-                .or_else(|| Some(apath.to_string_lossy().into_owned())),
-            asset_id: Some(asset.id.clone()),
-            craft_app,
-        });
-    }
-
-    let input = crate::workspace::resolve_workspace_path(s, raw);
+        apath.clone()
+    } else {
+        crate::workspace::resolve_workspace_path(s, raw)
+    };
     if !input.exists() {
         return Err(bad(&format!("file not found: {}", input.display())));
     }
+
+    let craft_dir = pdf_path.with_file_name("storyboard").join("craft");
+    let matched_asset_id = matched_asset
+        .map(|a| a.id.clone())
+        .or_else(|| s.project_assets.iter().find(|a| a.path.as_deref() == Some(input.as_path())).map(|a| a.id.clone()));
+
+    if input.extension().is_some_and(|e| e.eq_ignore_ascii_case("ecproj"))
+        && let Some(t_sec) = p["effect_time"].as_f64().or_else(|| p["time"].as_f64())
+    {
+        std::fs::create_dir_all(&craft_dir)?;
+        let pose_png = craft_dir.join(format!("{fkey}.png"));
+        let comp = p["comp"]
+            .as_str()
+            .map(str::to_owned)
+            .or_else(|| crate::cmd::character::ecproj_first_comp_name(&input));
+        CraftHub::render_effect_frame(&input, comp.as_deref(), t_sec.max(0.0), 1024, &pose_png)?;
+        return Ok(ImageLinkMeta {
+            image: pose_png.to_string_lossy().into_owned(),
+            linked_file: Some(explicit_link.map(str::to_owned).unwrap_or_else(|| input.to_string_lossy().into_owned())),
+            asset_id: matched_asset_id,
+            craft_app: Some("effectcraft".into()),
+            outline: craft_util::media::craft_outline_summary(&input),
+            time_sec: Some(t_sec.max(0.0)),
+        });
+    }
+
+    if has_photocraft_slot_ops(p) {
+        std::fs::create_dir_all(&craft_dir)?;
+        let out_pcraft = craft_dir.join(format!("{fkey}.pcraft"));
+        let out_png = craft_dir.join(format!("{fkey}.png"));
+        CraftHub::process_storyboard_photo(&input, &out_pcraft, &out_png, p)?;
+        return Ok(ImageLinkMeta {
+            image: out_png.to_string_lossy().into_owned(),
+            linked_file: Some(explicit_link.map(str::to_owned).unwrap_or_else(|| out_pcraft.to_string_lossy().into_owned())),
+            asset_id: matched_asset_id,
+            craft_app: Some("photocraft".into()),
+            outline: craft_util::media::craft_outline_summary(&out_pcraft),
+            time_sec: None,
+        });
+    }
+
+    if p["vectorize"].as_bool() == Some(true) {
+        std::fs::create_dir_all(&craft_dir)?;
+        let out_vcraft = craft_dir.join(format!("{fkey}.vectorcraft"));
+        let out_png = craft_dir.join(format!("{fkey}.png"));
+        CraftHub::trace_subject_vector(
+            &input,
+            &out_vcraft,
+            p["preset"].as_str(),
+            true,
+            p["strokes"].as_bool().unwrap_or(false),
+        )?;
+        let _ = CraftHub::export_vector_preview(&out_vcraft, &out_png);
+        let preview = if out_png.is_file() { out_png } else { input.clone() };
+        return Ok(ImageLinkMeta {
+            image: preview.to_string_lossy().into_owned(),
+            linked_file: Some(explicit_link.map(str::to_owned).unwrap_or_else(|| out_vcraft.to_string_lossy().into_owned())),
+            asset_id: matched_asset_id,
+            craft_app: Some("vectorcraft".into()),
+            outline: craft_util::media::craft_outline_summary(&out_vcraft),
+            time_sec: None,
+        });
+    }
+
     let dir_for_preview = project_dir.or_else(|| pdf_path.parent());
     let (proj_img, linked_file, craft_app) =
         crate::cmd::project::assets::resolve_asset_project_image(dir_for_preview, &input);
-    let matched_asset_id = s
-        .project_assets
-        .iter()
-        .find(|a| a.path.as_deref() == Some(input.as_path()) || a.path.as_deref() == Some(proj_img.as_path()))
-        .map(|a| a.id.clone());
+    let final_linked = explicit_link
+        .map(str::to_owned)
+        .or(linked_file)
+        .or_else(|| Some(input.to_string_lossy().into_owned()));
+    let outline = final_linked
+        .as_deref()
+        .and_then(|lf| craft_util::media::craft_outline_summary(Path::new(lf)))
+        .or_else(|| craft_util::media::craft_outline_summary(&input));
 
     Ok(ImageLinkMeta {
         image: proj_img.to_string_lossy().into_owned(),
-        linked_file: explicit_link
-            .map(str::to_owned)
-            .or(linked_file)
-            .or_else(|| Some(input.to_string_lossy().into_owned())),
+        linked_file: final_linked,
         asset_id: matched_asset_id,
         craft_app,
+        outline,
+        time_sec: None,
     })
+}
+
+fn push_image_step(pdf_steps: &mut Vec<(&'static str, Value)>, page_idx: usize, bounds: [f64; 4], meta: &ImageLinkMeta) {
+    pdf_steps.push((
+        "annot_image",
+        json!({
+            "page": page_idx,
+            "bounds": bounds,
+            "path": meta.image,
+            "fit": "fillProportionally",
+            "metadata": {
+                "linked_file": meta.linked_file,
+                "asset_id": meta.asset_id,
+                "craft_app": meta.craft_app,
+                "outline": meta.outline,
+                "time_sec": meta.time_sec,
+            }
+        }),
+    ));
 }
 
 fn apply_page_edits(
@@ -165,7 +314,22 @@ fn apply_page_edits(
         pdf_steps.push(("form_fill", json!({"field": fkey, "value": text})));
     }
 
-    let explicit_source = p.get("source_project").or_else(|| p.get("linked_file")).and_then(Value::as_str);
+    if p.get("character").and_then(Value::as_str).is_some_and(|c| !c.trim().is_empty())
+        && p.get("image").is_none()
+        && let Some(label) = slot_or_label
+    {
+        let slot = page
+            .slots
+            .iter()
+            .find(|sl| sl.label == label && !sl.locked)
+            .ok_or_else(|| bad(&format!("page {page_idx} has no unlocked image slot `{label}`")))?;
+        let fkey = field_key(page_idx, label);
+        let meta = resolve_character_pose_for_storyboard(s, pdf_path, p, &fkey)?;
+        push_image_step(pdf_steps, page_idx, slot.bounds, &meta);
+        state.images.insert(fkey, meta);
+        return Ok(());
+    }
+
     let mut image_entries: Vec<(String, String)> = Vec::new();
     for key in ["images", "image"] {
         if let Some(obj) = p.get(key).and_then(Value::as_object) {
@@ -184,22 +348,9 @@ fn apply_page_edits(
             .iter()
             .find(|sl| sl.label == label && !sl.locked)
             .ok_or_else(|| bad(&format!("page {page_idx} has no unlocked image slot `{label}`")))?;
-        let meta = resolve_storyboard_image_with_link(s, pdf_path, &raw, explicit_source)?;
         let fkey = field_key(page_idx, &label);
-        pdf_steps.push((
-            "annot_image",
-            json!({
-                "page": page_idx,
-                "bounds": slot.bounds,
-                "path": meta.image,
-                "fit": "fillProportionally",
-                "metadata": {
-                    "linked_file": meta.linked_file,
-                    "asset_id": meta.asset_id,
-                    "craft_app": meta.craft_app,
-                }
-            }),
-        ));
+        let meta = resolve_storyboard_image_with_link(s, pdf_path, &raw, p, &fkey)?;
+        push_image_step(pdf_steps, page_idx, slot.bounds, &meta);
         state.images.insert(fkey, meta);
     }
     Ok(())

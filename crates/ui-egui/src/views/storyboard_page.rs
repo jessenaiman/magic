@@ -1,8 +1,9 @@
 //! Seamless `612 × 792 pt` US Letter `storyboard.pdf` (`PDFCraft`) page renderer with
-//! click-in-place text editing and drag-and-drop / click still-image placement directly on the page.
+//! click-in-place text editing, drag-and-drop / Wayland paste / click image placement, and
+//! right-click handoff to `PhotoCraft`, `VectorCraft`, or `EffectCraft` for linked Craft files.
 
 use egui::{
-    Align2, Color32, CornerRadius, FontFamily, FontId, Id, Key, Pos2, Rect, Sense, Stroke,
+    Align2, Color32, CornerRadius, Event, FontFamily, FontId, Id, Key, Pos2, Rect, Sense, Stroke,
     StrokeKind, TextEdit, Ui, Vec2,
 };
 use serde_json::{Value, json};
@@ -12,6 +13,11 @@ use crate::state::{PickerTarget, UiAction, ViewCtx};
 
 pub const PAGE_W_PT: f32 = 612.0;
 pub const PAGE_H_PT: f32 = 792.0;
+
+const SLOT_PICKER_EXTS: &[&str] = &[
+    "png", "jpg", "jpeg", "webp", "pcraft", "psd", "psb", "ora", "xcf", "kra", "pdn",
+    "vectorcraft", "svg", "svgz", "ai", "eps", "af", "afdesign", "afphoto", "ecproj",
+];
 
 pub struct PageSummary {
     pub index: usize,
@@ -57,6 +63,19 @@ fn local_rect(page_rect: Rect, bounds: &[Value]) -> Option<Rect> {
         Pos2::new(x0.clamp(page_rect.min.x, page_rect.max.x), y0.clamp(page_rect.min.y, page_rect.max.y)),
         Pos2::new(x1.clamp(page_rect.min.x, page_rect.max.x), y1.clamp(page_rect.min.y, page_rect.max.y)),
     ))
+}
+
+fn pasted_file_path(ui: &Ui) -> Option<String> {
+    ui.input(|i| {
+        i.events.iter().find_map(|ev| match ev {
+            Event::Paste(raw) => {
+                let first = raw.lines().map(str::trim).find(|l| !l.is_empty() && !l.starts_with('#'))?;
+                let cleaned = first.strip_prefix("file://").unwrap_or(first);
+                std::path::Path::new(cleaned).exists().then(|| cleaned.to_owned())
+            }
+            _ => None,
+        })
+    })
 }
 
 /// Draw a compact miniature page preview (`2-up` left section rail).
@@ -109,8 +128,8 @@ pub fn paint_mini_page(ui: &mut Ui, rect: Rect, page: &PageSummary, selected: bo
 /// Draw a full interactive `storyboard.pdf` page inside the seamless center scroll:
 /// - Locked chrome, editorial rules, and headings are strictly read-only.
 /// - Unlocked text fields become live inline `TextEdit` widgets directly on the page when clicked.
-/// - Unlocked image slots accept OS drag-and-drop still images (`.png`, `.jpg`, `.webp`, `.pcraft`, `.vectorcraft`)
-///   or click-to-pick via `craft-dialogs`.
+/// - Unlocked image slots accept OS drag-and-drop, Wayland clipboard file paste (`Ctrl+V` / `⌘V`),
+///   click-to-pick (`craft-dialogs`), and right-click to open linked `.pcraft`/`.vectorcraft`/`.ecproj`.
 pub fn draw_interactive_page(
     ui: &mut Ui,
     ctx: &mut ViewCtx<'_>,
@@ -145,7 +164,7 @@ pub fn draw_interactive_page(
 
     let is_active = ctx.state.storyboard.current_page == page.index;
     let frame_stroke = if is_active {
-        Stroke::new(1.8, ctx.pal.accent_emerald)
+        Stroke::new(1.8, ctx.pal.accent)
     } else {
         Stroke::new(1.0, Color32::from_rgb(196, 190, 178))
     };
@@ -213,6 +232,7 @@ fn draw_interactive_slots_on_page(
     dropped_paths: &[String],
 ) {
     let pointer_pos = ui.ctx().input(|i| i.pointer.hover_pos().or_else(|| i.pointer.latest_pos()));
+    let pasted = pasted_file_path(ui);
 
     for slot in &page.slots {
         let Some(label) = slot["label"].as_str() else { continue };
@@ -233,7 +253,7 @@ fn draw_interactive_slots_on_page(
             if is_editing {
                 draw_inline_text_editor(ui, ctx, rect, page.index, label, scale);
             } else {
-                let resp = ui.interact(rect, Id::unique(("sb_txt_slot", page.index, label)), Sense::click());
+                let resp = ui.interact(rect, Id::new(("sb_txt_slot", page.index, label)), Sense::click());
                 ctx.reg.record(
                     &format!("sb-field-p{:02}-{label}", page.index),
                     &format!("Edit {} (Page {})", label, page.index + 1),
@@ -245,7 +265,7 @@ fn draw_interactive_slots_on_page(
                     paint_text_slot_value(ui, rect, val_str, filled, required, resp.hovered(), scale);
                 } else if resp.hovered() || (required && !filled) {
                     let outline = if resp.hovered() {
-                        Stroke::new(1.5, ctx.pal.accent_emerald)
+                        Stroke::new(1.5, ctx.pal.accent)
                     } else {
                         Stroke::new(1.0, Color32::from_rgba_unmultiplied(210, 72, 62, 140))
                     };
@@ -266,7 +286,7 @@ fn draw_interactive_slots_on_page(
                 resp.on_hover_text(format!("Click to edit `{label}` in storyboard.pdf"));
             }
         } else {
-            let resp = ui.interact(rect, Id::unique(("sb_img_slot", page.index, label)), Sense::click());
+            let resp = ui.interact(rect, Id::new(("sb_img_slot", page.index, label)), Sense::click());
             ctx.reg.record(
                 &format!("sb-img-p{:02}-{label}", page.index),
                 &format!("Image Slot {} (Page {})", label, page.index + 1),
@@ -296,15 +316,26 @@ fn draw_interactive_slots_on_page(
                 };
                 ui.painter().rect_stroke(rect, CornerRadius::same(2), stroke, StrokeKind::Inside);
             }
+            let linked_meta = slot["linked_file"].as_str().filter(|l| !l.is_empty());
+            let app_meta = slot["craft_app"].as_str().filter(|a| !a.is_empty());
+
             if hovered
-                && let Some(dropped) = dropped_paths.first()
+                && let Some(dropped) = dropped_paths.first().or(pasted.as_ref())
             {
                 ctx.state.storyboard.current_page = page.index;
                 ctx.exec(
                     "storyboard.set",
                     json!({"page": page.index, "label": label, "image": dropped}),
-                    Some("Placed image onto storyboard.pdf"),
+                    Some("Placed artwork onto storyboard.pdf"),
                 );
+            } else if resp.secondary_clicked()
+                && let Some(linked_path) = linked_meta
+            {
+                let mut open_req = json!({"path": linked_path});
+                if let Some(app) = app_meta {
+                    open_req["app"] = json!(app);
+                }
+                ctx.exec("workspace.open", open_req, Some("Opened linked Craft project file"));
             } else if resp.clicked() {
                 ctx.state.storyboard.current_page = page.index;
                 ctx.state.storyboard.editing_page = Some(page.index);
@@ -314,26 +345,21 @@ fn draw_interactive_slots_on_page(
                         page: page.index,
                         slot: label.to_owned(),
                     },
-                    title: format!("Choose Still Image for {label} (Page {:02})", page.index + 1),
-                    extensions: vec![
-                        "png".into(),
-                        "jpg".into(),
-                        "jpeg".into(),
-                        "webp".into(),
-                        "pcraft".into(),
-                        "vectorcraft".into(),
-                    ],
+                    title: format!("Choose Artwork for {label} (Page {:02})", page.index + 1),
+                    extensions: SLOT_PICKER_EXTS.iter().map(|s| (*s).to_owned()).collect(),
                     directory: false,
                     save: false,
                 });
             }
-            let linked_meta = slot["linked_file"].as_str().filter(|l| !l.is_empty());
-            let app_meta = slot["craft_app"].as_str().filter(|a| !a.is_empty());
+
             if let Some(app) = app_meta.or_else(|| linked_meta.map(|_| "linked")) {
-                let badge_txt = app.to_ascii_uppercase();
+                let badge_txt = match slot["time_sec"].as_f64() {
+                    Some(sec) => format!("{} {:.2}S", app.to_ascii_uppercase(), sec),
+                    None => app.to_ascii_uppercase(),
+                };
                 let badge_rect = Rect::from_min_size(
                     Pos2::new(rect.min.x + 3.0, rect.min.y + 3.0),
-                    Vec2::new((badge_txt.len() as f32 * 5.8 + 8.0).min(rect.width() - 6.0), 13.0),
+                    Vec2::new((badge_txt.len() as f32 * 5.6 + 8.0).min(rect.width() - 6.0), 13.0),
                 );
                 if badge_rect.width() > 16.0 && rect.height() > 20.0 {
                     ui.painter().rect_filled(badge_rect, CornerRadius::same(2), Color32::from_black_alpha(165));
@@ -346,9 +372,18 @@ fn draw_interactive_slots_on_page(
                     );
                 }
             }
-            let hover_msg = match linked_meta {
-                Some(lf) => format!("`{label}` · Linked file: {lf} (drop or click to replace)"),
-                None => format!("Drop project asset / image or click to fill `{label}`"),
+            let outline_info = slot["outline"].as_str().filter(|o| !o.is_empty());
+            let hover_msg = match (linked_meta, outline_info, app_meta) {
+                (Some(lf), Some(out), Some(app)) => {
+                    format!("`{label}` · {app} ({out})\nLinked: {lf}\nClick/drop/paste to replace · Right-click to open in {app}")
+                }
+                (Some(lf), _, Some(app)) => {
+                    format!("`{label}` · Linked: {lf}\nClick/drop/paste to replace · Right-click to open in {app}")
+                }
+                (Some(lf), _, None) => {
+                    format!("`{label}` · Linked: {lf}\nClick/drop/paste to replace · Right-click to open")
+                }
+                _ => format!("Drop, paste, or click to place PhotoCraft / VectorCraft / EffectCraft artwork in `{label}`"),
             };
             resp.on_hover_text(hover_msg);
         }
@@ -433,7 +468,7 @@ fn draw_inline_text_editor(
     ui.painter().rect_stroke(
         edit_rect,
         CornerRadius::same(3),
-        Stroke::new(1.8, ctx.pal.accent_emerald),
+        Stroke::new(1.8, ctx.pal.accent),
         StrokeKind::Inside,
     );
 
@@ -455,14 +490,14 @@ fn draw_inline_text_editor(
             edit_rect.shrink(2.0).size(),
             TextEdit::multiline(&mut ctx.state.storyboard.draft_text)
                 .font(FontId::new(font_pt, FontFamily::Proportional))
-                .frame(egui::Frame::NONE),
+                .frame(false),
         )
     } else {
         child.add_sized(
             edit_rect.shrink(2.0).size(),
             TextEdit::singleline(&mut ctx.state.storyboard.draft_text)
                 .font(FontId::new(font_pt, FontFamily::Proportional))
-                .frame(egui::Frame::NONE),
+                .frame(false),
         )
     };
 
