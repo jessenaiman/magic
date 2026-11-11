@@ -427,7 +427,7 @@ fn draw_monotone_cubic_curves(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     let mid_y = pad.max.y - (ctx.state.studio.curve_mid_y as f32) * pad.height();
     let p1 = Pos2::new(pad.min.x + pad.width() * 0.35, mid_y);
     let p2 = Pos2::new(pad.min.x + pad.width() * 0.65, mid_y);
-    paint_cubic_bezier(ui.painter(), [p0, p1, p2, p3], Stroke::new(2.0, ctx.pal.accent_emerald));
+    paint_cubic_bezier(ui, [p0, p1, p2, p3], Stroke::new(2.0, ctx.pal.accent_emerald));
     ui.painter().circle_filled(Pos2::new(pad.center().x, mid_y), 4.0, ctx.pal.accent_amber);
     ctx.reg.record("fc-monotone-curve", "Monotone-Cubic Curve", &resp, None);
 }

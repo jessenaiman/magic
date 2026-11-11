@@ -612,7 +612,7 @@ pub fn cmd_image_generate(s: &mut Session, p: &Value) -> Result<Value> {
     if p["remove_background"].as_bool().unwrap_or(false) || p["transparent_background"].as_bool().unwrap_or(false) {
         let cut_png = out_dir.join(format!("{base_name}-cutout.png"));
         let chroma = p["chroma"].as_str();
-        if CraftHub::isolate_subject_photo(&raw_png, &cut_png, chroma, 0.8).is_ok() && cut_png.is_file() {
+        if CraftHub::remove_background_photo(&raw_png, &cut_png, chroma, 0.8).is_ok() && cut_png.is_file() {
             final_png = cut_png;
         }
     }

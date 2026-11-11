@@ -377,7 +377,7 @@ pub fn cmd_storyboard_bulk_generate(s: &mut Session, p: &Value) -> Result<Value>
     if run_live {
         let mut batch_updates = Vec::new();
         for job in &jobs {
-            let mut gen_req = json!({
+            let gen_req = json!({
                 "prompt": job["prompt"],
                 "references": job["references"],
                 "transparent_background": job["archetype"] == "char",

@@ -293,7 +293,7 @@ impl Server {
                     "project": project,
                     "storyboard": self.run("storyboard.check", json!({})).await.unwrap_or(Value::Null),
                     "timeline": self.run("video.timeline", json!({})).await.unwrap_or(Value::Null),
-                    "bridge": self.run("bridge.status", json!({})).unwrap_or(Value::Null),
+                    "bridge": self.run("bridge.status", json!({})).await.unwrap_or(Value::Null),
                 })),
                 Err(e) => Err(e),
             },

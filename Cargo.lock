@@ -3232,6 +3232,7 @@ version = "0.17.0"
 dependencies = [
  "clap",
  "magic-engine",
+ "magic-mcp",
  "serde",
  "serde_json",
 ]

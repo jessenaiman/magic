@@ -62,8 +62,7 @@ fn inspect_pcraft_dir_bundle(dir: &Path) -> Option<Value> {
         }));
     }
     let manifest_bytes = std::fs::read(dir.join(MANIFEST)).ok()?;
-    let manifest_str = std::str::from_utf8(&manifest_bytes).ok()?;
-    match read_manifest::<IgnoredAny>(manifest_str, &PcraftLimits::default(), PCRAFT_STEPS, PCRAFT_VERSION) {
+    match read_manifest::<IgnoredAny, craft_pcraft_format::Error>(&manifest_bytes, &PcraftLimits::default(), PCRAFT_STEPS, PCRAFT_VERSION) {
         Ok(m) => Some(json!({
             "kind": "pcraft",
             "bundle": "directory",

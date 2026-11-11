@@ -18,7 +18,6 @@ use std::path::{Path, PathBuf};
 
 use serde_json::{Value, json};
 
-pub(crate) use cli::ScopedTempDir;
 pub use discovery::same_canonical_path;
 pub use target::CraftTarget;
 

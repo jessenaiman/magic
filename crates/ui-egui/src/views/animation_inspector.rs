@@ -695,7 +695,7 @@ fn draw_bezier_graph_editor_dock(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str) 
 
         ui.painter().line_segment([p0, p1], Stroke::new(1.0, ctx.pal.accent_amber));
         ui.painter().line_segment([p3, p2], Stroke::new(1.0, ctx.pal.accent_sky));
-        paint_cubic_bezier(ui.painter(), [p0, p1, p2, p3], Stroke::new(2.2, ctx.pal.accent_emerald));
+        paint_cubic_bezier(ui, [p0, p1, p2, p3], Stroke::new(2.2, ctx.pal.accent_emerald));
         ui.painter().circle_filled(p1, 4.4, ctx.pal.accent_amber);
         ui.painter().circle_filled(p2, 4.4, ctx.pal.accent_sky);
         ui.painter().text(Pos2::new(pad.min.x + 2.0, pad.min.y + 2.0), Align2::LEFT_TOP, "Value / Speed Bezier", FontId::monospace(8.5), ctx.pal.text_muted);
