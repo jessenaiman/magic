@@ -432,7 +432,7 @@ fn build_precheck_value(p: &Value, current: &Value, tc_report: &Value, topology:
             "t_pose_ready": t_pose_ready,
             "riggable": riggable,
             "texturecraft_info": tc_report,
-            "recommended_adjustment": default_stem,
+            "recommended_adjustment": alt_budget,
         }),
     ))
 }

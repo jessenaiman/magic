@@ -111,6 +111,14 @@ pub fn cmd_character_rig(s: &mut Session, p: &Value) -> Result<Value> {
     }
     effectcraft(&view.dir, Some(&project), &steps, true)?;
     record_rest(&view, &project, parts)?;
+    let preview_png = project.with_file_name(format!("{}-{}-preview.png", view.id, view.view));
+    let _ = super::effectcraft_frame(&project, &view.comp(), 0.0, 960, &preview_png);
+    if s.project_path.is_some() && project.is_file() {
+        let _ = s.execute(
+            "project.add_asset",
+            json!({"path": project, "kind": "character", "name": format!("{} Rig", view.id), "if_not_exists": true, "load": false}),
+        );
+    }
     Ok(json!({
         "ok": true,
         "ecproj": project,

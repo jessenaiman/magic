@@ -36,7 +36,7 @@ pub fn show(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         i.raw
             .dropped_files
             .iter()
-            .map(|f| f.path().to_string_lossy().into_owned())
+            .filter_map(|f| f.path.as_ref().map(|p| p.to_string_lossy().into_owned()))
             .collect()
     });
 
@@ -277,7 +277,7 @@ fn draw_sections_two_up_rail(ui: &mut Ui, ctx: &mut ViewCtx<'_>, pages: &[PageSu
                                         None,
                                     );
                                     let selected = ctx.state.storyboard.current_page == pg.index;
-                                    paint_mini_page(ui, r, pg, selected, ctx.pal.accent_emerald);
+                                    paint_mini_page(ui, r, pg, selected, ctx.pal.accent);
                                     if resp.clicked() {
                                         ctx.state.storyboard.current_page = pg.index;
                                         ctx.state.storyboard.scroll_to_page = Some(pg.index);
@@ -313,7 +313,7 @@ fn draw_seamless_document_scroll(
     fill_card(ui, ctx.pal, true, |ui| {
         ui.horizontal(|ui| {
             ui.label(
-                RichText::new("Click any text field on the page to edit · Drop an image onto any grey slot")
+                RichText::new("Click any text field to edit · Drop, paste, or click any slot to place artwork · Right-click a filled slot to open its linked Craft file")
                     .size(10.5)
                     .color(ctx.pal.text_muted),
             );

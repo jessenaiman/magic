@@ -293,7 +293,7 @@ impl Server {
                     "project": project,
                     "storyboard": self.run("storyboard.check", json!({})).await.unwrap_or(Value::Null),
                     "timeline": self.run("video.timeline", json!({})).await.unwrap_or(Value::Null),
-                    "bridge": self.run("bridge.status", json!({})).await.unwrap_or(Value::Null),
+                    "bridge": self.run("bridge.status", json!({})).unwrap_or(Value::Null),
                 })),
                 Err(e) => Err(e),
             },
@@ -353,7 +353,7 @@ impl Server {
         self.exec_doc_inspect(p.target.as_deref()).await
     }
 
-    #[tool(description = "Render a stage frame PNG (`studio` via FilmCraft, `lyrics`/`motion`/`animation` via EffectCraft, or `storyboard` via DesignCraft).")]
+    #[tool(description = "Render a stage frame PNG (`studio` via FilmCraft, `lyrics`/`motion`/`animation` via EffectCraft, or `storyboard` via PDFCraft).")]
     async fn render_preview(&self, Parameters(p): Parameters<PreviewParams>) -> CallToolResult {
         let sec = p.time.unwrap_or(0.0);
         let res = match p.stage.as_deref().unwrap_or("studio") {
@@ -458,7 +458,7 @@ impl Server {
         output(self.run("ui.type", compact(json!(p))).await)
     }
 
-    #[tool(description = "Capture a PNG (`{window: true, path?, panel?, id?}` for the live eframe window, or `{window: false, page?}` for a headless DesignCraft storyboard spread).")]
+    #[tool(description = "Capture a PNG (`{window: true, path?, panel?, id?}` for the live eframe window, or `{window: false, page?}` for a headless PDFCraft storyboard page).")]
     async fn screenshot(&self, Parameters(p): Parameters<ShotParams>) -> CallToolResult {
         if p.window == Some(false) {
             return output(self.run("storyboard.thumbnail", json!({"page": p.page.unwrap_or(0), "scale": 1.0})).await);
@@ -481,7 +481,7 @@ impl ServerHandler for Server {
         rmcp::model::ServerConfig::new(rmcp::model::ServerCapabilities::builder().enable_tools().build())
             .with_server_info(rmcp::model::Implementation::new("magic", env!("CARGO_PKG_VERSION")))
             .with_instructions(
-                "Magic Studio is a pure-Rust eframe/egui 0.37 coordinator shell over DesignCraft (:7979), PhotoCraft (:9879), VectorCraft (:9880), EffectCraft (:9877, mcp --autosave), and FilmCraft (:9876, FILMCRAFT_CONTROL_TOKEN). Start `magic --control 9875` and connect with `magic-cli mcp --connect 127.0.0.1:9875` (or `--bridge`) to drive the live window (`inspect_ui`, `ui_elements`, `ui_click`, `screenshot`, `ui_control`), or use `bridge_craft` / `video.finish` / `effect.exec` to drive FilmCraft and EffectCraft directly."
+                "Magic Studio is a pure-Rust eframe/egui 0.37 coordinator shell over PDFCraft (~/.pdfcraft-control.json), DesignCraft (:7979), PhotoCraft (:9879), VectorCraft (:9880), EffectCraft (:9877, mcp --autosave), and FilmCraft (:9876, FILMCRAFT_CONTROL_TOKEN). Start `magic --control 9875` and connect with `magic-cli mcp --connect 127.0.0.1:9875` (or `--bridge`) to drive the live window (`inspect_ui`, `ui_elements`, `ui_click`, `screenshot`, `ui_control`), or use `bridge_craft` / `video.finish` / `effect.exec` to drive FilmCraft and EffectCraft directly."
                     .to_string(),
             )
     }

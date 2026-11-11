@@ -101,7 +101,7 @@ struct NewArgs {
 
 #[derive(Subcommand)]
 enum Cmd {
-    /// Create a new song project (`--audio` transcribes timestamps, syncs FilmCraft lyrics, and initializes `storyboard.designcraft`)
+    /// Create a new song project (`--audio` transcribes timestamps, syncs FilmCraft lyrics, and initializes printable `storyboard.pdf`)
     New(NewArgs),
     /// List engine commands (`id` and `label`; `describe` shows one in full)
     Commands { filter: Option<String> },

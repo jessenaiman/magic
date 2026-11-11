@@ -1,5 +1,5 @@
-//! Workshop file intake, audio/target linking, PhotoCraft panel grid splitting,
-//! draft approval, and project file catalog/trash handlers.
+//! Workshop file intake, audio/target linking, native `PhotoCraft` (`image.crop` + `batch`)
+//! panel grid splitting, draft approval, and project file catalog/trash handlers.
 
 use std::path::{Path, PathBuf};
 
@@ -11,7 +11,7 @@ use crate::cmd::project::workshop::{
     workshop_asset_files, workshop_status,
 };
 use crate::workspace::{has_extension, resolve_workspace_path, song_audio_path};
-use crate::{EngineError, Result, Session};
+use crate::{CraftHub, CraftTarget, EngineError, Result, Session};
 
 fn numbered_prompts(text: &str) -> std::collections::BTreeMap<usize, String> {
     let mut out = std::collections::BTreeMap::new();
@@ -83,13 +83,14 @@ fn requested_paths(s: &Session, params: &Value) -> Result<Vec<PathBuf>> {
 }
 
 fn require_addable(path: &Path, only: Option<&[&str]>) -> Result<()> {
-    if !path.is_file() {
+    if !craft_util::media::is_craft_doc_path(path) {
         return Err(EngineError::InvalidParams(format!("file not found: {}", path.display())));
     }
     if let Some(exts) = only
         && !has_extension(path, exts)
+        && CraftTarget::from_path(path).is_none()
     {
-        return Err(EngineError::InvalidParams(format!("not an image: {}", path.display())));
+        return Err(EngineError::InvalidParams(format!("not an image or Craft artwork: {}", path.display())));
     }
     Ok(())
 }
@@ -109,13 +110,13 @@ fn place_file(path: &Path, dest: &Path) -> Result<()> {
     if dest == path {
         return Ok(());
     }
-    if dest.is_file() && std::fs::read(dest)? != std::fs::read(path)? {
+    if dest.is_file() && path.is_file() && std::fs::read(dest)? != std::fs::read(path)? {
         return Err(EngineError::InvalidParams(format!(
             "Material destination exists with different bytes: {}. Rename or explicitly resolve the collision; original retained.",
             dest.display()
         )));
     }
-    if !dest.exists() {
+    if !dest.exists() && path.is_file() {
         std::fs::copy(path, dest)?;
     }
     Ok(())
@@ -178,7 +179,7 @@ fn grid_dims(params: &Value) -> (u32, u32, u32) {
     (columns, rows, inset)
 }
 
-fn crop_panels(_dir: &Path, image: &Path, out_dir: &Path, columns: u32, rows: u32, inset: u32, (cw, ch): (u32, u32)) -> Result<Vec<PathBuf>> {
+fn crop_panels(image: &Path, out_dir: &Path, columns: u32, rows: u32, inset: u32, (cw, ch): (u32, u32)) -> Result<Vec<PathBuf>> {
     let mut panels = Vec::new();
     for r in 0..rows {
         for c in 0..columns {
@@ -188,8 +189,8 @@ fn crop_panels(_dir: &Path, image: &Path, out_dir: &Path, columns: u32, rows: u3
             let y = r * ch + inset;
             let w = cw - 2 * inset;
             let h = ch - 2 * inset;
-            let steps = [("canvas.crop", json!({"x": x, "y": y, "width": w, "height": h})), ("file.export", json!({"path": out, "format": "png"}))];
-            crate::CraftHub::run_batch(crate::CraftTarget::Photo, Some(image), None, &steps)?;
+            let steps = [("image.crop", json!({"x": x, "y": y, "width": w, "height": h}))];
+            CraftHub::run_batch(CraftTarget::Photo, Some(image), Some(&out), &steps)?;
             panels.push(out);
         }
     }
@@ -225,14 +226,39 @@ pub fn cmd_workshop_split_panels(s: &mut Session, params: &Value) -> Result<Valu
         .map(|p| resolve_workspace_path(s, p))
         .ok_or_else(|| EngineError::InvalidParams("missing panel grid 'image'".into()))?;
     let (columns, rows, inset) = grid_dims(params);
-    let (w, h) = image::image_dimensions(&image)?;
+    let (w, h) = crate::cmd::character::cut::photocraft_dimensions(&image)?;
     let (cw, ch) = (w / columns, h / rows);
     if cw <= 2 * inset || ch <= 2 * inset {
         return Err(EngineError::InvalidParams("panels too small for that grid and inset".into()));
     }
     let out_dir = dir.join(STORYBOARD_DIR);
     std::fs::create_dir_all(&out_dir)?;
-    let panels = crop_panels(&dir, &image, &out_dir, columns, rows, inset, (cw, ch))?;
+    let mut panels = crop_panels(&image, &out_dir, columns, rows, inset, (cw, ch))?;
+    if let Some(actions) = params.get("actions").filter(|v| v.is_array() || v.is_object()) {
+        let graded_dir = out_dir.join("graded");
+        if CraftHub::batch_grade_photo_folder(actions, &out_dir, &graded_dir).is_ok() {
+            panels = panels
+                .into_iter()
+                .map(|p| {
+                    let g = graded_dir.join(p.file_name().unwrap_or_default());
+                    if g.is_file() { g } else { p }
+                })
+                .collect();
+        }
+    }
+    if params.get("place_in_storyboard").and_then(Value::as_bool).unwrap_or(false) {
+        for (idx, panel_png) in panels.iter().enumerate() {
+            let _ = crate::cmd::storyboard::cmd_storyboard_set(
+                s,
+                &json!({
+                    "scene": idx + 1,
+                    "label": "scene_image",
+                    "image": panel_png,
+                    "linked_file": image,
+                }),
+            );
+        }
+    }
     let prompts_written = write_prompts(s, params, &panels, &image)?;
     let mut status = workshop_status(s)?;
     status["panels"] = json!(panels);

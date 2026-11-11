@@ -22,6 +22,7 @@ pub(crate) const fn is_long_running_id(id: &str) -> bool {
             | b"video.assemble"
             | b"audio.analyze"
             | b"storyboard.bulk_generate"
+            | b"storyboard.grade"
             | b"workshop.split_panels"
             | b"fidget.stage"
             | b"image.generate"

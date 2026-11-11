@@ -101,7 +101,7 @@ pub(crate) fn discover_character_folders(project_dir: &Path) -> Vec<(String, Opt
                 .into_iter()
                 .flatten()
                 .flatten()
-                .any(|f| f.path().is_file() && crate::workspace::has_extension(&f.path(), &["pcraft", "psd", "ecproj", "vectorcraft", "svg", "anicraft", "png", "webp", "jpg", "jpeg"]));
+                .any(|f| craft_util::media::is_craft_doc_path(&f.path()) && crate::workspace::has_extension(&f.path(), &["pcraft", "psd", "psb", "ora", "xcf", "kra", "ecproj", "vectorcraft", "svg", "ai", "anicraft", "png", "webp", "jpg", "jpeg"]));
         if direct_has_craft {
             out.push((name.to_owned(), None, entry));
             continue;
@@ -209,7 +209,7 @@ fn find_by_ext(dir: &Path, id: &str, folder_name: &str, view: &str, is_flat: boo
         ]);
     }
     for c in candidates {
-        if c.is_file() {
+        if craft_util::media::is_craft_doc_path(&c) {
             return Some(c);
         }
     }
@@ -218,7 +218,7 @@ fn find_by_ext(dir: &Path, id: &str, folder_name: &str, view: &str, is_flat: boo
         .flatten()
         .flatten()
         .map(|e| e.path())
-        .filter(|p| p.is_file() && p.extension().is_some_and(|e| e.eq_ignore_ascii_case(ext)))
+        .filter(|p| craft_util::media::is_craft_doc_path(p) && p.extension().is_some_and(|e| e.eq_ignore_ascii_case(ext)))
         .collect();
     all.sort();
     all.iter().find(|p| p.file_stem().and_then(|s| s.to_str()).is_none_or(|s| !s.contains("before-"))).cloned().or_else(|| all.into_iter().next())
@@ -344,7 +344,7 @@ impl View {
             return self.require_photo_doc(made_by);
         }
         let path = self.file(ext);
-        if path.is_file() {
+        if craft_util::media::is_craft_doc_path(&path) {
             if ext == "ecproj" {
                 let _ = check_ecproj_head(&path)?;
             }

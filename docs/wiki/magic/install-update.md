@@ -6,8 +6,8 @@ description: Install Magic Studio, magic-cli, and magic-mcp, and connect live --
 ## Install From Source
 
 ```sh
-git clone https://github.com/jessenaiman/magic.git
-cd magic
+git clone https://github.com/jessenaiman/magic-studio-app.git
+cd magic-studio-app
 ./install.sh --from-source
 export PATH="$HOME/.local/bin:${CARGO_HOME:-$HOME/.cargo}/bin:$PATH"
 ```

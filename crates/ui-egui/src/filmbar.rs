@@ -201,7 +201,7 @@ pub fn paint_local_image(
     let img = Image::from_uri(uri);
     let aspect = cached_image_aspect(raw_path).or_else(|| {
         match img.load_for_size(ui.ctx(), inner.size()) {
-            Ok(egui::load::TexturePoll::Ready { texture }) if texture.size.y > 0.0 => {
+            Ok(egui::load::TexturePoll::Ready { texture }) if texture.size.y > 0 => {
                 Some((texture.size.x as f32) / (texture.size.y as f32))
             }
             _ => None,

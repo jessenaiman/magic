@@ -633,8 +633,8 @@ pub fn cmd_character_import(s: &mut Session, p: &Value) -> Result<Value> {
     let raw_path = p["path"].as_str().ok_or_else(|| bad("path=<file> is required"))?;
     let source = crate::workspace::resolve_workspace_path(s, raw_path);
     let ext = source.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase).unwrap_or_default();
-    if matches!(ext.as_str(), "ecproj" | "pcraft" | "psd" | "vectorcraft" | "svg" | "anicraft") {
-        if !source.is_file() {
+    if matches!(ext.as_str(), "ecproj" | "pcraft" | "psd" | "psb" | "ora" | "xcf" | "kra" | "pdn" | "vectorcraft" | "svg" | "ai" | "af" | "afdesign" | "afphoto" | "anicraft") {
+        if !craft_util::media::is_craft_doc_path(&source) {
             return Err(bad(format!("{} does not exist", source.display())));
         }
         let head = (ext == "ecproj").then(|| check_ecproj_head(&source)).transpose()?;
@@ -655,7 +655,7 @@ pub fn cmd_character_import(s: &mut Session, p: &Value) -> Result<Value> {
         let char_dir = character_folder(&project_dir, &char_id);
         std::fs::create_dir_all(&char_dir)?;
         let file_name = source.file_name().ok_or_else(|| bad("invalid Craft document filename"))?;
-        let dest = if source.starts_with(project_dir.join("assets/characters")) || source.starts_with(project_dir.join("animations")) {
+        let dest = if source.starts_with(project_dir.join("assets/characters")) || source.starts_with(project_dir.join("animations")) || source.is_dir() {
             source.clone()
         } else {
             let d = char_dir.join(file_name);

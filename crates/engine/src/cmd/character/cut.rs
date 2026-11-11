@@ -225,11 +225,22 @@ pub fn cmd_character_cut(s: &mut Session, p: &Value) -> Result<Value> {
         part["file"] = files.get(&id).cloned().unwrap_or(Value::Null);
     }
     let svg = view.file("svg");
+    let vcraft = view.file("vectorcraft");
     if let Ok(silhouette_pts) = vectorcraft_trace_outline(&image, &svg, 2.0)
         && !silhouette_pts.is_empty()
     {
+        let _ = CraftHub::export_vector_preview(&svg, &vcraft);
         parts["silhouette_svg"] = json!(svg);
+        if vcraft.is_file() {
+            parts["silhouette_vectorcraft"] = json!(vcraft);
+        }
         parts["silhouette_points"] = json!(silhouette_pts.len());
+    }
+    if s.project_path.is_some() && craft_util::media::is_craft_doc_path(&pcraft) {
+        let _ = s.execute(
+            "project.add_asset",
+            json!({"path": pcraft, "kind": "auto", "name": format!("{} ({})", view.id, view.view), "if_not_exists": true, "load": false}),
+        );
     }
     if parts["animation_style"].is_null() {
         parts["animation_style"] = json!("cutout_2_5d");

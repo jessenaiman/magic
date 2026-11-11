@@ -73,7 +73,7 @@ impl Default for ProjectPrefs {
             root: None,
             characters_root: None,
             storyboard_template: "magic".into(),
-            storyboard_format: "designcraft".into(),
+            storyboard_format: "pdfcraft".into(),
             storyboard_locked: true,
         }
     }
@@ -412,7 +412,7 @@ impl MagicPrefs {
             "project.root" => self.project.root = opt_str_from_value(value),
             "project.characters_root" => self.project.characters_root = opt_str_from_value(value),
             "project.storyboard_template" => self.project.storyboard_template = value.as_str().unwrap_or("magic").to_owned(),
-            "project.storyboard_format" => self.project.storyboard_format = value.as_str().unwrap_or("designcraft").to_owned(),
+            "project.storyboard_format" => self.project.storyboard_format = value.as_str().unwrap_or("pdfcraft").to_owned(),
             "project.storyboard_locked" => self.project.storyboard_locked = value.as_bool().unwrap_or(true),
             "lyrics.default_size" => self.lyrics.default_size = value.as_i64().unwrap_or(72),
             "lyrics.outline" => self.lyrics.outline = value.as_bool().unwrap_or(true),

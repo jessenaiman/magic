@@ -23,6 +23,17 @@ use crate::{Result, UtilError};
 
 const PCRAFT_STEPS: &[PcraftStep] = &[];
 
+/// True when `path` is an existing Craft file or an unpacked PhotoCraft `.pcraft` directory bundle
+/// containing `manifest.json` (`craft-pcraft-format`).
+pub fn is_craft_doc_path(path: &Path) -> bool {
+    if path.is_file() {
+        return true;
+    }
+    path.is_dir()
+        && path.extension().is_some_and(|e| e.eq_ignore_ascii_case("pcraft"))
+        && path.join(MANIFEST).is_file()
+}
+
 /// Metadata read from an `.ecproj` header, tolerating `ReadError::TooNew` so files saved by a
 /// newer ArtCraft Launcher `effectcraft` release continue to work via `effectcraft-cli`.
 #[derive(Clone, Debug)]
@@ -62,7 +73,8 @@ fn inspect_pcraft_dir_bundle(dir: &Path) -> Option<Value> {
         }));
     }
     let manifest_bytes = std::fs::read(dir.join(MANIFEST)).ok()?;
-    match read_manifest::<IgnoredAny, craft_pcraft_format::Error>(&manifest_bytes, &PcraftLimits::default(), PCRAFT_STEPS, PCRAFT_VERSION) {
+    let manifest_str = std::str::from_utf8(&manifest_bytes).ok()?;
+    match read_manifest::<IgnoredAny>(manifest_str, &PcraftLimits::default(), PCRAFT_STEPS, PCRAFT_VERSION) {
         Ok(m) => Some(json!({
             "kind": "pcraft",
             "bundle": "directory",
@@ -130,17 +142,44 @@ pub fn inspect_craft_envelope(path: &Path) -> Option<Value> {
     }))
 }
 
+/// Build a concise human-readable outline tag (`layers`, `pages`/`artboards`/`comps`, canvas size)
+/// directly via `craft-doc` / `craft-pcraft-format` without spawning any subprocess.
+pub fn craft_outline_summary(path: &Path) -> Option<String> {
+    if path.is_dir() && path.extension().is_some_and(|e| e.eq_ignore_ascii_case("pcraft")) {
+        let info = inspect_pcraft_dir_bundle(path)?;
+        let ver = info["version"].as_u64().unwrap_or(1);
+        return Some(format!("pcraft dir v{ver}"));
+    }
+    let bytes = std::fs::read(path).ok()?;
+    if craft_doc::sniff(&bytes).is_none() {
+        return None;
+    }
+    let outline = craft_doc::outline(&bytes, &Limits::default()).ok()?;
+    let layers = outline.layers.len();
+    let pages = outline.pages.len();
+    if let Some(c) = outline.canvas {
+        return Some(format!("{}x{} · {} layers", c.width, c.height, layers));
+    }
+    if let Some(first_pg) = outline.pages.first() {
+        if pages > 1 {
+            return Some(format!("{pages} pages/comps · {layers} layers"));
+        }
+        return Some(format!("{} · {layers} layers", first_pg.name));
+    }
+    (layers > 0).then(|| format!("{layers} layers"))
+}
+
 /// Extract the embedded composite or thumbnail PNG rendition from a `.pcraft` (directory bundle or
-/// ZIP) or `.vectorcraft` document directly via `craft-pcraft-format` / `craft-doc` and write it
-/// atomically via `craft-atomic` without spawning `photocraft-cli` or `vectorcraft-cli`.
+/// ZIP), `.vectorcraft`, or `.ecproj` document directly via `craft-pcraft-format` / `craft-doc`
+/// and write it atomically via `craft-atomic` without spawning any CLI subprocess.
 pub fn extract_craft_preview(path: &Path, out_png: &Path) -> Result<bool> {
     if path.is_dir() && path.extension().is_some_and(|e| e.eq_ignore_ascii_case("pcraft")) {
         if path.join(SAVE_LOCK).exists() {
             return Ok(false);
         }
-        let manifest_ok = std::fs::read(path.join(MANIFEST))
+        let manifest_ok = std::fs::read_to_string(path.join(MANIFEST))
             .ok()
-            .and_then(|raw| read_manifest::<IgnoredAny, craft_pcraft_format::Error>(&raw, &PcraftLimits::default(), PCRAFT_STEPS, PCRAFT_VERSION).ok());
+            .and_then(|raw| read_manifest::<IgnoredAny>(&raw, &PcraftLimits::default(), PCRAFT_STEPS, PCRAFT_VERSION).ok());
         let candidates: Vec<&str> = match manifest_ok.as_ref() {
             Some(m) => [m.full_composite.as_deref(), m.composite.as_deref(), m.thumbnail.as_deref()]
                 .into_iter()
@@ -204,9 +243,17 @@ pub fn extract_craft_pdf(path: &Path, out_pdf: &Path) -> Result<bool> {
     Ok(true)
 }
 
-/// Read `(width, height, has_alpha)` from an image header or `craft_doc::outline` without
-/// decoding full pixel buffers into RAM.
+/// Read `(width, height, has_alpha)` from an image header, `.pcraft` directory bundle, or
+/// `craft_doc::outline` without decoding full pixel buffers into RAM.
 pub fn fast_dimensions(path: &Path) -> Option<(u32, u32, bool)> {
+    if path.is_dir() && path.extension().is_some_and(|e| e.eq_ignore_ascii_case("pcraft")) {
+        for rel in [FULL_COMPOSITE, COMPOSITE, THUMB] {
+            if let Ok((w, h)) = image::image_dimensions(path.join(rel)) {
+                return Some((w, h, true));
+            }
+        }
+        return None;
+    }
     if let Ok((w, h)) = image::image_dimensions(path) {
         let ext = path.extension().and_then(|e| e.to_str()).unwrap_or_default().to_ascii_lowercase();
         let has_alpha = matches!(ext.as_str(), "png" | "webp" | "gif" | "svg" | "tif" | "tiff");

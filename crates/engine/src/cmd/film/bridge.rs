@@ -594,7 +594,7 @@ pub fn cmd_words_captions_sync(s: &mut Session, p: &Value) -> Result<Value> {
             &json!({"path": pulled, "format": "srt", "track": "C1"}),
         )?;
         let imported = if pulled.is_file() {
-            crate::cmd::project::transcript::cmd_workshop_import_transcript(s, &json!({"path": pulled, "replace": true})).ok()
+            crate::workshop::cmd_workshop_import_transcript(s, &json!({"path": pulled, "replace": true})).ok()
         } else {
             None
         };

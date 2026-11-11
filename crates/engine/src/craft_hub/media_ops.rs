@@ -1,6 +1,9 @@
 //! Native `PhotoCraft`, `VectorCraft`, and `EffectCraft` media pipelines routed through [`CraftHub`]:
 //! - Background & subject isolation (`PhotoCraft` `layer.removeBackground`, `select.subject`,
 //!   `select.colorRange`, `select.refineEdge`, `layer.maskAllObjects`, plus `EffectCraft` `Keylight (1.2)`).
+//! - Non-destructive `PhotoCraft` Storyboard panel grading & styles (`layer.newAdjustmentLayer.curves`,
+//!   `layer.newAdjustmentLayer.vibrance`, `layer.newAdjustmentLayer.colorLookup` `.cube`/`.3dl`/`.look`,
+//!   `filter.sharpen.smartSharpen`, `layer.layerStyle.*`, and `photocraft-cli batch --actions`).
 //! - Vector subject & stroke tracing (`VectorCraft` `imageTrace.make` with `ignoreWhite: true`,
 //!   `method: "overlapping"`, `createStrokes`, `imageTrace.expand`).
 //! - EffectCraft timeline interchange (`file.exportTimeline`) & ProRes 4444 RGBA renders (`renderQueue.*`).
@@ -10,7 +13,7 @@ use std::path::{Path, PathBuf};
 
 use serde_json::{Value, json};
 
-use super::{CraftHub, CraftTarget};
+use super::{CraftHub, CraftTarget, ScopedTempDir, cli};
 use crate::{EngineError, Result};
 
 fn bad(msg: impl Into<String>) -> EngineError {
@@ -19,15 +22,43 @@ fn bad(msg: impl Into<String>) -> EngineError {
 
 impl CraftHub {
     /// True when the target ArtCraft binary or CLI is installed on the host (`PATH` / ArtCraft Launcher).
-    /// Used especially for `CraftTarget::Ani` (`AniCraft`, pre-alpha) so cel workflows stay optional.
     pub fn is_installed(target: CraftTarget) -> bool {
         crate::workspace::find_executable(target.cli_name()).is_ok() || crate::workspace::find_executable(target.app_bin()).is_ok()
+    }
+
+    /// Export a flat PNG composite preview of any PhotoCraft-supported layered or HDR file
+    /// (`.pcraft`, `.psd`, `.psb`, `.ora`, `.xcf`, `.kra`, `.pdn`, `.afphoto`, `.exr`, `.hdr`, `.fits`, `.heic`).
+    pub fn export_photo_preview(doc: &Path, out_png: &Path) -> Result<()> {
+        cli::export_photo_flat(doc, out_png)
+    }
+
+    /// Export a flat PNG or PDF rendition of any VectorCraft-supported vector/Affinity file
+    /// (`.vectorcraft`, `.ai`, `.eps`, `.svg`, `.svgz`, `.dxf`, `.emf`, `.wmf`, `.af`, `.afdesign`, `.afpub`).
+    pub fn export_vector_preview(doc: &Path, out_file: &Path) -> Result<()> {
+        cli::export_vector_flat(doc, out_file)
+    }
+
+    /// Run `photocraft-cli batch --actions <actions.json> --in <in_dir> --out <out_dir>` across a folder.
+    pub fn batch_grade_photo_folder(actions: &Value, in_dir: &Path, out_dir: &Path) -> Result<Value> {
+        if !in_dir.is_dir() {
+            return Err(bad(format!("input folder does not exist: {}", in_dir.display())));
+        }
+        let tmp = ScopedTempDir::new("magic-photocraft-batch")?;
+        let actions_path = tmp.path().join("grade.json");
+        let raw = serde_json::to_vec_pretty(actions).map_err(|e| bad(e.to_string()))?;
+        craft_atomic::atomic_write(&actions_path, &raw)?;
+        cli::run_photo_batch_actions(&actions_path, in_dir, out_dir)
+    }
+
+    /// Alias for [`Self::remove_background_photo`] used by `craft_ai` and `photo.*` callers.
+    pub fn isolate_subject_photo(input: &Path, output: &Path, chroma_hex: Option<&str>, feather_px: f64) -> Result<Value> {
+        Self::remove_background_photo(input, output, chroma_hex, feather_px)
     }
 
     /// Isolate the foreground subject and remove the background of `input` into `output` (`.png` / `.psd` / `.pcraft`)
     /// using native `PhotoCraft` commands — never hand-rolled pixel loops or overwriting `input` headless.
     pub fn remove_background_photo(input: &Path, output: &Path, chroma_hex: Option<&str>, feather_px: f64) -> Result<Value> {
-        if !input.is_file() {
+        if !craft_util::media::is_craft_doc_path(input) {
             return Err(bad(format!("input image does not exist: {}", input.display())));
         }
         if super::same_canonical_path(input, output) {
@@ -56,6 +87,69 @@ impl CraftHub {
             "output": output,
             "chroma": chroma_hex,
             "steps": results.len(),
+        }))
+    }
+
+    /// Apply non-destructive PhotoCraft adjustment layers, smart sharpen, background isolation, or
+    /// layer styles for a Storyboard image slot, writing both an editable `.pcraft` project and a
+    /// flat composite `.png` preview.
+    pub fn process_storyboard_photo(input: &Path, out_pcraft: &Path, out_png: &Path, opts: &Value) -> Result<Value> {
+        if !craft_util::media::is_craft_doc_path(input) {
+            return Err(bad(format!("input image does not exist: {}", input.display())));
+        }
+        if let Some(parent) = out_pcraft.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        if let Some(parent) = out_png.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        let mut steps: Vec<(&'static str, Value)> = Vec::new();
+        if opts["remove_background"].as_bool() == Some(true) {
+            if let Some(hex) = opts["chroma"].as_str().map(str::trim).filter(|s| !s.is_empty()) {
+                steps.push(("select.colorRange", json!({"color": hex, "fuzziness": 42, "invert": true})));
+                steps.push(("select.refineEdge", json!({"smooth": 2, "feather": 0.8, "contrast": 20, "shiftEdge": -10})));
+                steps.push(("layer.layerMask.revealSelection", json!({})));
+                steps.push(("select.deselect", json!({})));
+            } else {
+                steps.push(("layer.removeBackground", json!({})));
+                steps.push(("select.refineEdge", json!({"smooth": 2, "feather": 0.8, "contrast": 16, "shiftEdge": -6})));
+            }
+        }
+        if opts["auto_tone"].as_bool() == Some(true) {
+            steps.push(("image.autoTone", json!({})));
+        }
+        if opts["auto_contrast"].as_bool() == Some(true) {
+            steps.push(("image.autoContrast", json!({})));
+        }
+        if opts["auto_color"].as_bool() == Some(true) {
+            steps.push(("image.autoColor", json!({})));
+        }
+        if let Some(vib) = opts["vibrance"].as_f64() {
+            steps.push(("layer.newAdjustmentLayer.vibrance", json!({"vibrance": vib, "saturation": opts["saturation"].as_f64().unwrap_or(0.0)})));
+        }
+        if let Some(pts) = opts["curves"].as_array().filter(|a| !a.is_empty()) {
+            steps.push(("layer.newAdjustmentLayer.curves", json!({"points": pts})));
+        }
+        if let Some(lut) = opts["lut"].as_str().map(str::trim).filter(|s| !s.is_empty()) {
+            steps.push(("layer.newAdjustmentLayer.colorLookup", json!({"path": lut})));
+        }
+        if let Some(amt) = opts["sharpen"].as_f64().filter(|&v| v > 0.0) {
+            steps.push(("filter.sharpen.smartSharpen", json!({"amount": amt})));
+        }
+        if let Some(stroke_obj) = opts.get("stroke").filter(|v| v.is_object()) {
+            steps.push(("layer.layerStyle.stroke", stroke_obj.clone()));
+        }
+        if let Some(shadow_obj) = opts.get("drop_shadow").filter(|v| v.is_object()) {
+            steps.push(("layer.layerStyle.dropShadow", shadow_obj.clone()));
+        }
+        steps.push(("file.saveACopy", json!({"path": out_png, "overwrite": true})));
+        let res = Self::run_batch(CraftTarget::Photo, Some(input), Some(out_pcraft), &steps)?;
+        Ok(json!({
+            "ok": true,
+            "engine": "PhotoCraft",
+            "pcraft": out_pcraft,
+            "png": out_png,
+            "steps": res.len(),
         }))
     }
 

@@ -111,7 +111,7 @@ fn install_macos_menu(ctx: &egui::Context, initial: &UiShellState) -> Option<Mac
         raw_input: Box::new(move |raw| {
             raw_ref.borrow_mut().raw_input(raw);
         }),
-        sync_frame: Box::<dyn FnMut(&egui::Context, &UiShellState, bool, &dyn Fn(&str) -> bool) -> Vec<CommandRef>>::from(Box::new(
+        sync_frame: Box<dyn FnMut(&egui::Context, &UiShellState, bool, &dyn Fn(&str) -> bool) -> Vec<CommandRef>>::from(Box::new(
             move |egui_ctx, state, modal, is_enabled| {
                 let mut menu = frame_ref.borrow_mut();
                 menu.set_gate(Gate {

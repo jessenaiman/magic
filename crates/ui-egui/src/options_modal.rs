@@ -772,7 +772,7 @@ pub fn draw_command_palette_popup(egui_ctx: &egui::Context, ctx: &mut ViewCtx<'_
         .filter(|spec| {
             spec.id.to_ascii_lowercase().contains(&q)
                 || spec.label.to_ascii_lowercase().contains(&q)
-                || spec.menu.iter().any(|part| part.to_ascii_lowercase().contains(&q))
+                || spec.category.to_ascii_lowercase().contains(&q)
         })
         .take(10)
         .collect();

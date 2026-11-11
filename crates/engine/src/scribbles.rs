@@ -1,6 +1,6 @@
 //! Fidget prompt staging (`fidget.prepare`, `fidget.stage`) and Scribbles template workflows
 //! (`scribbles.*`) backed strictly by [`crate::craft_ai`] (`storytold/craft-ai-integrations`),
-//! `PhotoCraft`, `VectorCraft`, and `EffectCraft`.
+//! Storyboard reference resolution (Rule 3), `PhotoCraft`, `VectorCraft`, and `EffectCraft`.
 
 use std::path::PathBuf;
 
@@ -70,7 +70,7 @@ pub fn parse_frontmatter_template(text: &str) -> Option<String> {
     None
 }
 
-fn layout(kind: &Value, p: &Value) -> Result<String> {
+fn layout(kind: &Value, p: &Value, sb_style: Option<&str>) -> Result<String> {
     let mut text = kind["layout"].as_str().unwrap_or_default().to_string();
     if let Some(actions) = kind["actions"].as_object() {
         let name = p["action"].as_str().unwrap_or("walk");
@@ -84,15 +84,18 @@ fn layout(kind: &Value, p: &Value) -> Result<String> {
             .replace("{keys}", action["keys"].as_str().unwrap_or_default());
     }
     if text.contains("{prompt}") {
-        let prompt = p["prompt"].as_str().filter(|t| !t.trim().is_empty());
+        let prompt = p["prompt"]
+            .as_str()
+            .filter(|t| !t.trim().is_empty())
+            .or_else(|| sb_style.filter(|t| !t.trim().is_empty()));
         text = text.replace("{prompt}", prompt.ok_or_else(|| bad("prompt is required"))?);
     }
     Ok(text)
 }
 
-fn compose(all: &Value, kind: &Value, p: &Value) -> Result<String> {
+fn compose(all: &Value, kind: &Value, p: &Value, sb_style: Option<&str>) -> Result<String> {
     let [w, h] = [kind["canvas"][0].as_u64().unwrap_or(1024), kind["canvas"][1].as_u64().unwrap_or(1536)];
-    let mut parts = vec![format!("Draw ONE image on a {w} x {h} px canvas."), layout(kind, p)?];
+    let mut parts = vec![format!("Draw ONE image on a {w} x {h} px canvas."), layout(kind, p, sb_style)?];
     for rule in kind["rules"].as_array().into_iter().flatten().filter_map(Value::as_str) {
         parts.push(all[rule].as_str().unwrap_or_default().to_string());
     }
@@ -101,6 +104,9 @@ fn compose(all: &Value, kind: &Value, p: &Value) -> Result<String> {
         && let Some(prompt) = p["prompt"].as_str().filter(|t| !t.trim().is_empty())
     {
         parts.push(format!("Character: {prompt}"));
+    }
+    if let Some(style) = sb_style.filter(|s| !s.trim().is_empty()) {
+        parts.push(format!("Storyboard Design Reference: {style}"));
     }
     if let Some(notes) = p["notes"].as_str().filter(|t| !t.trim().is_empty()) {
         parts.push(format!("Notes: {notes}"));
@@ -122,28 +128,42 @@ pub(crate) struct PreparedDrawing {
 }
 
 impl PreparedDrawing {
-    pub fn prepare(p: &Value, name: &str) -> Result<Self> {
+    pub fn prepare(s: Option<&Session>, p: &Value, name: &str) -> Result<Self> {
         let all = templates()?;
         let kind = all["kinds"].get(name).ok_or_else(|| bad(format!("unknown drawing kind `{name}`")))?;
         if p.get("reference").is_some() && p.get("references").is_some() {
             return Err(bad("use `reference` or `references`, not both"));
         }
-        let references = match p.get("references").or_else(|| p.get("reference")) {
+        let prefer_char = name != "image" && name != "custom";
+        let (sb_style, sb_refs) = s
+            .map(|sess| crate::cmd::storyboard::storyboard_media_references_for(sess, prefer_char))
+            .unwrap_or((None, Vec::new()));
+
+        let mut references = match p.get("references").or_else(|| p.get("reference")) {
             None => Vec::new(),
             Some(Value::String(one)) => vec![json!(one)],
             Some(Value::Array(many)) => many.clone(),
             _ => return Err(bad("references must be an image path or array of image paths")),
         };
+        if references.is_empty() && !sb_refs.is_empty() {
+            references = sb_refs
+                .iter()
+                .take(5)
+                .map(|pb| json!(pb.to_string_lossy().into_owned()))
+                .collect();
+        }
         if references.len() > 5 || references.iter().any(|r| r.as_str().is_none_or(|s| s.trim().is_empty())) {
             return Err(bad("references must contain at most five nonempty image paths"));
         }
         if kind["needs_reference"] == true && references.is_empty() {
-            return Err(bad(format!("`{name}` requires reference=<image of the character>")));
+            return Err(bad(format!(
+                "`{name}` requires reference=<image of the character> (or a character image placed in Storyboard)"
+            )));
         }
-        if name == "new" && p["prompt"].as_str().is_none_or(|t| t.trim().is_empty()) {
+        if name == "new" && p["prompt"].as_str().is_none_or(|t| t.trim().is_empty()) && sb_style.is_none() {
             return Err(bad("`new` requires prompt=<the character to draw>"));
         }
-        let prompt = compose(&all, kind, p)?;
+        let prompt = compose(&all, kind, p, sb_style.as_deref())?;
         let save_command = kind["save_command"].as_str().unwrap_or("project.add_asset").to_owned();
         let save_kind = kind["save_kind"].as_str().unwrap_or("image").to_owned();
         let tags: Vec<String> = kind["tags"]
@@ -190,9 +210,9 @@ impl PreparedDrawing {
 }
 
 /// Deterministic template preview (`fidget.prepare`).
-pub fn cmd_fidget_prepare(_: &mut Session, p: &Value) -> Result<Value> {
+pub fn cmd_fidget_prepare(s: &mut Session, p: &Value) -> Result<Value> {
     let name = p["kind"].as_str().or_else(|| p["template"].as_str()).unwrap_or("custom");
-    let prepared = PreparedDrawing::prepare(p, name)?;
+    let prepared = PreparedDrawing::prepare(Some(s), p, name)?;
     let mut request = prepared.request;
     request["ok"] = json!(true);
     request["stage"] = json!("template_preview");
@@ -207,7 +227,7 @@ pub fn cmd_fidget_stage(s: &mut Session, p: &Value) -> Result<Value> {
     let prefs = open_store().get().clone();
     let default_tpl = prefs.scribbles.template.as_deref().unwrap_or("custom");
     let name = p["kind"].as_str().or_else(|| p["template"].as_str()).unwrap_or(default_tpl);
-    let mut prepared = PreparedDrawing::prepare(p, name)?;
+    let mut prepared = PreparedDrawing::prepare(Some(s), p, name)?;
     let base_prompt = prepared.request["prompt"].as_str().unwrap_or_default().to_owned();
 
     let structured = crate::craft_ai::rephrase_prompt_with_fidget(name, &base_prompt)?;
@@ -319,7 +339,7 @@ pub fn cmd_scribbles_ingest(s: &mut Session, p: &Value) -> Result<Value> {
     }))
 }
 
-fn resolve_template_request(p: &Value) -> Result<(Value, Value)> {
+fn resolve_template_request(s: &Session, p: &Value) -> Result<(Value, Value)> {
     let all = templates()?;
     let kinds = &all["kinds"];
     if let Some(fidget) = p.get("fidget").filter(|v| v.is_object()) {
@@ -341,7 +361,7 @@ fn resolve_template_request(p: &Value) -> Result<(Value, Value)> {
         return Ok((p.clone(), meta));
     }
     if let Some(kind_name) = p["kind"].as_str().or_else(|| p["template"].as_str()) {
-        let prepared = PreparedDrawing::prepare(p, kind_name)?;
+        let prepared = PreparedDrawing::prepare(Some(s), p, kind_name)?;
         return Ok((prepared.request, prepared.fidget));
     }
     let frontmatter_kind = p["markdown"]
@@ -368,7 +388,7 @@ fn resolve_template_request(p: &Value) -> Result<(Value, Value)> {
         ));
     }
     if p["prompt"].as_str().is_some_and(|v| !v.trim().is_empty()) {
-        let prepared = PreparedDrawing::prepare(p, "custom")?;
+        let prepared = PreparedDrawing::prepare(Some(s), p, "custom")?;
         return Ok((prepared.request, prepared.fidget));
     }
     Err(bad("Scribbles requires a template (`kind`, `template`, or `fidget` from `fidget.stage`); inspect `scribbles.templates`"))
@@ -381,7 +401,7 @@ pub fn cmd_scribbles_generate(s: &mut Session, p: &Value) -> Result<Value> {
     if p["kind"].as_str().or_else(|| p["template"].as_str()).or_else(|| p["fidget"]["kind"].as_str()) == Some("moppet") {
         return cmd_scribbles_moppet(s, p);
     }
-    let (request, mut metadata) = resolve_template_request(p)?;
+    let (request, mut metadata) = resolve_template_request(s, p)?;
     if request["prompt"].as_str().is_none_or(|v| v.trim().is_empty()) {
         return Err(bad("Scribbles requires a nonempty final prompt"));
     }
@@ -421,7 +441,7 @@ pub fn cmd_scribbles_generate(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn draw(s: &mut Session, p: &Value, name: &str) -> Result<Value> {
-    let prepared = PreparedDrawing::prepare(p, name)?;
+    let prepared = PreparedDrawing::prepare(Some(s), p, name)?;
     let mut request = prepared.request;
     request["fidget"] = prepared.fidget;
     cmd_scribbles_generate(s, &request)
@@ -467,7 +487,8 @@ pub fn cmd_scribbles_moppet(s: &mut Session, p: &Value) -> Result<Value> {
         .as_str()
         .filter(|v| !v.trim().is_empty())
         .map(|raw| crate::workspace::resolve_workspace_path(s, raw))
-        .filter(|pb| pb.is_file());
+        .filter(|pb| pb.is_file())
+        .or_else(|| crate::cmd::storyboard::storyboard_media_references_for(s, true).1.into_iter().next());
     let char_gen = if let Some(ref ref_path) = existing_ref
         && p["reuse_reference"].as_bool().unwrap_or(false)
     {

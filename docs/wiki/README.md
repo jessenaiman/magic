@@ -19,7 +19,7 @@ The 5 Starlight Markdown pages in [`docs/wiki/magic/`](magic/) follow the exact 
   slug: "magic",
   name: "Magic Studio",
   tagline: "Song-driven storyboard, puppet animation, and kinetic lyric studio",
-  repo: "https://github.com/jessenaiman/magic",
+  repo: "https://github.com/jessenaiman/magic-studio-app",
   cli: "magic-cli",
   controlPort: 9876,
 }
