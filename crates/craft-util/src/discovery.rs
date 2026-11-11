@@ -151,13 +151,10 @@ pub fn detect_craft_launcher() -> Option<PathBuf> {
     None
 }
 
-
 /// Return `$HOME/.pdfcraft-control.json` (`%USERPROFILE%\.pdfcraft-control.json` on Windows),
 /// never a shared directory like `/tmp`, matching PdfCraft's mode-0600 control-file security rule.
 pub fn pdfcraft_control_file() -> Option<PathBuf> {
-    std::env::var_os("HOME")
-        .or_else(|| std::env::var_os("USERPROFILE"))
-        .map(|h| PathBuf::from(h).join(".pdfcraft-control.json"))
+    std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")).map(|h| PathBuf::from(h).join(".pdfcraft-control.json"))
 }
 
 pub fn control_addr(target: CraftTarget, configured_port: Option<u16>) -> SocketAddr {

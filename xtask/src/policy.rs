@@ -35,13 +35,7 @@ const UI_CRATES: &[&str] = &[
 ];
 
 /// Non-Tauri / pure-Rust enforcement: webview shells and plugins are forbidden across the entire workspace.
-const FORBIDDEN_WEBVIEW: &[&str] = &[
-    "tauri",
-    "tauri-build",
-    "wry",
-    "tao",
-    "webkit2gtk",
-];
+const FORBIDDEN_WEBVIEW: &[&str] = &["tauri", "tauri-build", "wry", "tao", "webkit2gtk"];
 
 /// Sibling ArtCraft product crates are strictly forbidden as Cargo dependencies: Magic shares only
 /// `storytold/craft-libs` (`craft-*`) and `storytold/craft-ai-integrations`, and drives installed
@@ -111,15 +105,11 @@ pub(crate) fn layers() -> Result<()> {
         };
         for d in deps {
             if FORBIDDEN_WEBVIEW.contains(&d.as_str()) || d.starts_with("tauri-") {
-                errors.push(format!(
-                    "{name} depends on forbidden webview/Tauri crate {d}: Magic Studio is pure Rust (eframe + egui + craft-libs)"
-                ));
+                errors.push(format!("{name} depends on forbidden webview/Tauri crate {d}: Magic Studio is pure Rust (eframe + egui + craft-libs)"));
                 continue;
             }
             if FORBIDDEN_SIBLING_PREFIXES.iter().any(|p| d.starts_with(p)) {
-                errors.push(format!(
-                    "{name} depends on sibling app crate {d}: drive installed Craft apps via CraftHub (--control / <product>-cli) instead"
-                ));
+                errors.push(format!("{name} depends on sibling app crate {d}: drive installed Craft apps via CraftHub (--control / <product>-cli) instead"));
                 continue;
             }
             let Some(dl) = layer_of(d) else { continue };

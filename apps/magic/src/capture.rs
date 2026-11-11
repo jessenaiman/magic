@@ -23,8 +23,6 @@ pub struct PendingCapture {
     pub is_temp: bool,
     pub panel: Option<String>,
     pub widget_id: Option<String>,
-    pub settle_frames: u8,
-    pub issued: bool,
     pub deadline: Instant,
     pub reply: mpsc::Sender<Result<Value, String>>,
 }
@@ -40,17 +38,7 @@ impl PendingCapture {
     ) -> Self {
         let (slot, callback) = CaptureSlot::new(ctx, ViewportId::ROOT, PER_IMAGE_BOUND_BYTES);
         ctx.send_viewport_cmd_to(ViewportId::ROOT, ViewportCommand::Screenshot(callback));
-        Self {
-            slot,
-            target,
-            is_temp,
-            panel,
-            widget_id,
-            settle_frames: 0,
-            issued: true,
-            deadline: Instant::now() + CAPTURE_TIMEOUT,
-            reply,
-        }
+        Self { slot, target, is_temp, panel, widget_id, deadline: Instant::now() + CAPTURE_TIMEOUT, reply }
     }
 
     pub fn poll(&mut self, pixels_per_point: f32, reg: &AutomationRegistry) -> bool {
@@ -90,13 +78,10 @@ fn finish_capture(
         }
     };
     let mut png = Vec::new();
-    PngEncoder::new(&mut png)
-        .write_image(&rgba, width, height, ColorType::Rgba8.into())
-        .map_err(|e| format!("PNG encoding failed: {e}"))?;
+    PngEncoder::new(&mut png).write_image(&rgba, width, height, ColorType::Rgba8.into()).map_err(|e| format!("PNG encoding failed: {e}"))?;
     if is_temp {
         let opts = WriteOptions::default().with_new_file_permissions(NewFilePermissions::Private);
-        opts.atomic_write(target, &png)
-            .map_err(|e| format!("could not write {}: {e}", target.display()))?;
+        opts.atomic_write(target, &png).map_err(|e| format!("could not write {}: {e}", target.display()))?;
     } else {
         magic::write_file(target, &png).map_err(|e| format!("could not write {}: {e}", target.display()))?;
     }

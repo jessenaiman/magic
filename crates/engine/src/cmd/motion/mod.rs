@@ -262,14 +262,10 @@ pub fn cmd_motion_read(s: &mut Session, _p: &Value) -> Result<Value> {
     let (svg_files, vectorcraft_files, preview_frames) = collect_motion_craft_files(&dir);
     for cue in &mut cues {
         let cue_id = cue["id"].as_str().unwrap_or("action");
-        let svg_file = cue["svg_path"]
-            .as_str()
-            .map(PathBuf::from)
-            .filter(|p| p.is_file())
-            .or_else(|| {
-                let candidate = dir.join("motion/svg").join(format!("{cue_id}.svg"));
-                candidate.is_file().then_some(candidate)
-            });
+        let svg_file = cue["svg_path"].as_str().map(PathBuf::from).filter(|p| p.is_file()).or_else(|| {
+            let candidate = dir.join("motion/svg").join(format!("{cue_id}.svg"));
+            candidate.is_file().then_some(candidate)
+        });
         cue["svg_file"] = json!(svg_file);
         let st_ms = (cue["start"].as_f64().unwrap_or(0.0).max(0.0) * 1000.0).round() as u64;
         let en_ms = (cue["end"].as_f64().unwrap_or(1.5).max(0.1) * 1000.0).round() as u64;

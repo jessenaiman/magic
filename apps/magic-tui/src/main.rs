@@ -48,10 +48,7 @@ fn parse_repl_line(line: &str) -> (&str, Value) {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
-    let mut remote = cli
-        .connect
-        .as_deref()
-        .map(|spec| Remote::new(normalize_control_addr(spec), magic::workspace::control_token()));
+    let mut remote = cli.connect.as_deref().map(|spec| Remote::new(normalize_control_addr(spec), magic::workspace::control_token()));
     let mut session = remote.is_none().then(Session::user_session);
 
     if let (Some(path), Some(sess)) = (cli.project.as_deref(), session.as_mut()) {

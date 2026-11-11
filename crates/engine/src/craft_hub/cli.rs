@@ -302,11 +302,7 @@ pub fn exec_batch(target: CraftTarget, input: Option<&Path>, output: Option<&Pat
         CraftTarget::Pdf => {
             let tmp = ScopedTempDir::new("magic-pdfcraft")?;
             let script_path = tmp.path().join("steps.json");
-            let root_dir = input
-                .or(output)
-                .and_then(Path::parent)
-                .filter(|p| !p.as_os_str().is_empty())
-                .unwrap_or_else(|| Path::new("."));
+            let root_dir = input.or(output).and_then(Path::parent).filter(|p| !p.as_os_str().is_empty()).unwrap_or_else(|| Path::new("."));
             let mut script_steps: Vec<Value> = Vec::with_capacity(steps.len() + 2);
             if let Some(src) = input.filter(|p| p.is_file()) {
                 script_steps.push(json!({"tool": "doc_open", "params": {"path": src}}));
@@ -319,12 +315,7 @@ pub fn exec_batch(target: CraftTarget, input: Option<&Path>, output: Option<&Pat
             }
             let bytes = serde_json::to_vec_pretty(&script_steps).map_err(|e| EngineError::InvalidParams(e.to_string()))?;
             craft_atomic::atomic_write(&script_path, &bytes)?;
-            cmd.arg("run")
-                .arg("--script")
-                .arg(&script_path)
-                .arg("--root")
-                .arg(root_dir)
-                .arg("--report");
+            cmd.arg("run").arg("--script").arg(&script_path).arg("--root").arg(root_dir).arg("--report");
             let out = cmd.output().map_err(|e| EngineError::ExternalTool("pdfcraft-cli".into(), e.to_string()))?;
             let val = parse_cli_value(CraftTarget::Pdf, "run", &out)?;
             if let Some(arr) = val.get("steps").or_else(|| val.get("results")).and_then(Value::as_array) {
@@ -424,13 +415,7 @@ pub fn run_photo_batch_actions(actions_file: &Path, in_dir: &Path, out_dir: &Pat
     let _slot = crate::workspace::acquire_tool_slot();
     std::fs::create_dir_all(out_dir)?;
     let mut cmd = cli_command(CraftTarget::Photo, None)?;
-    cmd.arg("batch")
-        .arg("--actions")
-        .arg(actions_file)
-        .arg("--in")
-        .arg(in_dir)
-        .arg("--out")
-        .arg(out_dir);
+    cmd.arg("batch").arg("--actions").arg(actions_file).arg("--in").arg(in_dir).arg("--out").arg(out_dir);
     let out = cmd.output().map_err(|e| EngineError::ExternalTool("photocraft-cli".into(), e.to_string()))?;
     parse_cli_value(CraftTarget::Photo, "batch", &out)
 }

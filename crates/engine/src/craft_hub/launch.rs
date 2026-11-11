@@ -37,9 +37,7 @@ fn record_opened_app(target: CraftTarget, port: u16) {
 
 /// Gracefully close sibling ArtCraft windows spawned by Magic during this session unless dirty.
 pub fn close_opened_apps() -> Result<Value> {
-    let entries: Vec<(&'static str, u16)> = opened_apps_registry()
-        .lock()
-        .map_or_else(|_| Vec::new(), |map| map.iter().map(|(&k, &v)| (k, v)).collect());
+    let entries: Vec<(&'static str, u16)> = opened_apps_registry().lock().map_or_else(|_| Vec::new(), |map| map.iter().map(|(&k, &v)| (k, v)).collect());
     let mut closed = Vec::new();
     let mut skipped_dirty = Vec::new();
 
@@ -66,12 +64,7 @@ pub fn close_opened_apps() -> Result<Value> {
             if let Some(ctrl_file) = craft_util::discovery::pdfcraft_control_file().filter(|p| p.is_file())
                 && let Ok(cli_bin) = require_executable(target.cli_name())
             {
-                let _ = scrubbed_command(&cli_bin, target, None)
-                    .arg("ui")
-                    .arg("--control")
-                    .arg(ctrl_file)
-                    .arg("quit")
-                    .output();
+                let _ = scrubbed_command(&cli_bin, target, None).arg("ui").arg("--control").arg(ctrl_file).arg("quit").output();
             }
         } else {
             let _ = control::live_control(target, Some(port), "app.quit", &json!({"force": false}));

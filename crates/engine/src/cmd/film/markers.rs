@@ -208,10 +208,7 @@ fn markers_add(f: &super::Film, ecproj: &Path, p: &Value) -> Result<Value> {
 
 fn markers_edit_or_palette(f: &super::Film, action: &str, p: &Value) -> Result<Value> {
     let project = f.require()?.to_path_buf();
-    let swatch = p["custom_swatch"]
-        .as_str()
-        .or_else(|| (action == "palette").then(|| p["color"].as_str()).flatten())
-        .filter(|s| !s.trim().is_empty());
+    let swatch = p["custom_swatch"].as_str().or_else(|| (action == "palette").then(|| p["color"].as_str()).flatten()).filter(|s| !s.trim().is_empty());
     if let Some(sw) = swatch {
         let res = CraftHub::execute_and_save(CraftTarget::Film, &project, "colors.addCustom", &json!({"color": sw.trim()}))?;
         return Ok(json!({"ok": true, "swatch": sw.trim(), "result": res}));
@@ -426,9 +423,7 @@ fn markers_interchange(f: &super::Film, default_ecproj: &Path, p: &Value) -> Res
         "import" | "effect_to_film" => "effect_to_film",
         _ => "film_to_effect",
     };
-    let prerender = p["prerender"]
-        .as_str()
-        .unwrap_or_else(|| if p["prerender"].as_bool() == Some(false) { "none" } else { "unsupported" });
+    let prerender = p["prerender"].as_str().unwrap_or_else(|| if p["prerender"].as_bool() == Some(false) { "none" } else { "unsupported" });
     let ext = match format {
         "fcpxml" => "fcpxml",
         "otio" => "otio",
@@ -474,12 +469,7 @@ fn markers_interchange(f: &super::Film, default_ecproj: &Path, p: &Value) -> Res
         let mut imported_into_filmcraft = Value::Null;
         if f.project.is_file()
             && p["import_target"].as_bool().unwrap_or(true)
-            && let Ok(res) = CraftHub::execute_and_save(
-                CraftTarget::Film,
-                &f.project,
-                "file.import",
-                &json!({"paths": [interchange_path]}),
-            )
+            && let Ok(res) = CraftHub::execute_and_save(CraftTarget::Film, &f.project, "file.import", &json!({"paths": [interchange_path]}))
         {
             imported_into_filmcraft = res;
         }
@@ -494,21 +484,13 @@ fn markers_interchange(f: &super::Film, default_ecproj: &Path, p: &Value) -> Res
         }))
     } else {
         let project = f.require()?.to_path_buf();
-        let exported = CraftHub::execute(
-            CraftTarget::Film,
-            Some(&project),
-            "file.exportInterchange",
-            &json!({"format": format, "path": interchange_path}),
-        )?;
+        let exported = CraftHub::execute(CraftTarget::Film, Some(&project), "file.exportInterchange", &json!({"format": format, "path": interchange_path}))?;
         let mut imported = Value::Null;
         if ecproj.is_file()
             && format != "ale"
             && p["import_target"].as_bool().unwrap_or(true)
-            && let Ok(res) = CraftHub::run_effect_steps(
-                Some(&ecproj),
-                true,
-                &[("file.importTimeline".to_string(), json!({"path": interchange_path, "format": format}))],
-            )
+            && let Ok(res) =
+                CraftHub::run_effect_steps(Some(&ecproj), true, &[("file.importTimeline".to_string(), json!({"path": interchange_path, "format": format}))])
         {
             imported = res.into_iter().next().unwrap_or(Value::Null);
         }

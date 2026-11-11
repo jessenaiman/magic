@@ -45,22 +45,75 @@ pub const EFFECTCRAFT_19_CATEGORIES: &[(&str, &str)] = &[
 
 /// All 38 EffectCraft layer blend modes (`T29`).
 pub const EFFECTCRAFT_38_BLEND_MODES: &[&str] = &[
-    "normal", "dissolve", "dancingDissolve",
-    "darken", "multiply", "colorBurn", "classicColorBurn", "linearBurn", "darkerColor",
-    "add", "lighten", "screen", "colorDodge", "classicColorDodge", "linearDodge", "lighterColor",
-    "overlay", "softLight", "hardLight", "linearLight", "vividLight", "pinLight", "hardMix",
-    "difference", "classicDifference", "exclusion", "subtract", "divide",
-    "hue", "saturation", "color", "luminosity",
-    "stencilAlpha", "stencilLuma", "silhouetteAlpha", "silhouetteLuma", "alphaAdd", "luminescentPremul",
+    "normal",
+    "dissolve",
+    "dancingDissolve",
+    "darken",
+    "multiply",
+    "colorBurn",
+    "classicColorBurn",
+    "linearBurn",
+    "darkerColor",
+    "add",
+    "lighten",
+    "screen",
+    "colorDodge",
+    "classicColorDodge",
+    "linearDodge",
+    "lighterColor",
+    "overlay",
+    "softLight",
+    "hardLight",
+    "linearLight",
+    "vividLight",
+    "pinLight",
+    "hardMix",
+    "difference",
+    "classicDifference",
+    "exclusion",
+    "subtract",
+    "divide",
+    "hue",
+    "saturation",
+    "color",
+    "luminosity",
+    "stencilAlpha",
+    "stencilLuma",
+    "silhouetteAlpha",
+    "silhouetteLuma",
+    "alphaAdd",
+    "luminescentPremul",
 ];
 
 /// All 27 FilmCraft GPU linear-light blend modes (`T38`).
 pub const FILMCRAFT_27_BLEND_MODES: &[&str] = &[
-    "Normal", "Dissolve", "Darken", "Multiply", "Color Burn", "Linear Burn", "Darker Color",
-    "Lighten", "Screen", "Color Dodge", "Linear Dodge (Add)", "Lighter Color",
-    "Overlay", "Soft Light", "Hard Light", "Vivid Light", "Linear Light", "Pin Light", "Hard Mix",
-    "Difference", "Exclusion", "Subtract", "Divide",
-    "Hue", "Saturation", "Color", "Luminosity",
+    "Normal",
+    "Dissolve",
+    "Darken",
+    "Multiply",
+    "Color Burn",
+    "Linear Burn",
+    "Darker Color",
+    "Lighten",
+    "Screen",
+    "Color Dodge",
+    "Linear Dodge (Add)",
+    "Lighter Color",
+    "Overlay",
+    "Soft Light",
+    "Hard Light",
+    "Vivid Light",
+    "Linear Light",
+    "Pin Light",
+    "Hard Mix",
+    "Difference",
+    "Exclusion",
+    "Subtract",
+    "Divide",
+    "Hue",
+    "Saturation",
+    "Color",
+    "Luminosity",
 ];
 
 pub const LYRICS_EFFECTS: &[MappedEffect] = &[
@@ -414,10 +467,7 @@ pub fn query_motion_effects(params: &Value) -> Value {
     let category = params.get("category").and_then(Value::as_str);
     let filter = params.get("filter").and_then(Value::as_str);
     let effects = serialize_table(MOTION_EFFECTS, app, category, filter);
-    let categories_19: Vec<Value> = EFFECTCRAFT_19_CATEGORIES
-        .iter()
-        .map(|(id, lbl)| json!({"id": id, "label": lbl}))
-        .collect();
+    let categories_19: Vec<Value> = EFFECTCRAFT_19_CATEGORIES.iter().map(|(id, lbl)| json!({"id": id, "label": lbl})).collect();
     json!({
         "ok": true,
         "domain": "motion",

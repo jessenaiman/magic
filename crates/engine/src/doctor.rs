@@ -23,18 +23,8 @@ impl Check {
         Self { name: name.into(), status: "ok", message: message.into(), remediation: None }
     }
 
-    fn problem(
-        status: &'static str,
-        name: impl Into<String>,
-        message: impl Into<String>,
-        remediation: impl Into<String>,
-    ) -> Self {
-        Self {
-            name: name.into(),
-            status,
-            message: message.into(),
-            remediation: Some(remediation.into()),
-        }
+    fn problem(status: &'static str, name: impl Into<String>, message: impl Into<String>, remediation: impl Into<String>) -> Self {
+        Self { name: name.into(), status, message: message.into(), remediation: Some(remediation.into()) }
     }
 
     fn to_json(&self) -> Value {
@@ -63,13 +53,7 @@ fn craft_target_checks(target: CraftTarget) -> [Check; 2] {
         Some(path) => {
             let live_note = control_addr(target)
                 .ok()
-                .map(|addr| {
-                    if is_listening(addr) {
-                        format!(" (--control listening on {addr})")
-                    } else {
-                        format!(" (--control idle on {addr})")
-                    }
-                })
+                .map(|addr| if is_listening(addr) { format!(" (--control listening on {addr})") } else { format!(" (--control idle on {addr})") })
                 .unwrap_or_default();
             Check::ok(format!("app:{app_name}"), format!("{app_name} is at {}{live_note}", path.display()))
         }
@@ -94,20 +78,14 @@ fn checks(s: &Session) -> Vec<Check> {
         out.extend(craft_target_checks(target));
     }
 
-    out.push(tool_check(
-        "magic-cli",
-        "fail",
-        "Build it with `cargo build -p magic-cli` and put target/debug on PATH",
-    ));
+    out.push(tool_check("magic-cli", "fail", "Build it with `cargo build -p magic-cli` and put target/debug on PATH"));
 
     let ai = crate::craft_ai::craft_ai_status();
     let ai_enabled = ai["enabled"].as_bool().unwrap_or(false);
     let conn_count = ai["connections"].as_array().map_or(0, Vec::len);
     out.push(Check::ok(
         "ai:craft-ai-integrations",
-        format!(
-            "ai.enabled={ai_enabled}, {conn_count} SharedStore connection(s) configured via storytold/craft-ai-integrations"
-        ),
+        format!("ai.enabled={ai_enabled}, {conn_count} SharedStore connection(s) configured via storytold/craft-ai-integrations"),
     ));
 
     out.push(match s.control_address {
@@ -115,12 +93,7 @@ fn checks(s: &Session) -> Vec<Check> {
         None => Check::ok("control", "no live control listener in this session (headless)"),
     });
 
-    let project_dir = s
-        .project_path
-        .as_ref()
-        .and_then(|p| p.parent())
-        .map(Path::to_path_buf)
-        .unwrap_or_else(|| s.cwd.clone());
+    let project_dir = s.project_path.as_ref().and_then(|p| p.parent()).map(Path::to_path_buf).unwrap_or_else(|| s.cwd.clone());
     let server_file = project_dir.join(".video-server.json");
     if server_file.is_file() {
         out.push(Check::problem(

@@ -10,10 +10,7 @@ use std::io::{BufRead, Write};
 
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use serde_json::{Value, json};
-use subcommands::{
-    BridgeCmd, CaptionsArgs, ControlsArgs, ExportArgs, FinishArgs, ImportAepArgs, InterchangeArgs,
-    LottieArgs, MarkersArgs,
-};
+use subcommands::{BridgeCmd, CaptionsArgs, ControlsArgs, ExportArgs, FinishArgs, ImportAepArgs, InterchangeArgs, LottieArgs, MarkersArgs};
 
 const AFTER_HELP: &str = "\
 CREATE:   magic-cli new --audio song.wav --name \"My Song\" [--wizard]
@@ -512,14 +509,7 @@ fn run(cli: Cli) -> Result<(), String> {
     if let (Some(path), Some(session)) = (cli.project.as_deref(), session.as_mut()) {
         session.execute("file.open", json!({ "path": path })).map_err(|e| e.to_string())?;
     }
-    let mut target = Target {
-        session,
-        connect: cli.connect,
-        project: cli.project,
-        save: cli.save,
-        save_as: cli.save_as,
-        dry: cli.dry_run,
-    };
+    let mut target = Target { session, connect: cli.connect, project: cli.project, save: cli.save, save_as: cli.save_as, dry: cli.dry_run };
     match (cli.command_id, cli.command) {
         (Some(_), Some(_)) => Err("Use --command or a subcommand, not both.".into()),
         (Some(id), None) => {
@@ -560,10 +550,7 @@ fn run(cli: Cli) -> Result<(), String> {
 fn main() {
     let cli = Cli::parse();
     if cli.connect.is_some() && cli.project.is_some() {
-        let _ = writeln!(
-            std::io::stderr(),
-            "Use --connect or --project, not both: --connect uses the project open in the live window."
-        );
+        let _ = writeln!(std::io::stderr(), "Use --connect or --project, not both: --connect uses the project open in the live window.");
         std::process::exit(2);
     }
     if let Err(err) = run(cli) {

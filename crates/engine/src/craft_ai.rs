@@ -16,8 +16,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use craft_ai_client::{AiClient, RoleStatus, ToolDesk};
 use craft_ai_core::{
-    AppId, CapabilityId, CapabilitySpec, Connection, ConnectionId, ConsentLedger, ConsentTerm,
-    Event, InputRole, JobState, ModelId, ModelInfo, Output, Payload, Request, Role, RoleId,
+    AppId, CapabilityId, CapabilitySpec, Connection, ConnectionId, ConsentLedger, ConsentTerm, Event, InputRole, JobState, ModelId, ModelInfo, Output, Payload,
+    Request, Role, RoleId,
 };
 use craft_ai_native::shared::SharedStore;
 use serde_json::{Value, json};
@@ -55,9 +55,7 @@ fn current_prefs() -> MagicPrefs {
 
 fn require_ai_enabled(prefs: &MagicPrefs) -> Result<()> {
     if !prefs.ai.enabled {
-        return Err(bad(
-            "AI integrations are turned off in Settings (`ai.enabled = false`). Enable AI in Edit -> Preferences -> AI & LLM first.",
-        ));
+        return Err(bad("AI integrations are turned off in Settings (`ai.enabled = false`). Enable AI in Edit -> Preferences -> AI & LLM first."));
     }
     Ok(())
 }
@@ -110,10 +108,7 @@ fn validate_endpoint_locality(endpoint: &str) -> Result<&'static str> {
     }
     if let Some(rest) = trimmed.strip_prefix("http://") {
         let host = rest.split(['/', ':']).next().unwrap_or_default();
-        let bracket_host = rest
-            .strip_prefix('[')
-            .and_then(|s| s.split(']').next())
-            .unwrap_or_default();
+        let bracket_host = rest.strip_prefix('[').and_then(|s| s.split(']').next()).unwrap_or_default();
         if matches!(host, "127.0.0.1" | "localhost") || bracket_host == "::1" {
             return Ok("local");
         }
@@ -126,17 +121,12 @@ fn validate_endpoint_locality(endpoint: &str) -> Result<&'static str> {
 
 fn text_spec() -> Result<CapabilitySpec> {
     let cap = CapabilityId::parse("text.complete").map_err(ai_err)?;
-    Ok(CapabilitySpec::new(cap)
-        .accepting(InputRole::Prompt, 1)
-        .accepting(InputRole::System, 1)
-        .requiring(InputRole::Prompt))
+    Ok(CapabilitySpec::new(cap).accepting(InputRole::Prompt, 1).accepting(InputRole::System, 1).requiring(InputRole::Prompt))
 }
 
 fn image_spec(with_references: bool) -> Result<CapabilitySpec> {
     let cap = CapabilityId::parse("image.generate").map_err(ai_err)?;
-    let mut spec = CapabilitySpec::new(cap)
-        .accepting(InputRole::Prompt, 1)
-        .requiring(InputRole::Prompt);
+    let mut spec = CapabilitySpec::new(cap).accepting(InputRole::Prompt, 1).requiring(InputRole::Prompt);
     if with_references {
         spec = spec.accepting(InputRole::Reference, MAX_REFERENCES);
     }
@@ -151,11 +141,7 @@ fn read_shared_connections() -> Vec<Value> {
     let _ = shared.update(|store| {
         for conn in &store.connections {
             let raw = serde_json::to_value(conn).unwrap_or_else(|_| json!({}));
-            let models: Vec<Value> = conn
-                .models
-                .iter()
-                .map(|m| json!({ "id": m.id.as_str(), "label": m.label }))
-                .collect();
+            let models: Vec<Value> = conn.models.iter().map(|m| json!({ "id": m.id.as_str(), "label": m.label })).collect();
             snapshot.push(json!({
                 "id": conn.id.as_str(),
                 "label": conn.label,
@@ -219,10 +205,7 @@ pub fn craft_ai_status() -> Value {
             })
             .collect(),
     };
-    let adapters: Vec<Value> = STANDARD_PROVIDERS
-        .iter()
-        .map(|(id, label)| json!({"id": id, "label": label}))
-        .collect();
+    let adapters: Vec<Value> = STANDARD_PROVIDERS.iter().map(|(id, label)| json!({"id": id, "label": label})).collect();
     json!({
         "ok": true,
         "app_id": "magic",
@@ -260,37 +243,19 @@ fn upsert_user_connection(p: &Value) -> Result<Option<String>> {
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .ok_or_else(|| bad("register_connection.id is required (e.g. `local-sub` or `my-openai`)"))?;
-    let provider = conn_obj
-        .get("provider")
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .unwrap_or("openai");
+    let provider = conn_obj.get("provider").and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty()).unwrap_or("openai");
     if !STANDARD_PROVIDERS.iter().any(|(known, _)| *known == provider) {
         return Err(bad(format!(
             "Unknown `craft-ai-integrations` adapter `{provider}`; supported standard adapters: openai, declarative, comfyui, gemini, vertex, bfl, artcraft"
         )));
     }
-    let label = conn_obj
-        .get("label")
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .unwrap_or(conn_id_raw);
-    let endpoint = conn_obj
-        .get("endpoint")
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|s| !s.is_empty());
+    let label = conn_obj.get("label").and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty()).unwrap_or(conn_id_raw);
+    let endpoint = conn_obj.get("endpoint").and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty());
     let locality = match endpoint {
         Some(url) => validate_endpoint_locality(url)?,
         None => conn_obj.get("locality").and_then(Value::as_str).unwrap_or("remote"),
     };
-    let secret_name = conn_obj
-        .get("secret_name")
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|s| !s.is_empty());
+    let secret_name = conn_obj.get("secret_name").and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty());
 
     let allow_refs = provider != "declarative";
     let mut models: Vec<ModelInfo> = Vec::new();
@@ -299,9 +264,7 @@ fn upsert_user_connection(p: &Value) -> Result<Option<String>> {
     }
     if let Some(im) = conn_obj.get("image_model").and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty()) {
         if let Some(existing) = models.iter_mut().find(|m| m.id.as_str() == im) {
-            let merged = ModelInfo::new(existing.id.clone(), existing.label.clone())
-                .with(text_spec()?)
-                .with(image_spec(allow_refs)?);
+            let merged = ModelInfo::new(existing.id.clone(), existing.label.clone()).with(text_spec()?).with(image_spec(allow_refs)?);
             *existing = merged;
         } else {
             models.push(ModelInfo::new(ModelId::new(im).map_err(ai_err)?, im).with(image_spec(allow_refs)?));
@@ -345,9 +308,7 @@ fn bind_role_in_desk(role: &Role, conn_raw: &str, model_raw: &str) -> Result<()>
     let model_id = ModelId::new(model_raw.trim()).map_err(ai_err)?;
     let shared = SharedStore::at_default_location().map_err(ai_err)?;
     let client = standard_client()?;
-    ToolDesk::new(client, shared, None)
-        .choose(role, &conn_id, &model_id)
-        .map_err(ai_err)
+    ToolDesk::new(client, shared, None).choose(role, &conn_id, &model_id).map_err(ai_err)
 }
 
 /// `ai.configure` (also wired for `scribbles.connect`): updates AI toggles, registers an optional
@@ -383,17 +344,9 @@ pub fn cmd_ai_configure(s: &mut Session, p: &Value) -> Result<Value> {
         let _ = s.execute("prefs.set", json!({"key": "fidget.model", "value": fm}))?;
     }
 
-    let scrib_conn = p
-        .get("scribbles_connection")
-        .or_else(|| p.get("connection"))
-        .and_then(Value::as_str)
-        .filter(|v| !v.trim().is_empty())
-        .or(registered.as_deref());
-    let scrib_model = p
-        .get("scribbles_model")
-        .or_else(|| p.get("model"))
-        .and_then(Value::as_str)
-        .filter(|v| !v.trim().is_empty());
+    let scrib_conn =
+        p.get("scribbles_connection").or_else(|| p.get("connection")).and_then(Value::as_str).filter(|v| !v.trim().is_empty()).or(registered.as_deref());
+    let scrib_model = p.get("scribbles_model").or_else(|| p.get("model")).and_then(Value::as_str).filter(|v| !v.trim().is_empty());
     if let (Some(sc), Some(sm)) = (scrib_conn, scrib_model) {
         bind_role_in_desk(&scribbles_role()?, sc, sm)?;
         let _ = bind_role_in_desk(&scribbles_reference_role()?, sc, sm);
@@ -407,18 +360,14 @@ pub fn cmd_ai_configure(s: &mut Session, p: &Value) -> Result<Value> {
 /// `ai.consent` (and `scribbles.consent`): grants or revokes outbound disclosure consent in `ConsentLedger`.
 pub fn cmd_ai_consent(_: &mut Session, p: &Value) -> Result<Value> {
     let client = standard_client()?;
-    let file = client
-        .consent_file()
-        .ok_or_else(|| ai_err("this system has no folder for the craft-ai consent file"))?;
+    let file = client.consent_file().ok_or_else(|| ai_err("this system has no folder for the craft-ai consent file"))?;
 
     if p.get("revoke").and_then(Value::as_bool) == Some(true) {
         file.save(&ConsentLedger::default()).map_err(ai_err)?;
         return Ok(json!({"ok": true, "revoked": true}));
     }
 
-    if p.get("agree").and_then(Value::as_bool) != Some(true)
-        && p.get("agree").and_then(Value::as_str) != Some("true")
-    {
+    if p.get("agree").and_then(Value::as_bool) != Some(true) && p.get("agree").and_then(Value::as_str) != Some("true") {
         return Err(bad("Pass agree=true (or revoke=true) to update outbound AI consent."));
     }
     let wanted = p.get("term").and_then(Value::as_str).unwrap_or("until_revoked");
@@ -447,9 +396,7 @@ pub fn cmd_ai_consent(_: &mut Session, p: &Value) -> Result<Value> {
     }
 
     if destinations.is_empty() {
-        return Err(bad(
-            "Bind a connection and model for Fidget or Scribbles in Preferences -> AI & LLM before granting consent.",
-        ));
+        return Err(bad("Bind a connection and model for Fidget or Scribbles in Preferences -> AI & LLM before granting consent."));
     }
     if term.remembers() {
         file.save(&ledger).map_err(ai_err)?;
@@ -503,12 +450,7 @@ pub fn rephrase_prompt_with_fidget(template_name: &str, base_prompt: &str) -> Re
             text_out.push_str(text);
         }
     }
-    let trimmed = text_out
-        .trim()
-        .trim_start_matches("```json")
-        .trim_start_matches("```")
-        .trim_end_matches("```")
-        .trim();
+    let trimmed = text_out.trim().trim_start_matches("```json").trim_start_matches("```").trim_end_matches("```").trim();
     if let Ok(parsed) = serde_json::from_str::<Value>(trimmed)
         && parsed.is_object()
     {
@@ -536,21 +478,12 @@ pub fn draw_via_scribbles(prompt: &str, references: &[PathBuf], out: &Path) -> R
     if !prefs.scribbles.enabled {
         return Err(bad("Scribbles image generation is turned off (`scribbles.enabled = false`)."));
     }
-    let role = if references.is_empty() {
-        scribbles_role()?
-    } else {
-        scribbles_reference_role()?
-    };
+    let role = if references.is_empty() { scribbles_role()? } else { scribbles_reference_role()? };
     let client = standard_client()?;
     if let RoleStatus::Unavailable { reason } = client.status(&role) {
-        return Err(bad(format!(
-            "Scribbles cannot run `{}`: {reason}. Configure a compatible model in Preferences -> AI & LLM.",
-            role.id.as_str()
-        )));
+        return Err(bad(format!("Scribbles cannot run `{}`: {reason}. Configure a compatible model in Preferences -> AI & LLM.", role.id.as_str())));
     }
-    let plan = client
-        .plan(&role, build_image_request(&role, prompt, references)?)
-        .map_err(ai_err)?;
+    let plan = client.plan(&role, build_image_request(&role, prompt, references)?).map_err(ai_err)?;
     let ledger = client.consent_file().map(|f| f.load_or_empty()).unwrap_or_default();
     if plan.needs_consent(&ledger) {
         return Err(bad(format!(
@@ -574,18 +507,10 @@ pub fn draw_via_scribbles(prompt: &str, references: &[PathBuf], out: &Path) -> R
 /// `image.generate`: generates an image via `storytold/craft-ai-integrations` (`scribbles` role)
 /// and runs optional `PhotoCraft` background isolation + `VectorCraft` silhouette tracing.
 pub fn cmd_image_generate(s: &mut Session, p: &Value) -> Result<Value> {
-    let raw_prompt = p["prompt"]
-        .as_str()
-        .map(str::trim)
-        .filter(|v| !v.is_empty())
-        .ok_or_else(|| bad("image.generate requires a nonempty `prompt`"))?;
+    let raw_prompt = p["prompt"].as_str().map(str::trim).filter(|v| !v.is_empty()).ok_or_else(|| bad("image.generate requires a nonempty `prompt`"))?;
 
     let use_sb = p["use_storyboard_references"].as_bool().unwrap_or(true);
-    let (sb_style, sb_refs) = if use_sb {
-        crate::cmd::storyboard::storyboard_media_references(s)
-    } else {
-        (None, Vec::new())
-    };
+    let (sb_style, sb_refs) = if use_sb { crate::cmd::storyboard::storyboard_media_references(s) } else { (None, Vec::new()) };
     let effective_prompt = match sb_style.as_deref().filter(|st| !raw_prompt.contains(*st)) {
         Some(st) => format!("{st} | {raw_prompt}"),
         None => raw_prompt.to_owned(),
@@ -595,12 +520,9 @@ pub fn cmd_image_generate(s: &mut Session, p: &Value) -> Result<Value> {
     let explicit_refs: Vec<PathBuf> = match p.get("references").or_else(|| p.get("reference")) {
         None => Vec::new(),
         Some(Value::String(one)) if !one.trim().is_empty() => vec![crate::workspace::resolve_workspace_path(s, one)],
-        Some(Value::Array(arr)) => arr
-            .iter()
-            .filter_map(Value::as_str)
-            .filter(|v| !v.trim().is_empty())
-            .map(|raw| crate::workspace::resolve_workspace_path(s, raw))
-            .collect(),
+        Some(Value::Array(arr)) => {
+            arr.iter().filter_map(Value::as_str).filter(|v| !v.trim().is_empty()).map(|raw| crate::workspace::resolve_workspace_path(s, raw)).collect()
+        }
         _ => Vec::new(),
     };
     let references: Vec<PathBuf> = if explicit_refs.is_empty() { sb_refs } else { explicit_refs };
@@ -613,11 +535,7 @@ pub fn cmd_image_generate(s: &mut Session, p: &Value) -> Result<Value> {
         None => s.cwd.join("generated"),
     };
     std::fs::create_dir_all(&out_dir)?;
-    let base_name = p["name"]
-        .as_str()
-        .map(crate::workspace::sanitize_asset_id)
-        .filter(|v| !v.is_empty())
-        .unwrap_or_else(|| "scribbles-render".into());
+    let base_name = p["name"].as_str().map(crate::workspace::sanitize_asset_id).filter(|v| !v.is_empty()).unwrap_or_else(|| "scribbles-render".into());
     let raw_png = out_dir.join(format!("{base_name}.png"));
     draw_via_scribbles(prompt, &references, &raw_png)?;
 
@@ -640,13 +558,11 @@ pub fn cmd_image_generate(s: &mut Session, p: &Value) -> Result<Value> {
 
     let (width, height) = image::image_dimensions(&final_png).unwrap_or((1024, 1024));
     let mut attached_id = Value::Null;
-    if s.project_path.is_some() && p["register_asset"].as_bool().unwrap_or(true) {
-        if let Ok(res) = s.execute(
-            "project.add_asset",
-            json!({"path": final_png, "kind": "image", "name": base_name, "load": false}),
-        ) {
-            attached_id = res["asset_id"].clone();
-        }
+    if s.project_path.is_some()
+        && p["register_asset"].as_bool().unwrap_or(true)
+        && let Ok(res) = s.execute("project.add_asset", json!({"path": final_png, "kind": "image", "name": base_name, "load": false}))
+    {
+        attached_id = res["asset_id"].clone();
     }
 
     Ok(json!({

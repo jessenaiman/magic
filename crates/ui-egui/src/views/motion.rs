@@ -3,22 +3,16 @@
 //! underlying audio playback, and `EffectCraft` (`V4`) ↔ `FilmCraft` (`V1`) track switching.
 
 use craft_ui::layout::{SplitAxis, SplitSize, split_rect};
-use egui::{
-    Align, Align2, Color32, CornerRadius, FontId, Layout, Pos2, Rect, RichText, ScrollArea, Sense,
-    Stroke, StrokeKind, Ui, Vec2,
-};
+use egui::{Align, Align2, Color32, CornerRadius, FontId, Layout, Pos2, Rect, RichText, ScrollArea, Sense, Stroke, StrokeKind, Ui, Vec2};
 use serde_json::{Value, json};
 
 use crate::controls::{
-    FilmbarOrientation, FilmbarStyle, badge_accent_color, child_pane, fill_card,
-    paint_craft_doc_card, paint_filmbar_frame, paint_local_image, paint_svg_path_preview,
-    pill_toggle,
+    FilmbarOrientation, FilmbarStyle, badge_accent_color, child_pane, fill_card, paint_craft_doc_card, paint_filmbar_frame, paint_local_image,
+    paint_svg_path_preview, pill_toggle,
 };
 use crate::state::{PickerTarget, UiAction, ViewCtx};
 use crate::timeline::{CraftTimelineLane, CraftTimelineSpan, draw_craft_timeline};
-use crate::views::motion_inspector::{
-    draw_lottie_toolbar_buttons, draw_lottie_warnings_strip, draw_motion_inspector,
-};
+use crate::views::motion_inspector::{draw_lottie_toolbar_buttons, draw_lottie_warnings_strip, draw_motion_inspector};
 use crate::widgets::{BtnSpec, action_button, status_pill};
 
 pub fn show(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
@@ -61,15 +55,18 @@ fn draw_toolbar(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing.x = 5.0;
             ui.spacing_mut().item_spacing.y = 4.0;
-            let doc_lbl = if has_ecproj {
-                format!("V4 · motion/actions.ecproj · {svg_cnt} .svg")
-            } else {
-                format!("V4 · Action Motion ({svg_cnt} .svg)")
-            };
+            let doc_lbl = if has_ecproj { format!("V4 · motion/actions.ecproj · {svg_cnt} .svg") } else { format!("V4 · Action Motion ({svg_cnt} .svg)") };
             let badge_resp = ui.label(RichText::new(doc_lbl).monospace().size(10.0).color(ctx.pal.accent_amber));
             ctx.reg.record("motion-anicraft-cli-badge", "anicraft-cli headless badge", &badge_resp, None);
 
-            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("motion-trace-image", "scissors", "Trace Sketch (.svg)", "Trace raster sketch to SVG via VectorCraft")).clicked() {
+            if action_button(
+                ui,
+                ctx.reg,
+                ctx.pal,
+                BtnSpec::new("motion-trace-image", "scissors", "Trace Sketch (.svg)", "Trace raster sketch to SVG via VectorCraft"),
+            )
+            .clicked()
+            {
                 ctx.push(UiAction::PickFile {
                     target: PickerTarget::MotionTraceImage,
                     title: "Select Sketch to Trace in VectorCraft".into(),
@@ -81,7 +78,14 @@ fn draw_toolbar(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("motion-save-cue", "save", "Save Cue", "Write SVG + sync motion/actions.ecproj")).clicked() {
                 save_active_motion_cue(ctx);
             }
-            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("motion-render-frame", "image", "Render Frame", "Render active EffectCraft or FilmCraft frame at cue time")).clicked() {
+            if action_button(
+                ui,
+                ctx.reg,
+                ctx.pal,
+                BtnSpec::new("motion-render-frame", "image", "Render Frame", "Render active EffectCraft or FilmCraft frame at cue time"),
+            )
+            .clicked()
+            {
                 if ctx.state.motion.track_source == "filmcraft" {
                     ctx.exec("video.frame", json!({"seconds": ctx.state.motion.start_sec}), Some("Rendered FilmCraft frame"));
                 } else {
@@ -90,17 +94,33 @@ fn draw_toolbar(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             }
             draw_lottie_toolbar_buttons(ui, ctx);
 
-            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("motion-open-vectorcraft", "pen", "VectorCraft", "Open motion/svg/*.svg in VectorCraft")).clicked() {
+            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("motion-open-vectorcraft", "pen", "VectorCraft", "Open motion/svg/*.svg in VectorCraft"))
+                .clicked()
+            {
                 ctx.exec("motion.open", json!({"app": "vectorcraft"}), Some("Opened VectorCraft"));
             }
-            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("motion-open-effectcraft", "external", "EffectCraft", "Open motion/actions.ecproj in EffectCraft")).clicked() {
+            if action_button(
+                ui,
+                ctx.reg,
+                ctx.pal,
+                BtnSpec::new("motion-open-effectcraft", "external", "EffectCraft", "Open motion/actions.ecproj in EffectCraft"),
+            )
+            .clicked()
+            {
                 ctx.exec("motion.open", json!({"app": "effectcraft"}), Some("Opened motion/actions.ecproj in EffectCraft"));
             }
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("motion-reload", "refresh", "Reload motion.read & motion.effects")).clicked() {
                 ctx.exec("motion.read", json!({}), None);
                 ctx.exec("motion.effects", json!({}), None);
             }
-            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("motion-publish-v4", "film", "Publish V4", "Render motion/actions.ecproj & publish V4 Action Motion").primary()).clicked() {
+            if action_button(
+                ui,
+                ctx.reg,
+                ctx.pal,
+                BtnSpec::new("motion-publish-v4", "film", "Publish V4", "Render motion/actions.ecproj & publish V4 Action Motion").primary(),
+            )
+            .clicked()
+            {
                 ctx.exec("motion.publish", json!({"render": true}), Some("Published Action Motion onto V4"));
             }
         });
@@ -139,64 +159,56 @@ fn draw_motion_film_reel(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             ui.label(RichText::new("Film Reel · Cues").size(13.0).strong());
             status_pill(ui, ctx.pal, &format!("{} cue(s)", cues.len()), ctx.pal.accent_emerald);
         });
-        ui.label(
-            RichText::new("motion/actions.ecproj & motion/svg/*.svg")
-                .monospace()
-                .size(9.5)
-                .color(ctx.pal.text_muted),
-        );
+        ui.label(RichText::new("motion/actions.ecproj & motion/svg/*.svg").monospace().size(9.5).color(ctx.pal.text_muted));
         ui.separator();
 
-        ScrollArea::vertical()
-            .id_salt("motion_cues_list")
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                if cues.is_empty() {
-                    draw_starter_reel_cues(ui, ctx, &film_frames);
-                }
-                for (idx, cue) in cues.iter().enumerate() {
-                    let scene_bg = if film_frames.is_empty() {
-                        None
-                    } else {
-                        film_frames.get(idx % film_frames.len()).map(String::as_str)
-                    };
-                    draw_single_cue_reel_frame(ui, ctx, idx, cue, scene_bg);
-                    ui.add_space(6.0);
-                }
+        ScrollArea::vertical().id_salt("motion_cues_list").auto_shrink([false, false]).show(ui, |ui| {
+            if cues.is_empty() {
+                draw_starter_reel_cues(ui, ctx, &film_frames);
+            }
+            for (idx, cue) in cues.iter().enumerate() {
+                let scene_bg = if film_frames.is_empty() { None } else { film_frames.get(idx % film_frames.len()).map(String::as_str) };
+                draw_single_cue_reel_frame(ui, ctx, idx, cue, scene_bg);
+                ui.add_space(6.0);
+            }
 
-                if !lines.is_empty() {
-                    ui.add_space(6.0);
-                    ui.collapsing(
-                        RichText::new("Anchor Cue to Sung Word").size(10.5).color(ctx.pal.text_secondary),
-                        |ui| {
-                            for line in lines.iter().take(12) {
-                                if let Some(words) = line["words"].as_array() {
-                                    ui.horizontal_wrapped(|ui| {
-                                        ui.spacing_mut().item_spacing.x = 3.0;
-                                        for w in words {
-                                            let wid = w["word_id"].as_str().unwrap_or_default().to_owned();
-                                            let txt = w["text"].as_str().unwrap_or("");
-                                            if txt.is_empty() {
-                                                continue;
-                                            }
-                                            let sel = ctx.state.motion.selected_word_id.as_deref() == Some(wid.as_str());
-                                            let btn_id = format!("motion-word-{wid}");
-                                            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&btn_id, txt, "Anchor action drawing to sung word").selected(sel)).clicked() {
-                                                ctx.state.motion.selected_word_id = Some(wid);
-                                                ctx.state.motion.cue_name = txt.to_owned();
-                                                if let Some(st) = w["start"].as_f64() {
-                                                    ctx.state.motion.start_sec = st;
-                                                    ctx.push(UiAction::SeekAudio(st));
-                                                }
-                                            }
+            if !lines.is_empty() {
+                ui.add_space(6.0);
+                ui.collapsing(RichText::new("Anchor Cue to Sung Word").size(10.5).color(ctx.pal.text_secondary), |ui| {
+                    for line in lines.iter().take(12) {
+                        if let Some(words) = line["words"].as_array() {
+                            ui.horizontal_wrapped(|ui| {
+                                ui.spacing_mut().item_spacing.x = 3.0;
+                                for w in words {
+                                    let wid = w["word_id"].as_str().unwrap_or_default().to_owned();
+                                    let txt = w["text"].as_str().unwrap_or("");
+                                    if txt.is_empty() {
+                                        continue;
+                                    }
+                                    let sel = ctx.state.motion.selected_word_id.as_deref() == Some(wid.as_str());
+                                    let btn_id = format!("motion-word-{wid}");
+                                    if action_button(
+                                        ui,
+                                        ctx.reg,
+                                        ctx.pal,
+                                        BtnSpec::label_only(&btn_id, txt, "Anchor action drawing to sung word").selected(sel),
+                                    )
+                                    .clicked()
+                                    {
+                                        ctx.state.motion.selected_word_id = Some(wid);
+                                        ctx.state.motion.cue_name = txt.to_owned();
+                                        if let Some(st) = w["start"].as_f64() {
+                                            ctx.state.motion.start_sec = st;
+                                            ctx.push(UiAction::SeekAudio(st));
                                         }
-                                    });
+                                    }
                                 }
-                            }
-                        },
-                    );
-                }
-            });
+                            });
+                        }
+                    }
+                });
+            }
+        });
     });
     ctx.reg.record("motion-cues-rail", "Motion Film Reel", &panel.response, None);
 }
@@ -220,18 +232,9 @@ fn draw_starter_reel_cues(ui: &mut Ui, ctx: &mut ViewCtx<'_>, film_frames: &[Str
             ui,
             crect,
             ctx.pal,
-            FilmbarStyle {
-                orientation: FilmbarOrientation::Vertical,
-                selected: sel,
-                hovered: resp.hovered(),
-                timecode: None,
-            },
+            FilmbarStyle { orientation: FilmbarOrientation::Vertical, selected: sel, hovered: resp.hovered(), timecode: None },
         );
-        let bg_frame = if film_frames.is_empty() {
-            None
-        } else {
-            film_frames.get(idx % film_frames.len()).map(String::as_str)
-        };
+        let bg_frame = if film_frames.is_empty() { None } else { film_frames.get(idx % film_frames.len()).map(String::as_str) };
         let _ = paint_local_image(ui, inner, bg_frame, ctx.pal.bg_stage, 3);
         if let Some(d_str) = preset_svg_d(ctx, pid) {
             paint_svg_path_preview(ui, inner.shrink(10.0), &d_str, Stroke::new(2.2, ctx.pal.accent_emerald), None);
@@ -264,13 +267,7 @@ fn draw_starter_reel_cues(ui: &mut Ui, ctx: &mut ViewCtx<'_>, film_frames: &[Str
     }
 }
 
-fn draw_single_cue_reel_frame(
-    ui: &mut Ui,
-    ctx: &mut ViewCtx<'_>,
-    idx: usize,
-    cue: &Value,
-    scene_bg: Option<&str>,
-) {
+fn draw_single_cue_reel_frame(ui: &mut Ui, ctx: &mut ViewCtx<'_>, idx: usize, cue: &Value, scene_bg: Option<&str>) {
     let cid = cue["id"].as_str().unwrap_or("cue");
     let word = cue["word"].as_str().or_else(|| cue["title"].as_str()).unwrap_or(cid);
     let clock = cue["clock"].as_str().unwrap_or("0:00.0");
@@ -282,17 +279,8 @@ fn draw_single_cue_reel_frame(
 
     let card_w = (ui.available_width() - 4.0).max(140.0);
     let (crect, resp) = ui.allocate_exact_size(Vec2::new(card_w, 108.0), Sense::click());
-    let inner = paint_filmbar_frame(
-        ui,
-        crect,
-        ctx.pal,
-        FilmbarStyle {
-            orientation: FilmbarOrientation::Vertical,
-            selected,
-            hovered: resp.hovered(),
-            timecode: None,
-        },
-    );
+    let inner =
+        paint_filmbar_frame(ui, crect, ctx.pal, FilmbarStyle { orientation: FilmbarOrientation::Vertical, selected, hovered: resp.hovered(), timecode: None });
     if !paint_local_image(ui, inner, preview_img, ctx.pal.bg_stage, 3) {
         ui.painter().rect_filled(inner, CornerRadius::same(3), ctx.pal.bg_stage);
     }
@@ -336,10 +324,7 @@ fn draw_single_cue_reel_frame(
 fn active_cue(ctx: &ViewCtx<'_>) -> Option<Value> {
     let cues = ctx.state.cache.motion_doc["cues"].as_array()?;
     cues.iter()
-        .find(|c| {
-            c["word"].as_str() == Some(ctx.state.motion.cue_name.as_str())
-                || c["title"].as_str() == Some(ctx.state.motion.cue_name.as_str())
-        })
+        .find(|c| c["word"].as_str() == Some(ctx.state.motion.cue_name.as_str()) || c["title"].as_str() == Some(ctx.state.motion.cue_name.as_str()))
         .or_else(|| cues.first())
         .cloned()
 }
@@ -381,20 +366,17 @@ fn draw_motion_audio_and_track_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             ui,
             ctx.reg,
             ctx.pal,
-            BtnSpec::new("motion-audio-play", play_icon, play_lbl, "Play / pause underlying song or FilmCraft audio track")
-                .primary()
-                .enabled(has_audio),
+            BtnSpec::new("motion-audio-play", play_icon, play_lbl, "Play / pause underlying song or FilmCraft audio track").primary().enabled(has_audio),
         )
         .clicked()
         {
             ctx.push(UiAction::ToggleAudio);
         }
-        ui.label(
-            RichText::new(format!("0:{:04.1}", ctx.state.motion.start_sec))
-                .monospace()
-                .size(9.8)
-                .color(if ctx.state.audio_playing { ctx.pal.accent_emerald } else { ctx.pal.text_muted }),
-        );
+        ui.label(RichText::new(format!("0:{:04.1}", ctx.state.motion.start_sec)).monospace().size(9.8).color(if ctx.state.audio_playing {
+            ctx.pal.accent_emerald
+        } else {
+            ctx.pal.text_muted
+        }));
         for (src, lbl, tip) in [
             ("effectcraft", "EC · V4 Motion", "Isolate EffectCraft motion/actions.ecproj track"),
             ("filmcraft", "FC · Film Track", "Preview underlying FilmCraft V1 / program sequence track"),
@@ -410,10 +392,9 @@ fn draw_motion_audio_and_track_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                 ctx.exec("video.frame", json!({"seconds": ctx.state.motion.start_sec}), None);
             }
         }
-        for (aud, lbl, tip) in [
-            ("song", "♪ Song", "Monitor underlying song audio stem"),
-            ("filmcraft", "FC Mix", "Monitor rendered FilmCraft sequence audio mix"),
-        ] {
+        for (aud, lbl, tip) in
+            [("song", "♪ Song", "Monitor underlying song audio stem"), ("filmcraft", "FC Mix", "Monitor rendered FilmCraft sequence audio mix")]
+        {
             let id = format!("motion-audio-src-{aud}");
             let sel = ctx.state.motion.audio_source == aud;
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, lbl, tip).selected(sel)).clicked() {
@@ -477,12 +458,7 @@ fn draw_motion_stage(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             ui,
             outer,
             ctx.pal,
-            FilmbarStyle {
-                orientation: FilmbarOrientation::Horizontal,
-                selected: false,
-                hovered: oresp.hovered(),
-                timecode: Some(tc_badge),
-            },
+            FilmbarStyle { orientation: FilmbarOrientation::Horizontal, selected: false, hovered: oresp.hovered(), timecode: Some(tc_badge) },
         );
 
         let rendered_motion = ctx
@@ -496,7 +472,14 @@ fn draw_motion_stage(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
 
         if ctx.state.motion.track_source == "filmcraft" {
             if !paint_local_image(ui, rect, backdrop.as_deref(), ctx.pal.bg_stage, 4) {
-                paint_craft_doc_card(ui, rect.shrink(16.0), ctx.pal, "FC", "film/Song.fcproj", "Click Assemble in Studio or Render Frame to preview FilmCraft V1 track");
+                paint_craft_doc_card(
+                    ui,
+                    rect.shrink(16.0),
+                    ctx.pal,
+                    "FC",
+                    "film/Song.fcproj",
+                    "Click Assemble in Studio or Render Frame to preview FilmCraft V1 track",
+                );
             }
         } else if !paint_local_image(ui, rect, rendered_motion, ctx.pal.bg_stage, 4) {
             if ctx.state.motion.track_source == "overlay" {
@@ -526,8 +509,7 @@ fn draw_motion_stage(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                 }
             }
         }
-        ui.painter()
-            .rect_stroke(rect, CornerRadius::same(4), Stroke::new(1.0, ctx.pal.border_subtle), StrokeKind::Inside);
+        ui.painter().rect_stroke(rect, CornerRadius::same(4), Stroke::new(1.0, ctx.pal.border_subtle), StrokeKind::Inside);
     });
 }
 
@@ -545,12 +527,7 @@ fn draw_real_motion_timeline(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             CraftTimelineSpan {
                 start_sec: st,
                 end_sec: c["end"].as_f64().unwrap_or(st + 1.8),
-                label: c["word"]
-                    .as_str()
-                    .or_else(|| c["title"].as_str())
-                    .or_else(|| c["preset"].as_str())
-                    .unwrap_or("Cue")
-                    .to_owned(),
+                label: c["word"].as_str().or_else(|| c["title"].as_str()).or_else(|| c["preset"].as_str()).unwrap_or("Cue").to_owned(),
             }
         })
         .collect();
@@ -558,11 +535,7 @@ fn draw_real_motion_timeline(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     if cue_spans.is_empty() {
         let st = ctx.state.motion.start_sec.clamp(0.0, (total_dur - 1.5).max(0.0));
         let en = (st + ctx.state.motion.draw_duration + ctx.state.motion.hold_duration).min(total_dur);
-        cue_spans.push(CraftTimelineSpan {
-            start_sec: st,
-            end_sec: en.max(st + 1.2),
-            label: format!("{} (draft)", ctx.state.motion.cue_name),
-        });
+        cue_spans.push(CraftTimelineSpan { start_sec: st, end_sec: en.max(st + 1.2), label: format!("{} (draft)", ctx.state.motion.cue_name) });
     }
 
     let trim_spans: Vec<CraftTimelineSpan> = cue_spans
@@ -604,10 +577,54 @@ fn draw_real_motion_timeline(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         let dirty_v4 = ctx.state.dirty_tracks.contains("V4");
         let top_title = if show_fc { "FC V1 / BEAT" } else { "▸ Beat / Audio" };
         let lanes = [
-            CraftTimelineLane { code: "BEAT", title: top_title, color: ctx.pal.accent_amber, filmbar: show_fc, waveform: has_audio, dirty: false, spans: beat_spans, keyframes: &beat_keys, frames: if show_fc { &film_frames } else { &[] }, empty_hint: "Beat markers" },
-            CraftTimelineLane { code: "CUE", title: "T Cue", color: ctx.pal.accent_amber, filmbar: false, waveform: false, dirty: false, spans: cue_spans.clone(), keyframes: &[], frames: &[], empty_hint: "" },
-            CraftTimelineLane { code: "MOTION", title: "EC V4 MOTION", color: ctx.pal.accent_emerald, filmbar: false, waveform: false, dirty: dirty_v4, spans: cue_spans, keyframes: &motion_keys, frames: &[], empty_hint: "motion/actions.ecproj" },
-            CraftTimelineLane { code: "TRIM", title: "⟳ Trim", color: ctx.pal.accent_sky, filmbar: false, waveform: false, dirty: false, spans: trim_spans, keyframes: &motion_keys, frames: &[], empty_hint: "" },
+            CraftTimelineLane {
+                code: "BEAT",
+                title: top_title,
+                color: ctx.pal.accent_amber,
+                filmbar: show_fc,
+                waveform: has_audio,
+                dirty: false,
+                spans: beat_spans,
+                keyframes: &beat_keys,
+                frames: if show_fc { &film_frames } else { &[] },
+                empty_hint: "Beat markers",
+            },
+            CraftTimelineLane {
+                code: "CUE",
+                title: "T Cue",
+                color: ctx.pal.accent_amber,
+                filmbar: false,
+                waveform: false,
+                dirty: false,
+                spans: cue_spans.clone(),
+                keyframes: &[],
+                frames: &[],
+                empty_hint: "",
+            },
+            CraftTimelineLane {
+                code: "MOTION",
+                title: "EC V4 MOTION",
+                color: ctx.pal.accent_emerald,
+                filmbar: false,
+                waveform: false,
+                dirty: dirty_v4,
+                spans: cue_spans,
+                keyframes: &motion_keys,
+                frames: &[],
+                empty_hint: "motion/actions.ecproj",
+            },
+            CraftTimelineLane {
+                code: "TRIM",
+                title: "⟳ Trim",
+                color: ctx.pal.accent_sky,
+                filmbar: false,
+                waveform: false,
+                dirty: false,
+                spans: trim_spans,
+                keyframes: &motion_keys,
+                frames: &[],
+                empty_hint: "",
+            },
         ];
         let mut playhead = ctx.state.motion.start_sec;
         if draw_craft_timeline(ui, ctx, "motion", total_dur, &mut playhead, &lanes) {
