@@ -79,7 +79,10 @@ fi
 
 resolve_bin() {
   local name="$1"
-  if [[ -x "$SCRIPT_DIR/bin/$name" ]]; then
+  if [[ "$FROM_SOURCE" -eq 1 ]]; then
+    [[ -x "$SCRIPT_DIR/target/release/$name" ]] || return 1
+    printf '%s\n' "$SCRIPT_DIR/target/release/$name"
+  elif [[ -x "$SCRIPT_DIR/bin/$name" ]]; then
     printf '%s\n' "$SCRIPT_DIR/bin/$name"
   elif [[ -x "$SCRIPT_DIR/target/release/$name" ]]; then
     printf '%s\n' "$SCRIPT_DIR/target/release/$name"
