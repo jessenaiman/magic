@@ -1,50 +1,51 @@
-//! Storyboard: Single-Responsibility `.designcraft` document adapter over `DesignCraft`
-//! (`designcraft --control` and `designcraft-cli` via [`crate::CraftHub`]) and `craft-libs`.
+//! Storyboard: printable reference document (`storyboard.pdf`) governed strictly by the
+//! `.designcraft` master (`Magic Studio Storyboard.designcraft`).
 //!
-//! Storyboard owns CRUD operations (`new`, `pages`, `set`, `add`, `remove`, `section`, `locations`),
-//! drag-and-drop / CLI image overlaying (saving a flat image inside `.designcraft` plus an optional
-//! reference to the underlying Craft project in `storyboard/references.json`), traffic-light section
-//! readiness (`check`), setup wizard (`wizard`), and title-page-driven bulk image generation
-//! (`bulk_generate`). Every spread embeds read-only fine-print `magic-cli` instructions (`*_cli` frames
-//! locked on the `"CLI Fineprint (Read-Only)"` layer).
+//! Storyboard Rules:
+//! 1. The `.designcraft` master IS the rules (`doc["sections"]` defines section names and
+//!    `item["locked"]` defines editable vs chrome items — zero hardcoded section tables or extra
+//!    permission checks).
+//! 2. Storyboard is a printable reference document (`612 × 792 pt` US Letter), decoupled from video.
+//! 3. Storyboard supplies the canonical style & image references for all new media creation.
+//! 4. `Assets` shows each asset's flat project image, and that project image is what Storyboard
+//!    stores together with metadata linking back to the underlying files.
 
 pub mod crud;
 pub mod workflow;
 
 pub use crud::{
-    cmd_storyboard_add, cmd_storyboard_export, cmd_storyboard_locations, cmd_storyboard_new, cmd_storyboard_open, cmd_storyboard_pages, cmd_storyboard_remove,
-    cmd_storyboard_section, cmd_storyboard_set, cmd_storyboard_thumbnail,
+    cmd_storyboard_add, cmd_storyboard_export, cmd_storyboard_locations, cmd_storyboard_new,
+    cmd_storyboard_open, cmd_storyboard_pages, cmd_storyboard_remove, cmd_storyboard_section,
+    cmd_storyboard_set, cmd_storyboard_thumbnail,
 };
 pub use workflow::{cmd_storyboard_bulk_generate, cmd_storyboard_check, cmd_storyboard_wizard};
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
+use flate2::read::DeflateDecoder;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-use crate::link_watch::FileStamp;
-use crate::{CraftHub, CraftTarget, EngineError, Result, Session};
+use crate::{EngineError, Result, Session};
 
-pub(crate) const TEMPLATE: &[u8] = include_bytes!("../../../templates/storyboard.designcraft");
-pub(crate) const MAX_REFS: usize = 12;
-pub const ARCHETYPES: &[(&str, &str)] =
-    &[("cover", "cover_title"), ("world", "world_heading"), ("char", "char_heading"), ("motion", "motion_heading"), ("scene", "scene_id")];
-pub const MAIN_TITLE_ARCHETYPES: &[&str] = &["cover", "world", "char", "motion"];
-const TITLE_LABELS: &[&str] = &["cover_title", "world_heading", "char_heading", "motion_heading", "scene_title", "scene_id", "title"];
-const EXPORT_ONLY: &[&str] = &["document.inspect", "file.exportPdf", "file.exportPptx"];
-
-pub(crate) type Labels = HashMap<String, u64>;
+const MASTER_DESIGNCRAFT: &[u8] = include_bytes!("../../../templates/storyboard.designcraft");
+pub(crate) const PDF_TEMPLATE: &[u8] = include_bytes!("../../../templates/storyboard-template.pdf");
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct SlotReference {
-    pub page: usize,
-    pub slot: String,
-    pub flat_image: String,
-    pub source_project: Option<String>,
+pub struct ImageLinkMeta {
+    pub image: String,
+    pub linked_file: Option<String>,
+    pub asset_id: Option<String>,
     pub craft_app: Option<String>,
-    pub updated_unix: u64,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct FieldState {
+    pub text: BTreeMap<String, String>,
+    pub images: BTreeMap<String, ImageLinkMeta>,
 }
 
 pub(crate) fn bad(msg: &str) -> EngineError {
@@ -58,63 +59,130 @@ pub(crate) fn fail(e: impl std::fmt::Display) -> EngineError {
 pub(crate) fn doc_path(s: &Session, p: &Value) -> Result<PathBuf> {
     if let Some(raw) = p.get("path").and_then(Value::as_str).filter(|r| !r.trim().is_empty()) {
         let mut path = crate::workspace::resolve_workspace_path(s, raw);
-        if path.extension().is_none_or(|e| !e.eq_ignore_ascii_case("designcraft")) {
-            path.as_mut_os_string().push(".designcraft");
+        if path.extension().is_none_or(|e| !e.eq_ignore_ascii_case("pdf")) {
+            path.set_extension("pdf");
         }
         return Ok(path);
     }
-    let project = s.project_path.as_ref().ok_or_else(|| bad("give `path`, or open a project"))?;
-    Ok(project.with_file_name("storyboard.designcraft"))
+    let project = s.project_path.as_ref().ok_or_else(|| bad("give `path`, or open a .magic project"))?;
+    Ok(project.with_file_name("storyboard.pdf"))
 }
 
-pub(crate) fn references_path(sb_path: &Path) -> PathBuf {
-    sb_path.with_file_name("storyboard").join("references.json")
+pub(crate) fn fields_state_path(pdf_path: &Path) -> PathBuf {
+    pdf_path.with_file_name("storyboard").join("fields.json")
 }
 
-pub(crate) fn load_slot_references(sb_path: &Path) -> BTreeMap<String, SlotReference> {
-    let path = references_path(sb_path);
-    std::fs::read_to_string(path).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default()
+pub(crate) fn load_field_state(pdf_path: &Path) -> FieldState {
+    std::fs::read_to_string(fields_state_path(pdf_path))
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default()
 }
 
-pub(crate) fn save_slot_references(sb_path: &Path, refs: &BTreeMap<String, SlotReference>) -> Result<()> {
-    let path = references_path(sb_path);
+pub(crate) fn save_field_state(pdf_path: &Path, state: &FieldState) -> Result<()> {
+    let path = fields_state_path(pdf_path);
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }
-    let bytes = serde_json::to_vec_pretty(refs).map_err(fail)?;
-    craft_atomic::atomic_write(&path, &bytes)?;
+    craft_atomic::atomic_write(&path, &serde_json::to_vec_pretty(state).map_err(fail)?)?;
     Ok(())
 }
 
+pub(crate) fn field_key(page: usize, label: &str) -> String {
+    format!("p{page:02}_{label}")
+}
+
 pub(crate) fn slot_cli_command(page: usize, label: &str, kind: &str) -> String {
-    if label.starts_with("ref_") && label[4..].chars().all(|c| c.is_ascii_digit()) {
-        format!("magic-cli storyboard set page={page} refs='[\"ref1.png\"]'")
-    } else if kind == "text" {
+    if kind == "text" {
         format!("magic-cli storyboard set page={page} label={label} text=\"...\"")
     } else {
-        format!("magic-cli storyboard set page={page} label={label} image=\"path/to/art.png\"")
+        format!("magic-cli storyboard set page={page} label={label} image=\"path/to/image.png\"")
     }
 }
 
-pub(crate) fn page_cli_command(page: usize, archetype: &str) -> String {
-    match archetype {
-        "cover" => format!(
-            "READONLY CLI · magic-cli storyboard wizard title=\"...\" style=\"...\" · magic-cli storyboard pages page={page} · magic-cli storyboard check"
-        ),
-        "world" => format!(
-            "READONLY CLI · magic-cli storyboard locations page={page} fields='{{\"world_heading\":\"...\"}}' · magic-cli storyboard check"
-        ),
-        "char" => {
-            "READONLY CLI · magic-cli exec character.cut character=<id> remove_background=true rig=true · magic-cli exec character.puppet.rig_face character=<id>"
-                .into()
-        }
-        "motion" => {
-            "READONLY CLI · magic-cli exec motion.save word_id=w-0001 image=\"cue.png\" · magic-cli exec motion.publish render=true".into()
-        }
-        _ => format!(
-            "READONLY CLI · magic-cli storyboard pages page={page} · magic-cli storyboard bulk_generate · magic-cli storyboard add archetype={archetype}"
-        ),
+pub(crate) fn human_slot_title(label: &str) -> String {
+    label
+        .split('_')
+        .filter(|part| !part.is_empty())
+        .map(|part| {
+            let mut chars = part.chars();
+            match chars.next() {
+                Some(first) => format!("{}{}", first.to_ascii_uppercase(), chars.as_str()),
+                None => String::new(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+pub(crate) fn slot_is_filled(kind: &str, text: Option<&str>, image: Option<&str>) -> bool {
+    match kind {
+        "text" => text.is_some_and(|raw| {
+            let t = raw.trim();
+            !t.is_empty() && !(t.contains('[') && t.contains(']')) && !t.contains("____")
+        }),
+        "image" => image.is_some_and(|img| {
+            let p = img.trim();
+            !p.is_empty() && Path::new(p).is_file()
+        }),
+        _ => false,
     }
+}
+
+fn u16_at(bytes: &[u8], at: usize) -> usize {
+    u16::from_le_bytes([bytes[at], bytes[at + 1]]) as usize
+}
+
+fn u32_at(bytes: &[u8], at: usize) -> usize {
+    u32::from_le_bytes([bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]]) as usize
+}
+
+/// Read `document.json` from the embedded `.designcraft` master once in memory.
+pub(crate) fn master_template_doc() -> &'static Value {
+    static DOC: OnceLock<Value> = OnceLock::new();
+    DOC.get_or_init(|| {
+        let bytes = MASTER_DESIGNCRAFT;
+        let eocd = (0..=bytes.len().saturating_sub(22))
+            .rev()
+            .find(|&i| &bytes[i..i + 4] == b"PK\x05\x06")
+            .unwrap_or(0);
+        let mut pos = u32_at(bytes, eocd + 16);
+        for _ in 0..u16_at(bytes, eocd + 10) {
+            if pos + 46 > bytes.len() || &bytes[pos..pos + 4] != b"PK\x01\x02" {
+                break;
+            }
+            let (name_len, extra_len, comment_len) = (
+                u16_at(bytes, pos + 28),
+                u16_at(bytes, pos + 30),
+                u16_at(bytes, pos + 32),
+            );
+            if std::str::from_utf8(&bytes[pos + 46..pos + 46 + name_len]).unwrap_or("") == "document.json" {
+                let local = u32_at(bytes, pos + 42);
+                let start = local + 30 + u16_at(bytes, local + 26) + u16_at(bytes, local + 28);
+                let data = &bytes[start..start + u32_at(bytes, pos + 20)];
+                let mut out = Vec::new();
+                if u16_at(bytes, pos + 10) == 8 {
+                    let _ = DeflateDecoder::new(data).read_to_end(&mut out);
+                } else {
+                    out.extend_from_slice(data);
+                }
+                return serde_json::from_slice(&out).unwrap_or_else(|_| json!({}));
+            }
+            pos += 46 + name_len + extra_len + comment_len;
+        }
+        json!({})
+    })
+}
+
+/// Rule 1: Section names come strictly from `doc["sections"]` in the `.designcraft` master.
+pub(crate) fn master_sections() -> Vec<String> {
+    let doc = master_template_doc();
+    doc["sections"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|s| s["marker"].as_str().map(str::trim).filter(|m| !m.is_empty()).map(str::to_owned))
+        .collect()
 }
 
 fn item_bounds(item: &Value) -> Option<[f64; 4]> {
@@ -153,106 +221,58 @@ fn item_bounds(item: &Value) -> Option<[f64; 4]> {
             }
         }
     }
-    (min_x.is_finite() && max_x > min_x && max_y > min_y).then_some([min_x, min_y, max_x, max_y])
+    (min_x.is_finite() && max_x >= min_x && max_y >= min_y && (max_x > min_x || max_y > min_y))
+        .then_some([min_x, min_y, max_x, max_y])
 }
 
-fn u16_at(bytes: &[u8], at: usize) -> usize {
-    u16::from_le_bytes([bytes[at], bytes[at + 1]]) as usize
-}
-
-fn u32_at(bytes: &[u8], at: usize) -> usize {
-    u32::from_le_bytes([bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]]) as usize
-}
-
-/// Read `document.json` from a `.designcraft` OpenDocument-style ZIP archive (preferring live
-/// `DesignCraft --control` `document.inspect` when an active DesignCraft window holds the file).
-pub(crate) fn read_designcraft_doc(path: &Path) -> Result<Value> {
-    if !path.is_file() {
-        return Err(bad(&format!("{} does not exist", path.display())));
-    }
-    if let Some(Ok(live)) = CraftHub::try_live(CraftTarget::Design, path, "document.inspect", &json!({}), false)
-        && live["spreads"].is_array()
-    {
-        return Ok(live);
-    }
-    let bytes = std::fs::read(path)?;
-    if bytes.len() < 22 || &bytes[0..4] != b"PK\x03\x04" {
-        return Err(fail("not a valid .designcraft archive"));
-    }
-    let eocd = (0..=bytes.len() - 22).rev().find(|&i| &bytes[i..i + 4] == b"PK\x05\x06").ok_or_else(|| fail("corrupt .designcraft central directory"))?;
-    let mut pos = u32_at(&bytes, eocd + 16);
-    for _ in 0..u16_at(&bytes, eocd + 10) {
-        if pos + 46 > bytes.len() || &bytes[pos..pos + 4] != b"PK\x01\x02" {
-            break;
+fn section_for_doc_page(doc: &Value, page_idx: usize) -> String {
+    let mut matched: Option<&str> = None;
+    for sec in doc["sections"].as_array().into_iter().flatten() {
+        let start = sec["start"].as_u64().unwrap_or(0) as usize;
+        if page_idx >= start
+            && let Some(marker) = sec["marker"].as_str().filter(|m| !m.trim().is_empty())
+        {
+            matched = Some(marker);
         }
-        let (name_len, extra_len, comment_len) = (u16_at(&bytes, pos + 28), u16_at(&bytes, pos + 30), u16_at(&bytes, pos + 32));
-        if std::str::from_utf8(&bytes[pos + 46..pos + 46 + name_len]).unwrap_or("") == "document.json" {
-            let local = u32_at(&bytes, pos + 42);
-            let start = local + 30 + u16_at(&bytes, local + 26) + u16_at(&bytes, local + 28);
-            let data = &bytes[start..start + u32_at(&bytes, pos + 20)];
-            let raw = match u16_at(&bytes, pos + 10) {
-                0 => data.to_vec(),
-                8 => {
-                    let mut out = Vec::new();
-                    flate2::read::DeflateDecoder::new(data).read_to_end(&mut out).map_err(fail)?;
-                    out
-                }
-                other => return Err(fail(format!("unsupported zip compression method {other}"))),
-            };
-            return serde_json::from_slice(&raw).map_err(fail);
-        }
-        pos += 46 + name_len + extra_len + comment_len;
     }
-    Err(fail("document.json not found in .designcraft archive"))
+    matched.unwrap_or("Storyboard").to_owned()
 }
 
-pub(crate) fn parent_labels(doc: &Value) -> HashMap<u64, String> {
-    doc["parents"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(|p| {
-            let prefix = p["parent"]["prefix"].as_str().or_else(|| p["prefix"].as_str())?;
-            let name = p["parent"]["name"].as_str().or_else(|| p["name"].as_str())?;
-            let label = if prefix.is_empty() { name.to_string() } else { format!("{prefix}-{name}") };
-            Some((p["id"].as_u64()?, label))
-        })
-        .collect()
-}
-
+#[derive(Clone)]
 pub(crate) struct Slot {
     pub label: String,
+    pub form_name: String,
     pub id: u64,
     pub kind: &'static str,
     pub text: Option<String>,
     pub image: Option<String>,
-    pub source_project: Option<String>,
+    pub linked_file: Option<String>,
+    pub asset_id: Option<String>,
     pub craft_app: Option<String>,
-    pub bounds: Option<[f64; 4]>,
-    pub hidden: bool,
+    pub bounds: [f64; 4],
     pub locked: bool,
-    pub readonly: bool,
+    pub filled: bool,
     pub cli_command: String,
 }
 
 impl Slot {
-    pub fn is_cli_helper(&self) -> bool {
-        self.label.ends_with("_cli")
-    }
-
     pub fn to_json(&self) -> Value {
         json!({
             "label": self.label,
+            "form_field": self.form_name,
+            "title": human_slot_title(&self.label),
             "id": self.id,
             "kind": self.kind,
             "text": self.text,
             "image": self.image,
-            "source_project": self.source_project,
+            "linked_file": self.linked_file,
+            "asset_id": self.asset_id,
             "craft_app": self.craft_app,
             "bounds": self.bounds,
-            "hidden": self.hidden,
             "locked": self.locked,
-            "readonly": self.readonly,
+            "required": !self.locked,
+            "filled": self.filled,
+            "light": if self.filled { "green" } else { "red" },
             "cli_command": self.cli_command,
         })
     }
@@ -260,124 +280,274 @@ impl Slot {
 
 pub(crate) struct PageInfo {
     pub index: usize,
-    pub archetype: String,
-    pub section: Option<String>,
+    pub spread_index: usize,
+    pub page_in_spread: usize,
+    pub spread_page_count: usize,
+    pub section: String,
     pub bounds: [f64; 4],
+    pub heading: Option<String>,
     pub slots: Vec<Slot>,
+    pub layout_items: Vec<Value>,
 }
 
 impl PageInfo {
     pub fn title(&self) -> String {
-        TITLE_LABELS
-            .iter()
-            .find_map(|k| self.slots.iter().find(|s| s.label == *k)?.text.as_deref().map(str::trim).filter(|t| !t.is_empty()))
-            .map_or_else(|| format!("{} {}", self.archetype, self.index + 1), str::to_string)
-    }
-
-    pub fn is_main_title_page(&self) -> bool {
-        MAIN_TITLE_ARCHETYPES.contains(&self.archetype.as_str())
-    }
-
-    pub fn labels(&self) -> Labels {
-        self.slots.iter().map(|s| (s.label.clone(), s.id)).collect()
+        if let Some(h) = self.heading.as_deref().filter(|t| !t.trim().is_empty()) {
+            return h.trim().to_owned();
+        }
+        format!("{} · Page {:02}", self.section, self.index + 1)
     }
 
     pub fn to_json(&self) -> Value {
-        let slots: Vec<Value> = self.slots.iter().filter(|s| !s.is_cli_helper()).map(Slot::to_json).collect();
-        let cli_instructions: Vec<Value> = self
-            .slots
-            .iter()
-            .filter(|s| s.is_cli_helper())
-            .map(|s| {
-                json!({
-                    "label": s.label,
-                    "id": s.id,
-                    "text": s.text,
-                    "readonly": true,
-                    "locked": true,
-                    "style": "CLI Fineprint",
-                })
-            })
-            .collect();
-        let left_no = self.index * 2 + 1;
-        let right_no = left_no + 1;
+        let slots: Vec<Value> = self.slots.iter().filter(|s| !s.locked).map(Slot::to_json).collect();
         json!({
             "page": self.index,
-            "spread_pages": [format!("{left_no:02}"), format!("{right_no:02}")],
-            "archetype": self.archetype,
-            "is_title_section": self.is_main_title_page(),
+            "page_number": self.index + 1,
+            "spread": self.spread_index,
+            "page_in_spread": self.page_in_spread,
+            "spread_page_count": self.spread_page_count,
             "section": self.section,
             "title": self.title(),
             "bounds": self.bounds,
-            "cli_command": page_cli_command(self.index, &self.archetype),
-            "cli_instructions": cli_instructions,
             "slots": slots,
+            "layout_items": self.layout_items,
         })
     }
 }
 
-pub(crate) fn parse_pages_and_stories(path: &Path, doc: &Value) -> (Vec<PageInfo>, HashMap<u64, u64>) {
-    let parents = parent_labels(doc);
-    let refs = load_slot_references(path);
-    let default_w = doc["settings"]["pageWidth"].as_f64().unwrap_or(1600.0);
-    let default_h = doc["settings"]["pageHeight"].as_f64().unwrap_or(1000.0);
-    let mut stories = HashMap::new();
+/// Rule 4: Sync connected project assets (`s.project_assets`) into the Storyboard's `Assets`
+/// inventory slots (`assets_thumb_N`, `assets_name_N`, `assets_details_N`) using each asset's
+/// flat project image + linked-file metadata.
+pub(crate) fn sync_assets_into_state(s: &Session, state: &mut FieldState) {
+    let Some(project_dir) = s.project_path.as_deref().and_then(Path::parent) else {
+        return;
+    };
+    let doc = master_template_doc();
+    let mut assets_page_idx: Option<usize> = None;
+    let mut doc_pg = 0usize;
+    for spread in doc["spreads"].as_array().into_iter().flatten() {
+        let sp_pages = spread["pages"].as_array().map_or(1, Vec::len).max(1);
+        if spread["items"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .any(|it| it["label"].as_str() == Some("assets_thumb_1"))
+        {
+            assets_page_idx = Some(doc_pg);
+            break;
+        }
+        doc_pg += sp_pages;
+    }
+    let Some(pg_idx) = assets_page_idx else { return };
+
+    for (i, asset) in s.project_assets.iter().take(6).enumerate() {
+        let n = i + 1;
+        let Some(ref raw_path) = asset.path else { continue };
+        let (proj_img, linked_file, craft_app) =
+            crate::cmd::project::assets::resolve_asset_project_image(Some(project_dir), raw_path);
+        let thumb_key = field_key(pg_idx, &format!("assets_thumb_{n}"));
+        state.images.entry(thumb_key).or_insert_with(|| ImageLinkMeta {
+            image: proj_img.to_string_lossy().into_owned(),
+            linked_file: linked_file.clone().or_else(|| Some(raw_path.to_string_lossy().into_owned())),
+            asset_id: Some(asset.id.clone()),
+            craft_app: craft_app.clone(),
+        });
+        let name_key = field_key(pg_idx, &format!("assets_name_{n}"));
+        state.text.entry(name_key).or_insert_with(|| asset.name.clone());
+        let details_key = field_key(pg_idx, &format!("assets_details_{n}"));
+        state.text.entry(details_key).or_insert_with(|| {
+            let rel = raw_path
+                .strip_prefix(project_dir)
+                .unwrap_or(raw_path)
+                .to_string_lossy();
+            let app_tag = craft_app.as_deref().unwrap_or(asset.kind.as_str());
+            format!("{app_tag} · {rel}")
+        });
+    }
+}
+
+/// Rule 1: Parse Storyboard pages strictly from the `.designcraft` master (`doc["sections"]` + `item["locked"]`).
+pub(crate) fn parse_storyboard_pages(s: Option<&Session>, pdf_path: &Path) -> Vec<PageInfo> {
+    let doc = master_template_doc();
+    let mut state = load_field_state(pdf_path);
+    if let Some(sess) = s {
+        sync_assets_into_state(sess, &mut state);
+    }
+    let default_w = doc["settings"]["pageWidth"].as_f64().unwrap_or(612.0);
+    let default_h = doc["settings"]["pageHeight"].as_f64().unwrap_or(792.0);
     let mut pages = Vec::new();
-    for (index, spread) in doc["spreads"].as_array().into_iter().flatten().enumerate() {
-        let mut slots = Vec::new();
+    let mut doc_page_idx = 0usize;
+
+    for (spread_idx, spread) in doc["spreads"].as_array().into_iter().flatten().enumerate() {
+        let raw_pages = spread["pages"].as_array().cloned().unwrap_or_default();
+        let spread_pages: Vec<(f64, f64, f64, f64)> = if raw_pages.is_empty() {
+            vec![(0.0, 0.0, default_w, default_h)]
+        } else {
+            raw_pages
+                .iter()
+                .map(|pg| {
+                    (
+                        pg["x"].as_f64().unwrap_or(0.0),
+                        pg["y"].as_f64().unwrap_or(0.0),
+                        pg["width"].as_f64().unwrap_or(default_w),
+                        pg["height"].as_f64().unwrap_or(default_h),
+                    )
+                })
+                .collect()
+        };
+        let sp_count = spread_pages.len();
+        let mut per_page_slots: Vec<Vec<Slot>> = vec![Vec::new(); sp_count];
+        let mut per_page_layout: Vec<Vec<Value>> = vec![Vec::new(); sp_count];
+        let mut per_page_headings: Vec<Option<String>> = vec![None; sp_count];
+
         for item in spread["items"].as_array().into_iter().flatten() {
             let Some(id) = item["id"].as_u64() else { continue };
-            if let Some(story_id) = item["content"]["story"].as_u64().or_else(|| item["story"].as_u64()) {
-                stories.insert(id, story_id);
+            if item["hidden"].as_bool().unwrap_or(false) {
+                continue;
             }
-            let Some(label) = item["label"].as_str().filter(|l| !l.is_empty()) else { continue };
-            let ctype = item["content"]["type"].as_str().or_else(|| item["kind"].as_str()).unwrap_or("image");
+            let Some(wb) = item_bounds(item) else { continue };
+            let cx = (wb[0] + wb[2]) * 0.5;
+            let page_in_spread = spread_pages
+                .iter()
+                .position(|(px, _, pw, _)| cx >= *px - 2.0 && cx <= *px + *pw + 2.0)
+                .unwrap_or(0);
+            let (px, py, _, _) = spread_pages[page_in_spread];
+            let local_bounds = [wb[0] - px, wb[1] - py, wb[2] - px, wb[3] - py];
+            let target_page_idx = doc_page_idx + page_in_spread;
+
+            let ctype = item["content"]["type"].as_str().unwrap_or("unassigned");
+            let label_opt = item["label"].as_str().filter(|l| !l.is_empty());
+            let locked = item["locked"].as_bool().unwrap_or(false);
+
+            let story_id = item["content"]["story"].as_u64();
+            let story_obj = story_id.and_then(|sid| doc["stories"].get(sid.to_string()));
+            let fkey = label_opt.map(|lbl| field_key(target_page_idx, lbl));
+            let text = fkey
+                .as_ref()
+                .and_then(|k| state.text.get(k).cloned())
+                .or_else(|| story_obj.and_then(|st| st["text"].as_str()).map(str::to_owned));
+            let img_meta = fkey.as_ref().and_then(|k| state.images.get(k)).cloned();
+            let image = img_meta.as_ref().map(|m| m.image.clone());
+
+            if locked
+                && ctype == "text"
+                && label_opt.is_some_and(|l| l.ends_with("_heading") || l == "section_title" || l == "cover_badge")
+                && per_page_headings[page_in_spread].is_none()
+            {
+                per_page_headings[page_in_spread] = text.clone();
+            }
+
+            let over = story_obj.and_then(|st| st["chars"].as_array()?.first()).and_then(|ch| ch.get("over"));
+            let align = story_obj
+                .and_then(|st| st["paras"].as_array()?.first())
+                .and_then(|pa| pa["para"]["align"].as_str())
+                .unwrap_or("left");
+            let item_kind = if ctype == "text" {
+                "text"
+            } else if !locked && label_opt.is_some() {
+                "image"
+            } else {
+                "shape"
+            };
+            let hide_hint = label_opt
+                .and_then(|l| l.strip_suffix("_hint"))
+                .is_some_and(|base| state.images.contains_key(&field_key(target_page_idx, base)));
+            if !hide_hint {
+                per_page_layout[page_in_spread].push(json!({
+                    "id": id,
+                    "label": label_opt,
+                    "kind": item_kind,
+                    "locked": locked,
+                    "bounds": local_bounds,
+                    "fill": item["fill"]["swatch"].as_str().unwrap_or("[None]"),
+                    "stroke": item["stroke"]["swatch"].as_str().unwrap_or("[None]"),
+                    "stroke_weight": item["stroke"]["weight"].as_f64().unwrap_or(0.0),
+                    "text": text,
+                    "font_size": over.and_then(|o| o["size"].as_f64()).unwrap_or(9.5),
+                    "font_style": over.and_then(|o| o["fontStyle"].as_str()).unwrap_or("Regular"),
+                    "text_fill": over.and_then(|o| o["fill"].as_str()).unwrap_or("Ink"),
+                    "align": align,
+                    "image": image,
+                    "linked_file": img_meta.as_ref().and_then(|m| m.linked_file.as_deref()),
+                    "asset_id": img_meta.as_ref().and_then(|m| m.asset_id.as_deref()),
+                    "craft_app": img_meta.as_ref().and_then(|m| m.craft_app.as_deref()),
+                }));
+            }
+
+            let Some(label) = label_opt else { continue };
             let kind = if ctype == "text" { "text" } else { "image" };
-            let text = if kind == "text" {
-                item["text"]
-                    .as_str()
-                    .map(str::to_string)
-                    .or_else(|| item["content"]["story"].as_u64().and_then(|sid| doc["stories"][sid.to_string()]["text"].as_str()).map(str::to_string))
-            } else {
-                None
-            };
-            let image = if kind == "image" {
-                item["content"]["asset"]
-                    .as_u64()
-                    .and_then(|aid| doc["assets"][aid.to_string()]["link"].as_str())
-                    .or_else(|| item["link"].as_str())
-                    .map(|raw| craft_docpath::resolve_absolute(raw, Some(path)).map_or_else(|_| raw.to_string(), |p| p.to_string_lossy().into_owned()))
-            } else {
-                None
-            };
-            let ref_entry = refs.get(&format!("{index}:{label}"));
-            let is_cli = label.ends_with("_cli");
-            slots.push(Slot {
+            let filled = slot_is_filled(kind, text.as_deref(), image.as_deref());
+            per_page_slots[page_in_spread].push(Slot {
                 label: label.to_string(),
+                form_name: field_key(target_page_idx, label),
                 id,
                 kind,
                 text,
                 image,
-                source_project: ref_entry.and_then(|r| r.source_project.clone()),
-                craft_app: ref_entry.and_then(|r| r.craft_app.clone()),
-                bounds: item_bounds(item),
-                hidden: item["hidden"].as_bool().unwrap_or(false),
-                locked: item["locked"].as_bool().unwrap_or(is_cli),
-                readonly: item["readonly"].as_bool().unwrap_or(is_cli),
-                cli_command: slot_cli_command(index, label, kind),
+                linked_file: img_meta.as_ref().and_then(|m| m.linked_file.clone()),
+                asset_id: img_meta.as_ref().and_then(|m| m.asset_id.clone()),
+                craft_app: img_meta.as_ref().and_then(|m| m.craft_app.clone()),
+                bounds: local_bounds,
+                locked,
+                filled,
+                cli_command: slot_cli_command(target_page_idx, label, kind),
             });
         }
-        let archetype = ARCHETYPES.iter().find(|(_, marker)| slots.iter().any(|s| s.label == *marker)).map_or("scene", |(name, _)| *name).to_string();
-        let section = spread["pages"][0]["parent"].as_u64().and_then(|pid| parents.get(&pid).cloned());
-        pages.push(PageInfo { index, archetype, section, bounds: [0.0, 0.0, default_w, default_h], slots });
+
+        for (p_in_sp, (((_, _, pw, ph), slots), (layout_items, heading))) in spread_pages
+            .into_iter()
+            .zip(per_page_slots.into_iter())
+            .zip(per_page_layout.into_iter().zip(per_page_headings.into_iter()))
+            .enumerate()
+        {
+            let index = doc_page_idx + p_in_sp;
+            pages.push(PageInfo {
+                index,
+                spread_index: spread_idx,
+                page_in_spread: p_in_sp,
+                spread_page_count: sp_count,
+                section: section_for_doc_page(doc, index),
+                bounds: [0.0, 0.0, pw, ph],
+                heading,
+                slots,
+                layout_items,
+            });
+        }
+        doc_page_idx += sp_count;
     }
-    (pages, stories)
+    pages
 }
 
-pub(crate) fn run_design_steps(path: &Path, steps: &[(&str, Value)]) -> Result<Vec<Value>> {
-    let mutates = steps.iter().any(|(id, _)| !EXPORT_ONLY.contains(id));
-    if mutates {
-        crate::link_watch::save_guard(path, FileStamp::of(path))?;
+/// Rule 3: Gather the Storyboard's visual design prompts and placed reference images so ALL new
+/// media creation (`image.generate`, `scribbles`, `storyboard.bulk_generate`) uses Storyboard references.
+pub(crate) fn storyboard_media_references(s: &Session) -> (Option<String>, Vec<PathBuf>) {
+    let Ok(pdf_path) = doc_path(s, &json!({})) else {
+        return (None, Vec::new());
+    };
+    let pages = parse_storyboard_pages(Some(s), &pdf_path);
+    let mut style_parts = Vec::new();
+    for key in ["cover_overall_design", "world_location_prompt", "char_exact_prompt"] {
+        if let Some(txt) = pages
+            .iter()
+            .find_map(|pg| pg.slots.iter().find(|sl| sl.label == key && sl.filled)?.text.as_deref())
+            .map(str::trim)
+            .filter(|t| !t.is_empty())
+        {
+            style_parts.push(txt.to_owned());
+        }
     }
-    CraftHub::run_batch(CraftTarget::Design, Some(path), mutates.then_some(path), steps)
+    let style_context = (!style_parts.is_empty()).then(|| style_parts.join(" | "));
+
+    let mut refs = Vec::new();
+    for pg in &pages {
+        for sl in pg.slots.iter().filter(|sl| sl.kind == "image" && sl.filled) {
+            if let Some(p) = sl.image.as_deref().map(PathBuf::from).filter(|p| p.is_file())
+                && !refs.contains(&p)
+                && refs.len() < 5
+            {
+                refs.push(p);
+            }
+        }
+    }
+    (style_context, refs)
 }

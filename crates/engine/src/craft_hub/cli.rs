@@ -154,6 +154,37 @@ pub fn exec_single(target: CraftTarget, doc: Option<&Path>, command: &str, param
                 cmd.arg("--cmd").arg(command).arg("--params").arg(&params_str);
             }
         }
+        CraftTarget::Pdf => {
+            if command == "info"
+                && let Some(path) = doc
+            {
+                cmd.arg("info").arg(path);
+            } else if command == "text"
+                && let Some(path) = doc
+            {
+                cmd.arg("text").arg(path);
+                if let Some(pg) = params["page"].as_u64() {
+                    cmd.arg("--page").arg(pg.to_string());
+                }
+            } else if command == "tools" {
+                cmd.arg("tools");
+            } else if let Some(ui_sub) = command.strip_prefix("ui.") {
+                let ctrl_file = craft_util::discovery::pdfcraft_control_file()
+                    .ok_or_else(|| EngineError::InvalidParams("HOME required for ~/.pdfcraft-control.json".into()))?;
+                cmd.arg("ui").arg("--control").arg(ctrl_file).arg(ui_sub);
+                if let Some(obj) = params.as_object() {
+                    for (k, v) in obj {
+                        let val_str = v.as_str().map(str::to_owned).unwrap_or_else(|| v.to_string());
+                        cmd.arg(format!("{k}={val_str}"));
+                    }
+                }
+            } else {
+                let steps = [(command, params.clone())];
+                let out_doc = if save { doc } else { None };
+                let mut list = exec_batch(CraftTarget::Pdf, doc, out_doc, &steps)?;
+                return Ok(list.pop().unwrap_or_else(|| json!({"ok": true})));
+            }
+        }
         CraftTarget::Design | CraftTarget::Deck => {
             if save && let Some(path) = doc {
                 cmd.arg("script").arg("--in").arg(path).arg("--save").arg(path);
@@ -263,6 +294,39 @@ pub fn exec_batch(target: CraftTarget, input: Option<&Path>, output: Option<&Pat
             cmd.arg("--commands").arg("-").arg("--json");
             let payload: Vec<Value> = steps.iter().map(|(id, params)| json!({"command": id, "params": params})).collect();
             stdin_bytes = Some(serde_json::to_vec(&payload).map_err(|e| EngineError::InvalidParams(e.to_string()))?);
+        }
+        CraftTarget::Pdf => {
+            let tmp = ScopedTempDir::new("magic-pdfcraft")?;
+            let script_path = tmp.path().join("steps.json");
+            let root_dir = input
+                .or(output)
+                .and_then(Path::parent)
+                .filter(|p| !p.as_os_str().is_empty())
+                .unwrap_or_else(|| Path::new("."));
+            let mut script_steps: Vec<Value> = Vec::with_capacity(steps.len() + 2);
+            if let Some(src) = input.filter(|p| p.is_file()) {
+                script_steps.push(json!({"tool": "doc_open", "params": {"path": src}}));
+            }
+            for (id, params) in steps {
+                script_steps.push(json!({"tool": id, "params": params}));
+            }
+            if let Some(dest) = output {
+                script_steps.push(json!({"tool": "doc_save", "params": {"path": dest}}));
+            }
+            let bytes = serde_json::to_vec_pretty(&script_steps).map_err(|e| EngineError::InvalidParams(e.to_string()))?;
+            craft_atomic::atomic_write(&script_path, &bytes)?;
+            cmd.arg("run")
+                .arg("--script")
+                .arg(&script_path)
+                .arg("--root")
+                .arg(root_dir)
+                .arg("--report");
+            let out = cmd.output().map_err(|e| EngineError::ExternalTool("pdfcraft-cli".into(), e.to_string()))?;
+            let val = parse_cli_value(CraftTarget::Pdf, "run", &out)?;
+            if let Some(arr) = val.get("steps").or_else(|| val.get("results")).and_then(Value::as_array) {
+                return Ok(arr.clone());
+            }
+            return Ok(vec![val]);
         }
         CraftTarget::Design | CraftTarget::Deck => {
             let src = input.ok_or_else(|| EngineError::InvalidParams(format!("{} batch requires an input document", target.cli_name())))?;
@@ -378,6 +442,20 @@ fn parse_batch_output(target: CraftTarget, out: &Output) -> Result<Vec<Value>> {
         }
     }
     Ok(lines)
+}
+
+pub fn render_pdf_pages(doc: &Path, page: Option<usize>, scale: f64, destination: &Path) -> Result<()> {
+    let root_dir = doc
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    let step = match page {
+        Some(index) => ("page_render", json!({"page": index + 1, "scale": scale, "out": destination})),
+        None => ("page_render", json!({"scale": scale, "out_dir": destination})),
+    };
+    let _ = exec_batch(CraftTarget::Pdf, Some(doc), None, &[step])?;
+    let _ = root_dir;
+    Ok(())
 }
 
 pub fn render_design_pages(doc: &Path, page: Option<usize>, scale: f64, destination: &Path) -> Result<()> {

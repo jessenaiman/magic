@@ -120,6 +120,7 @@ pub enum PickerTarget {
     ImportFontDir,
     ImportWasmPlugin,
     ImportModel3d,
+    StoryboardSlotImage { page: usize, slot: String },
 }
 
 #[derive(Clone, Debug)]
@@ -136,6 +137,7 @@ pub enum UiAction {
         save: bool,
     },
     ToggleAudio,
+    SeekAudio(f64),
     SnapWindow,
     OpenPreferences,
     OpenDoctor,
@@ -326,6 +328,69 @@ impl UiShellState {
             .pointer("/inputs/0/path")
             .and_then(Value::as_str)
             .map(str::to_owned)
+    }
+
+    /// Ordered `FilmCraft` (`V1` / program) & Storyboard scene frames for stage track switching and Film Reels.
+    pub fn active_film_frames(&self) -> Vec<String> {
+        let mut out = Vec::new();
+        if let Some(last) = &self.cache.last_video_frame {
+            out.push(last.clone());
+        }
+        let co = &self.cache.film_status["craft_outputs"];
+        for key in ["program_frames", "v1_frames"] {
+            if let Some(arr) = co[key].as_array() {
+                for item in arr {
+                    if let Some(s) = item.as_str().filter(|p| !p.is_empty())
+                        && !out.iter().any(|x| x == s)
+                    {
+                        out.push(s.to_owned());
+                    }
+                }
+            }
+        }
+        if let Some(pages) = self.cache.storyboard_pages["pages"].as_array() {
+            for page in pages {
+                if page["archetype"].as_str() == Some("cover") {
+                    continue;
+                }
+                let img = page["preview_png"]
+                    .as_str()
+                    .filter(|s| !s.is_empty())
+                    .or_else(|| {
+                        page["slots"].as_array().and_then(|slots| {
+                            slots.iter().find_map(|sl| sl["image"].as_str().filter(|s| !s.is_empty()))
+                        })
+                    });
+                if let Some(s) = img
+                    && !out.iter().any(|x| x == s)
+                {
+                    out.push(s.to_owned());
+                }
+            }
+        }
+        if out.is_empty()
+            && let Some(bg) = self
+                .cache
+                .snapshot
+                .pointer("/data/drawer/backgrounds/0/thumb")
+                .and_then(Value::as_str)
+                .filter(|s| !s.is_empty())
+        {
+            out.push(bg.to_owned());
+        }
+        out
+    }
+
+    /// Select the `FilmCraft` (`V1` / program) frame corresponding to `sec` seconds along the song timeline.
+    pub fn film_frame_at_time(&self, sec: f64) -> Option<String> {
+        let frames = self.active_film_frames();
+        if frames.is_empty() {
+            return None;
+        }
+        let total = self.audio_duration_sec.max(15.0);
+        let frac = (sec.max(0.0) / total).clamp(0.0, 0.9999);
+        let idx = ((frac * (frames.len() as f64)).floor() as usize).min(frames.len().saturating_sub(1));
+        frames.get(idx).cloned()
     }
 
     pub fn drafts_report(&self) -> Value {

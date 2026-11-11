@@ -11,7 +11,7 @@
 //! - `T26` & `T06`: Bidirectional `V3 ↔ C1` Captions (`Subtitle`, `CEA-608`, `CEA-708`, `Teletext`
 //!   in `srt`/`vtt`/`scc`/`mcc`/`stl`/`ttml`), `Upgrade to Graphic`, and `.ectemplate` / `.fcgt` workflow.
 
-use egui::{Align, Layout, RichText, ScrollArea, Ui};
+use egui::{RichText, ScrollArea, Ui};
 use magic::craft_effects::LYRICS_EFFECTS;
 use serde_json::json;
 
@@ -22,14 +22,21 @@ use crate::controls::{
 use crate::state::{PickerTarget, UiAction, ViewCtx};
 use crate::widgets::{BtnSpec, action_button, status_pill, text_input};
 
-/// Left-rail compact font discovery, `+ Font Dir`, `Point/Box`, `Kerning`, & `LTR/RTL` strip (`T21`–`T22`).
+/// Compact font discovery, `+ Font Dir`, `Point/Box`, `Kerning`, & `LTR/RTL` strip (`T21`–`T22`).
 pub fn draw_font_shaping_strip(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
-    ui.add_space(4.0);
+    ui.label(RichText::new("Font Family & OpenType Layout (T21–T22)").size(11.5).strong().color(ctx.pal.accent_sky));
     ui.horizontal_wrapped(|ui| {
-        for font in ["Inter", "Fraunces", "Space Grotesk", "JetBrains Mono"] {
+        ui.spacing_mut().item_spacing.x = 4.0;
+        ui.spacing_mut().item_spacing.y = 4.0;
+        for (font, short_lbl) in [
+            ("Inter", "Inter"),
+            ("Fraunces", "Fraunces"),
+            ("Space Grotesk", "Grotesk"),
+            ("JetBrains Mono", "JB Mono"),
+        ] {
             let id = format!("words-font-{font}");
             let sel = ctx.state.lyrics.font_preset == font;
-            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, font, "Select system/variable font (T21)").selected(sel)).clicked() {
+            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, short_lbl, font).selected(sel)).clicked() {
                 ctx.state.lyrics.font_preset = font.into();
                 ctx.exec(
                     "effect.exec",
@@ -56,6 +63,8 @@ pub fn draw_font_shaping_strip(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         }
     });
     ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
+        ui.spacing_mut().item_spacing.y = 4.0;
         for (bmode, lbl) in [("point", "Point"), ("box", "Box")] {
             let id = format!("words-box-{bmode}");
             let sel = ctx.state.lyrics.text_box_mode == bmode;
@@ -97,9 +106,10 @@ pub fn draw_font_shaping_strip(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
 /// Right-hand inspector (`[Animators] [Styles & 3D] [FX & Expr]`) for `T21`–`T25`.
 pub fn draw_lyrics_inspector(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     let panel = fill_card(ui, ctx.pal, true, |ui| {
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing.x = 4.0;
             for (tid, lbl, tip) in [
-                ("animators", "Animators", "Transform, Variable Axes & Text Range Selectors (T21, T23)"),
+                ("animators", "Animators", "Fonts, Transform, Variable Axes & Text Range Selectors (T21-T23)"),
                 ("styles", "Styles & 3D", "All 9 Layer Styles + Global Light & 3D Extrude (T24)"),
                 ("fx", "FX & Expr", "Craft Typography Effects & JS Expressions + Pick-Whip (T25)"),
             ] {
@@ -124,14 +134,18 @@ pub fn draw_lyrics_inspector(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
 }
 
 fn draw_transform_and_range_animators_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
+    draw_font_shaping_strip(ui, ctx);
+    ui.separator();
+
     ui.label(RichText::new("Transform & Skew").size(12.0).strong());
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
         rotary_dial(ui, ctx.reg, ctx.pal, ScalarSpec::new("words-rot-dial", "Rotate", -180.0..=180.0, "°", ctx.pal.accent_emerald), &mut ctx.state.lyrics.rotate_deg);
         rotary_dial(ui, ctx.reg, ctx.pal, ScalarSpec::new("words-skew-dial", "Skew Slant", -45.0..=45.0, "°", ctx.pal.accent_amber), &mut ctx.state.lyrics.skew_slant_deg);
         rotary_dial(ui, ctx.reg, ctx.pal, ScalarSpec::new("words-axis-dial", "Skew Axis", -90.0..=90.0, "°", ctx.pal.accent_sky), &mut ctx.state.lyrics.skew_axis_deg);
     });
     ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("words-font-size", "Font Size", 18.0..=160.0, "px", ctx.pal.accent_emerald), &mut ctx.state.lyrics.font_size);
-    ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("words-tracking", "Tracking", -80.0..=300.0, "", ctx.pal.accent_sky), &mut ctx.state.lyrics.tracking);
+    ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("words-tracking", "Tracking", -80.0..=300.0, "px", ctx.pal.accent_sky), &mut ctx.state.lyrics.tracking);
     ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("words-stretch-x", "Stretch X", 40.0..=200.0, "%", ctx.pal.accent_emerald), &mut ctx.state.lyrics.scale_x);
     ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("words-stretch-y", "Stretch Y", 40.0..=200.0, "%", ctx.pal.accent_emerald), &mut ctx.state.lyrics.scale_y);
 
@@ -140,7 +154,7 @@ fn draw_transform_and_range_animators_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     let w_ch = ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("words-var-wght", "Weight (wght)", 100.0..=900.0, "", ctx.pal.accent_amber), &mut ctx.state.lyrics.var_weight).changed();
     let wd_ch = ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("words-var-wdth", "Width (wdth)", 75.0..=125.0, "%", ctx.pal.accent_sky), &mut ctx.state.lyrics.var_width).changed();
     let sl_ch = ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("words-var-slnt", "Slant (slnt)", -15.0..=15.0, "°", ctx.pal.accent_emerald), &mut ctx.state.lyrics.var_slant).changed();
-    if pill_toggle(ui, ctx.reg, ctx.pal, "words-ligatures", "OpenType Ligatures (liga/calt)", &mut ctx.state.lyrics.ligatures, ctx.pal.accent_emerald).changed() || w_ch || wd_ch || sl_ch {
+    if pill_toggle(ui, ctx.reg, ctx.pal, "words-ligatures", "OpenType Ligatures", &mut ctx.state.lyrics.ligatures, ctx.pal.accent_emerald).changed() || w_ch || wd_ch || sl_ch {
         ctx.state.dirty_drafts.insert("lyrics".into());
     }
     if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("words-apply-shaping", "Apply Variable Shaping", "Sync layer.setText variations & OpenType features")).clicked() {
@@ -168,6 +182,7 @@ fn draw_transform_and_range_animators_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     ui.separator();
     ui.label(RichText::new("Range & Wiggly Selector (T23)").size(11.5).strong().color(ctx.pal.accent_emerald));
     ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
         for unit in ["characters", "words", "lines"] {
             let id = format!("words-range-unit-{unit}");
             let sel = ctx.state.lyrics.range_unit == unit;
@@ -177,6 +192,7 @@ fn draw_transform_and_range_animators_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         }
     });
     ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
         for (sh, lbl) in [("ramp_up", "Ramp ↑"), ("ramp_down", "Ramp ↓"), ("triangle", "Tri"), ("square", "Square")] {
             let id = format!("words-range-shape-{sh}");
             let sel = ctx.state.lyrics.range_shape == sh;
@@ -190,7 +206,7 @@ fn draw_transform_and_range_animators_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("words-range-offset", "Range Offset", -100.0..=100.0, "%", ctx.pal.accent_amber), &mut ctx.state.lyrics.range_offset_pct);
     ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("words-ease-high", "Ease High", 0.0..=100.0, "%", ctx.pal.accent_sky), &mut ctx.state.lyrics.ease_high_pct);
     ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("words-ease-low", "Ease Low", 0.0..=100.0, "%", ctx.pal.accent_sky), &mut ctx.state.lyrics.ease_low_pct);
-    pill_toggle(ui, ctx.reg, ctx.pal, "words-3d-per-char", "EffectCraft 3D Per-Character Layer", &mut ctx.state.lyrics.per_char_3d, ctx.pal.accent_emerald);
+    pill_toggle(ui, ctx.reg, ctx.pal, "words-3d-per-char", "3D Per-Character Layer", &mut ctx.state.lyrics.per_char_3d, ctx.pal.accent_emerald);
     pill_toggle(ui, ctx.reg, ctx.pal, "words-wiggly-sel", "Wiggly Selector", &mut ctx.state.lyrics.wiggly_selector, ctx.pal.accent_amber);
 
     if action_button(
@@ -226,6 +242,8 @@ fn draw_transform_and_range_animators_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
 fn draw_styles_and_3d_extrude_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     ui.label(RichText::new("9 Layer Styles & Global Light (T24)").size(11.5).strong().color(ctx.pal.accent_amber));
     ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
+        ui.spacing_mut().item_spacing.y = 4.0;
         for (skind, lbl) in [
             ("dropShadow", "Drop Shadow"),
             ("innerShadow", "Inner Shadow"),
@@ -253,7 +271,7 @@ fn draw_styles_and_3d_extrude_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             }
         }
     });
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         rotary_dial(
             ui,
             ctx.reg,
@@ -261,7 +279,8 @@ fn draw_styles_and_3d_extrude_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             ScalarSpec::new("words-global-light", "Global Light", -180.0..=180.0, "°", ctx.pal.accent_amber),
             &mut ctx.state.lyrics.global_light_deg,
         );
-        ui.vertical(|ui| {
+        let rem_w = (ui.available_width() - 4.0).max(120.0);
+        ui.allocate_ui_with_layout(egui::Vec2::new(rem_w, 68.0), egui::Layout::top_down(egui::Align::Min), |ui| {
             ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("words-stroke-w", "Stroke Width", 0.0..=24.0, "px", ctx.pal.accent_amber), &mut ctx.state.lyrics.stroke_width);
             ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("words-glow-r", "Glow Radius", 0.0..=60.0, "px", ctx.pal.accent_emerald), &mut ctx.state.lyrics.glow_radius);
         });
@@ -271,6 +290,7 @@ fn draw_styles_and_3d_extrude_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     ui.label(RichText::new("Advanced 3D Text Extrusion & Bevels (T24)").size(11.5).strong().color(ctx.pal.accent_sky));
     ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("words-extrude-depth", "Extrusion Depth", 0.0..=120.0, "px", ctx.pal.accent_sky), &mut ctx.state.lyrics.extrude_depth);
     ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
         for bev in ["angular", "concave", "convex"] {
             let id = format!("words-bevel-{bev}");
             let sel = ctx.state.lyrics.bevel_style == bev;
@@ -326,7 +346,7 @@ fn draw_typography_fx_and_expr_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     }
 
     ui.separator();
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         ui.label(RichText::new("Inline JS Expression (T25)").size(11.5).strong().color(ctx.pal.accent_emerald));
         let ok_expr = !ctx.state.lyrics.expr_code.trim().is_empty();
         status_pill(
@@ -343,9 +363,11 @@ fn draw_typography_fx_and_expr_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         "JavaScript Expression",
         &mut ctx.state.lyrics.expr_code,
         "wiggle(2.5, 8)",
-        ui.available_width().max(160.0),
+        (ui.available_width() - 4.0).max(140.0),
     );
     ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
+        ui.spacing_mut().item_spacing.y = 4.0;
         for (lbl, snippet) in [
             ("wiggle", "wiggle(2.5, 8)"),
             ("loopOut", "loopOut(\"cycle\")"),
@@ -377,11 +399,14 @@ fn draw_typography_fx_and_expr_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     });
 }
 
-/// Stage-footer bidirectional `V3 ↔ C1` Captions (`T26`) and `.ectemplate` / `.fcgt` bar (`T06`).
+/// Collapsible stage-footer bidirectional `V3 ↔ C1` Captions (`T26`) and `.ectemplate` / `.fcgt` bar (`T06`).
 pub fn draw_captions_and_template_strip(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     ctx.pal.inset_frame().show(ui, |ui| {
+        ui.set_min_width(ui.available_width());
         ui.horizontal_wrapped(|ui| {
-            ui.label(RichText::new("Captions C1 (T26):").monospace().size(9.5).color(ctx.pal.accent_sky));
+            ui.spacing_mut().item_spacing.x = 4.0;
+            ui.spacing_mut().item_spacing.y = 4.0;
+            ui.label(RichText::new("Captions C1:").monospace().size(9.5).color(ctx.pal.accent_sky));
             for std_name in ["Subtitle", "CEA-608", "CEA-708", "Teletext"] {
                 let id = format!("words-cap-std-{std_name}");
                 let sel = ctx.state.lyrics.caption_standard == std_name;
@@ -413,9 +438,7 @@ pub fn draw_captions_and_template_strip(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                     Some("Upgraded C1 captions to editable graphics"),
                 );
             }
-
-            ui.separator();
-            text_input(ui, ctx.reg, "words-tpl-name", "Template Name", &mut ctx.state.lyrics.template_name, "chorus-lower-third", 124.0);
+            text_input(ui, ctx.reg, "words-tpl-name", "Template Name", &mut ctx.state.lyrics.template_name, "chorus-lower-third", 118.0);
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("words-export-ectpl", "Export .ectemplate", "Package Essential Graphics .ectemplate (T06)")).clicked() {
                 ctx.exec(
                     "bridge.templates",

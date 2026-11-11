@@ -28,7 +28,7 @@ pub use theme::{AccentChoice, InterfaceStyle, MagicPalette, ThemeMode};
 pub use widgets::AutomationRegistry;
 
 /// Install `egui_extras` image/SVG loaders and `craft_ui::fonts::UiFonts` (`system_fonts` +
-/// `color_fonts` fallback stack shared with `craft-font-catalog`).
+/// `color_fonts` script font chain shared with `craft-font-catalog`).
 pub fn install_loaders(ctx: &egui::Context) {
     egui_extras::install_image_loaders(ctx);
     UiFonts::new(&I18nScripts).ui_language("en").install(ctx);

@@ -1,6 +1,6 @@
 //! `Studio` view (`#view-studio`): Craft-project-native `FilmCraft Studio` (`film/<song>.fcproj`)
-//! matching `07-studio-filmcraft-assembly.jpg`, plus the 7-mode `Sheet 08` Zone E Finishing Deck
-//! (`studio_finishing.rs` & `studio_audio_titles.rs`: `[Matrix] [Edit] [Color] [FX] [Audio] [Titles] [Export]`).
+//! matching `07-studio-filmcraft-assembly.jpg`, plus the unified 7-workspace `Sheet 08` Zone E
+//! Finishing Deck (`[Assembly] [Edit] [Color] [FX] [Audio] [Titles] [Export]`).
 
 use craft_ui::layout::{SplitAxis, SplitSize, split_rect};
 use egui::{
@@ -61,13 +61,14 @@ pub fn show(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     ui.add_space(6.0);
 
     let remaining = ui.available_rect_before_wrap();
+    // Generous 182px Review Range dock so Time Ruler + all 4 lanes (Film, V1/V2, V3, V4) render cleanly
     if ctx.state.show_bottom_dock
-        && let Some(vert) = split_rect(remaining, SplitAxis::Vertical, SplitSize::FixedSecond(148.0), 8.0, 220.0)
+        && let Some(vert) = split_rect(remaining, SplitAxis::Vertical, SplitSize::FixedSecond(182.0), 8.0, 220.0)
     {
         let mut upper = child_pane(ui, vert.first, "studio_upper");
         draw_upper_three_columns(&mut upper, ctx, &scenes, &outputs);
         let mut lower = child_pane(ui, vert.second, "studio_review");
-        draw_review_range_dock(&mut lower, ctx, &outputs);
+        draw_review_range_dock(&mut lower, ctx, &scenes, &outputs);
         let _ = ui.allocate_rect(remaining, Sense::hover());
     } else {
         draw_upper_three_columns(ui, ctx, &scenes, &outputs);
@@ -197,9 +198,9 @@ fn frame_at_index(frames: &[String], idx: usize) -> Option<&str> {
 }
 
 fn gold_outline_button(ui: &mut Ui, ctx: &mut ViewCtx<'_>, id: &str, label: &str, tooltip: &str) -> bool {
-    let font = FontId::proportional(12.0);
+    let font = FontId::proportional(11.8);
     let galley = ui.painter().layout_no_wrap(label.to_owned(), font.clone(), ctx.pal.accent_amber);
-    let (rect, resp) = ui.allocate_exact_size(Vec2::new(galley.size().x + 22.0, 26.0), Sense::click());
+    let (rect, resp) = ui.allocate_exact_size(Vec2::new(galley.size().x + 20.0, 26.0), Sense::click());
     let fill = if resp.hovered() {
         Color32::from_rgba_unmultiplied(0x66, 0x4b, 0x1d, 190)
     } else {
@@ -214,64 +215,72 @@ fn gold_outline_button(ui: &mut Ui, ctx: &mut ViewCtx<'_>, id: &str, label: &str
 
 fn draw_studio_header(ui: &mut Ui, ctx: &mut ViewCtx<'_>, outputs: &CraftOutputs) {
     let ready = ctx.state.cache.film_status["export_ready"].as_bool().unwrap_or(false);
+    let fc_live = ctx.state.cache.bridge_status["filmcraft"]["listening"].as_bool() == Some(true);
     let fc_short = outputs.fcproj_path.rsplit('/').next().unwrap_or("Song.fcproj");
     let offline_n = count_offline_clips(&ctx.state.cache.timeline);
+
     let bar = ctx.pal.card_frame().show(ui, |ui| {
         ui.set_min_width(ui.available_width());
-        ui.horizontal(|ui| {
-            ui.label(RichText::new(format!("FilmCraft Studio — film/{fc_short}")).size(14.5).strong().color(ctx.pal.text_primary));
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing.x = 5.0;
+            ui.spacing_mut().item_spacing.y = 4.0;
+            ui.label(RichText::new(format!("FilmCraft Studio — film/{fc_short}")).size(14.0).strong().color(ctx.pal.text_primary));
             status_pill(
                 ui,
                 ctx.pal,
-                if ready { "Export Ready" } else if outputs.fcproj_exists { ".fcproj Live" } else { "Unassembled" },
+                if ready { "Export Ready" } else if outputs.fcproj_exists { ".fcproj on Disk" } else { "Unassembled" },
                 if ready { ctx.pal.accent_emerald } else { ctx.pal.accent_amber },
+            );
+            status_pill(
+                ui,
+                ctx.pal,
+                if fc_live { "FC :9876 Live" } else { "FC Disconnected" },
+                if fc_live { ctx.pal.accent_emerald } else { ctx.pal.text_muted },
             );
             if offline_n > 0 {
                 status_pill(ui, ctx.pal, &format!("{offline_n} Offline"), ctx.pal.danger);
             }
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                if action_button(
-                    ui,
-                    ctx.reg,
-                    ctx.pal,
-                    BtnSpec::icon_only("film-export-settings-toggle", "sliders", "Configure FilmCraft export settings")
-                        .selected(ctx.state.studio.show_export_settings),
-                )
-                .clicked()
-                {
-                    ctx.state.studio.show_export_settings = !ctx.state.studio.show_export_settings;
-                }
-                if gold_outline_button(ui, ctx, "film-open", "Open in FilmCraft", "Open master .fcproj in FilmCraft") {
-                    ctx.exec("video.open", json!({}), Some("Opened .fcproj in FilmCraft"));
-                }
-                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("film-export", "upload", "Export Film", "Render final master film via FilmCraft")).clicked() {
-                    let payload = json!({
-                        "format": ctx.state.studio.export_format,
-                        "container": ctx.state.studio.export_container,
-                        "hdrTransfer": ctx.state.studio.export_hdr_transfer,
-                        "bitrateMode": ctx.state.studio.bitrate_mode,
-                        "crf": ctx.state.studio.crf_value as u64,
-                        "scale": ctx.state.studio.export_scale,
-                        "quality": ctx.state.studio.export_quality as u64,
-                        "burnCaptions": ctx.state.studio.burn_captions,
-                        "allowOffline": ctx.state.studio.allow_offline,
-                        "gpuRendering": ctx.state.studio.gpu_rendering,
-                        "hwEncoding": ctx.state.studio.hw_encoding,
-                        "queue": ctx.state.studio.queue_export,
-                    });
-                    ctx.exec("video.export", payload, Some("Exported master film"));
-                }
-                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("film-frame", "Grab Frame", "Render program PNG frame from .fcproj at playhead")).clicked() {
-                    let sec = ctx.state.studio.seek_seconds;
-                    ctx.exec("video.frame", json!({"seconds": sec}), Some("Rendered program frame from .fcproj"));
-                }
-                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("film-preview", "play", "Preview", "Render half-scale FilmCraft preview").primary()).clicked() {
-                    ctx.exec("video.preview", json!({}), Some("Rendered FilmCraft preview"));
-                }
-                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("film-assemble", "Assemble", "Assemble FilmCraft .fcproj from V1-V4 Craft outputs")).clicked() {
-                    ctx.exec("video.assemble", json!({}), Some("Assembled FilmCraft .fcproj sequence"));
-                }
-            });
+            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("film-assemble", "Assemble", "Assemble FilmCraft .fcproj from V1-V4 Craft outputs")).clicked() {
+                ctx.exec("video.assemble", json!({}), Some("Assembled FilmCraft .fcproj sequence"));
+            }
+            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("film-preview", "play", "Preview", "Render half-scale FilmCraft preview").primary()).clicked() {
+                ctx.exec("video.preview", json!({}), Some("Rendered FilmCraft preview"));
+            }
+            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("film-frame", "Grab Frame", "Render program PNG frame from .fcproj at playhead")).clicked() {
+                let sec = ctx.state.studio.seek_seconds;
+                ctx.exec("video.frame", json!({"seconds": sec}), Some("Rendered program frame from .fcproj"));
+            }
+            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("film-export", "upload", "Export Film", "Render final master film via FilmCraft")).clicked() {
+                let payload = json!({
+                    "format": ctx.state.studio.export_format,
+                    "container": ctx.state.studio.export_container,
+                    "hdrTransfer": ctx.state.studio.export_hdr_transfer,
+                    "bitrateMode": ctx.state.studio.bitrate_mode,
+                    "crf": ctx.state.studio.crf_value as u64,
+                    "scale": ctx.state.studio.export_scale,
+                    "quality": ctx.state.studio.export_quality as u64,
+                    "burnCaptions": ctx.state.studio.burn_captions,
+                    "allowOffline": ctx.state.studio.allow_offline,
+                    "gpuRendering": ctx.state.studio.gpu_rendering,
+                    "hwEncoding": ctx.state.studio.hw_encoding,
+                    "queue": ctx.state.studio.queue_export,
+                });
+                ctx.exec("video.export", payload, Some("Exported master film"));
+            }
+            if gold_outline_button(ui, ctx, "film-open", "Open in FilmCraft", "Open master .fcproj in FilmCraft") {
+                ctx.exec("video.open", json!({}), Some("Opened .fcproj in FilmCraft"));
+            }
+            if action_button(
+                ui,
+                ctx.reg,
+                ctx.pal,
+                BtnSpec::icon_only("film-export-settings-toggle", "sliders", "Configure FilmCraft export settings")
+                    .selected(ctx.state.studio.show_export_settings),
+            )
+            .clicked()
+            {
+                ctx.state.studio.show_export_settings = !ctx.state.studio.show_export_settings;
+            }
         });
     });
     ctx.reg.record("film-head", "Studio Header", &bar.response, None);
@@ -280,6 +289,8 @@ fn draw_studio_header(ui: &mut Ui, ctx: &mut ViewCtx<'_>, outputs: &CraftOutputs
 fn draw_export_drawer(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     let drawer = ctx.pal.card_frame().show(ui, |ui| {
         ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing.x = 4.0;
+            ui.spacing_mut().item_spacing.y = 4.0;
             for fmt in ["h264", "hevc", "prores", "dnxhr", "av1", "vp9", "exr", "webm", "gif", "wav", "flac"] {
                 let id = format!("film-export-{fmt}");
                 let sel = ctx.state.studio.export_format == fmt;
@@ -297,8 +308,11 @@ fn draw_export_drawer(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
 
 fn draw_upper_three_columns(ui: &mut Ui, ctx: &mut ViewCtx<'_>, scenes: &[StudioSceneItem], outputs: &CraftOutputs) {
     let rect = ui.available_rect_before_wrap();
+    let left_w = if rect.width() >= 1220.0 { 232.0 } else { 208.0 };
+    let right_w = if rect.width() >= 1260.0 { 398.0 } else { 344.0 };
+
     let after_left = if ctx.state.show_nav_rail
-        && let Some(left_split) = split_rect(rect, SplitAxis::Horizontal, SplitSize::FixedFirst(236.0), 8.0, 180.0)
+        && let Some(left_split) = split_rect(rect, SplitAxis::Horizontal, SplitSize::FixedFirst(left_w), 8.0, 180.0)
     {
         let mut scenes_col = child_pane(ui, left_split.first, "studio_scenes_col");
         draw_film_scenes_rail(&mut scenes_col, ctx, scenes, outputs);
@@ -308,7 +322,7 @@ fn draw_upper_three_columns(ui: &mut Ui, ctx: &mut ViewCtx<'_>, scenes: &[Studio
     };
 
     if ctx.state.show_right_inspector
-        && let Some(right_split) = split_rect(after_left, SplitAxis::Horizontal, SplitSize::FixedSecond(364.0), 8.0, 240.0)
+        && let Some(right_split) = split_rect(after_left, SplitAxis::Horizontal, SplitSize::FixedSecond(right_w), 8.0, 240.0)
     {
         let mut center_col = child_pane(ui, right_split.first, "studio_center_col");
         draw_center_monitor_and_moment(&mut center_col, ctx, scenes, outputs);
@@ -323,21 +337,20 @@ fn draw_upper_three_columns(ui: &mut Ui, ctx: &mut ViewCtx<'_>, scenes: &[Studio
 
 fn draw_film_scenes_rail(ui: &mut Ui, ctx: &mut ViewCtx<'_>, scenes: &[StudioSceneItem], outputs: &CraftOutputs) {
     let panel = fill_card(ui, ctx.pal, true, |ui| {
-        ui.horizontal(|ui| {
-            ui.label(RichText::new("Film / Scenes").size(13.0).strong());
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("studio-rail-csv", "CSV", "Export sequence markers CSV (T35)")).clicked() {
-                    ctx.exec("video.markers", json!({"action": "export_csv"}), Some("Exported sequence markers CSV"));
-                }
-                let prox = ctx.state.studio.proxies_enabled;
-                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("studio-rail-proxy", "Proxy", "Toggle proxies (T35)").selected(prox)).clicked() {
-                    ctx.state.studio.proxies_enabled = !prox;
-                    ctx.exec("video.finish", json!({"op": "toggle_proxies", "enabled": !prox}), Some("Toggled FilmCraft proxy mode"));
-                }
-                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("studio-rail-relink", "link", "Relink offline clips (T08)")).clicked() {
-                    ctx.exec("bridge.preflight", json!({"action": "relink"}), Some("Checked & relinked FilmCraft media"));
-                }
-            });
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing.x = 4.0;
+            ui.label(RichText::new("Film / Scenes").size(12.5).strong());
+            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("studio-rail-relink", "link", "Relink offline clips (T08)")).clicked() {
+                ctx.exec("bridge.preflight", json!({"action": "relink"}), Some("Checked & relinked FilmCraft media"));
+            }
+            let prox = ctx.state.studio.proxies_enabled;
+            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("studio-rail-proxy", "Proxy", "Toggle proxies (T35)").selected(prox)).clicked() {
+                ctx.state.studio.proxies_enabled = !prox;
+                ctx.exec("video.finish", json!({"op": "toggle_proxies", "enabled": !prox}), Some("Toggled FilmCraft proxy mode"));
+            }
+            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("studio-rail-csv", "CSV", "Export sequence markers CSV (T35)")).clicked() {
+                ctx.exec("video.markers", json!({"action": "export_csv"}), Some("Exported sequence markers CSV"));
+            }
         });
         ui.add_space(4.0);
         ScrollArea::vertical()
@@ -345,18 +358,19 @@ fn draw_film_scenes_rail(ui: &mut Ui, ctx: &mut ViewCtx<'_>, scenes: &[StudioSce
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 if scenes.is_empty() {
-                    let w = ui.available_width().max(150.0);
-                    let (erect, _) = ui.allocate_exact_size(Vec2::new(w, 118.0), Sense::hover());
+                    let w = (ui.available_width() - 4.0).max(140.0);
+                    let (erect, _) = ui.allocate_exact_size(Vec2::new(w, 114.0), Sense::hover());
                     paint_craft_doc_card(ui, erect, ctx.pal, "FC", outputs.fcproj_path.rsplit('/').next().unwrap_or("Song.fcproj"), "Assemble FilmCraft timeline or add DesignCraft scenes");
                     return;
                 }
                 for (idx, sc) in scenes.iter().enumerate() {
                     let selected = ctx.state.studio.selected_scene == idx;
-                    let w = ui.available_width().max(150.0);
-                    let (card_rect, resp) = ui.allocate_exact_size(Vec2::new(w, 110.0), Sense::click());
+                    let w = (ui.available_width() - 4.0).max(140.0);
+                    let (card_rect, resp) = ui.allocate_exact_size(Vec2::new(w, 108.0), Sense::click());
                     if resp.clicked() {
                         ctx.state.studio.selected_scene = idx;
                         ctx.state.studio.seek_seconds = sc.start_sec;
+                        ctx.push(UiAction::SeekAudio(sc.start_sec));
                     }
                     let inner = paint_filmbar_frame(
                         ui,
@@ -389,9 +403,13 @@ fn draw_center_monitor_and_moment(ui: &mut Ui, ctx: &mut ViewCtx<'_>, scenes: &[
     let step_idx = ((ctx.state.studio.seek_seconds / 2.5).floor().max(0.0)) as usize;
 
     let mon_card = fill_card(ui, ctx.pal, false, |ui| {
-        let avail_w = ui.available_width().max(220.0);
-        let mon_h = (avail_w * 9.0 / 16.0).clamp(128.0, 208.0);
-        let (rect, resp) = ui.allocate_exact_size(Vec2::new(avail_w, mon_h), Sense::click());
+        let avail_w = (ui.available_width() - 2.0).max(210.0);
+        let max_mon_h = (ui.available_height() * 0.48).clamp(118.0, 206.0);
+        let mon_h = (avail_w * 9.0 / 16.0).min(max_mon_h);
+        let mon_w = (mon_h * 16.0 / 9.0).min(avail_w);
+        let (outer, resp) = ui.allocate_exact_size(Vec2::new(avail_w, mon_h), Sense::click());
+        let rect = Rect::from_center_size(outer.center(), Vec2::new(mon_w, mon_h));
+        ui.painter().rect_filled(outer, CornerRadius::same(8), Color32::from_rgb(7, 10, 15));
         if !paint_local_image(ui, rect, program_img, Color32::BLACK, 8) {
             paint_craft_doc_card(
                 ui,
@@ -402,18 +420,22 @@ fn draw_center_monitor_and_moment(ui: &mut Ui, ctx: &mut ViewCtx<'_>, scenes: &[
                 "Click Assemble then Grab Frame to render FilmCraft program output",
             );
         }
-        ui.painter().rect_stroke(rect, CornerRadius::same(8), Stroke::new(1.0, ctx.pal.border), StrokeKind::Inside);
+        ui.painter().rect_stroke(outer, CornerRadius::same(8), Stroke::new(1.0, ctx.pal.border), StrokeKind::Inside);
         ctx.reg.record("film-player", "Program Monitor", &resp, None);
 
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing.x = 5.0;
             let play_icon = if ctx.state.audio_playing { "pause" } else { "play" };
-            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("film-play", play_icon, "Toggle transport").primary()).clicked() {
+            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("film-play", play_icon, "Toggle Studio audio/video transport").primary()).clicked() {
                 ctx.push(UiAction::ToggleAudio);
             }
             let dur = ctx.state.audio_duration_sec.max(30.0);
-            let scrub_w = (ui.available_width() - 90.0).max(100.0);
-            ui.allocate_ui_with_layout(Vec2::new(scrub_w, 30.0), Layout::top_down(Align::Min), |ui| {
-                ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("film-seek", "Playhead", 0.0..=dur, "s", ctx.pal.accent_emerald), &mut ctx.state.studio.seek_seconds);
+            let scrub_w = (ui.available_width() - 94.0).clamp(96.0, 320.0);
+            ui.allocate_ui_with_layout(Vec2::new(scrub_w, 28.0), Layout::top_down(Align::Min), |ui| {
+                if ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("film-seek", "Playhead", 0.0..=dur, "s", ctx.pal.accent_emerald), &mut ctx.state.studio.seek_seconds).changed() {
+                    let s = ctx.state.studio.seek_seconds;
+                    ctx.push(UiAction::SeekAudio(s));
+                }
             });
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("film-add-marker", "pin", "Marker", "Add timeline marker")).clicked() {
                 ctx.exec("video.markers", json!({"action": "seed"}), Some("Synced timeline markers"));
@@ -426,17 +448,18 @@ fn draw_center_monitor_and_moment(ui: &mut Ui, ctx: &mut ViewCtx<'_>, scenes: &[
 
     ui.add_space(6.0);
     fill_card(ui, ctx.pal, true, |ui| {
-        ui.horizontal(|ui| {
-            ui.label(RichText::new("At this moment").size(13.0).strong());
-            ui.label(RichText::new("(Craft Project Outputs)").size(12.0).color(ctx.pal.text_muted));
+        ui.horizontal_wrapped(|ui| {
+            ui.label(RichText::new("At this moment").size(12.5).strong());
+            ui.label(RichText::new("(16:9 Craft Track Outputs)").size(11.0).color(ctx.pal.text_muted));
         });
         ui.add_space(4.0);
         ui.horizontal(|ui| {
-            let card_w = ((ui.available_width() - 12.0) / 3.0).max(90.0);
+            ui.spacing_mut().item_spacing.x = 6.0;
+            let card_w = ((ui.available_width() - 14.0) / 3.0).floor().max(82.0);
             draw_moment_layer_card(ui, ctx, MomentCardSpec {
                 card_w,
                 code: "V2",
-                title: "V1/V2 Animation · .pcraft/.ecproj",
+                title: "V2 Animation",
                 craft_badge: "EC",
                 craft_doc: ".pcraft / .ecproj",
                 frame: frame_at_index(&outputs.v2_frames, step_idx),
@@ -446,9 +469,9 @@ fn draw_center_monitor_and_moment(ui: &mut Ui, ctx: &mut ViewCtx<'_>, scenes: &[
             draw_moment_layer_card(ui, ctx, MomentCardSpec {
                 card_w,
                 code: "V3",
-                title: "V3 Lyrics · lettering/lyrics.ecproj",
+                title: "V3 Lyrics",
                 craft_badge: "EC",
-                craft_doc: "lettering/lyrics.ecproj",
+                craft_doc: "lyrics.ecproj",
                 frame: frame_at_index(&outputs.v3_frames, step_idx),
                 selected: false,
                 target: ViewMode::Design,
@@ -456,9 +479,9 @@ fn draw_center_monitor_and_moment(ui: &mut Ui, ctx: &mut ViewCtx<'_>, scenes: &[
             draw_moment_layer_card(ui, ctx, MomentCardSpec {
                 card_w,
                 code: "V4",
-                title: "V4 Motion · motion/actions.ecproj",
+                title: "V4 Motion",
                 craft_badge: "VCRAFT",
-                craft_doc: "motion/actions.ecproj",
+                craft_doc: "actions.ecproj",
                 frame: frame_at_index(&outputs.v4_frames, step_idx),
                 selected: false,
                 target: ViewMode::Motion,
@@ -468,18 +491,23 @@ fn draw_center_monitor_and_moment(ui: &mut Ui, ctx: &mut ViewCtx<'_>, scenes: &[
 }
 
 fn draw_moment_layer_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>, spec: MomentCardSpec<'_>) {
-    ui.allocate_ui_with_layout(Vec2::new(spec.card_w, 110.0), Layout::top_down(Align::Min), |ui| {
-        let (card_rect, resp) = ui.allocate_exact_size(Vec2::new(spec.card_w, 106.0), Sense::click());
+    let img_h = ((spec.card_w - 6.0) * 9.0 / 16.0).clamp(48.0, 92.0);
+    let total_h = img_h + 26.0;
+    ui.allocate_ui_with_layout(Vec2::new(spec.card_w, total_h), Layout::top_down(Align::Min), |ui| {
+        let (card_rect, resp) = ui.allocate_exact_size(Vec2::new(spec.card_w, total_h - 2.0), Sense::click());
         let border = if spec.selected { Stroke::new(1.5, ctx.pal.accent_emerald) } else { Stroke::new(1.0, ctx.pal.border) };
         ui.painter().rect(card_rect, CornerRadius::same(7), ctx.pal.bg_input, border, StrokeKind::Inside);
-        let img_rect = Rect::from_min_max(Pos2::new(card_rect.min.x + 3.0, card_rect.min.y + 3.0), Pos2::new(card_rect.max.x - 3.0, card_rect.max.y - 24.0));
+        let img_rect = Rect::from_min_max(
+            Pos2::new(card_rect.min.x + 3.0, card_rect.min.y + 3.0),
+            Pos2::new(card_rect.max.x - 3.0, card_rect.min.y + 3.0 + img_h),
+        );
         if !paint_local_image(ui, img_rect, spec.frame, ctx.pal.bg_stage, 5) {
             paint_craft_doc_card(ui, img_rect, ctx.pal, spec.craft_badge, spec.craft_doc, "");
         }
-        let tag_r = Rect::from_min_size(Pos2::new(img_rect.min.x + 5.0, img_rect.min.y + 5.0), Vec2::new(30.0, 15.0));
+        let tag_r = Rect::from_min_size(Pos2::new(img_rect.min.x + 5.0, img_rect.min.y + 5.0), Vec2::new(28.0, 14.0));
         ui.painter().rect_filled(tag_r, CornerRadius::same(4), Color32::from_rgba_unmultiplied(10, 14, 21, 210));
-        ui.painter().text(tag_r.center(), Align2::CENTER_CENTER, "16:9", FontId::monospace(8.5), ctx.pal.text_primary);
-        ui.painter().text(Pos2::new(card_rect.min.x + 7.0, card_rect.max.y - 11.5), Align2::LEFT_CENTER, spec.title, FontId::proportional(10.0), ctx.pal.text_secondary);
+        ui.painter().text(tag_r.center(), Align2::CENTER_CENTER, "16:9", FontId::monospace(8.2), ctx.pal.text_primary);
+        ui.painter().text(Pos2::new(card_rect.min.x + 6.0, card_rect.max.y - 10.5), Align2::LEFT_CENTER, spec.title, FontId::proportional(10.2), ctx.pal.text_secondary);
         if resp.clicked() {
             ctx.push(UiAction::NavigateAuthoring { view: spec.target, seconds: ctx.state.studio.seek_seconds });
         }
@@ -520,23 +548,29 @@ fn draw_elements_matrix_body(ui: &mut Ui, ctx: &mut ViewCtx<'_>, scenes: &[Studi
         .max(outputs.v4_frames.len())
         .clamp(1, 6);
 
-    ui.horizontal(|ui| {
-        ui.label(RichText::new("Elements Matrix").size(13.0).strong());
-        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("studio-matrix-bake", "Bake V3", "Bake linked lettering/lyrics.ecproj to ProRes 4444 .mov (T01)")).clicked() {
-                ctx.exec("video.bake_link", json!({"project": "lettering/lyrics.ecproj", "track": "V3"}), Some("Baked linked V3 .ecproj to ProRes 4444"));
-            }
-            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("studio-matrix-sync", "refresh", "Sync Comps", "Re-render dirty linked .ecproj comps (T01)")).clicked() {
-                ctx.exec("video.sync_links", json!({}), Some("Synced linked EffectCraft compositions"));
-            }
-        });
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 5.0;
+        ui.label(RichText::new("Elements Matrix").size(12.5).strong());
+        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("studio-matrix-sync", "refresh", "Sync Comps", "Re-render dirty linked .ecproj comps (T01)")).clicked() {
+            ctx.exec("video.sync_links", json!({}), Some("Synced linked EffectCraft compositions"));
+        }
+        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("studio-matrix-bake", "Bake V3", "Bake linked lettering/lyrics.ecproj to ProRes 4444 .mov (T01)")).clicked() {
+            ctx.exec("video.bake_link", json!({"project": "lettering/lyrics.ecproj", "track": "V3"}), Some("Baked linked V3 .ecproj to ProRes 4444"));
+        }
     });
+
+    // Strict bounded column math so all 3 columns (Animation, Lyrics, Motion) fit 100% inside right deck!
+    let avail_total = (ui.available_width() - 6.0).max(220.0);
+    let tc_w = 34.0_f32;
+    let gap = 4.0_f32;
+    let col_w = ((avail_total - tc_w - gap * 3.0) / 3.0).floor().max(56.0);
+
     ui.horizontal(|ui| {
-        ui.add_space(38.0);
-        let col_w = ((ui.available_width() - 12.0) / 3.0).max(68.0);
+        ui.spacing_mut().item_spacing.x = gap;
+        ui.allocate_exact_size(Vec2::new(tc_w, 16.0), Sense::hover());
         for title in ["Animation", "Lyrics", "Motion"] {
-            ui.allocate_ui_with_layout(Vec2::new(col_w, 18.0), Layout::centered_and_justified(egui::Direction::LeftToRight), |ui| {
-                ui.label(RichText::new(title).size(10.5).color(ctx.pal.text_secondary));
+            ui.allocate_ui_with_layout(Vec2::new(col_w, 16.0), Layout::centered_and_justified(egui::Direction::LeftToRight), |ui| {
+                ui.label(RichText::new(title).size(10.2).color(ctx.pal.text_secondary));
             });
         }
     });
@@ -550,7 +584,8 @@ fn draw_elements_matrix_body(ui: &mut Ui, ctx: &mut ViewCtx<'_>, scenes: &[Studi
                 let active_row = (ctx.state.studio.seek_seconds - row_sec).abs() < 1.4;
 
                 ui.horizontal(|ui| {
-                    let (tc_rect, _) = ui.allocate_exact_size(Vec2::new(34.0, 62.0), Sense::hover());
+                    ui.spacing_mut().item_spacing.x = gap;
+                    let (tc_rect, _) = ui.allocate_exact_size(Vec2::new(tc_w, 58.0), Sense::hover());
                     ui.painter().text(
                         tc_rect.center(),
                         Align2::CENTER_CENTER,
@@ -559,13 +594,12 @@ fn draw_elements_matrix_body(ui: &mut Ui, ctx: &mut ViewCtx<'_>, scenes: &[Studi
                         if active_row { ctx.pal.accent_emerald } else { ctx.pal.text_muted },
                     );
 
-                    let col_w = ((ui.available_width() - 12.0) / 3.0).max(68.0);
                     for (col_idx, target, badge, doc, frame) in [
                         (0usize, ViewMode::Animation, "EC", ".ecproj", outputs.v2_frames.get(row).map(String::as_str)),
-                        (1usize, ViewMode::Design, "EC", "lyrics.ecproj", outputs.v3_frames.get(row).map(String::as_str)),
-                        (2usize, ViewMode::Motion, "VCRAFT", "actions.ecproj", outputs.v4_frames.get(row).map(String::as_str)),
+                        (1usize, ViewMode::Design, "EC", "lyrics", outputs.v3_frames.get(row).map(String::as_str)),
+                        (2usize, ViewMode::Motion, "VCRAFT", "actions", outputs.v4_frames.get(row).map(String::as_str)),
                     ] {
-                        let (cell_rect, cresp) = ui.allocate_exact_size(Vec2::new(col_w, 62.0), Sense::click());
+                        let (cell_rect, cresp) = ui.allocate_exact_size(Vec2::new(col_w, 58.0), Sense::click());
                         if cresp.clicked() {
                             ctx.state.studio.seek_seconds = row_sec;
                             ctx.push(UiAction::NavigateAuthoring { view: target, seconds: row_sec });
@@ -591,10 +625,11 @@ fn draw_elements_matrix_body(ui: &mut Ui, ctx: &mut ViewCtx<'_>, scenes: &[Studi
         });
 }
 
-fn draw_review_range_dock(ui: &mut Ui, ctx: &mut ViewCtx<'_>, outputs: &CraftOutputs) {
+fn draw_review_range_dock(ui: &mut Ui, ctx: &mut ViewCtx<'_>, scenes: &[StudioSceneItem], outputs: &CraftOutputs) {
     let tracks = ctx.state.cache.timeline["tracks"].as_array().cloned().unwrap_or_default();
     let total_ticks = ctx.state.cache.timeline["duration_tick"].as_i64().unwrap_or(0).max(1) as f64;
     let total_dur = ctx.state.studio.range_end.max(ctx.state.audio_duration_sec).max(10.0);
+    let has_audio = ctx.state.song_audio_path().is_some();
 
     let spans_for = |role_match: &str, code: &str| -> Vec<CraftTimelineSpan> {
         tracks
@@ -613,16 +648,69 @@ fn draw_review_range_dock(ui: &mut Ui, ctx: &mut ViewCtx<'_>, outputs: &CraftOut
             .collect()
     };
 
-    let v1_src = if outputs.program_frames.is_empty() { outputs.v1_frames.as_slice() } else { outputs.program_frames.as_slice() };
+    let mut film_strip_frames: Vec<String> = if !outputs.program_frames.is_empty() {
+        outputs.program_frames.clone()
+    } else {
+        outputs.v1_frames.clone()
+    };
+    if film_strip_frames.is_empty() {
+        film_strip_frames = scenes.iter().filter_map(|s| s.image.clone()).collect();
+    }
+    let scene_keys: Vec<f64> = scenes.iter().map(|s| s.start_sec).collect();
+
     let dirty_v2 = ctx.state.dirty_tracks.contains("V2");
     let dirty_v3 = ctx.state.dirty_tracks.contains("V3");
     let dirty_v4 = ctx.state.dirty_tracks.contains("V4");
 
     let lanes = [
-        CraftTimelineLane { code: "V1", title: "Film", color: ctx.pal.text_muted, filmbar: true, dirty: false, spans: Vec::new(), frames: v1_src, empty_hint: "V1 scenes" },
-        CraftTimelineLane { code: "V2", title: "V1/V2 Animation", color: ctx.pal.accent_sky, filmbar: false, dirty: dirty_v2, spans: spans_for("character", "V2"), frames: &outputs.v2_frames, empty_hint: "V1/V2 Animation — click Link V2 or Assemble" },
-        CraftTimelineLane { code: "V3", title: "V3 Lyrics", color: ctx.pal.accent_amber, filmbar: false, dirty: dirty_v3, spans: spans_for("lyrics", "V3"), frames: &outputs.v3_frames, empty_hint: "V3 Lyrics — click Publish V3 in Lyrics" },
-        CraftTimelineLane { code: "V4", title: "V4 Motion", color: ctx.pal.accent_emerald, filmbar: false, dirty: dirty_v4, spans: spans_for("motion", "V4"), frames: &outputs.v4_frames, empty_hint: "V4 Motion — click Publish V4 in Motion" },
+        CraftTimelineLane {
+            code: "V1",
+            title: "Film",
+            color: ctx.pal.text_muted,
+            filmbar: true,
+            waveform: false,
+            dirty: false,
+            spans: Vec::new(),
+            keyframes: &scene_keys,
+            frames: &film_strip_frames,
+            empty_hint: "V1 scenes",
+        },
+        CraftTimelineLane {
+            code: "V2",
+            title: "V1/V2 Animation",
+            color: ctx.pal.accent_sky,
+            filmbar: false,
+            waveform: has_audio,
+            dirty: dirty_v2,
+            spans: spans_for("character", "V2"),
+            keyframes: &[],
+            frames: &outputs.v2_frames,
+            empty_hint: "V1/V2 Animation — click Link V2 or Assemble",
+        },
+        CraftTimelineLane {
+            code: "V3",
+            title: "V3 Lyrics",
+            color: ctx.pal.accent_amber,
+            filmbar: false,
+            waveform: has_audio,
+            dirty: dirty_v3,
+            spans: spans_for("lyrics", "V3"),
+            keyframes: &[],
+            frames: &outputs.v3_frames,
+            empty_hint: "V3 Lyrics — click Publish V3 in Lyrics",
+        },
+        CraftTimelineLane {
+            code: "V4",
+            title: "V4 Motion",
+            color: ctx.pal.accent_emerald,
+            filmbar: false,
+            waveform: false,
+            dirty: dirty_v4,
+            spans: spans_for("motion", "V4"),
+            keyframes: &[],
+            frames: &outputs.v4_frames,
+            empty_hint: "V4 Motion — click Publish V4 in Motion",
+        },
     ];
 
     let dock = fill_card(ui, ctx.pal, true, |ui| {
@@ -641,6 +729,7 @@ fn draw_review_range_dock(ui: &mut Ui, ctx: &mut ViewCtx<'_>, outputs: &CraftOut
         let mut seek = ctx.state.studio.seek_seconds;
         if draw_craft_timeline(ui, ctx, "studio", total_dur, &mut seek, &lanes) {
             ctx.state.studio.seek_seconds = seek;
+            ctx.push(UiAction::SeekAudio(seek));
         }
     });
     ctx.reg.record("studio-review-range", "Review Range", &dock.response, None);

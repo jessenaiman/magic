@@ -60,6 +60,7 @@ pub fn project_document(s: &Session) -> Value {
         "assets": s.project_assets,
         "workshop": {
             "audio": s.song_audio,
+            "storyboard": "storyboard.pdf",
             "draft_approved": s.draft_approved,
             "target": s.video_target,
             "video_project": s.video_project_path,
@@ -267,7 +268,7 @@ fn bootstrap_new_project_workshop(s: &mut Session, path: &Path, params: &Value) 
     let project_title =
         params.get("title").or_else(|| params.get("name")).and_then(Value::as_str).or_else(|| path.file_stem().and_then(|n| n.to_str())).unwrap_or("Untitled");
 
-    let sb = path.with_file_name("storyboard.designcraft");
+    let sb = path.with_file_name("storyboard.pdf");
     if !sb.is_file() || params["overwrite"] == true {
         let mut sb_req = json!({
             "path": sb,
@@ -278,7 +279,7 @@ fn bootstrap_new_project_workshop(s: &mut Session, path: &Path, params: &Value) 
             sb_req["wizard"] = wiz.clone();
         }
         match crate::cmd::storyboard::cmd_storyboard_new(s, &sb_req) {
-            Ok(_) => steps.push(json!({"command": "storyboard.new", "status": "complete; storyboard.designcraft initialized with CLI command labels"})),
+            Ok(_) => steps.push(json!({"command": "storyboard.new", "status": "complete; storyboard.pdf initialized from read-only master template"})),
             Err(e) => steps.push(json!({"command": "storyboard.new", "status": "failed", "error": e.to_string()})),
         }
     }

@@ -2,8 +2,8 @@
 //! panels (`Sheet 08` Zone E — `T32`–`T38`), wired 1:1 to `crates/engine/src/cmd/film/finishing.rs`.
 
 use egui::{
-    Align, Align2, Color32, CornerRadius, FontId, Layout, Pos2, Rect, RichText, ScrollArea, Sense,
-    Stroke, StrokeKind, Ui, Vec2,
+    Align2, Color32, CornerRadius, FontId, Pos2, Rect, RichText, ScrollArea, Sense, Stroke,
+    StrokeKind, Ui, Vec2,
 };
 use magic::craft_effects::FILMCRAFT_27_BLEND_MODES;
 use serde_json::{Value, json};
@@ -23,49 +23,47 @@ pub fn count_offline_clips(timeline: &Value) -> usize {
         .count()
 }
 
-/// Top 7-mode selector (`[Matrix] [Edit] [Color] [FX] [Audio] [Titles] [Export]`) + Workspace preset (`T32`).
+/// Unified single-bar 7-workspace selector (`[Assembly] [Edit] [Color] [FX] [Audio] [Titles] [Export]`)
+/// syncing both the Studio deck mode and `FilmCraft` workspace preset (`T32`).
 pub fn draw_studio_mode_tabs(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     ui.horizontal_wrapped(|ui| {
-        for (tid, lbl, tip) in [
-            ("matrix", "Matrix", "V2/V3/V4 Craft Outputs & Dynamic-Link Sync"),
-            ("edit", "Edit", "3-Point Edit, Trim/JKL, Proxies, Markers & Sequence FPS (T33-T35)"),
-            ("color", "Color", "32f Linear Color, 3-Way Wheels, Monotone-Cubic Curves & Scopes (T36-T37)"),
-            ("fx", "FX", "90+ Video FX, 30 Transitions, 27 Blend Modes & Keyframes (T38)"),
-            ("audio", "Audio", "BS.1770-4 Loudness, 35+ DSP, Ducking & Mixer Automation (T39-T40)"),
-            ("titles", "Titles", "OpenType V/H Graphics, Responsive Pinning, .fcgt & C1 Captions (T41)"),
-            ("export", "Export", "Pure-Rust Codecs, HDR PQ/HLG, CRF/VBR/CBR & Queue Jobs (T42)"),
+        ui.spacing_mut().item_spacing.x = 4.0;
+        ui.spacing_mut().item_spacing.y = 4.0;
+        for (tid, lbl, fc_ws, tip) in [
+            ("matrix", "Assembly", Some("Assembly"), "Assembly workspace: V2/V3/V4 Craft Matrix & Dynamic-Link Sync"),
+            ("edit", "Edit", Some("Editing"), "Editing workspace: 3-Point Edit, Trim/JKL, Proxies, Markers & Sequence FPS (T33-T35)"),
+            ("color", "Color", Some("Color"), "Color workspace: 32f Linear Color, 3-Way Wheels, Monotone-Cubic Curves & Scopes (T36-T37)"),
+            ("fx", "FX", Some("Effects"), "Effects workspace: 90+ Video FX, 30 Transitions, 27 Blend Modes & Keyframes (T38)"),
+            ("audio", "Audio", Some("Audio"), "Audio workspace: BS.1770-4 Loudness, 35+ DSP, Ducking & Console Mixer (T39-T40)"),
+            ("titles", "Titles", None, "OpenType V/H Graphics, Responsive Pinning, .fcgt & C1 Captions (T41)"),
+            ("export", "Export", None, "Pure-Rust Codecs, HDR PQ/HLG, CRF/VBR/CBR & Queue Jobs (T42)"),
         ] {
             let id = format!("studio-tab-{tid}");
             let sel = ctx.state.studio.inspector_tab == tid;
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, lbl, tip).selected(sel)).clicked() {
                 ctx.state.studio.inspector_tab = tid.into();
-            }
-        }
-    });
-    ui.horizontal_wrapped(|ui| {
-        ui.label(RichText::new("Workspace:").size(10.0).color(ctx.pal.text_muted));
-        for ws in ["Assembly", "Editing", "Color", "Effects", "Audio"] {
-            let id = format!("studio-ws-{ws}");
-            let sel = ctx.state.studio.workspace_preset == ws;
-            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, ws, "Switch FilmCraft workspace (T32)").selected(sel)).clicked() {
-                ctx.state.studio.workspace_preset = ws.into();
-                ctx.exec("video.finish", json!({"op": "workspace", "preset": ws}), None);
+                if let Some(ws) = fc_ws {
+                    ctx.state.studio.workspace_preset = ws.into();
+                    ctx.exec("video.finish", json!({"op": "workspace", "preset": ws}), None);
+                }
             }
         }
     });
 }
 
-/// Program Monitor 3-Point Editing (`I`/`O`, `,`, `.`, `;`, `'`) + `J/K/L` Dynamic Trim bar (`T33`–`T34`).
+/// Program Monitor 3-Point Editing (`Mark In [I]`, `Mark Out [O]`, `Insert [,]`, `Overwrite [.]`, `Lift [;]`, `Extract [']`) + `J/K/L` Dynamic Trim bar (`T33`–`T34`).
 pub fn draw_program_trim_and_three_point_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     let sec = ctx.state.studio.seek_seconds;
     ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
+        ui.spacing_mut().item_spacing.y = 4.0;
         for (id, lbl, op, extra, tip) in [
-            ("fc-mark-in", "I", "mark_in", json!({"seconds": sec}), "Mark Source In (I)"),
-            ("fc-mark-out", "O", "mark_out", json!({"seconds": sec + 3.0}), "Mark Source Out (O)"),
-            ("fc-insert", ", Ins", "insert", json!({"track": "V1", "audioTrack": "A1"}), "Insert edit (,)"),
-            ("fc-overwrite", ". Ovr", "overwrite", json!({"track": "V1", "audioTrack": "A1"}), "Overwrite edit (.)"),
-            ("fc-lift", "; Lift", "lift", json!({}), "Lift range (;)"),
-            ("fc-extract", "' Ext", "extract", json!({}), "Ripple extract range (')"),
+            ("fc-mark-in", "Mark In [I]", "mark_in", json!({"seconds": sec}), "Mark Source In at playhead (I)"),
+            ("fc-mark-out", "Mark Out [O]", "mark_out", json!({"seconds": sec + 3.0}), "Mark Source Out (O)"),
+            ("fc-insert", "Insert [,]", "insert", json!({"track": "V1", "audioTrack": "A1"}), "Ripple insert edit onto patched track (,)"),
+            ("fc-overwrite", "Overwrite [.]", "overwrite", json!({"track": "V1", "audioTrack": "A1"}), "Overwrite edit onto patched track (.)"),
+            ("fc-lift", "Lift [;]", "lift", json!({}), "Lift In-to-Out range leaving gap (;)"),
+            ("fc-extract", "Extract [']", "extract", json!({}), "Ripple extract In-to-Out range closing gap (')"),
         ] {
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(id, lbl, tip)).clicked() {
                 let mut p = extra;
@@ -105,7 +103,8 @@ pub fn draw_graded_scopes_strip(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     }
     ui.add_space(4.0);
     ctx.pal.inset_frame().show(ui, |ui| {
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing.x = 4.0;
             for (sm, lbl) in [
                 ("waveform", "Waveform IRE"),
                 ("parade", "RGB Parade"),
@@ -120,8 +119,8 @@ pub fn draw_graded_scopes_strip(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                 }
             }
         });
-        let w = ui.available_width().max(180.0);
-        let (rect, resp) = ui.allocate_exact_size(Vec2::new(w, 54.0), Sense::hover());
+        let w = (ui.available_width() - 4.0).max(180.0);
+        let (rect, resp) = ui.allocate_exact_size(Vec2::new(w, 60.0), Sense::hover());
         ui.painter().rect(rect, CornerRadius::same(5), Color32::from_rgb(8, 12, 18), Stroke::new(1.0, ctx.pal.border_subtle), StrokeKind::Inside);
         for ire in [0.25_f32, 0.5, 0.75] {
             let y = rect.max.y - ire * rect.height();
@@ -150,6 +149,7 @@ pub fn draw_graded_scopes_strip(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
 pub fn draw_edit_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     ui.label(RichText::new("Track Patching & Sync Lock (T33)").size(11.5).strong().color(ctx.pal.accent_emerald));
     ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
         for trk in ["V1", "V2", "V3", "V4", "A1", "A2"] {
             let id = format!("fc-patch-{trk}");
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, trk, "Patch & sync-lock track (timeline.setTrack)")).clicked() {
@@ -164,6 +164,7 @@ pub fn draw_edit_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     ui.separator();
     ui.label(RichText::new("Trim Suite & WSOLA Rate Stretch (T34)").size(11.5).strong().color(ctx.pal.accent_sky));
     ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
         for kind in ["ripple", "roll", "slip", "slide", "razor"] {
             let id = format!("fc-trim-kind-{kind}");
             let sel = ctx.state.studio.trim_tool == kind;
@@ -178,6 +179,7 @@ pub fn draw_edit_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         }
     });
     ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
         for (id, lbl, frames) in [
             ("fc-nudge-m5", "-5f", -5),
             ("fc-nudge-m1", "-1f", -1),
@@ -196,8 +198,9 @@ pub fn draw_edit_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         }
     });
     ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("fc-speed-pct", "Clip Speed (WSOLA)", 25.0..=400.0, "%", ctx.pal.accent_amber), &mut ctx.state.studio.speed_pct);
-    pill_toggle(ui, ctx.reg, ctx.pal, "fc-opt-flow", "Optical Flow Frame Interpolation", &mut ctx.state.studio.optical_flow, ctx.pal.accent_emerald);
+    pill_toggle(ui, ctx.reg, ctx.pal, "fc-opt-flow", "Optical Flow Interpolation", &mut ctx.state.studio.optical_flow, ctx.pal.accent_emerald);
     ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("fc-apply-speed", "Apply Rate Stretch", "clip.rateStretch WSOLA").primary()).clicked() {
             let interp = if ctx.state.studio.optical_flow { "opticalFlow" } else { "frameBlend" };
             ctx.exec(
@@ -216,10 +219,11 @@ pub fn draw_edit_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
 
     ui.separator();
     ui.label(RichText::new("Proxies, Markers & Rational FPS (T10, T35)").size(11.5).strong().color(ctx.pal.accent_amber));
-    if pill_toggle(ui, ctx.reg, ctx.pal, "fc-proxies", "Enable Low-Res Proxy Editing (Auto Full-Res on Export)", &mut ctx.state.studio.proxies_enabled, ctx.pal.accent_emerald).changed() {
+    if pill_toggle(ui, ctx.reg, ctx.pal, "fc-proxies", "Low-Res Proxy Editing (Full-Res Export)", &mut ctx.state.studio.proxies_enabled, ctx.pal.accent_emerald).changed() {
         ctx.exec("video.finish", json!({"op": "toggle_proxies", "enabled": ctx.state.studio.proxies_enabled}), Some("Toggled FilmCraft proxy workflow"));
     }
     ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
         for (lbl, fps, df) in [
             ("23.976", json!([24000, 1001]), false),
             ("24", json!([24, 1]), false),
@@ -242,6 +246,7 @@ pub fn draw_edit_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
 pub fn draw_color_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     ui.label(RichText::new("32f Linear Color Space & 9 Log Curves (T36)").size(11.5).strong().color(ctx.pal.accent_emerald));
     ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
         for (cs, lbl, hdr) in [
             ("rec709", "Rec.709 SDR", false),
             ("rec2100_pq", "Rec.2100 PQ", true),
@@ -260,6 +265,8 @@ pub fn draw_color_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         }
     });
     ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
+        ui.spacing_mut().item_spacing.y = 4.0;
         for log_c in [
             "Sony S-Log3", "ARRI LogC3", "ARRI LogC4", "RED Log3G10", "Canon Log 3",
             "Panasonic V-Log", "BMD Film Gen5", "Apple Log", "Fujifilm F-Log2",
@@ -276,6 +283,7 @@ pub fn draw_color_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     ui.separator();
     ui.label(RichText::new("6 Grading Sections (On/Off Switches)").size(11.0).strong());
     ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
         for (idx, (sec_id, lbl)) in [
             ("basic", "Basic"),
             ("creative", "Creative"),
@@ -305,6 +313,7 @@ pub fn draw_color_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("fc-col-vig", "Vignette", -100.0..=100.0, "", ctx.pal.accent_sky), &mut ctx.state.studio.color_vignette);
 
     ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("fc-col-apply", "Apply Grade", "lumetri_param").primary()).clicked() {
             ctx.exec(
                 "video.finish",
@@ -340,7 +349,9 @@ pub fn draw_color_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
 
 fn draw_three_way_wheels(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     ui.add_space(4.0);
+    let wheel_w = ((ui.available_width() - 12.0) / 3.0).floor().clamp(80.0, 118.0);
     ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
         for (idx, (wname, lbl, col)) in [
             ("shadows", "Shadows", ctx.pal.accent_sky),
             ("midtones", "Midtones", ctx.pal.accent_amber),
@@ -349,13 +360,20 @@ fn draw_three_way_wheels(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         .into_iter()
         .enumerate()
         {
-            let (rect, resp) = ui.allocate_exact_size(Vec2::new(96.0, 88.0), Sense::click_and_drag());
-            let c = Pos2::new(rect.center().x, rect.min.y + 40.0);
-            let r = 27.0;
-            ui.painter().circle_filled(c, r, Color32::from_rgb(15, 20, 30));
-            ui.painter().circle_stroke(c, r, Stroke::new(1.3, col.gamma_multiply(0.7)));
-            ui.painter().line_segment([Pos2::new(c.x - r, c.y), Pos2::new(c.x + r, c.y)], Stroke::new(0.7, ctx.pal.border_subtle));
-            ui.painter().line_segment([Pos2::new(c.x, c.y - r), Pos2::new(c.x, c.y + r)], Stroke::new(0.7, ctx.pal.border_subtle));
+            let (rect, resp) = ui.allocate_exact_size(Vec2::new(wheel_w, 108.0), Sense::click_and_drag());
+            let c = Pos2::new(rect.center().x, rect.min.y + 54.0);
+            let r = (wheel_w * 0.34).clamp(24.0, 34.0);
+            ui.painter().text(
+                Pos2::new(c.x, rect.min.y + 9.0),
+                Align2::CENTER_CENTER,
+                format!("{:+.2}, {:+.2}", ctx.state.studio.wheels[idx][0], ctx.state.studio.wheels[idx][1]),
+                FontId::monospace(8.5),
+                col,
+            );
+            ui.painter().circle_filled(c, r, Color32::from_rgb(13, 18, 28));
+            ui.painter().circle_stroke(c, r, Stroke::new(1.5, col.gamma_multiply(0.78)));
+            ui.painter().line_segment([Pos2::new(c.x - r, c.y), Pos2::new(c.x + r, c.y)], Stroke::new(0.8, ctx.pal.border_subtle));
+            ui.painter().line_segment([Pos2::new(c.x, c.y - r), Pos2::new(c.x, c.y + r)], Stroke::new(0.8, ctx.pal.border_subtle));
 
             if (resp.dragged() || resp.clicked())
                 && let Some(pos) = resp.interact_pointer_pos()
@@ -377,15 +395,17 @@ fn draw_three_way_wheels(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                 c.x + ctx.state.studio.wheels[idx][0] * (r - 4.0),
                 c.y - ctx.state.studio.wheels[idx][1] * (r - 4.0),
             );
-            ui.painter().circle_filled(puck, 4.2, col);
-            ui.painter().text(Pos2::new(c.x, rect.max.y - 7.0), Align2::CENTER_CENTER, lbl, FontId::proportional(10.0), ctx.pal.text_secondary);
+            ui.painter().circle_filled(puck, 4.6, col);
+            ui.painter().text(Pos2::new(c.x, rect.max.y - 8.0), Align2::CENTER_CENTER, lbl, FontId::proportional(10.2), ctx.pal.text_secondary);
             ctx.reg.record(format!("fc-wheel-{wname}"), lbl, &resp, None);
         }
     });
 }
 
 fn draw_monotone_cubic_curves(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
+    ui.add_space(4.0);
     ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
         for (ch, lbl) in [
             ("rgb", "RGB"),
             ("hueVsSat", "H×S"),
@@ -400,11 +420,27 @@ fn draw_monotone_cubic_curves(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                 ctx.state.studio.curve_channel = ch.into();
             }
         }
+        ui.label(
+            RichText::new(format!("Mid {:.0}% IRE", ctx.state.studio.curve_mid_y * 100.0))
+                .monospace()
+                .size(9.2)
+                .color(ctx.pal.accent_amber),
+        );
     });
-    let w = ui.available_width().max(180.0);
-    let (rect, resp) = ui.allocate_exact_size(Vec2::new(w, 68.0), Sense::click_and_drag());
+    let w = (ui.available_width() - 4.0).max(180.0);
+    let (rect, resp) = ui.allocate_exact_size(Vec2::new(w, 120.0), Sense::click_and_drag());
     ui.painter().rect(rect, CornerRadius::same(6), Color32::from_rgb(10, 14, 21), Stroke::new(1.0, ctx.pal.border), StrokeKind::Inside);
-    let pad = rect.shrink(8.0);
+    let pad = Rect::from_min_max(Pos2::new(rect.min.x + 12.0, rect.min.y + 10.0), Pos2::new(rect.max.x - 12.0, rect.max.y - 10.0));
+    let grid_stroke = Stroke::new(0.8, Color32::from_rgba_unmultiplied(44, 58, 80, 70));
+    for step in 1..4 {
+        let f = (step as f32) * 0.25;
+        let gx = pad.min.x + f * pad.width();
+        let gy = pad.min.y + f * pad.height();
+        ui.painter().line_segment([Pos2::new(gx, pad.min.y), Pos2::new(gx, pad.max.y)], grid_stroke);
+        ui.painter().line_segment([Pos2::new(pad.min.x, gy), Pos2::new(pad.max.x, gy)], grid_stroke);
+    }
+    ui.painter().line_segment([Pos2::new(pad.min.x, pad.max.y), Pos2::new(pad.max.x, pad.min.y)], grid_stroke);
+
     if (resp.dragged() || resp.clicked())
         && let Some(pos) = resp.interact_pointer_pos()
     {
@@ -427,16 +463,28 @@ fn draw_monotone_cubic_curves(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     let mid_y = pad.max.y - (ctx.state.studio.curve_mid_y as f32) * pad.height();
     let p1 = Pos2::new(pad.min.x + pad.width() * 0.35, mid_y);
     let p2 = Pos2::new(pad.min.x + pad.width() * 0.65, mid_y);
-    paint_cubic_bezier(ui, [p0, p1, p2, p3], Stroke::new(2.0, ctx.pal.accent_emerald));
-    ui.painter().circle_filled(Pos2::new(pad.center().x, mid_y), 4.0, ctx.pal.accent_amber);
+    paint_cubic_bezier(ui.painter(), [p0, p1, p2, p3], Stroke::new(2.2, ctx.pal.accent_emerald));
+    ui.painter().circle_filled(p0, 3.8, ctx.pal.accent_emerald);
+    ui.painter().circle_filled(Pos2::new(pad.center().x, mid_y), 4.8, ctx.pal.accent_amber);
+    ui.painter().circle_filled(p3, 3.8, ctx.pal.accent_emerald);
     ctx.reg.record("fc-monotone-curve", "Monotone-Cubic Curve", &resp, None);
 }
 
 /// `[FX]` tab: 90+ Video Effects, ~30 Transitions, Clip Motion, 27 Blend Modes & Keyframes (`T38`).
 pub fn draw_fx_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     ui.label(RichText::new("90+ Video FX & 30 Transitions (T38)").size(11.5).strong().color(ctx.pal.accent_emerald));
-    text_input(ui, ctx.reg, "fc-fx-search", "Filter FilmCraft FX", &mut ctx.state.studio.fx_search, "Search Bokeh, Ultra Key, Dissolve…", ui.available_width().max(150.0));
+    text_input(
+        ui,
+        ctx.reg,
+        "fc-fx-search",
+        "Filter FilmCraft FX",
+        &mut ctx.state.studio.fx_search,
+        "Search Bokeh, Ultra Key, Dissolve…",
+        (ui.available_width() - 4.0).max(140.0),
+    );
     ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
+        ui.spacing_mut().item_spacing.y = 4.0;
         for (fx_name, is_trans) in [
             ("Cross Dissolve", true),
             ("Film Dissolve", true),
@@ -480,8 +528,9 @@ pub fn draw_fx_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         });
     });
     ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("fc-antiflicker", "Anti-Flicker Filter", 0.0..=1.0, "", ctx.pal.accent_amber), &mut ctx.state.studio.anti_flicker);
-    ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("fc-stab-smooth", "Warp Stabilizer Smoothness", 0.0..=100.0, "%", ctx.pal.accent_emerald), &mut ctx.state.studio.stabilize_smooth);
+    ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("fc-stab-smooth", "Stabilizer Smoothness", 0.0..=100.0, "%", ctx.pal.accent_emerald), &mut ctx.state.studio.stabilize_smooth);
     ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("fc-motion-apply", "Apply Clip Motion", "clip.motion").primary()).clicked() {
             ctx.exec(
                 "video.finish",

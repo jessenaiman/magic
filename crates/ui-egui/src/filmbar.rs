@@ -1,8 +1,10 @@
-//! 35mm cinema sprocket (`filmbar`) border frames, local `file://` image rendering, Craft document
-//! state cards, anti-aliased Bezier & SVG `d` path previews, dashed borders, and 3-ring glowing
-//! readiness lights (`00-figma-component-system-sheet.jpg`).
+//! 35mm cinema sprocket (`filmbar`) border frames, aspect-preserving local `file://` image
+//! rendering, Craft document state cards, anti-aliased Bezier & SVG `d` path previews, dashed
+//! borders, and 3-ring glowing readiness lights (`00-figma-component-system-sheet.jpg`).
 
+use std::collections::HashMap;
 use std::path::Path;
+use std::sync::{Mutex, OnceLock};
 
 use egui::{
     Align, Align2, Color32, CornerRadius, FontId, Image, Layout, Pos2, Rect, Sense, Shape, Stroke,
@@ -54,6 +56,7 @@ pub fn fill_card<R>(
         } else {
             ui.set_min_width(inner_w);
         }
+        ui.set_max_width(inner_w);
         ui.vertical(add_contents).inner
     })
 }
@@ -107,7 +110,74 @@ pub fn local_image_uri(path: &str) -> Option<String> {
     }
 }
 
-/// Paint a local image inside `rect` if `path` exists on disk, returning `true` when drawn.
+fn parse_svg_aspect(path: &Path) -> Option<f32> {
+    let raw = std::fs::read_to_string(path).ok()?;
+    let head = &raw[..raw.len().min(4096)];
+    if let Some(vb_pos) = head.find("viewBox=") {
+        let rest = &head[vb_pos + 8..];
+        let quote = rest.chars().next()?;
+        if quote == '"' || quote == '\'' {
+            let inner = rest[1..].split(quote).next()?;
+            let nums: Vec<f32> = inner
+                .split(|c: char| c.is_whitespace() || c == ',')
+                .filter(|s| !s.is_empty())
+                .filter_map(|s| s.parse::<f32>().ok())
+                .collect();
+            if nums.len() == 4 && nums[2] > 0.0 && nums[3] > 0.0 {
+                return Some(nums[2] / nums[3]);
+            }
+        }
+    }
+    None
+}
+
+/// Cached `(width / height)` native aspect ratio read from image header bytes without pixel decode.
+pub fn cached_image_aspect(path: &str) -> Option<f32> {
+    static CACHE: OnceLock<Mutex<HashMap<String, Option<f32>>>> = OnceLock::new();
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    if let Ok(guard) = cache.lock()
+        && let Some(&cached) = guard.get(trimmed)
+    {
+        return cached;
+    }
+    let p = Path::new(trimmed);
+    let computed = if p.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("svg")) {
+        parse_svg_aspect(p)
+    } else {
+        image::image_dimensions(p)
+            .ok()
+            .filter(|&(w, h)| w > 0 && h > 0)
+            .map(|(w, h)| (w as f32) / (h as f32))
+    };
+    if let Ok(mut guard) = cache.lock() {
+        if guard.len() > 2048 {
+            guard.clear();
+        }
+        guard.insert(trimmed.to_owned(), computed);
+    }
+    computed
+}
+
+fn fit_contain_rect(bounds: Rect, aspect: f32) -> Rect {
+    if !aspect.is_finite() || aspect <= 0.02 || bounds.width() <= 1.0 || bounds.height() <= 1.0 {
+        return bounds;
+    }
+    let box_aspect = bounds.width() / bounds.height();
+    let (w, h) = if aspect >= box_aspect {
+        let w = bounds.width();
+        (w, (w / aspect).min(bounds.height()))
+    } else {
+        let h = bounds.height();
+        ((h * aspect).min(bounds.width()), h)
+    };
+    Rect::from_center_size(bounds.center(), Vec2::new(w.max(1.0), h.max(1.0)))
+}
+
+/// Paint a local image inside `rect` preserving native aspect ratio (`contain`), returning `true` when drawn.
 pub fn paint_local_image(
     ui: &mut Ui,
     rect: Rect,
@@ -115,16 +185,33 @@ pub fn paint_local_image(
     bg_fill: Color32,
     corner_radius: u8,
 ) -> bool {
-    ui.painter().rect_filled(rect, CornerRadius::same(corner_radius), bg_fill);
-    let Some(uri) = path.and_then(local_image_uri) else {
+    if bg_fill != Color32::TRANSPARENT {
+        ui.painter().rect_filled(rect, CornerRadius::same(corner_radius), bg_fill);
+    }
+    let Some(raw_path) = path else {
         return false;
     };
-    let mut clipped = ui.new_child(egui::UiBuilder::new().max_rect(rect));
-    clipped.set_clip_rect(rect.shrink(1.0));
-    Image::from_uri(uri)
-        .maintain_aspect_ratio(true)
-        .max_size(rect.size())
-        .paint_at(&mut clipped, rect.shrink(1.0));
+    let Some(uri) = local_image_uri(raw_path) else {
+        return false;
+    };
+    let inner = rect.shrink(1.0);
+    if !inner.is_positive() {
+        return false;
+    }
+    let img = Image::from_uri(uri);
+    let aspect = cached_image_aspect(raw_path).or_else(|| {
+        match img.load_for_size(ui.ctx(), inner.size()) {
+            Ok(egui::load::TexturePoll::Ready { texture }) if texture.size.y > 0.0 => {
+                Some((texture.size.x as f32) / (texture.size.y as f32))
+            }
+            _ => None,
+        }
+    });
+    let target = aspect.map_or(inner, |ar| fit_contain_rect(inner, ar));
+    let mut clipped = ui.new_child(egui::UiBuilder::new().max_rect(inner));
+    clipped.set_clip_rect(inner);
+    img.corner_radius(CornerRadius::same(corner_radius.saturating_sub(1)))
+        .paint_at(&mut clipped, target);
     true
 }
 
@@ -144,31 +231,48 @@ pub fn paint_craft_doc_card(
         Stroke::new(1.0, pal.border_subtle),
         StrokeKind::Inside,
     );
+    let clipped = ui.painter().with_clip_rect(rect.shrink(2.0));
     let bcol = badge_accent_color(pal, badge);
-    let chip_w = (badge.len() as f32 * 7.0 + 14.0).max(30.0);
+    let chip_w = (badge.len() as f32 * 7.0 + 14.0).clamp(28.0, (rect.width() - 8.0).max(28.0));
     let cy = rect.center().y;
-    let chip = Rect::from_center_size(Pos2::new(rect.center().x, cy - 12.0), Vec2::new(chip_w, 18.0));
-    ui.painter().rect(
+    let y_shift = if detail.is_empty() || rect.height() <= 54.0 { 8.0 } else { 13.0 };
+    let chip = Rect::from_center_size(Pos2::new(rect.center().x, cy - y_shift), Vec2::new(chip_w, 17.0));
+    clipped.rect(
         chip,
         CornerRadius::same(5),
         bcol.gamma_multiply(0.18),
         Stroke::new(1.0, bcol.gamma_multiply(0.75)),
         StrokeKind::Inside,
     );
-    ui.painter()
-        .text(chip.center(), Align2::CENTER_CENTER, badge, FontId::monospace(9.5), bcol);
-    ui.painter().text(
-        Pos2::new(rect.center().x, cy + 4.0),
+    clipped.text(chip.center(), Align2::CENTER_CENTER, badge, FontId::monospace(9.0), bcol);
+    let max_chars = ((rect.width() / 6.2) as usize).max(6);
+    let file_lbl = if craft_file.chars().count() > max_chars {
+        let mut s: String = craft_file.chars().take(max_chars.saturating_sub(1)).collect();
+        s.push('…');
+        s
+    } else {
+        craft_file.to_owned()
+    };
+    clipped.text(
+        Pos2::new(rect.center().x, cy + (if detail.is_empty() || rect.height() <= 54.0 { 7.0 } else { 3.0 })),
         Align2::CENTER_CENTER,
-        craft_file,
-        FontId::monospace(10.0),
+        &file_lbl,
+        FontId::monospace(9.5),
         pal.text_secondary,
     );
     if !detail.is_empty() && rect.height() > 54.0 {
-        ui.painter().text(
-            Pos2::new(rect.center().x, cy + 19.0),
+        let max_det = ((rect.width() / 5.6) as usize).max(10);
+        let det_lbl = if detail.chars().count() > max_det {
+            let mut s: String = detail.chars().take(max_det.saturating_sub(1)).collect();
+            s.push('…');
+            s
+        } else {
+            detail.to_owned()
+        };
+        clipped.text(
+            Pos2::new(rect.center().x, cy + 18.0),
             Align2::CENTER_CENTER,
-            detail,
+            &det_lbl,
             FontId::proportional(9.5),
             pal.text_muted,
         );
@@ -176,7 +280,7 @@ pub fn paint_craft_doc_card(
 }
 
 /// Paint a smooth anti-aliased cubic Bezier curve via `egui::Shape::line` for real sampled keyframes.
-pub fn paint_cubic_bezier(ui: &mut Ui, pts: [Pos2; 4], stroke: Stroke) {
+pub fn paint_cubic_bezier(painter: &egui::Painter, pts: [Pos2; 4], stroke: Stroke) {
     let steps = 28usize;
     let mut samples = Vec::with_capacity(steps + 1);
     for i in 0..=steps {
@@ -190,7 +294,7 @@ pub fn paint_cubic_bezier(ui: &mut Ui, pts: [Pos2; 4], stroke: Stroke) {
         let y = b0 * pts[0].y + b1 * pts[1].y + b2 * pts[2].y + b3 * pts[3].y;
         samples.push(Pos2::new(x, y));
     }
-    ui.painter().add(Shape::line(samples, stroke));
+    painter.add(Shape::line(samples, stroke));
 }
 
 /// Paint real SVG `d` path coordinates read from an authored `motion/svg/*.svg` or `motion/actions.json` cue.
@@ -259,10 +363,7 @@ fn fit_points_into_rect(pts: &[(f32, f32)], target: Rect) -> Vec<Pos2> {
         .collect()
 }
 
-/// Paint a 35mm film-sprocket (`filmbar`) border matching `2. 35mm Filmbar Border Frames` in `00-figma-component-system-sheet.jpg`:
-/// - `Default`: Slate `#202836` sprocket rail strip with dark `#0C1017` punched sprocket holes.
-/// - `Hover`: Elevated `#2E3B50` sprocket rail strip with dark `#0C1017` punched sprocket holes.
-/// - `Active`: Illuminated solid `#35E1C0` mint sprocket rail strip (with soft outer glow) and dark `#0A1116` punched sprocket holes!
+/// Paint a 35mm film-sprocket (`filmbar`) border matching `2. 35mm Filmbar Border Frames` in `00-figma-component-system-sheet.jpg`.
 pub fn paint_filmbar_frame(ui: &mut Ui, rect: Rect, pal: &MagicPalette, style: FilmbarStyle<'_>) -> Rect {
     let (rail_fill, border_col, hole_col, stroke_w) = if style.selected {
         (

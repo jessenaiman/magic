@@ -62,7 +62,20 @@ pub fn close_opened_apps() -> Result<Value> {
                 continue;
             }
         }
-        let _ = control::live_control(target, Some(port), "app.quit", &json!({"force": false}));
+        if target == CraftTarget::Pdf {
+            if let Some(ctrl_file) = craft_util::discovery::pdfcraft_control_file().filter(|p| p.is_file())
+                && let Ok(cli_bin) = require_executable(target.cli_name())
+            {
+                let _ = scrubbed_command(&cli_bin, target, None)
+                    .arg("ui")
+                    .arg("--control")
+                    .arg(ctrl_file)
+                    .arg("quit")
+                    .output();
+            }
+        } else {
+            let _ = control::live_control(target, Some(port), "app.quit", &json!({"force": false}));
+        }
         if let Ok(mut map) = opened_apps_registry().lock() {
             map.remove(name);
         }
@@ -147,7 +160,13 @@ fn spawn_controlled_app(target: CraftTarget, port: u16, file: Option<&Path>, wor
     {
         cmd.env(target.token_env(), tok);
     }
-    cmd.arg("--control").arg(port.to_string());
+    if target == CraftTarget::Pdf {
+        let ctrl_file = craft_util::discovery::pdfcraft_control_file()
+            .ok_or_else(|| EngineError::InvalidParams("HOME directory required for ~/.pdfcraft-control.json".into()))?;
+        cmd.arg("--control").arg(ctrl_file).arg("--two-paged");
+    } else {
+        cmd.arg("--control").arg(port.to_string());
+    }
     if target.uses_token_file_flag()
         && let Some(ref tf) = token_file
     {

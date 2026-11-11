@@ -51,6 +51,14 @@ pub(crate) const SKIP_CHARACTER_GROUPS: &[&str] = &[
     "contact-parts-v1",
     "cast",
     "tripo-input",
+    "parts",
+    "sprites",
+    "frames",
+    "layers",
+    "source",
+    "renders",
+    "preview",
+    "rig",
 ];
 
 pub(crate) fn bad(message: impl Into<String>) -> EngineError {
@@ -82,13 +90,18 @@ pub(crate) fn discover_character_folders(project_dir: &Path) -> Vec<(String, Opt
             continue;
         }
         let direct_has_craft = entry.join("front").is_dir()
+            || entry.join("side").is_dir()
+            || entry.join("back").is_dir()
+            || entry.join("parts").is_dir()
+            || entry.join("sprites").is_dir()
+            || entry.join("rig").is_dir()
             || entry.join("parts.json").is_file()
             || entry.join("character.magic").is_file()
             || std::fs::read_dir(&entry)
                 .into_iter()
                 .flatten()
                 .flatten()
-                .any(|f| f.path().is_file() && crate::workspace::has_extension(&f.path(), &["pcraft", "psd", "ecproj", "vectorcraft", "png", "webp"]));
+                .any(|f| f.path().is_file() && crate::workspace::has_extension(&f.path(), &["pcraft", "psd", "ecproj", "vectorcraft", "svg", "anicraft", "png", "webp", "jpg", "jpeg"]));
         if direct_has_craft {
             out.push((name.to_owned(), None, entry));
             continue;

@@ -17,11 +17,12 @@ use crate::state::{PickerTarget, UiAction, ViewCtx, ViewMode};
 use crate::views::project_bridge::{
     draw_offline_and_source_guard_card, draw_trunk_bridge_buttons, draw_trunk_bridge_drawers,
 };
-use crate::widgets::{BtnSpec, action_button, text_input};
+use crate::widgets::{BtnSpec, action_button, status_pill, text_input};
 
 pub fn show(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     let body = ui.available_rect_before_wrap();
-    if let Some(split) = split_rect(body, SplitAxis::Horizontal, SplitSize::FixedFirst(296.0), 14.0, 320.0) {
+    let left_w = if body.width() >= 1120.0 { 296.0 } else { 264.0 };
+    if let Some(split) = split_rect(body, SplitAxis::Horizontal, SplitSize::FixedFirst(left_w), 14.0, 280.0) {
         let div_x = split.first.max.x + 7.0;
         ui.painter().line_segment(
             [Pos2::new(div_x, body.min.y), Pos2::new(div_x, body.max.y)],
@@ -88,9 +89,9 @@ fn draw_stage_stack(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
 }
 
 fn draw_song_waveform(ui: &mut Ui, ctx: &mut ViewCtx<'_>, song_file: &str, has_song: bool) {
-    let w = ui.available_width().max(160.0);
-    let (rect, resp) = ui.allocate_exact_size(Vec2::new(w, 28.0), Sense::click());
-    let base_y = rect.max.y - 4.0;
+    let w = (ui.available_width() - 2.0).max(140.0);
+    let (rect, resp) = ui.allocate_exact_size(Vec2::new(w, 26.0), Sense::click());
+    let base_y = rect.max.y - 3.0;
     ui.painter().line_segment(
         [Pos2::new(rect.min.x, base_y), Pos2::new(rect.max.x, base_y)],
         Stroke::new(1.0, ctx.pal.border),
@@ -108,7 +109,7 @@ fn draw_song_waveform(ui: &mut Ui, ctx: &mut ViewCtx<'_>, song_file: &str, has_s
             let frac = (i as f32) / (bars as f32);
             let env = (frac * std::f32::consts::PI).sin().powf(0.55);
             let amp = (0.18 + ((seed >> 16) as f32 / 65535.0) * 0.82) * env;
-            let bh = (amp * 19.0).max(2.0);
+            let bh = (amp * 18.0).max(2.0);
             let x = rect.min.x + frac * rect.width();
             let col = if frac >= play_frac {
                 ctx.pal.accent_emerald.gamma_multiply(0.82)
@@ -142,7 +143,7 @@ fn recessed_action_button(
     centered: bool,
     tooltip: &str,
 ) -> bool {
-    let w = ui.available_width().max(100.0);
+    let w = (ui.available_width() - 2.0).max(88.0);
     let (rect, resp) = ui.allocate_exact_size(Vec2::new(w, 28.0), Sense::click());
     let fill = if resp.hovered() { ctx.pal.bg_hover } else { ctx.pal.bg_input };
     let border = if resp.hovered() { ctx.pal.accent_emerald } else { ctx.pal.border };
@@ -170,6 +171,41 @@ fn recessed_action_button(
     resp.clicked()
 }
 
+fn draw_section_status_header(
+    ui: &mut Ui,
+    light_color: Color32,
+    title: &str,
+    title_color: Color32,
+    right_meta: &str,
+    muted_color: Color32,
+) {
+    let w = (ui.available_width() - 2.0).max(140.0);
+    let (rect, _) = ui.allocate_exact_size(Vec2::new(w, 20.0), Sense::hover());
+    paint_readiness_light(ui, Pos2::new(rect.min.x + 7.0, rect.center().y), light_color);
+    ui.painter().text(
+        Pos2::new(rect.min.x + 20.0, rect.center().y),
+        Align2::LEFT_CENTER,
+        title,
+        FontId::proportional(12.5),
+        title_color,
+    );
+    let max_meta_chars = (((rect.width() - 120.0).max(48.0) / 6.2) as usize).max(8);
+    let shown_meta = if right_meta.chars().count() > max_meta_chars {
+        let mut s: String = right_meta.chars().take(max_meta_chars.saturating_sub(1)).collect();
+        s.push('…');
+        s
+    } else {
+        right_meta.to_owned()
+    };
+    ui.painter().text(
+        Pos2::new(rect.max.x - 2.0, rect.center().y),
+        Align2::RIGHT_CENTER,
+        &shown_meta,
+        FontId::proportional(11.0),
+        muted_color,
+    );
+}
+
 fn draw_song_and_lyrics_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     let song_path = ctx.state.song_audio_path().unwrap_or_default();
     let has_song = !song_path.is_empty();
@@ -189,21 +225,18 @@ fn draw_song_and_lyrics_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         .inner_margin(egui::Margin::same(12))
         .stroke(Stroke::new(1.3, ctx.pal.accent_emerald.gamma_multiply(0.76)))
         .show(ui, |ui| {
-            ui.set_min_width((ui.available_width() - 4.0).max(200.0));
+            let inner_w = (ui.available_width() - 4.0).max(180.0);
+            ui.set_min_width(inner_w);
+            ui.set_max_width(inner_w);
             ui.vertical(|ui| {
-                ui.horizontal(|ui| {
-                    let col = if has_song { ctx.pal.accent_emerald } else { ctx.pal.accent_amber };
-                    let (drect, _) = ui.allocate_exact_size(Vec2::new(14.0, 16.0), Sense::hover());
-                    paint_readiness_light(ui, drect.center(), col);
-                    ui.label(RichText::new("Song").size(12.5).strong().color(ctx.pal.accent_emerald));
-                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        ui.label(RichText::new(song_file).size(11.0).color(ctx.pal.text_muted));
-                    });
-                });
-                draw_song_waveform(ui, ctx, song_file, has_song);
+                // 1. Song section
+                let scol = if has_song { ctx.pal.accent_emerald } else { ctx.pal.accent_amber };
+                draw_section_status_header(ui, scol, "Song", ctx.pal.accent_emerald, song_file, ctx.pal.text_muted);
                 ui.add_space(2.0);
+                draw_song_waveform(ui, ctx, song_file, has_song);
+                ui.add_space(4.0);
                 ui.horizontal(|ui| {
-                    let pick_w = (ui.available_width() - 88.0).max(110.0);
+                    let pick_w = (ui.available_width() - 82.0).max(96.0);
                     ui.allocate_ui_with_layout(Vec2::new(pick_w, 28.0), Layout::top_down(Align::Min), |ui| {
                         if recessed_action_button(ui, ctx, "song-upload", "Change audio…", false, "Select song audio file") {
                             ctx.push(UiAction::PickFile {
@@ -228,19 +261,21 @@ fn draw_song_and_lyrics_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                     }
                 });
 
-                ui.add_space(8.0);
-                ui.horizontal(|ui| {
-                    let lcol = if lyric_lines.is_empty() { ctx.pal.accent_amber } else { ctx.pal.accent_emerald };
-                    let (drect, _) = ui.allocate_exact_size(Vec2::new(14.0, 16.0), Sense::hover());
-                    paint_readiness_light(ui, drect.center(), lcol);
-                    ui.label(RichText::new("Lyrics & notes").size(12.5).strong().color(ctx.pal.accent_amber));
-                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        ui.label(RichText::new(format!("{} lines", lyric_lines.len())).size(11.0).color(ctx.pal.text_muted));
-                    });
-                });
+                // 2. Lyrics & notes section
+                ui.add_space(10.0);
+                let lcol = if lyric_lines.is_empty() { ctx.pal.accent_amber } else { ctx.pal.accent_emerald };
+                draw_section_status_header(
+                    ui,
+                    lcol,
+                    "Lyrics & notes",
+                    ctx.pal.accent_amber,
+                    &format!("{} lines", lyric_lines.len()),
+                    ctx.pal.text_muted,
+                );
+                ui.add_space(4.0);
                 ctx.pal.inset_frame().show(ui, |ui| {
                     ui.set_min_width(ui.available_width());
-                    ScrollArea::vertical().id_salt("proj_lyrics_box").max_height(104.0).show(ui, |ui| {
+                    ScrollArea::vertical().id_salt("proj_lyrics_box").max_height(98.0).show(ui, |ui| {
                         let preview_text = if lyric_lines.is_empty() {
                             "No lyrics loaded yet — align song audio or import timed lyrics.".to_owned()
                         } else {
@@ -249,28 +284,32 @@ fn draw_song_and_lyrics_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                         ui.label(RichText::new(preview_text).monospace().size(10.5).color(ctx.pal.text_secondary));
                     });
                 });
-                ui.add_space(2.0);
+                ui.add_space(6.0);
                 if recessed_action_button(
                     ui,
                     ctx,
                     "song-open-lyrics",
                     "Open Lyrics & Motion →",
                     true,
-                    "Open Kinetic Lyrics workspace",
+                    "Jump to Lyrics & Motion authoring workspace",
                 ) {
                     ctx.push(UiAction::SwitchView(ViewMode::Design));
                 }
 
+                // 3. Transcript section — clearly separated below divider with generous spacing
+                ui.add_space(10.0);
+                ui.separator();
                 ui.add_space(8.0);
-                ui.horizontal(|ui| {
-                    let tcol = if timed_words > 0 { ctx.pal.accent_emerald } else { ctx.pal.accent_amber };
-                    let (drect, _) = ui.allocate_exact_size(Vec2::new(14.0, 16.0), Sense::hover());
-                    paint_readiness_light(ui, drect.center(), tcol);
-                    ui.label(RichText::new("Transcript").size(12.5).strong().color(ctx.pal.accent_sky));
-                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        ui.label(RichText::new(format!("{timed_words} timed words")).size(11.0).color(ctx.pal.text_muted));
-                    });
-                });
+                let tcol = if timed_words > 0 { ctx.pal.accent_emerald } else { ctx.pal.accent_amber };
+                draw_section_status_header(
+                    ui,
+                    tcol,
+                    "Transcript",
+                    ctx.pal.accent_sky,
+                    &format!("{timed_words} timed words"),
+                    ctx.pal.text_muted,
+                );
+                ui.add_space(6.0);
                 if recessed_action_button(
                     ui,
                     ctx,
@@ -330,8 +369,8 @@ fn stage_jump_tile(
 
 fn draw_pipeline_jumps(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     let grid_resp = ui.vertical(|ui| {
-        let full_w = ui.available_width().max(200.0);
-        let half_w = ((full_w - 8.0) * 0.5).max(96.0);
+        let full_w = (ui.available_width() - 2.0).max(180.0);
+        let half_w = ((full_w - 8.0) * 0.5).max(86.0);
 
         for pair in [
             [
@@ -395,19 +434,19 @@ fn draw_group_by_domain_button(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     let galley = ui
         .painter()
         .layout_no_wrap(label.to_owned(), FontId::proportional(11.5), ctx.pal.text_primary);
-    let (rect, resp) = ui.allocate_exact_size(Vec2::new(galley.size().x + 48.0, 28.0), Sense::click());
+    let (rect, resp) = ui.allocate_exact_size(Vec2::new(galley.size().x + 44.0, 26.0), Sense::click());
     let fill = if resp.hovered() { ctx.pal.bg_hover } else { ctx.pal.bg_input };
     ui.painter()
         .rect(rect, CornerRadius::same(6), fill, Stroke::new(1.0, ctx.pal.border), StrokeKind::Inside);
 
-    let chk = Rect::from_min_size(Pos2::new(rect.min.x + 8.0, rect.center().y - 7.0), Vec2::splat(14.0));
+    let chk = Rect::from_min_size(Pos2::new(rect.min.x + 8.0, rect.center().y - 6.5), Vec2::splat(13.0));
     if active {
         ui.painter().rect_filled(chk, CornerRadius::same(4), ctx.pal.accent_emerald);
         ui.painter().text(
             chk.center(),
             Align2::CENTER_CENTER,
             "✓",
-            FontId::proportional(10.5),
+            FontId::proportional(10.0),
             Color32::from_rgb(0x06, 0x16, 0x12),
         );
     } else {
@@ -415,17 +454,17 @@ fn draw_group_by_domain_button(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             .rect(chk, CornerRadius::same(4), ctx.pal.bg_stage, Stroke::new(1.0, ctx.pal.border), StrokeKind::Inside);
     }
     ui.painter().text(
-        Pos2::new(chk.max.x + 7.0, rect.center().y),
+        Pos2::new(chk.max.x + 6.0, rect.center().y),
         Align2::LEFT_CENTER,
         label,
         FontId::proportional(11.5),
         ctx.pal.text_primary,
     );
     ui.painter().text(
-        Pos2::new(rect.max.x - 10.0, rect.center().y),
+        Pos2::new(rect.max.x - 9.0, rect.center().y),
         Align2::CENTER_CENTER,
         "▾",
-        FontId::proportional(11.0),
+        FontId::proportional(10.5),
         ctx.pal.text_muted,
     );
     if resp.clicked() {
@@ -435,9 +474,9 @@ fn draw_group_by_domain_button(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
 }
 
 fn mint_outline_button(ui: &mut Ui, ctx: &mut ViewCtx<'_>, id: &str, label: &str, tooltip: &str) -> bool {
-    let font = FontId::proportional(12.0);
+    let font = FontId::proportional(11.5);
     let galley = ui.painter().layout_no_wrap(label.to_owned(), font.clone(), ctx.pal.accent_emerald);
-    let (rect, resp) = ui.allocate_exact_size(Vec2::new(galley.size().x + 22.0, 28.0), Sense::click());
+    let (rect, resp) = ui.allocate_exact_size(Vec2::new(galley.size().x + 20.0, 26.0), Sense::click());
     let fill = if resp.hovered() {
         ctx.pal.accent_emerald.gamma_multiply(0.28)
     } else {
@@ -467,22 +506,22 @@ fn draw_files_trunk(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         ui.horizontal_wrapped(|ui| {
             ui.label(
                 RichText::new("Project Craft Files & Rendered Assets")
-                    .size(15.5)
+                    .size(15.0)
                     .strong()
                     .color(ctx.pal.text_primary),
             );
             ui.label(
                 RichText::new(format!("{total_count} Files · {reg_count} registered assets"))
-                    .size(12.0)
+                    .size(11.5)
                     .color(ctx.pal.text_muted),
             );
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 draw_trunk_bridge_buttons(ui, ctx);
             });
         });
-        ui.add_space(5.0);
+        ui.add_space(4.0);
 
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             let type_lbl = match ctx.state.project.type_filter.as_str() {
                 "craft" => "Type: Craft Projects  ▾",
                 "image" => "Type: Rendered Assets  ▾",
@@ -501,7 +540,7 @@ fn draw_files_trunk(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
 
             draw_group_by_domain_button(ui, ctx);
 
-            let search_w = (ui.available_width() - 252.0).clamp(120.0, 420.0);
+            let search_w = (ui.available_width() - 256.0).clamp(110.0, 380.0);
             text_input(ui, ctx.reg, "pf-search", "Filter files", &mut ctx.state.project.search, "Filter by name…", search_w);
 
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
@@ -556,7 +595,7 @@ fn draw_files_trunk(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         });
 
         draw_trunk_bridge_drawers(ui, ctx);
-        ui.add_space(4.0);
+        ui.add_space(3.0);
         ui.separator();
         draw_trunk_file_list(ui, ctx, &trunk_files);
     });
@@ -603,6 +642,7 @@ fn draw_trunk_file_list(ui: &mut Ui, ctx: &mut ViewCtx<'_>, trunk_files: &[Value
         .collect();
 
     let list_out = ScrollArea::vertical().id_salt("pf_list_scroll").auto_shrink([false, false]).show(ui, |ui| {
+        ui.spacing_mut().item_spacing.y = 2.5;
         ui.vertical(|ui| {
             if filtered.is_empty() {
                 ui.label(
@@ -616,19 +656,29 @@ fn draw_trunk_file_list(ui: &mut Ui, ctx: &mut ViewCtx<'_>, trunk_files: &[Value
                 let raw_grp = file["group_label"].as_str().unwrap_or("Project Files");
                 let grp_lbl = normalize_domain_heading(raw_grp);
                 if grouped && grp_lbl != last_group {
+                    let grp_count = filtered
+                        .iter()
+                        .filter(|item| normalize_domain_heading(item["group_label"].as_str().unwrap_or("Project Files")) == grp_lbl)
+                        .count();
                     if idx > 0 {
-                        ui.add_space(8.0);
+                        ui.add_space(5.0);
                     }
                     ui.horizontal(|ui| {
-                        ui.label(RichText::new(format!("▾ {grp_lbl}")).size(11.5).strong().color(ctx.pal.text_secondary));
-                        let rem = ui.available_width().max(24.0);
-                        let (lrect, _) = ui.allocate_exact_size(Vec2::new(rem, 12.0), Sense::hover());
+                        ui.label(
+                            RichText::new(format!("▾ {grp_lbl}"))
+                                .size(11.5)
+                                .strong()
+                                .color(ctx.pal.text_secondary),
+                        );
+                        ui.label(RichText::new(format!("({grp_count})")).monospace().size(9.5).color(ctx.pal.text_muted));
+                        let rem = ui.available_width().max(16.0);
+                        let (lrect, _) = ui.allocate_exact_size(Vec2::new(rem, 10.0), Sense::hover());
                         ui.painter().line_segment(
-                            [Pos2::new(lrect.min.x + 6.0, lrect.center().y), Pos2::new(lrect.max.x, lrect.center().y)],
+                            [Pos2::new(lrect.min.x + 4.0, lrect.center().y), Pos2::new(lrect.max.x, lrect.center().y)],
                             Stroke::new(1.0, ctx.pal.border_subtle),
                         );
                     });
-                    ui.add_space(3.0);
+                    ui.add_space(1.5);
                     last_group = grp_lbl.to_owned();
                 }
                 draw_single_trunk_row(ui, ctx, idx, file);
@@ -677,8 +727,8 @@ fn draw_single_trunk_row(ui: &mut Ui, ctx: &mut ViewCtx<'_>, idx: usize, file: &
         format!("{rel_dir}{name} · {detail}")
     };
 
-    let row_w = ui.available_width().max(320.0);
-    let (row_rect, _) = ui.allocate_exact_size(Vec2::new(row_w, 48.0), Sense::hover());
+    let row_w = (ui.available_width() - 6.0).max(260.0);
+    let (row_rect, _) = ui.allocate_exact_size(Vec2::new(row_w, 40.0), Sense::hover());
     ui.painter().rect(
         row_rect,
         CornerRadius::same(7),
@@ -687,11 +737,15 @@ fn draw_single_trunk_row(ui: &mut Ui, ctx: &mut ViewCtx<'_>, idx: usize, file: &
         StrokeKind::Inside,
     );
 
-    let badge_col_x = row_rect.min.x + (row_w * 0.56).clamp(220.0, row_w - 240.0);
-    let thumb_rect = Rect::from_min_size(Pos2::new(row_rect.min.x + 8.0, row_rect.center().y - 17.0), Vec2::splat(34.0));
+    let act_reserve = if can_animate || can_link_fc { 242.0 } else { 156.0 };
+    let badge_w = if badge == "VCRAFT" { 108.0 } else if can_link_fc { 116.0 } else { 68.0 };
+    let act_min_x = (row_rect.max.x - act_reserve).max(row_rect.min.x + 200.0);
+    let badge_min_x = (act_min_x - badge_w - 6.0).max(row_rect.min.x + 150.0);
+
+    let thumb_rect = Rect::from_min_size(Pos2::new(row_rect.min.x + 7.0, row_rect.center().y - 14.0), Vec2::splat(28.0));
     let show_art = matches!(badge, "PCRAFT" | "VCRAFT" | "PNG" | "JPG" | "WEBP" | "SVG") || has_registered_asset;
     let preview_src = file["preview_path"].as_str().or_else(|| is_image.then_some(path));
-    if !(show_art && paint_local_image(ui, thumb_rect, preview_src, ctx.pal.bg_stage, 6)) {
+    if !(show_art && paint_local_image(ui, thumb_rect, preview_src, ctx.pal.bg_stage, 5)) {
         let (tile_bg, tile_fg) = if badge == "FC" {
             (ctx.pal.accent_emerald_bg, ctx.pal.accent_emerald)
         } else {
@@ -699,7 +753,7 @@ fn draw_single_trunk_row(ui: &mut Ui, ctx: &mut ViewCtx<'_>, idx: usize, file: &
         };
         ui.painter().rect(
             thumb_rect,
-            CornerRadius::same(6),
+            CornerRadius::same(5),
             tile_bg,
             Stroke::new(1.0, tile_fg.gamma_multiply(0.45)),
             StrokeKind::Inside,
@@ -709,57 +763,52 @@ fn draw_single_trunk_row(ui: &mut Ui, ctx: &mut ViewCtx<'_>, idx: usize, file: &
             "VCRAFT" => "VC",
             other => other,
         };
-        let inner_box = thumb_rect.shrink(7.0);
         ui.painter()
-            .rect_stroke(inner_box, CornerRadius::same(3), Stroke::new(1.0, tile_fg.gamma_multiply(0.75)), StrokeKind::Inside);
-        ui.painter()
-            .text(inner_box.center(), Align2::CENTER_CENTER, short_glyph, FontId::monospace(8.5), tile_fg);
+            .text(thumb_rect.center(), Align2::CENTER_CENTER, short_glyph, FontId::monospace(8.5), tile_fg);
     }
 
-    let text_x = thumb_rect.max.x + 10.0;
-    ui.painter().text(
-        Pos2::new(text_x, row_rect.min.y + 16.0),
+    let text_x = thumb_rect.max.x + 9.0;
+    let text_clip = Rect::from_min_max(Pos2::new(text_x, row_rect.min.y), Pos2::new(badge_min_x - 6.0, row_rect.max.y));
+    let text_painter = ui.painter().with_clip_rect(text_clip);
+    text_painter.text(
+        Pos2::new(text_x, row_rect.min.y + 13.5),
         Align2::LEFT_CENTER,
         &primary_title,
-        FontId::proportional(12.5),
+        FontId::proportional(12.0),
         ctx.pal.text_primary,
     );
     let sub_col = if has_registered_asset { ctx.pal.accent_sky } else { ctx.pal.text_muted };
-    ui.painter().text(
-        Pos2::new(text_x, row_rect.min.y + 33.0),
+    text_painter.text(
+        Pos2::new(text_x, row_rect.min.y + 28.0),
         Align2::LEFT_CENTER,
         &subtitle,
-        FontId::proportional(10.5),
+        FontId::proportional(10.0),
         sub_col,
     );
 
-    let badge_rect = Rect::from_min_max(
-        Pos2::new(badge_col_x, row_rect.min.y),
-        Pos2::new((badge_col_x + 140.0).min(row_rect.max.x - 160.0), row_rect.max.y),
-    );
+    let badge_rect = Rect::from_min_max(Pos2::new(badge_min_x, row_rect.min.y), Pos2::new(act_min_x - 2.0, row_rect.max.y));
     let mut badge_ui = ui.new_child(
         egui::UiBuilder::new()
             .max_rect(badge_rect)
             .layout(Layout::left_to_right(Align::Center))
             .scope_id(ui.scope_id().with(("pf_badge", idx))),
     );
-    badge_ui.spacing_mut().item_spacing.x = 5.0;
+    badge_ui.spacing_mut().item_spacing.x = 4.0;
     paint_craft_badge(&mut badge_ui, ctx.pal, badge, false);
     if badge == "VCRAFT" {
         paint_craft_badge(&mut badge_ui, ctx.pal, "SVG", false);
+    } else if can_link_fc {
+        status_pill(&mut badge_ui, ctx.pal, "Link", ctx.pal.accent_emerald);
     }
 
-    let act_rect = Rect::from_min_max(
-        Pos2::new(badge_rect.max.x + 4.0, row_rect.min.y),
-        Pos2::new(row_rect.max.x - 8.0, row_rect.max.y),
-    );
+    let act_rect = Rect::from_min_max(Pos2::new(act_min_x, row_rect.min.y), Pos2::new(row_rect.max.x - 6.0, row_rect.max.y));
     let mut act_ui = ui.new_child(
         egui::UiBuilder::new()
             .max_rect(act_rect)
             .layout(Layout::right_to_left(Align::Center))
             .scope_id(ui.scope_id().with(("pf_act", idx))),
     );
-    act_ui.spacing_mut().item_spacing.x = 6.0;
+    act_ui.spacing_mut().item_spacing.x = 5.0;
 
     if can_animate {
         let anim_id = format!("pf-animate-{idx}");
@@ -813,7 +862,6 @@ fn draw_single_trunk_row(ui: &mut Ui, ctx: &mut ViewCtx<'_>, idx: usize, file: &
             ctx.exec("video.list_ec_comps", json!({"project": path}), None);
         }
     }
-    ui.add_space(4.0);
 }
 
 fn craft_app_for_path(path: &str) -> &'static str {

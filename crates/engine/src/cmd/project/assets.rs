@@ -25,6 +25,61 @@ pub(crate) fn asset_role(dir: Option<&Path>, path: Option<&Path>) -> &'static st
     }
 }
 
+
+/// Resolve the flat project preview `.png` and linked Craft file metadata for any project asset
+/// (`.pcraft` ZIP or directory bundle, `.vectorcraft`, `.ecproj`, `.fcproj`, or image with sibling Craft project).
+pub(crate) fn resolve_asset_project_image(
+    project_dir: Option<&Path>,
+    asset_path: &Path,
+) -> (PathBuf, Option<String>, Option<String>) {
+    let ext = asset_path.extension().and_then(|e| e.to_str()).unwrap_or_default().to_ascii_lowercase();
+    let stem = asset_path.file_stem().and_then(|n| n.to_str()).unwrap_or("asset");
+    let previews_dir = project_dir
+        .map(|d| d.join("assets/.previews"))
+        .unwrap_or_else(|| asset_path.parent().unwrap_or(Path::new(".")).join(".previews"));
+    let preview_png = previews_dir.join(format!("{stem}.png"));
+
+    match ext.as_str() {
+        "pcraft" | "psd" => {
+            if craft_util::media::extract_craft_preview(asset_path, &preview_png).unwrap_or(false) && preview_png.is_file() {
+                return (preview_png, Some(asset_path.to_string_lossy().into_owned()), Some("photocraft".into()));
+            }
+            return (asset_path.to_path_buf(), Some(asset_path.to_string_lossy().into_owned()), Some("photocraft".into()));
+        }
+        "vectorcraft" | "vcraft" | "drawcraft" | "svg" => {
+            if craft_util::media::extract_craft_preview(asset_path, &preview_png).unwrap_or(false) && preview_png.is_file() {
+                return (preview_png, Some(asset_path.to_string_lossy().into_owned()), Some("vectorcraft".into()));
+            }
+            return (asset_path.to_path_buf(), Some(asset_path.to_string_lossy().into_owned()), Some("vectorcraft".into()));
+        }
+        "ecproj" => {
+            let sibling_png = asset_path.with_extension("png");
+            let img = if sibling_png.is_file() { sibling_png } else { asset_path.to_path_buf() };
+            return (img, Some(asset_path.to_string_lossy().into_owned()), Some("effectcraft".into()));
+        }
+        "fcproj" => {
+            let sibling_png = asset_path.with_extension("png");
+            let img = if sibling_png.is_file() { sibling_png } else { asset_path.to_path_buf() };
+            return (img, Some(asset_path.to_string_lossy().into_owned()), Some("filmcraft".into()));
+        }
+        _ => {
+            for (cand_ext, app) in [
+                ("pcraft", "photocraft"),
+                ("psd", "photocraft"),
+                ("vectorcraft", "vectorcraft"),
+                ("ecproj", "effectcraft"),
+                ("fcproj", "filmcraft"),
+            ] {
+                let cand = asset_path.with_extension(cand_ext);
+                if cand.exists() {
+                    return (asset_path.to_path_buf(), Some(cand.to_string_lossy().into_owned()), Some(app.into()));
+                }
+            }
+            (asset_path.to_path_buf(), None, None)
+        }
+    }
+}
+
 pub fn cmd_project_list_assets(s: &mut Session, _: &Value) -> Result<Value> {
     let dir = s.project_path.as_deref().and_then(Path::parent);
     let assets = s
@@ -33,6 +88,12 @@ pub fn cmd_project_list_assets(s: &mut Session, _: &Value) -> Result<Value> {
         .map(|asset| {
             let mut entry = serde_json::to_value(asset).map_err(|e| EngineError::InvalidParams(e.to_string()))?;
             entry["role"] = json!(asset_role(dir, asset.path.as_deref()));
+            if let Some(ref p) = asset.path {
+                let (proj_img, linked_file, craft_app) = resolve_asset_project_image(dir, p);
+                entry["project_image"] = json!(proj_img);
+                entry["linked_file"] = json!(linked_file.unwrap_or_else(|| p.to_string_lossy().into_owned()));
+                entry["craft_app"] = json!(craft_app);
+            }
             Ok(entry)
         })
         .collect::<Result<Vec<Value>>>()?;
@@ -251,6 +312,13 @@ pub fn cmd_project_add_asset(s: &mut Session, params: &Value) -> Result<Value> {
     s.project_assets.push(crate::ProjectAsset { id: id.clone(), name, preset: None, path: stored.clone(), kind, extra: Default::default() });
     if load {
         cmd_project_load_asset(s, &json!({"id": id}))?;
+    }
+    if let Ok(sb_pdf) = crate::cmd::storyboard::doc_path(s, &json!({}))
+        && sb_pdf.is_file()
+    {
+        let mut sb_state = crate::cmd::storyboard::load_field_state(&sb_pdf);
+        crate::cmd::storyboard::sync_assets_into_state(s, &mut sb_state);
+        let _ = crate::cmd::storyboard::save_field_state(&sb_pdf, &sb_state);
     }
     if params["save"].as_bool() == Some(true) {
         cmd_project_save(s, &json!({}))?;

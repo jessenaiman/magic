@@ -1,22 +1,16 @@
-//! `04 Animations` supplementary `EffectCraft` inspector & Theatre/Graph dock (`Sheet 08` Zone B):
+//! `04 Animations` supplementary `EffectCraft` right-hand inspector & Time/Stagger controls (`Sheet 08` Zone B):
 //! - `T11`–`T13`: 5-pin Puppet Mesh (`position`, `advanced`, `bend`, `starch`, `overlap`),
 //!   `character.puppet.{addPin,setPin,selectPins,removePin,record,nullRig,follow}`.
 //! - `T14`–`T16`: `Classic 3D` vs `Advanced 3D PBR`, `.glb/.gltf/.obj/.fbx/.stl` 3D Model Import,
 //!   3D Primitives, 1/2-Node DoF Camera (`Orbit`/`Pan`/`Dolly` + 4-View), and 5 Light types + IBL.
 //! - `T17`: Roto Brush 3.0 (`classical`, `mobilesam`, `sam2.1-hiera-small`), `FG`/`BG`/`Refine`,
 //!   `Object Matte`, `Propagate`, and `Freeze`.
-//! - `T18`–`T20`: `layer.timing`, Work Area, Layer/Key Stagger, `A/P/S/R/T/M/E/U/EE/UU` property
-//!   filter + `Separate XY`, and interactive draggable Cubic Bezier Value/Speed Graph Editor.
+//! - `T18`: `layer.timing`, Work Area, and Layer/Key Stagger.
 
-use egui::{
-    Align, Align2, Color32, CornerRadius, FontId, Layout, Pos2, Rect, RichText, ScrollArea, Sense,
-    Stroke, StrokeKind, Ui, Vec2,
-};
+use egui::{RichText, ScrollArea, Ui};
 use serde_json::{Value, json};
 
-use crate::controls::{
-    ScalarSpec, fill_card, paint_cubic_bezier, pill_toggle, ring_slider_h, rotary_dial,
-};
+use crate::controls::{ScalarSpec, fill_card, pill_toggle, ring_slider_h, rotary_dial};
 use crate::state::{PickerTarget, UiAction, ViewCtx};
 use crate::widgets::{BtnSpec, action_button, status_pill, text_input};
 
@@ -24,24 +18,22 @@ use crate::widgets::{BtnSpec, action_button, status_pill, text_input};
 pub fn draw_time_and_stagger_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str) {
     let sky = ctx.pal.accent_sky;
     fill_card(ui, ctx.pal, false, |ui| {
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             ui.label(RichText::new("⏱ Time & Stagger (T18)").size(11.5).strong().color(sky));
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                if action_button(
-                    ui,
-                    ctx.reg,
-                    ctx.pal,
-                    BtnSpec::label_only("anim-precomp", "Precomp", "Precompose character layers (layer.precompose)"),
-                )
-                .clicked()
-                {
-                    ctx.exec(
-                        "effect.exec",
-                        json!({"domain": "character", "character": cid, "command": "layer.precompose", "params": {"name": "Character Precomp"}}),
-                        Some("Precomposed character layers in .ecproj"),
-                    );
-                }
-            });
+            if action_button(
+                ui,
+                ctx.reg,
+                ctx.pal,
+                BtnSpec::label_only("anim-precomp", "Precomp", "Precompose character layers (layer.precompose)"),
+            )
+            .clicked()
+            {
+                ctx.exec(
+                    "effect.exec",
+                    json!({"domain": "character", "character": cid, "command": "layer.precompose", "params": {"name": "Character Precomp"}}),
+                    Some("Precomposed character layers in .ecproj"),
+                );
+            }
         });
         ring_slider_h(
             ui,
@@ -50,7 +42,7 @@ pub fn draw_time_and_stagger_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str)
             ScalarSpec::new("anim-time-stretch", "Time Stretch", 25.0..=400.0, "%", sky),
             &mut ctx.state.animation.time_stretch_pct,
         );
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             pill_toggle(ui, ctx.reg, ctx.pal, "anim-time-rev", "Reverse", &mut ctx.state.animation.time_reverse, sky);
             pill_toggle(ui, ctx.reg, ctx.pal, "anim-freeze", "Freeze", &mut ctx.state.animation.freeze_frame, ctx.pal.accent_amber);
         });
@@ -69,6 +61,7 @@ pub fn draw_time_and_stagger_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str)
             &mut ctx.state.animation.stagger_frames,
         );
         ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing.x = 4.0;
             if action_button(
                 ui,
                 ctx.reg,
@@ -144,7 +137,8 @@ pub fn draw_puppet_and_3d_inspector(
     view_obj: Option<&Value>,
 ) {
     fill_card(ui, ctx.pal, true, |ui| {
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing.x = 4.0;
             for (tid, lbl, tip) in [
                 ("puppet", "Puppet", "5-Pin Puppet Mesh, Live Record, Null Rig & Follow-Through (T11-T13)"),
                 ("3d", "3D & Cam", "Classic/PBR 3D, .GLB Import, 1/2-Node DoF Cam & IBL Lights (T14-T16)"),
@@ -172,18 +166,18 @@ pub fn draw_puppet_and_3d_inspector(
 fn draw_puppet_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str, view_obj: Option<&Value>) {
     let has_char = !cid.is_empty();
     let pin_cnt = view_obj.and_then(|v| v["pins"].as_array()).map_or(0, Vec::len);
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         ui.label(RichText::new("360° Joint & Bone Dials").size(11.5).strong());
-        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            status_pill(ui, ctx.pal, &format!("{pin_cnt} pins"), ctx.pal.accent_emerald);
-        });
+        status_pill(ui, ctx.pal, &format!("{pin_cnt} pins"), ctx.pal.accent_emerald);
     });
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
         rotary_dial(ui, ctx.reg, ctx.pal, ScalarSpec::new("anim-dial-rot", "Rotate", -180.0..=180.0, "°", ctx.pal.accent_emerald), &mut ctx.state.animation.bone_rotation);
         rotary_dial(ui, ctx.reg, ctx.pal, ScalarSpec::new("anim-dial-jaw", "Jaw", 0.0..=45.0, "°", ctx.pal.accent_amber), &mut ctx.state.animation.jaw_open_deg);
         rotary_dial(ui, ctx.reg, ctx.pal, ScalarSpec::new("anim-dial-wing", "Wing", -60.0..=60.0, "°", ctx.pal.accent_sky), &mut ctx.state.animation.wing_bank_deg);
     });
     ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
         for part in ["head", "torso", "wing_l", "wing_r", "jaw", "tail"] {
             let id = format!("anim-part-{part}");
             let sel = ctx.state.animation.selected_part == part;
@@ -196,7 +190,7 @@ fn draw_puppet_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str, view_obj: Opti
         ui,
         ctx.reg,
         ctx.pal,
-        BtnSpec::new("anim-key-pose", "key", "Key Joint Pose", "Write bone transform keyframe at scrub time").enabled(has_char),
+        BtnSpec::new("anim-key-pose", "pin", "Key Joint Pose", "Write bone transform keyframe at scrub time").enabled(has_char),
     )
     .clicked()
     {
@@ -216,6 +210,8 @@ fn draw_puppet_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str, view_obj: Opti
     ui.separator();
     ui.label(RichText::new("5-Pin Puppet Mesh (T11)").size(11.5).strong().color(ctx.pal.accent_emerald));
     ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
+        ui.spacing_mut().item_spacing.y = 4.0;
         for (kind, lbl) in [
             ("position", "Position"),
             ("advanced", "Advanced"),
@@ -231,6 +227,7 @@ fn draw_puppet_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str, view_obj: Opti
         }
     });
     ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("anim-pin-add", "pin", "Add Pin", "character.puppet.addPin").primary().enabled(has_char)).clicked() {
             ctx.exec(
                 "character.puppet.addPin",
@@ -271,11 +268,11 @@ fn draw_puppet_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str, view_obj: Opti
         ctx.reg,
         ctx.pal,
         "anim-puppet-rec-live",
-        "Arm Live Stage Drag Recording",
+        "Arm Live Stage Drag",
         &mut ctx.state.animation.puppet_record_live,
         ctx.pal.danger,
     );
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         pill_toggle(ui, ctx.reg, ctx.pal, "anim-puppet-draft", "Draft Deform", &mut ctx.state.animation.puppet_draft_deform, ctx.pal.accent_sky);
         pill_toggle(ui, ctx.reg, ctx.pal, "anim-puppet-mesh", "Mesh", &mut ctx.state.animation.puppet_show_mesh, ctx.pal.accent_emerald);
     });
@@ -290,10 +287,11 @@ fn draw_puppet_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str, view_obj: Opti
         ui,
         ctx.reg,
         ctx.pal,
-        ScalarSpec::new("anim-follow-delay", "Follow-Through Delay", 0.01..=0.35, "s", ctx.pal.accent_sky),
+        ScalarSpec::new("anim-follow-delay", "Follow Delay", 0.01..=0.35, "s", ctx.pal.accent_sky),
         &mut ctx.state.animation.follow_delay,
     );
     ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-nulls-follow", "Pins → Nulls", "paths.pointsFollowNulls (T13)").enabled(has_char)).clicked() {
             ctx.exec(
                 "character.puppet.nullRig",
@@ -308,7 +306,7 @@ fn draw_puppet_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str, view_obj: Opti
                 Some("Attached follower Nulls to Puppet pins"),
             );
         }
-        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-follow-apply", "Secondary Follow", "character.puppet.follow (T13)").enabled(has_char)).clicked() {
+        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-follow-apply", "Cloth Follow", "character.puppet.follow (T13)").enabled(has_char)).clicked() {
             ctx.exec(
                 "character.puppet.follow",
                 json!({"character": cid, "part": ctx.state.animation.selected_part, "delay": ctx.state.animation.follow_delay}),
@@ -320,7 +318,8 @@ fn draw_puppet_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str, view_obj: Opti
 
 fn draw_3d_camera_and_lights_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str) {
     ui.label(RichText::new("3D Renderer & Models (T14)").size(11.5).strong().color(ctx.pal.accent_sky));
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
         for (rmode, lbl) in [("classic3d", "Classic 3D"), ("advanced3d", "Advanced 3D PBR")] {
             let id = format!("anim-renderer-{rmode}");
             let sel = ctx.state.animation.renderer_mode == rmode;
@@ -335,11 +334,12 @@ fn draw_3d_camera_and_lights_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str) 
         }
     });
     ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
         if action_button(
             ui,
             ctx.reg,
             ctx.pal,
-            BtnSpec::new("anim-import-3d", "folder", "+ .GLB/.OBJ/.FBX/.STL", "Import 3D model via layer.newModel (T14)").primary(),
+            BtnSpec::new("anim-import-3d", "folder", "+ 3D Model", "Import .glb/.gltf/.obj/.fbx/.stl via layer.newModel (T14)").primary(),
         )
         .clicked()
         {
@@ -367,12 +367,13 @@ fn draw_3d_camera_and_lights_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str) 
 
     ui.separator();
     ui.label(RichText::new("DoF Camera & 4-View (T15)").size(11.5).strong().color(ctx.pal.accent_emerald));
-    pill_toggle(ui, ctx.reg, ctx.pal, "anim-cam-2node", "Two-Node Point-of-Interest Camera", &mut ctx.state.animation.cam_two_node, ctx.pal.accent_emerald);
-    pill_toggle(ui, ctx.reg, ctx.pal, "anim-cam-dof", "Enable Depth of Field", &mut ctx.state.animation.cam_dof, ctx.pal.accent_sky);
+    pill_toggle(ui, ctx.reg, ctx.pal, "anim-cam-2node", "Two-Node POI Camera", &mut ctx.state.animation.cam_two_node, ctx.pal.accent_emerald);
+    pill_toggle(ui, ctx.reg, ctx.pal, "anim-cam-dof", "Depth of Field", &mut ctx.state.animation.cam_dof, ctx.pal.accent_sky);
     ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("anim-cam-focal", "Focal Length", 15.0..=200.0, "mm", ctx.pal.accent_emerald), &mut ctx.state.animation.cam_focal_mm);
     ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("anim-cam-ap", "Aperture", 0.0..=120.0, "px", ctx.pal.accent_amber), &mut ctx.state.animation.cam_aperture_px);
     ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("anim-cam-focus", "Focus Distance", 100.0..=3000.0, "px", ctx.pal.accent_sky), &mut ctx.state.animation.cam_focus_dist);
     ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("anim-add-camera", "plus", "Add Camera", "Create 3D camera via layer.newCamera").primary()).clicked() {
             let kind = if ctx.state.animation.cam_two_node { "twoNode" } else { "oneNode" };
             ctx.exec(
@@ -402,6 +403,7 @@ fn draw_3d_camera_and_lights_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str) 
         }
     });
     ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
         for vw in ["active", "front", "top", "left"] {
             let id = format!("anim-view-{vw}");
             let sel = ctx.state.animation.view_layout == vw;
@@ -416,6 +418,7 @@ fn draw_3d_camera_and_lights_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str) 
     ui.label(RichText::new("Lights & Environment IBL (T16)").size(11.5).strong().color(ctx.pal.accent_amber));
     pill_toggle(ui, ctx.reg, ctx.pal, "anim-light-shadows", "Cast 3D Shadows", &mut ctx.state.animation.light_casts_shadows, ctx.pal.accent_amber);
     ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
         for lkind in ["Parallel", "Spot", "Point", "Ambient", "Environment"] {
             let id = format!("anim-light-{lkind}");
             let sel = ctx.state.animation.light_kind.eq_ignore_ascii_case(lkind);
@@ -439,6 +442,7 @@ fn draw_3d_camera_and_lights_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str) 
 fn draw_roto_and_expr_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str) {
     ui.label(RichText::new("Roto Brush 3.0 & Object Matte (T17)").size(11.5).strong().color(ctx.pal.accent_emerald));
     ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
         for (mid, lbl) in [
             ("classical", "Classical"),
             ("mobilesam", "MobileSAM"),
@@ -457,6 +461,7 @@ fn draw_roto_and_expr_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str) {
         }
     });
     ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
         for (sk, lbl) in [("fg", "+ FG Stroke"), ("bg", "- BG Stroke"), ("refine", "Refine Edge")] {
             let id = format!("anim-roto-stroke-{sk}");
             let sel = ctx.state.animation.roto_stroke_kind == sk;
@@ -476,8 +481,9 @@ fn draw_roto_and_expr_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str) {
         }
     });
     ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("anim-roto-feather", "Matte Feather", 0.0..=25.0, "px", ctx.pal.accent_emerald), &mut ctx.state.animation.sam2_feather);
-    pill_toggle(ui, ctx.reg, ctx.pal, "anim-roto-decontam", "Decontaminate Edge Colors", &mut ctx.state.animation.sam2_decontaminate, ctx.pal.accent_sky);
+    pill_toggle(ui, ctx.reg, ctx.pal, "anim-roto-decontam", "Decontaminate Edges", &mut ctx.state.animation.sam2_decontaminate, ctx.pal.accent_sky);
     ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-obj-matte", "Object Matte", "Run one-click objectMatte.apply").primary()).clicked() {
             ctx.exec(
                 "effect.exec",
@@ -510,9 +516,10 @@ fn draw_roto_and_expr_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str) {
         "Rig JS Expression",
         &mut ctx.state.animation.expr_code,
         "loopOut(\"cycle\")",
-        ui.available_width().max(150.0),
+        (ui.available_width() - 4.0).max(140.0),
     );
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-expr-apply", "Apply Expr", "prop.setExpression").primary()).clicked() {
             ctx.exec(
                 "effect.exec",
@@ -532,208 +539,5 @@ fn draw_roto_and_expr_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str) {
                 Some("Linked property via Pick-Whip"),
             );
         }
-    });
-}
-
-/// Bottom dock (`[Theatre] [Keys / Props] [Graph Editor]`) covering `T19` & `T20`.
-pub fn draw_theatre_dock(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str) {
-    let dock = fill_card(ui, ctx.pal, true, |ui| {
-        ui.horizontal(|ui| {
-            for (tid, lbl, tip) in [
-                ("theatre", "Theatre", "Action clips & V2 timeline placement"),
-                ("keys", "Keys / Props", "Property reveal filter A/P/S/R/T/M/E/U/EE/UU & Separate XY (T20)"),
-                ("curves", "Graph Editor", "Draggable Cubic Bezier Value & Speed Curve Editor (T19)"),
-            ] {
-                let id = format!("anim-dock-{tid}");
-                let sel = ctx.state.animation.dock_tab == tid;
-                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, lbl, tip).selected(sel)).clicked() {
-                    ctx.state.animation.dock_tab = tid.into();
-                }
-            }
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                if action_button(
-                    ui,
-                    ctx.reg,
-                    ctx.pal,
-                    BtnSpec::new("anim-place-v2", "film", "Place on V2", "Place animated clip onto FilmCraft V2").primary().enabled(!cid.is_empty()),
-                )
-                .clicked()
-                {
-                    ctx.exec(
-                        "character.shot",
-                        json!({
-                            "character": cid,
-                            "sprite": ctx.state.animation.selected_action,
-                            "from": ctx.state.animation.place_start_sec,
-                            "duration": ctx.state.animation.place_duration_sec,
-                            "studio": true,
-                        }),
-                        Some("Placed character clip onto FilmCraft V2"),
-                    );
-                }
-            });
-        });
-
-        match ctx.state.animation.dock_tab.as_str() {
-            "keys" => draw_property_reveal_dock(ui, ctx, cid),
-            "curves" => draw_bezier_graph_editor_dock(ui, ctx, cid),
-            _ => draw_theatre_clips_row(ui, ctx, cid),
-        }
-    });
-    ctx.reg.record("anim-theatre-dock", "Animation Theatre Dock", &dock.response, None);
-}
-
-fn draw_theatre_clips_row(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str) {
-    ui.horizontal_wrapped(|ui| {
-        ui.label(RichText::new("CLIPS:").monospace().size(10.0).color(ctx.pal.text_muted));
-        for clip in ["idle", "fly", "sing", "jump", "wave", "rest"] {
-            let id = format!("theatre-clip-{clip}");
-            let sel = ctx.state.animation.selected_action == clip;
-            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, clip, "Trigger action clip").selected(sel)).clicked() {
-                ctx.state.animation.selected_action = clip.into();
-            }
-        }
-        let scrub_w = (ui.available_width() - 220.0).max(120.0);
-        ui.allocate_ui_with_layout(Vec2::new(scrub_w, 30.0), Layout::top_down(Align::Min), |ui| {
-            ring_slider_h(
-                ui,
-                ctx.reg,
-                ctx.pal,
-                ScalarSpec::new("anim-scrub", "Scrub", 0.0..=ctx.state.animation.action_duration.max(4.0), "s", ctx.pal.accent_emerald),
-                &mut ctx.state.animation.scrub_seconds,
-            );
-        });
-        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("theatre-save-action", "Save Action", "Persist custom action clip").enabled(!cid.is_empty())).clicked() {
-            ctx.exec(
-                "character.action",
-                json!({"character": cid, "action": ctx.state.animation.selected_action, "duration": ctx.state.animation.action_duration}),
-                Some("Saved character action cycle"),
-            );
-        }
-    });
-}
-
-fn draw_property_reveal_dock(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str) {
-    ui.horizontal_wrapped(|ui| {
-        ui.label(RichText::new("Reveal (T20):").monospace().size(10.0).color(ctx.pal.text_muted));
-        for prop in ["A", "P", "S", "R", "T", "M", "E", "U", "EE", "UU"] {
-            let id = format!("anim-prop-{prop}");
-            let sel = ctx.state.animation.prop_filter == prop;
-            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, prop, "Reveal timeline property").selected(sel)).clicked() {
-                ctx.state.animation.prop_filter = prop.into();
-                let cmd = format!("timeline.reveal.{}", prop.to_ascii_lowercase());
-                ctx.exec("effect.exec", json!({"domain": "character", "character": cid, "command": cmd, "params": {}}), None);
-            }
-        }
-        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-sep-xyz", "Separate XY", "prop.separateDimensions")).clicked() {
-            ctx.exec(
-                "effect.exec",
-                json!({"domain": "character", "character": cid, "command": "prop.separateDimensions", "params": {"property": "transform.position", "separate": true}}),
-                Some("Separated X / Y / Z position dimensions"),
-            );
-        }
-        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-prev-key", "◀ Prev", "time.previousKey")).clicked() {
-            ctx.exec("effect.exec", json!({"domain": "character", "character": cid, "command": "time.previousKey", "params": {}}), None);
-        }
-        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-add-key", "◆ Key", "prop.addKey").primary()).clicked() {
-            ctx.exec("effect.exec", json!({"domain": "character", "character": cid, "command": "prop.addKey", "params": {"time": ctx.state.animation.scrub_seconds}}), Some("Inserted keyframe"));
-        }
-        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-next-key", "Next ▶", "time.nextKey")).clicked() {
-            ctx.exec("effect.exec", json!({"domain": "character", "character": cid, "command": "time.nextKey", "params": {}}), None);
-        }
-    });
-}
-
-fn draw_bezier_graph_editor_dock(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str) {
-    ui.horizontal(|ui| {
-        let graph_w = (ui.available_width() - 360.0).clamp(150.0, 340.0);
-        let (rect, resp) = ui.allocate_exact_size(Vec2::new(graph_w, 82.0), Sense::click_and_drag());
-        ui.painter().rect(
-            rect,
-            CornerRadius::same(6),
-            Color32::from_rgb(0x0b, 0x0f, 0x16),
-            Stroke::new(1.0, ctx.pal.border),
-            StrokeKind::Inside,
-        );
-        let pad = rect.shrink2(Vec2::new(10.0, 8.0));
-        let p0 = Pos2::new(pad.min.x, pad.max.y);
-        let p3 = Pos2::new(pad.max.x, pad.min.y);
-        let mut h_out = ctx.state.animation.curve_handle_out;
-        let mut h_in = ctx.state.animation.curve_handle_in;
-        let p1 = Pos2::new(pad.min.x + h_out[0] * pad.width(), pad.max.y - h_out[1] * pad.height());
-        let p2 = Pos2::new(pad.min.x + h_in[0] * pad.width(), pad.max.y - h_in[1] * pad.height());
-
-        if resp.dragged()
-            && let Some(pos) = resp.interact_pointer_pos()
-        {
-            let nx = ((pos.x - pad.min.x) / pad.width().max(1.0)).clamp(0.05, 0.95);
-            let ny = (1.0 - (pos.y - pad.min.y) / pad.height().max(1.0)).clamp(0.0, 1.0);
-            if pos.distance(p1) <= pos.distance(p2) {
-                h_out = [nx, ny];
-                ctx.state.animation.curve_handle_out = h_out;
-            } else {
-                h_in = [nx, ny];
-                ctx.state.animation.curve_handle_in = h_in;
-            }
-        }
-        if resp.drag_stopped() {
-            ctx.exec(
-                "effect.exec",
-                json!({
-                    "domain": "character",
-                    "character": cid,
-                    "command": "keys.velocity",
-                    "params": {
-                        "outInfluence": (h_out[0] * 100.0).clamp(1.0, 100.0),
-                        "inInfluence": ((1.0 - h_in[0]) * 100.0).clamp(1.0, 100.0),
-                        "timeBase": "comp",
-                    }
-                }),
-                Some("Updated Cubic Bezier keyframe velocity handles"),
-            );
-        }
-
-        ui.painter().line_segment([p0, p1], Stroke::new(1.0, ctx.pal.accent_amber));
-        ui.painter().line_segment([p3, p2], Stroke::new(1.0, ctx.pal.accent_sky));
-        paint_cubic_bezier(ui, [p0, p1, p2, p3], Stroke::new(2.2, ctx.pal.accent_emerald));
-        ui.painter().circle_filled(p1, 4.4, ctx.pal.accent_amber);
-        ui.painter().circle_filled(p2, 4.4, ctx.pal.accent_sky);
-        ui.painter().text(Pos2::new(pad.min.x + 2.0, pad.min.y + 2.0), Align2::LEFT_TOP, "Value / Speed Bezier", FontId::monospace(8.5), ctx.pal.text_muted);
-        ctx.reg.record("anim-bezier-graph", "Graph Editor Canvas", &resp, None);
-
-        ui.vertical(|ui| {
-            ui.horizontal_wrapped(|ui| {
-                for (interp, lbl) in [
-                    ("linear", "Linear"),
-                    ("bezier", "Bezier"),
-                    ("continuousBezier", "Cont."),
-                    ("hold", "Hold"),
-                    ("roving", "Roving"),
-                ] {
-                    let id = format!("anim-interp-{interp}");
-                    let sel = ctx.state.animation.key_interp == interp;
-                    if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, lbl, "keys.setInterpolation").selected(sel)).clicked() {
-                        ctx.state.animation.key_interp = interp.into();
-                        ctx.exec(
-                            "effect.exec",
-                            json!({"domain": "character", "character": cid, "command": "keys.setInterpolation", "params": {"inType": interp, "outType": interp}}),
-                            Some("Set keyframe interpolation"),
-                        );
-                    }
-                }
-                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-easy-ease-f9", "Easy Ease F9", "keys.easyEase").primary()).clicked() {
-                    ctx.state.animation.curve_handle_out = [0.33, 0.0];
-                    ctx.state.animation.curve_handle_in = [0.67, 1.0];
-                    ctx.exec("effect.exec", json!({"domain": "character", "character": cid, "command": "keys.easyEase", "params": {"mode": "both"}}), Some("Applied Easy Ease (F9)"));
-                }
-            });
-            ring_slider_h(
-                ui,
-                ctx.reg,
-                ctx.pal,
-                ScalarSpec::new("anim-key-vel", "Influence", 1.0..=100.0, "%", ctx.pal.accent_amber),
-                &mut ctx.state.animation.key_velocity_pct,
-            );
-        });
     });
 }

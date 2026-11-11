@@ -101,12 +101,12 @@ fn classify_file(path: &Path) -> Option<FileClass> {
         }),
         "pdf" => Some(FileClass {
             group: "design_pdf",
-            group_label: "DesignCraft (.designcraft)",
+            group_label: "PDFCraft Storyboard (.pdf)",
             group_order: 1,
-            craft_priority: 3,
+            craft_priority: 1,
             badge: "PDF",
-            open_label: "Open in DesignCraft",
-            is_craft_project: false,
+            open_label: "Open in PDFCraft",
+            is_craft_project: true,
         }),
         "fcproj" => Some(FileClass {
             group: "filmcraft",

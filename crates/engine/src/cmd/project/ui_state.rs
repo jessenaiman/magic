@@ -47,7 +47,7 @@ fn build_drawer_model(assets_list: &[Value], characters: &[Value]) -> Value {
                 assets_list
                     .iter()
                     .find(|a| a["role"] == "character" && (a["id"].as_str() == Some(cid) || a["name"].as_str() == Some(name)))
-                    .and_then(|a| a["path"].as_str())
+                    .and_then(|a| a.get("project_image").or_else(|| a.get("path")).and_then(Value::as_str))
             });
         let matched_asset_id = assets_list
             .iter()
@@ -83,7 +83,9 @@ fn build_drawer_model(assets_list: &[Value], characters: &[Value]) -> Value {
             "name": a["name"].as_str().unwrap_or(aid),
             "role": "character",
             "badge": kind_badge(a["kind"].as_str().unwrap_or("image")),
-            "thumb": a["path"],
+            "thumb": a.get("project_image").unwrap_or(&a["path"]),
+            "linked_file": a["linked_file"],
+            "craft_app": a["craft_app"],
             "ready": false,
         }));
     }
@@ -99,7 +101,9 @@ fn build_drawer_model(assets_list: &[Value], characters: &[Value]) -> Value {
                 "name": a["name"].as_str().unwrap_or(aid),
                 "role": "background",
                 "badge": "Plate",
-                "thumb": a["path"],
+                "thumb": a.get("project_image").unwrap_or(&a["path"]),
+            "linked_file": a["linked_file"],
+            "craft_app": a["craft_app"],
                 "ready": true,
             }))
         })

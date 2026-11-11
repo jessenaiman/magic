@@ -137,8 +137,8 @@ fn discover_project_craft_badges(dir: &Path, doc: &Value) -> Vec<&'static str> {
     if has_fcproj {
         badges.push(".fcproj");
     }
-    if dir.join("storyboard.designcraft").is_file() {
-        badges.push(".designcraft");
+    if dir.join("storyboard.pdf").is_file() || dir.join("storyboard-template.pdf").is_file() {
+        badges.push(".pdf");
     }
     let has_ecproj = dir.join("lettering/lyrics.ecproj").is_file()
         || dir.join("motion/actions.ecproj").is_file()

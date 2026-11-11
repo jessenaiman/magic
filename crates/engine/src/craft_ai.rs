@@ -574,13 +574,25 @@ pub fn draw_via_scribbles(prompt: &str, references: &[PathBuf], out: &Path) -> R
 /// `image.generate`: generates an image via `storytold/craft-ai-integrations` (`scribbles` role)
 /// and runs optional `PhotoCraft` background isolation + `VectorCraft` silhouette tracing.
 pub fn cmd_image_generate(s: &mut Session, p: &Value) -> Result<Value> {
-    let prompt = p["prompt"]
+    let raw_prompt = p["prompt"]
         .as_str()
         .map(str::trim)
         .filter(|v| !v.is_empty())
         .ok_or_else(|| bad("image.generate requires a nonempty `prompt`"))?;
 
-    let references: Vec<PathBuf> = match p.get("references").or_else(|| p.get("reference")) {
+    let use_sb = p["use_storyboard_references"].as_bool().unwrap_or(true);
+    let (sb_style, sb_refs) = if use_sb {
+        crate::cmd::storyboard::storyboard_media_references(s)
+    } else {
+        (None, Vec::new())
+    };
+    let effective_prompt = match sb_style.as_deref().filter(|st| !raw_prompt.contains(*st)) {
+        Some(st) => format!("{st} | {raw_prompt}"),
+        None => raw_prompt.to_owned(),
+    };
+    let prompt = effective_prompt.as_str();
+
+    let explicit_refs: Vec<PathBuf> = match p.get("references").or_else(|| p.get("reference")) {
         None => Vec::new(),
         Some(Value::String(one)) if !one.trim().is_empty() => vec![crate::workspace::resolve_workspace_path(s, one)],
         Some(Value::Array(arr)) => arr
@@ -591,6 +603,7 @@ pub fn cmd_image_generate(s: &mut Session, p: &Value) -> Result<Value> {
             .collect(),
         _ => Vec::new(),
     };
+    let references: Vec<PathBuf> = if explicit_refs.is_empty() { sb_refs } else { explicit_refs };
     if references.len() > MAX_REFERENCES as usize {
         return Err(bad("references may contain at most 5 images"));
     }
@@ -644,5 +657,6 @@ pub fn cmd_image_generate(s: &mut Session, p: &Value) -> Result<Value> {
         "width": width,
         "height": height,
         "asset_id": attached_id,
+        "storyboard_references": references,
     }))
 }

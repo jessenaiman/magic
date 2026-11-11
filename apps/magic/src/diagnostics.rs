@@ -230,11 +230,15 @@ fn hydrate_open_project_caches(session: &mut Session, ui_state: &mut UiShellStat
 }
 
 pub fn refresh_cached_state(session: &mut Session, ui_state: &mut UiShellState, initial: bool) {
+    let prev_proj = ui_state.project_path.clone();
     if let Ok(snap) = session.execute("project.snapshot", json!({})) {
         ui_state.project_path = snap["project"].as_str().map(PathBuf::from);
         ui_state.cache.snapshot = snap;
     } else {
         ui_state.project_path = session.project_path.clone();
+    }
+    if ui_state.project_path.is_some() && (prev_proj != ui_state.project_path || ui_state.studio.title_text.is_empty()) {
+        ui_state.studio.title_text = ui_state.project_name();
     }
     if initial {
         if let Ok(cat) = session.execute("project.catalog", json!({})) {

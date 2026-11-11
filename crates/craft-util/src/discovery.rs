@@ -151,7 +151,30 @@ pub fn detect_craft_launcher() -> Option<PathBuf> {
     None
 }
 
+
+/// Return `$HOME/.pdfcraft-control.json` (`%USERPROFILE%\.pdfcraft-control.json` on Windows),
+/// never a shared directory like `/tmp`, matching PdfCraft's mode-0600 control-file security rule.
+pub fn pdfcraft_control_file() -> Option<PathBuf> {
+    std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .map(|h| PathBuf::from(h).join(".pdfcraft-control.json"))
+}
+
 pub fn control_addr(target: CraftTarget, configured_port: Option<u16>) -> SocketAddr {
+    if target == CraftTarget::Pdf
+        && let Some(ctrl_path) = pdfcraft_control_file().filter(|p| p.is_file())
+        && let Ok(raw) = std::fs::read_to_string(ctrl_path)
+        && let Ok(doc) = serde_json::from_str::<Value>(&raw)
+    {
+        if let Some(p) = doc["port"].as_u64().and_then(|n| u16::try_from(n).ok()).filter(|&n| n > 0) {
+            return SocketAddr::from(([127, 0, 0, 1], p));
+        }
+        if let Some(addr_str) = doc["addr"].as_str().or_else(|| doc["address"].as_str())
+            && let Ok(parsed) = addr_str.parse::<SocketAddr>()
+        {
+            return parsed;
+        }
+    }
     if let Ok(raw) = std::env::var(target.port_env())
         && let Ok(port) = raw.trim().parse::<u16>()
         && port > 0
@@ -170,6 +193,9 @@ fn config_base_dir() -> Option<PathBuf> {
 }
 
 pub fn token_file_path(target: CraftTarget, port: u16) -> Option<PathBuf> {
+    if target == CraftTarget::Pdf {
+        return pdfcraft_control_file();
+    }
     if target == CraftTarget::Photo
         && let Ok(custom) = std::env::var("PHOTOCRAFT_CONTROL_TOKEN_FILE")
         && !custom.trim().is_empty()

@@ -284,13 +284,38 @@ fn draw_dynamic_link_config_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>, ec_path: &st
         .get("used_in_count")
         .and_then(Value::as_u64)
         .unwrap_or(0);
+    let baked = ctx
+        .state
+        .cache
+        .ec_comps
+        .get("baked")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let ec_live = ctx
+        .state
+        .cache
+        .bridge_status
+        .pointer("/effectcraft/tcp_listening")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
 
     ui.add_space(4.0);
     ctx.pal.inset_frame().show(ui, |ui| {
         ui.set_min_width(ui.available_width());
         ui.vertical(|ui| {
             ui.horizontal_wrapped(|ui| {
-                status_pill(ui, ctx.pal, "EC ↔ FC Dynamic Link", ctx.pal.accent_emerald);
+                status_pill(
+                    ui,
+                    ctx.pal,
+                    if baked { "Baked (.mov)" } else { "Dynamic Link" },
+                    if baked { ctx.pal.accent_amber } else { ctx.pal.accent_emerald },
+                );
+                status_pill(
+                    ui,
+                    ctx.pal,
+                    if ec_live { "EC :9877 Live" } else { "EC Disconnected (CLI)" },
+                    if ec_live { ctx.pal.accent_emerald } else { ctx.pal.text_muted },
+                );
                 ui.label(
                     RichText::new(ec_path.rsplit('/').next().unwrap_or(ec_path))
                         .monospace()
@@ -346,7 +371,7 @@ fn draw_dynamic_link_config_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>, ec_path: &st
                         ctx.state.project.link_alpha_codec = codec.into();
                     }
                 }
-                ui.label(RichText::new("FPS (254B ticks/s):").size(10.5).color(ctx.pal.text_muted));
+                ui.label(RichText::new("FPS:").size(10.5).color(ctx.pal.text_muted));
                 for fps in ["23.976", "24", "29.97", "59.94", "60"] {
                     let id = format!("pf-link-fps-{fps}");
                     let sel = ctx.state.project.link_fps_preset == fps;
@@ -420,35 +445,61 @@ fn draw_dynamic_link_config_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>, ec_path: &st
     });
 }
 
-/// Left-rail `Offline Media & Render-Source Protection` card (`T08`).
+/// Left-rail `Offline Media & Render-Source Protection` card (`T08` + live `:9876`/`:9877` bridge state).
 pub fn draw_offline_and_source_guard_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     let pre = &ctx.state.cache.bridge_preflight;
     let all_online = pre["all_online"].as_bool().unwrap_or(true);
     let protected_ok = pre["source_overwrite_blocked"].as_bool().unwrap_or(true);
     let ec_missing = pre["ecproj_missing_count"].as_u64().unwrap_or(0);
+    let fc_live = ctx
+        .state
+        .cache
+        .bridge_status
+        .pointer("/filmcraft/tcp_listening")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let ec_live = ctx
+        .state
+        .cache
+        .bridge_status
+        .pointer("/effectcraft/tcp_listening")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
 
     fill_card(ui, ctx.pal, false, |ui| {
-        ui.horizontal(|ui| {
-            ui.label(RichText::new("Media & Source Guard").size(11.5).strong().color(ctx.pal.accent_sky));
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                status_pill(
-                    ui,
-                    ctx.pal,
-                    if all_online && protected_ok { "Online · Safe" } else { "Attention" },
-                    if all_online && protected_ok { ctx.pal.accent_emerald } else { ctx.pal.accent_amber },
-                );
-            });
+        ui.horizontal_wrapped(|ui| {
+            ui.label(RichText::new("Media & Bridge Status").size(11.5).strong().color(ctx.pal.accent_sky));
+            status_pill(
+                ui,
+                ctx.pal,
+                if all_online && protected_ok { "Media Online" } else { "Offline Media" },
+                if all_online && protected_ok { ctx.pal.accent_emerald } else { ctx.pal.danger },
+            );
+        });
+        ui.horizontal_wrapped(|ui| {
+            status_pill(
+                ui,
+                ctx.pal,
+                if fc_live { "FC :9876 Live" } else { "FC Disconnected" },
+                if fc_live { ctx.pal.accent_emerald } else { ctx.pal.text_muted },
+            );
+            status_pill(
+                ui,
+                ctx.pal,
+                if ec_live { "EC :9877 Live" } else { "EC Disconnected" },
+                if ec_live { ctx.pal.accent_emerald } else { ctx.pal.text_muted },
+            );
         });
         ui.label(
             RichText::new(format!(
-                "footage.check: {ec_missing} missing · file.checkOutput guard: {}",
+                "Missing footage: {ec_missing} · Output guard: {}",
                 if protected_ok { "armed" } else { "conflict" }
             ))
             .monospace()
             .size(9.5)
             .color(ctx.pal.text_muted),
         );
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             if action_button(
                 ui,
                 ctx.reg,
@@ -458,6 +509,7 @@ pub fn draw_offline_and_source_guard_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             .clicked()
             {
                 ctx.exec("bridge.preflight", json!({"action": "check"}), Some("Checked FilmCraft & EffectCraft media status"));
+                ctx.exec("bridge.status", json!({"ensure_tokens": true}), None);
             }
             if action_button(
                 ui,

@@ -5,11 +5,12 @@
 //! - FilmCraft (`:9876`, `FILMCRAFT_CONTROL_TOKEN`): <https://github.com/storytold/filmcraft/blob/main/docs/control-protocol.md>
 //! - EffectCraft (`:9877`, `mcp --autosave`): <https://github.com/storytold/effectcraft/blob/main/docs/control-protocol.md>
 //! - DesignCraft (`:7979`): <https://github.com/storytold/designcraft/blob/main/docs/control-protocol.md>
+//! - PDFCraft (`:7985`): <https://github.com/storytold/pdfcraft>
+//! - DeckCraft (`:7990`): <https://github.com/storytold/deckcraft>
 //! - PhotoCraft (`:9879`): <https://github.com/storytold/photocraft/blob/main/docs/control-protocol.md>
 //! - VectorCraft (`:9880`): <https://github.com/storytold/vectorcraft/blob/main/docs/control-protocol.md>
 //! - AniCraft (early alpha, CLI-only in Magic): <https://github.com/storytold/AniCraft>
 //! - TextureCraft (`:9882`): <https://github.com/storytold/texturecraft/blob/main/AGENTS.md>
-//! - DeckCraft (`:7990`): <https://github.com/storytold/deckcraft>
 
 use std::path::Path;
 
@@ -36,18 +37,20 @@ pub enum CraftTarget {
     Effect,
     Vector,
     Design,
+    Pdf,
     Deck,
     Ani,
     Texture,
 }
 
 impl CraftTarget {
-    pub const ALL: [CraftTarget; 8] = [
+    pub const ALL: [CraftTarget; 9] = [
         CraftTarget::Film,
         CraftTarget::Photo,
         CraftTarget::Effect,
         CraftTarget::Vector,
         CraftTarget::Design,
+        CraftTarget::Pdf,
         CraftTarget::Deck,
         CraftTarget::Ani,
         CraftTarget::Texture,
@@ -60,6 +63,7 @@ impl CraftTarget {
             Self::Effect => "effectcraft",
             Self::Vector => "vectorcraft",
             Self::Design => "designcraft",
+            Self::Pdf => "pdfcraft",
             Self::Deck => "deckcraft",
             Self::Ani => "anicraft",
             Self::Texture => "texturecraft",
@@ -78,17 +82,13 @@ impl CraftTarget {
             Self::Effect => "effectcraft-cli",
             Self::Vector => "vectorcraft-cli",
             Self::Design => "designcraft-cli",
+            Self::Pdf => "pdfcraft-cli",
             Self::Deck => "deckcraft-cli",
             Self::Ani => "anicraft-cli",
             Self::Texture => "texturecraft-cli",
         }
     }
 
-    /// Safety boundary: `AniCraft` is in early alpha (`storytold/AniCraft`), so Magic never opens
-    /// or attaches to its desktop GUI window. All live Studio UI components and window previews run
-    /// through `EffectCraft` and `FilmCraft` (plus `DesignCraft` / `PhotoCraft` / `VectorCraft`),
-    /// while `AniCraft` is invoked strictly headlessly via `anicraft-cli` (`info`, `commands`,
-    /// `exec`, `serve`, `render`, `render-seq`, `gif`, `mcp`).
     pub const fn allows_live_ui(self) -> bool {
         !matches!(self, Self::Ani)
     }
@@ -96,7 +96,12 @@ impl CraftTarget {
     pub fn from_name(raw: &str) -> Option<Self> {
         let key = raw.trim().to_ascii_lowercase();
         let base = key.strip_suffix("-cli").unwrap_or(&key);
-        Self::ALL.into_iter().find(|t| t.name() == base)
+        match base {
+            "pdf" => Some(Self::Pdf),
+            "deck" | "pptx" => Some(Self::Deck),
+            "design" => Some(Self::Design),
+            _ => Self::ALL.into_iter().find(|t| t.name() == base),
+        }
     }
 
     pub fn from_path(path: &Path) -> Option<Self> {
@@ -117,6 +122,7 @@ impl CraftTarget {
             "ecproj" | "ectemplate" => Some(Self::Effect),
             "vectorcraft" | "vcraft" | "drawcraft" | "svg" => Some(Self::Vector),
             "designcraft" | "idml" => Some(Self::Design),
+            "pdf" => Some(Self::Pdf),
             "deckcraft" | "pptx" => Some(Self::Deck),
             "anicraft" | "ani" | "fla" | "xfl" => Some(Self::Ani),
             "tcraft" => Some(Self::Texture),
@@ -124,18 +130,17 @@ impl CraftTarget {
         }
     }
 
-    /// Canonical upstream `--control` ports (`FilmCraft` `:9876`, `EffectCraft` `:9877`,
-    /// `DesignCraft` `:7979`, `DeckCraft` `:7990`; `Magic` itself defaults to `:9875`).
     pub const fn default_port(self) -> u16 {
         match self {
             Self::Film => 9876,
             Self::Effect => 9877,
             Self::Design => 7979,
+            Self::Pdf => 7985,
+            Self::Deck => 7990,
             Self::Photo => 9879,
             Self::Vector => 9880,
             Self::Ani => 9881,
             Self::Texture => 9882,
-            Self::Deck => 7990,
         }
     }
 
@@ -146,6 +151,7 @@ impl CraftTarget {
             Self::Effect => "EFFECTCRAFT_CONTROL_PORT",
             Self::Vector => "VECTORCRAFT_CONTROL_PORT",
             Self::Design => "DESIGNCRAFT_CONTROL_PORT",
+            Self::Pdf => "PDFCRAFT_CONTROL_PORT",
             Self::Deck => "DECKCRAFT_CONTROL_PORT",
             Self::Ani => "ANICRAFT_CONTROL_PORT",
             Self::Texture => "TEXTURECRAFT_CONTROL_PORT",
@@ -159,6 +165,7 @@ impl CraftTarget {
             Self::Effect => "EFFECTCRAFT_CONTROL_TOKEN",
             Self::Vector => "VECTORCRAFT_CONTROL_TOKEN",
             Self::Design => "DESIGNCRAFT_CONTROL_TOKEN",
+            Self::Pdf => "PDFCRAFT_CONTROL_TOKEN",
             Self::Deck => "DECKCRAFT_CONTROL_TOKEN",
             Self::Ani => "ANICRAFT_CONTROL_TOKEN",
             Self::Texture => "TEXTURECRAFT_CONTROL_TOKEN",
@@ -166,14 +173,14 @@ impl CraftTarget {
     }
 
     pub const fn optional_in_doctor(self) -> bool {
-        matches!(self, Self::Deck | Self::Ani | Self::Texture)
+        matches!(self, Self::Pdf | Self::Deck | Self::Ani | Self::Texture)
     }
 
     pub const fn auth(self) -> ControlAuth {
         match self {
             Self::Film => ControlAuth::InlineToken,
             Self::Photo | Self::Texture => ControlAuth::FirstFrameAuth,
-            Self::Design | Self::Deck | Self::Effect | Self::Vector | Self::Ani => ControlAuth::None,
+            Self::Design | Self::Pdf | Self::Deck | Self::Effect | Self::Vector | Self::Ani => ControlAuth::None,
         }
     }
 
@@ -217,7 +224,7 @@ impl CraftTarget {
         match self {
             Self::Film => self.control_envelope("project.inspect", &json!({})),
             Self::Effect => self.control_envelope("project.summary", &json!({})),
-            Self::Design | Self::Deck => self.control_envelope("document.inspect", &json!({})),
+            Self::Design | Self::Pdf | Self::Deck => self.control_envelope("document.inspect", &json!({})),
             Self::Photo => ("ui.inspect".to_string(), json!({})),
             Self::Vector => ("document.inspect".to_string(), json!({})),
             Self::Texture => ("session.inspect".to_string(), json!({})),
@@ -237,7 +244,7 @@ impl CraftTarget {
             Self::Photo => ("app.save".to_string(), json!({"path": doc})),
             Self::Vector => ("app.save".to_string(), json!({"path": doc, "wait": true})),
             Self::Effect | Self::Texture | Self::Ani => self.control_envelope("file.save", &json!({"path": doc, "confirm": true})),
-            Self::Film | Self::Design | Self::Deck => self.control_envelope("file.save", &json!({})),
+            Self::Film | Self::Design | Self::Pdf | Self::Deck => self.control_envelope("file.save", &json!({})),
         }
     }
 
@@ -246,6 +253,7 @@ impl CraftTarget {
             Self::Film => format!("filmcraft-cli --bridge 127.0.0.1:{port} exec project.inspect '{{}}'"),
             Self::Effect => format!("effectcraft-cli --bridge {port} --json exec project.summary '{{}}'"),
             Self::Design => format!("designcraft-cli app --port {port} --method document.inspect"),
+            Self::Pdf => "pdfcraft-cli ui --control ~/.pdfcraft-control.json inspect".to_string(),
             Self::Deck => format!("deckcraft-cli app --port {port} --method document.inspect"),
             Self::Photo => format!("photocraft-cli mcp --bridge 127.0.0.1:{port}"),
             Self::Vector => format!("vectorcraft-cli mcp --connect 127.0.0.1:{port}"),
@@ -259,6 +267,7 @@ impl CraftTarget {
             Self::Film => format!("filmcraft-cli mcp --bridge 127.0.0.1:{port}"),
             Self::Effect => format!("effectcraft-cli mcp --bridge {port}"),
             Self::Design => format!("designcraft-cli mcp --connect 127.0.0.1:{port}"),
+            Self::Pdf => "pdfcraft-cli mcp --compact".to_string(),
             Self::Deck => format!("deckcraft-cli mcp --connect 127.0.0.1:{port}"),
             Self::Vector => format!("vectorcraft-cli mcp --connect 127.0.0.1:{port}"),
             Self::Photo => format!("photocraft-cli mcp --bridge 127.0.0.1:{port}"),
@@ -272,6 +281,7 @@ impl CraftTarget {
             Self::Film => "filmcraft-cli mcp",
             Self::Effect => "effectcraft-cli mcp --autosave",
             Self::Design => "designcraft-cli mcp",
+            Self::Pdf => "pdfcraft-cli mcp --compact",
             Self::Deck => "deckcraft-cli mcp",
             Self::Vector => "vectorcraft-cli mcp",
             Self::Photo => "photocraft-cli mcp",

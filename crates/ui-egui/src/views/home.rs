@@ -1,11 +1,11 @@
 //! `Home` view (`#view-home`): Song Catalog grid matching `01-home-song-catalog.jpg`
 //! (`All Songs`, `In Production`, `Ready to Render`, `Character Rigs`), dashed-mint
-//! `+ START HERE — New Song Project` hero card, horizontal 35mm **filmbar** preview cards backed
-//! strictly by real rendered Craft frames, and vertical-safe multi-column card geometry.
+//! `+ START HERE — New Song Project` hero card, true `16:9` horizontal 35mm **filmbar** preview
+//! cards backed by real rendered Craft frames, and aspect-preserving character-rig cards.
 
 use egui::{
     Align, Align2, Color32, CornerRadius, FontId, Layout, Pos2, RichText, ScrollArea, Sense,
-    Stroke, StrokeKind, Ui, Vec2,
+    Stroke, Ui, Vec2,
 };
 use serde_json::{Value, json};
 
@@ -16,9 +16,8 @@ use crate::controls::{
 use crate::state::{PickerTarget, UiAction, ViewCtx, ViewMode};
 use crate::widgets::{BtnSpec, action_button, status_pill, text_input};
 
-const PROJECT_CARD_H: f32 = 308.0;
-const CHAR_CARD_W: f32 = 216.0;
-const CHAR_CARD_H: f32 = 180.0;
+const CHAR_CARD_W: f32 = 224.0;
+const CHAR_CARD_H: f32 = 228.0;
 
 enum GridSlot<'a> {
     StartHere,
@@ -46,7 +45,7 @@ pub fn show(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                 );
                 ui.add_space(6.0);
                 draw_project_grid(ui, ctx);
-                ui.add_space(14.0);
+                ui.add_space(16.0);
                 draw_character_catalog(ui, ctx);
             }
         });
@@ -74,6 +73,52 @@ fn catalog_characters(ctx: &ViewCtx<'_>) -> Vec<Value> {
         .unwrap_or_default()
 }
 
+fn humanize_slug(raw: &str) -> String {
+    if raw.contains(' ') {
+        return raw.to_owned();
+    }
+    raw.split(['-', '_'])
+        .filter(|s| !s.is_empty())
+        .map(|part| {
+            let mut ch = part.chars();
+            match ch.next() {
+                Some(f) => format!("{}{}", f.to_uppercase(), ch.as_str()),
+                None => String::new(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn clean_character_name(ch: &Value) -> String {
+    let raw = ch["name"].as_str().or_else(|| ch["id"].as_str()).unwrap_or("Character");
+    if !matches!(raw.to_ascii_lowercase().as_str(), "parts" | "front" | "side" | "back" | "sprites" | "cutout") {
+        return humanize_slug(raw);
+    }
+    if let Some(grp) = ch["group"].as_str().filter(|g| !g.is_empty() && !g.eq_ignore_ascii_case("animations")) {
+        return humanize_slug(grp);
+    }
+    for key in ["folder", "preview", "path"] {
+        if let Some(p) = ch[key].as_str() {
+            let segs: Vec<&str> = p
+                .split(['/', '\\'])
+                .filter(|s| {
+                    !s.is_empty()
+                        && !s.contains('.')
+                        && !matches!(
+                            s.to_ascii_lowercase().as_str(),
+                            "assets" | "characters" | "parts" | "sprites" | "frames" | "front" | "source"
+                        )
+                })
+                .collect();
+            if let Some(last) = segs.last() {
+                return humanize_slug(last);
+            }
+        }
+    }
+    humanize_slug(raw)
+}
+
 fn elide_middle(raw: &str, max_chars: usize) -> String {
     let total = raw.chars().count();
     if total <= max_chars || max_chars < 12 {
@@ -95,7 +140,7 @@ fn draw_filter_and_action_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         "Character Rigs".into()
     };
 
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         for (id, key, label, tip) in [
             ("home-filter-all", "", all_lbl.as_str(), "Show all song projects"),
             ("home-filter-production", "production", "In Production", "Filter active song films"),
@@ -113,7 +158,7 @@ fn draw_filter_and_action_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             }
         }
 
-        let search_w = (ui.available_width() - 284.0).clamp(150.0, 560.0);
+        let search_w = (ui.available_width() - 292.0).clamp(140.0, 560.0);
         text_input(
             ui,
             ctx.reg,
@@ -170,7 +215,7 @@ fn draw_new_project_form(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     let form_resp = ctx.pal.card_frame().show(ui, |ui| {
         ui.set_min_width((full_w - 24.0).max(320.0));
         ui.vertical(|ui| {
-            ui.horizontal(|ui| {
+            ui.horizontal_wrapped(|ui| {
                 ui.label(RichText::new("Create Song Project").size(14.5).strong().color(ctx.pal.text_primary));
                 ui.label(
                     RichText::new("Initializes .designcraft, .ecproj, and .fcproj Craft project files")
@@ -179,11 +224,11 @@ fn draw_new_project_form(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                 );
             });
             ui.add_space(4.0);
-            ui.horizontal(|ui| {
+            ui.horizontal_wrapped(|ui| {
                 ui.label("Title");
-                text_input(ui, ctx.reg, "new-name", "Project title", &mut ctx.state.home.new_name, "My Song", 260.0);
+                text_input(ui, ctx.reg, "new-name", "Project title", &mut ctx.state.home.new_name, "My Song", 240.0);
                 ui.label("Folder");
-                text_input(ui, ctx.reg, "new-root", "Projects folder", &mut ctx.state.home.new_root, "~/Magic", 320.0);
+                text_input(ui, ctx.reg, "new-root", "Projects folder", &mut ctx.state.home.new_root, "~/Magic", 280.0);
                 if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("new-root-pick", "folder", "Choose projects folder")).clicked() {
                     ctx.push(UiAction::PickFile {
                         target: PickerTarget::NewProjectRoot,
@@ -194,9 +239,9 @@ fn draw_new_project_form(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                     });
                 }
             });
-            ui.horizontal(|ui| {
+            ui.horizontal_wrapped(|ui| {
                 ui.label("Song");
-                text_input(ui, ctx.reg, "new-audio", "Song audio file", &mut ctx.state.home.new_audio, "/path/to/song.wav", 480.0);
+                text_input(ui, ctx.reg, "new-audio", "Song audio file", &mut ctx.state.home.new_audio, "/path/to/song.wav", 420.0);
                 if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("new-audio-pick", "music", "Choose Audio…", "Pick song audio file")).clicked() {
                     ctx.push(UiAction::PickFile {
                         target: PickerTarget::NewProjectAudio,
@@ -208,17 +253,17 @@ fn draw_new_project_form(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                 }
             });
             ui.collapsing("Storyboard Title-Page Prompts (Optional)", |ui| {
-                ui.horizontal(|ui| {
+                ui.horizontal_wrapped(|ui| {
                     ui.label("D01 Style");
-                    text_input(ui, ctx.reg, "new-wizard-style", "Visual style", &mut ctx.state.home.wizard_style, "Paper cutout storybook", 240.0);
+                    text_input(ui, ctx.reg, "new-wizard-style", "Visual style", &mut ctx.state.home.wizard_style, "Paper cutout storybook", 220.0);
                     ui.label("L01 World");
-                    text_input(ui, ctx.reg, "new-wizard-world", "Master world", &mut ctx.state.home.wizard_world, "Lantern harbor at dusk", 240.0);
+                    text_input(ui, ctx.reg, "new-wizard-world", "Master world", &mut ctx.state.home.wizard_world, "Lantern harbor at dusk", 220.0);
                 });
-                ui.horizontal(|ui| {
+                ui.horizontal_wrapped(|ui| {
                     ui.label("C01 Cast");
-                    text_input(ui, ctx.reg, "new-wizard-character", "Lead character", &mut ctx.state.home.wizard_character, "Curious fox conductor", 240.0);
+                    text_input(ui, ctx.reg, "new-wizard-character", "Lead character", &mut ctx.state.home.wizard_character, "Curious fox conductor", 220.0);
                     ui.label("M01 Motion");
-                    text_input(ui, ctx.reg, "new-wizard-motion", "Song-action motion", &mut ctx.state.home.wizard_motion, "Chalk star arcs on chorus", 240.0);
+                    text_input(ui, ctx.reg, "new-wizard-motion", "Song-action motion", &mut ctx.state.home.wizard_motion, "Chalk star arcs on chorus", 220.0);
                 });
             });
             ui.horizontal(|ui| {
@@ -277,18 +322,25 @@ fn build_new_project_payload(form: &crate::state::HomeFormState) -> Value {
     payload
 }
 
+fn project_card_dimensions(col_w: f32) -> (f32, f32, f32) {
+    let inner_w = (col_w - 26.0).max(180.0);
+    let hero_h = ((inner_w - 5.0) * 9.0 / 16.0 + 22.0).clamp(186.0, 286.0);
+    let card_h = hero_h + 132.0;
+    (inner_w, hero_h, card_h)
+}
+
 fn draw_start_here_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>, col_w: f32) {
-    ui.allocate_ui_with_layout(Vec2::new(col_w, PROJECT_CARD_H), Layout::top_down(Align::Min), |ui| {
+    let (inner_w, hero_h, card_h) = project_card_dimensions(col_w);
+    ui.allocate_ui_with_layout(Vec2::new(col_w, card_h), Layout::top_down(Align::Min), |ui| {
         egui::Frame::new()
             .fill(ctx.pal.bg_panel)
             .corner_radius(CornerRadius::same(10))
             .inner_margin(egui::Margin::same(12))
             .stroke(Stroke::new(1.0, ctx.pal.border))
             .show(ui, |ui| {
-                let inner_w = (col_w - 26.0).max(180.0);
                 ui.set_width(inner_w);
                 ui.vertical(|ui| {
-                    let (hero, hresp) = ui.allocate_exact_size(Vec2::new(inner_w, 162.0), Sense::click());
+                    let (hero, hresp) = ui.allocate_exact_size(Vec2::new(inner_w, hero_h - 18.0), Sense::click());
                     ui.painter().rect_filled(hero, CornerRadius::same(8), Color32::from_rgb(0x0b, 0x16, 0x18));
                     paint_dashed_rect(
                         ui,
@@ -298,14 +350,14 @@ fn draw_start_here_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>, col_w: f32) {
                         5.0,
                     );
                     ui.painter()
-                        .circle_filled(hero.center(), 48.0, ctx.pal.accent_emerald.gamma_multiply(0.08));
-                    let plus_c = Pos2::new(hero.center().x, hero.center().y - 8.0);
+                        .circle_filled(hero.center(), 54.0, ctx.pal.accent_emerald.gamma_multiply(0.08));
+                    let plus_c = Pos2::new(hero.center().x, hero.center().y - 9.0);
                     ui.painter()
-                        .circle_stroke(plus_c, 20.0, Stroke::new(1.6, ctx.pal.accent_emerald));
+                        .circle_stroke(plus_c, 22.0, Stroke::new(1.6, ctx.pal.accent_emerald));
                     ui.painter()
-                        .text(plus_c, Align2::CENTER_CENTER, "+", FontId::proportional(20.0), ctx.pal.accent_emerald);
+                        .text(plus_c, Align2::CENTER_CENTER, "+", FontId::proportional(21.0), ctx.pal.accent_emerald);
                     ui.painter().text(
-                        Pos2::new(hero.center().x, plus_c.y + 32.0),
+                        Pos2::new(hero.center().x, plus_c.y + 34.0),
                         Align2::CENTER_CENTER,
                         "START HERE",
                         FontId::monospace(10.5),
@@ -324,7 +376,7 @@ fn draw_start_here_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>, col_w: f32) {
                             .size(11.0)
                             .color(ctx.pal.text_muted),
                     );
-                    ui.add_space(3.0);
+                    ui.add_space(4.0);
                     ui.horizontal_wrapped(|ui| {
                         ui.spacing_mut().item_spacing.x = 4.0;
                         for step in ["Audio", "Lyrics", "Storyboard", "Film"] {
@@ -385,12 +437,12 @@ fn draw_single_project_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>, col_w: f32, idx:
         .filter_map(|b| b.as_str().map(str::to_owned))
         .collect();
 
-    ui.allocate_ui_with_layout(Vec2::new(col_w, PROJECT_CARD_H), Layout::top_down(Align::Min), |ui| {
+    let (inner_w, hero_h, card_h) = project_card_dimensions(col_w);
+    ui.allocate_ui_with_layout(Vec2::new(col_w, card_h), Layout::top_down(Align::Min), |ui| {
         let card_resp = ctx.pal.card_frame().show(ui, |ui| {
-            let inner_w = (col_w - 26.0).max(180.0);
             ui.set_width(inner_w);
             ui.vertical(|ui| {
-                let (thumb, tresp) = ui.allocate_exact_size(Vec2::new(inner_w, 162.0), Sense::click());
+                let (thumb, tresp) = ui.allocate_exact_size(Vec2::new(inner_w, hero_h), Sense::click());
                 let inner = paint_filmbar_frame(
                     ui,
                     thumb,
@@ -419,9 +471,9 @@ fn draw_single_project_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>, col_w: f32, idx:
                     ctx.push(UiAction::SwitchView(ViewMode::Project));
                 }
 
-                ui.add_space(7.0);
+                ui.add_space(8.0);
                 ui.horizontal(|ui| {
-                    ui.label(RichText::new(elide_middle(name, 22)).size(14.0).strong().color(ctx.pal.text_primary));
+                    ui.label(RichText::new(elide_middle(name, 26)).size(14.0).strong().color(ctx.pal.text_primary));
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                         ui.spacing_mut().item_spacing.x = 4.0;
                         if badges.is_empty() {
@@ -496,7 +548,7 @@ fn draw_project_grid(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
 
     let avail = ui.available_width().max(300.0);
     let cols: usize = if avail >= 1040.0 { 3 } else if avail >= 660.0 { 2 } else { 1 };
-    let gap = 12.0_f32;
+    let gap = 14.0_f32;
     let col_w = ((avail - ((cols.saturating_sub(1)) as f32) * gap) / (cols as f32)).clamp(260.0, 620.0);
 
     let grid_resp = ui.vertical(|ui| {
@@ -531,7 +583,7 @@ fn draw_character_catalog(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             if query.is_empty() {
                 return true;
             }
-            let cname = ch["name"].as_str().unwrap_or_default().to_ascii_lowercase();
+            let cname = clean_character_name(ch).to_ascii_lowercase();
             let grp = ch["group"].as_str().unwrap_or_default().to_ascii_lowercase();
             cname.contains(&query) || grp.contains(&query)
         })
@@ -549,9 +601,9 @@ fn draw_character_catalog(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     ui.add_space(6.0);
 
     let avail = ui.available_width().max(240.0);
-    let gap = 10.0_f32;
+    let gap = 12.0_f32;
     let cols = (((avail + gap) / (CHAR_CARD_W + gap)).floor() as usize).max(1);
-    let card_w = ((avail - ((cols.saturating_sub(1)) as f32) * gap) / (cols as f32)).clamp(188.0, 260.0);
+    let card_w = ((avail - ((cols.saturating_sub(1)) as f32) * gap) / (cols as f32)).clamp(192.0, 272.0);
 
     let cat_resp = ui.vertical(|ui| {
         for (r_idx, row) in visible.chunks(cols).enumerate() {
@@ -570,8 +622,8 @@ fn draw_character_catalog(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
 }
 
 fn draw_single_character_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>, card_w: f32, idx: usize, ch: &Value) {
-    let cname = ch["name"].as_str().or_else(|| ch["id"].as_str()).unwrap_or("Character");
-    let cid = ch["id"].as_str().unwrap_or(cname).to_owned();
+    let cname = clean_character_name(ch);
+    let cid = ch["id"].as_str().unwrap_or(&cname).to_owned();
     let proj = ch["project"].as_str().unwrap_or_default().to_owned();
     let preview = ch["preview"].as_str();
     let has_pcraft = ch["pcraft"].as_bool() == Some(true);
@@ -582,13 +634,13 @@ fn draw_single_character_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>, card_w: f32, i
             let inner_w = (card_w - 24.0).max(140.0);
             ui.set_width(inner_w);
             ui.vertical(|ui| {
-                let (img_rect, iresp) = ui.allocate_exact_size(Vec2::new(inner_w, 96.0), Sense::click());
+                let (img_rect, iresp) = ui.allocate_exact_size(Vec2::new(inner_w, 138.0), Sense::click());
                 if !paint_local_image(ui, img_rect, preview, ctx.pal.bg_stage, 6) {
-                    paint_craft_doc_card(ui, img_rect, ctx.pal, "PCRAFT", cname, "Unrendered character asset");
+                    paint_craft_doc_card(ui, img_rect, ctx.pal, "PCRAFT", &cname, "Unrendered character asset");
                 }
-                ui.add_space(4.0);
-                ui.horizontal(|ui| {
-                    ui.label(RichText::new(elide_middle(cname, 15)).size(12.0).strong().color(ctx.pal.text_primary));
+                ui.add_space(6.0);
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(RichText::new(elide_middle(&cname, 17)).size(12.5).strong().color(ctx.pal.text_primary));
                     if has_pcraft {
                         paint_craft_badge(ui, ctx.pal, ".pcraft", true);
                     }
@@ -596,7 +648,7 @@ fn draw_single_character_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>, card_w: f32, i
                         paint_craft_badge(ui, ctx.pal, ".ecproj", true);
                     }
                 });
-                ui.add_space(3.0);
+                ui.add_space(4.0);
                 let btn_id = format!("home-char-animate-{idx}");
                 let open_clicked = action_button(
                     ui,

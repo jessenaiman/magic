@@ -138,7 +138,17 @@ pub fn extract_craft_preview(path: &Path, out_png: &Path) -> Result<bool> {
         if path.join(SAVE_LOCK).exists() {
             return Ok(false);
         }
-        for rel in [COMPOSITE, FULL_COMPOSITE, THUMB] {
+        let manifest_ok = std::fs::read(path.join(MANIFEST))
+            .ok()
+            .and_then(|raw| read_manifest::<IgnoredAny, craft_pcraft_format::Error>(&raw, &PcraftLimits::default(), PCRAFT_STEPS, PCRAFT_VERSION).ok());
+        let candidates: Vec<&str> = match manifest_ok.as_ref() {
+            Some(m) => [m.full_composite.as_deref(), m.composite.as_deref(), m.thumbnail.as_deref()]
+                .into_iter()
+                .flatten()
+                .collect(),
+            None => vec![FULL_COMPOSITE, COMPOSITE, THUMB],
+        };
+        for rel in candidates {
             let candidate = path.join(rel);
             if candidate.is_file() {
                 let png = std::fs::read(&candidate)

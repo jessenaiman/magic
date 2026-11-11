@@ -251,7 +251,7 @@ pub(crate) fn workshop_status(s: &mut Session) -> Result<Value> {
             "document": supplied_transcript, "problems": transcript_errors, "brief": stage_brief(s, &dir, "transcript")}),
         json!({"id": "storyboard", "title": "Storyboard Sections", "done": sb_ready, "why": sb_check["next_step"].as_str().unwrap_or("Complete storyboard sections."),
             "title_sections_complete": sb_titles_done, "light": sb_check["light"],
-            "inputs": [file_chip(&dir.join("storyboard.designcraft"))],
+            "inputs": [file_chip(&dir.join("storyboard.pdf"))],
             "outputs": assets.iter().map(|p| file_chip(p)).collect::<Vec<_>>(),
             "brief": stage_brief(s, &dir, "storyboard")}),
         json!({"id": "animate", "title": "Video Production", "done": !animated.is_empty(), "optional": true,

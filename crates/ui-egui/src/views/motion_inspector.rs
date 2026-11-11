@@ -29,7 +29,7 @@ pub fn draw_lottie_toolbar_buttons(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         ui,
         ctx.reg,
         ctx.pal,
-        BtnSpec::new("motion-lottie-export", "upload", "Export .lottie", "Export V4 comp as Bodymovin .lottie (T04)"),
+        BtnSpec::new("motion-lottie-export", "upload", ".lottie", "Export V4 comp as Bodymovin .lottie (T04)"),
     )
     .clicked()
     {
@@ -120,9 +120,14 @@ pub fn draw_lottie_warnings_strip(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
 
 /// Layer Compositing Switches (`38` Blend Modes, Track Mattes, Motion Blur, Adjustment, Alpha Queue — `T29`).
 pub fn draw_layer_compositing_switches(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
-    ui.label(RichText::new("38 Blend Modes & Track Mattes (T29)").size(11.5).strong().color(ctx.pal.accent_emerald));
-    ScrollArea::horizontal().id_salt("motion_38_blend_scroll").show(ui, |ui| {
-        ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
+        ui.label(RichText::new("38 Blend Modes (T29)").size(11.5).strong().color(ctx.pal.accent_emerald));
+        status_pill(ui, ctx.pal, &ctx.state.motion.blend_mode, ctx.pal.accent_emerald);
+    });
+    ScrollArea::vertical().id_salt("motion_38_blend_box").max_height(88.0).show(ui, |ui| {
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing.x = 3.5;
+            ui.spacing_mut().item_spacing.y = 3.5;
             for mode in EFFECTCRAFT_38_BLEND_MODES {
                 let id = format!("motion-blend-{mode}");
                 let sel = ctx.state.motion.blend_mode == *mode;
@@ -138,7 +143,10 @@ pub fn draw_layer_compositing_switches(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         });
     });
 
+    ui.add_space(4.0);
     ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
+        ui.spacing_mut().item_spacing.y = 4.0;
         ui.label(RichText::new("Matte:").size(10.5).color(ctx.pal.text_muted));
         for (m, lbl) in [
             ("none", "None"),
@@ -156,7 +164,7 @@ pub fn draw_layer_compositing_switches(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         }
     });
 
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         if pill_toggle(ui, ctx.reg, ctx.pal, "motion-sw-mblur", "Motion Blur", &mut ctx.state.motion.motion_blur, ctx.pal.accent_emerald).changed() {
             ctx.exec(
                 "effect.exec",
@@ -174,6 +182,8 @@ pub fn draw_layer_compositing_switches(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     });
 
     ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
+        ui.spacing_mut().item_spacing.y = 4.0;
         ui.label(RichText::new("Alpha Queue:").size(10.5).color(ctx.pal.text_muted));
         for preset in ["ProRes 4444 XQ", "WebM VP9+Alpha", "AV1 MP4", "32f EXR"] {
             let id = format!("motion-rq-{preset}");
@@ -190,10 +200,11 @@ pub fn draw_layer_compositing_switches(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     });
 }
 
-/// Right-hand inspector (`[Shapes & Masks] [308 FX & Blend] [Track & EXR]`) for `T27`–`T31`.
+/// Right-hand inspector (`[Shapes] [308 FX] [Track & EXR]`) for `T27`–`T31`.
 pub fn draw_motion_inspector(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     let panel = fill_card(ui, ctx.pal, true, |ui| {
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing.x = 4.0;
             for (tid, lbl, tip) in [
                 ("shapes", "Shapes & Masks", "9 Shape Operators, Pen Masks & MediaPipe Face Track (T27-T28)"),
                 ("fx", "308 FX & Blend", "19-Category 308-FX Browser, .wasm Plug-in & 38 Blend Modes (T29)"),
@@ -220,9 +231,10 @@ pub fn draw_motion_inspector(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
 }
 
 fn draw_shapes_and_masks_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
         rotary_dial(ui, ctx.reg, ctx.pal, ScalarSpec::new("motion-arc-dial", "Arc Angle", -90.0..=90.0, "°", ctx.pal.accent_amber), &mut ctx.state.motion.arc_bend_deg);
-        rotary_dial(ui, ctx.reg, ctx.pal, ScalarSpec::new("motion-taper-dial", "Taper", 0.0..=100.0, "%", ctx.pal.accent_emerald), &mut ctx.state.motion.taper_pct);
+        rotary_dial(ui, ctx.reg, ctx.pal, ScalarSpec::new("motion-taper-dial", "Turbulence", 0.0..=100.0, "%", ctx.pal.accent_emerald), &mut ctx.state.motion.taper_pct);
     });
     ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("motion-pos-x", "X Offset", 0.0..=1920.0, "px", ctx.pal.accent_amber), &mut ctx.state.motion.pos_x);
     ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("motion-pos-y", "Y Offset", 0.0..=1080.0, "px", ctx.pal.accent_amber), &mut ctx.state.motion.pos_y);
@@ -231,6 +243,8 @@ fn draw_shapes_and_masks_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     ui.separator();
     ui.label(RichText::new("9 Shape Layer Operators (T27)").size(11.5).strong().color(ctx.pal.accent_emerald));
     ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
+        ui.spacing_mut().item_spacing.y = 4.0;
         for (op, lbl) in [
             ("trim", "Trim Paths"),
             ("repeater", "Repeater"),
@@ -258,10 +272,17 @@ fn draw_shapes_and_masks_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     ui.separator();
     ui.label(RichText::new("Bezier Masks & Face Tracker (T28)").size(11.5).strong().color(ctx.pal.accent_sky));
     ui.horizontal_wrapped(|ui| {
-        for mode in ["add", "subtract", "intersect", "difference"] {
+        ui.spacing_mut().item_spacing.x = 4.0;
+        ui.spacing_mut().item_spacing.y = 4.0;
+        for (mode, lbl) in [
+            ("add", "Add"),
+            ("subtract", "Subtract"),
+            ("intersect", "Intersect"),
+            ("difference", "Diff"),
+        ] {
             let id = format!("motion-mask-mode-{mode}");
             let sel = ctx.state.motion.mask_mode == mode;
-            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, mode, "Set Bezier mask mode").selected(sel)).clicked() {
+            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, lbl, "Set Bezier mask mode").selected(sel)).clicked() {
                 ctx.state.motion.mask_mode = mode.into();
             }
         }
@@ -269,6 +290,8 @@ fn draw_shapes_and_masks_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("motion-mask-feather", "Mask Feather", 0.0..=80.0, "px", ctx.pal.accent_sky), &mut ctx.state.motion.mask_feather);
     ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("motion-mask-exp", "Mask Expansion", -40.0..=40.0, "px", ctx.pal.accent_amber), &mut ctx.state.motion.mask_expansion);
     ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
+        ui.spacing_mut().item_spacing.y = 4.0;
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("motion-add-mask", "+ Pen Mask", "layer.addMask").primary()).clicked() {
             ctx.exec(
                 "effect.exec",
@@ -299,18 +322,6 @@ fn draw_shapes_and_masks_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             );
         }
     });
-
-    ui.separator();
-    if action_button(
-        ui,
-        ctx.reg,
-        ctx.pal,
-        BtnSpec::new("motion-publish-v4", "film", "Publish V4", "Render V4 Action Motion pass onto FilmCraft timeline").primary(),
-    )
-    .clicked()
-    {
-        ctx.exec("motion.publish", json!({"render": true}), Some("Published V4 Action Motion"));
-    }
 }
 
 fn representative_effects_for_category(cat: &str) -> &'static [(&'static str, &'static str)] {
@@ -372,26 +383,24 @@ fn draw_fx_308_and_blend_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     }
 
     ui.separator();
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         ui.label(RichText::new("19-Category 308-FX Browser (T29)").size(11.5).strong().color(ctx.pal.accent_sky));
-        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            if action_button(
-                ui,
-                ctx.reg,
-                ctx.pal,
-                BtnSpec::label_only("motion-load-wasm", "+ .wasm", "Load custom WASM effect plug-in (effect.plugins.load)"),
-            )
-            .clicked()
-            {
-                ctx.push(UiAction::PickFile {
-                    target: PickerTarget::ImportWasmPlugin,
-                    title: "Load EffectCraft .wasm Effect Plug-in".into(),
-                    extensions: vec!["wasm".into()],
-                    directory: false,
-                    save: false,
-                });
-            }
-        });
+        if action_button(
+            ui,
+            ctx.reg,
+            ctx.pal,
+            BtnSpec::label_only("motion-load-wasm", "+ .wasm", "Load custom WASM effect plug-in (effect.plugins.load)"),
+        )
+        .clicked()
+        {
+            ctx.push(UiAction::PickFile {
+                target: PickerTarget::ImportWasmPlugin,
+                title: "Load EffectCraft .wasm Effect Plug-in".into(),
+                extensions: vec!["wasm".into()],
+                directory: false,
+                save: false,
+            });
+        }
     });
     text_input(
         ui,
@@ -400,9 +409,11 @@ fn draw_fx_308_and_blend_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         "Search 308 EffectCraft effects",
         &mut ctx.state.motion.fx_search,
         "Filter 308 effects…",
-        ui.available_width().max(150.0),
+        (ui.available_width() - 4.0).max(140.0),
     );
     ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 3.5;
+        ui.spacing_mut().item_spacing.y = 3.5;
         for (cid, clbl) in EFFECTCRAFT_19_CATEGORIES {
             let id = format!("motion-cat-{cid}");
             let sel = ctx.state.motion.fx_category == *cid;
@@ -448,8 +459,10 @@ fn draw_fx_308_and_blend_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
 fn draw_tracking_and_exr_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     ui.label(RichText::new("Point, Warp & 3D Camera Tracker (T30)").size(11.5).strong().color(ctx.pal.accent_emerald));
     ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
+        ui.spacing_mut().item_spacing.y = 4.0;
         for (tm, lbl) in [
-            ("point", "1-Pt Track"),
+            ("point", "1-Pt"),
             ("twoPoint", "2-Pt Scale/Rot"),
             ("perspectiveCornerPin", "4-Corner Pin"),
         ] {
@@ -461,6 +474,8 @@ fn draw_tracking_and_exr_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         }
     });
     ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
+        ui.spacing_mut().item_spacing.y = 4.0;
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("motion-trk-run", "Track & Apply", "track.motion + track.apply").primary()).clicked() {
             ctx.exec(
                 "effect.exec",
@@ -494,7 +509,9 @@ fn draw_tracking_and_exr_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     ui.separator();
     ui.label(RichText::new("32f OpenEXR, Cryptomatte & OCIO (T31)").size(11.5).strong().color(ctx.pal.accent_amber));
     ui.horizontal_wrapped(|ui| {
-        for pass in ["RGBA", "Z-Depth", "Normal", "CryptoObject", "CryptoMaterial"] {
+        ui.spacing_mut().item_spacing.x = 4.0;
+        ui.spacing_mut().item_spacing.y = 4.0;
+        for pass in ["RGBA", "Z-Depth", "Normal", "CryptoObj", "CryptoMat"] {
             let id = format!("motion-exr-{pass}");
             let sel = ctx.state.motion.exr_layer == pass;
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, pass, "Select OpenEXR AOV pass (EXtractoR)").selected(sel)).clicked() {
@@ -508,6 +525,7 @@ fn draw_tracking_and_exr_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         }
     });
     ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("motion-exr-list", "Inspect Channels", "layer.channels")).clicked() {
             ctx.exec("effect.exec", json!({"domain": "motion", "command": "layer.channels", "params": {}}), None);
         }
@@ -524,7 +542,7 @@ fn draw_tracking_and_exr_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         ctx.reg,
         ctx.pal,
         "motion-preserve-rgb",
-        "Preserve RGB (Disable Display Color Mgmt)",
+        "Preserve RGB (Raw Color)",
         &mut ctx.state.motion.preserve_rgb,
         ctx.pal.accent_amber,
     )
@@ -537,6 +555,8 @@ fn draw_tracking_and_exr_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         );
     }
     ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
+        ui.spacing_mut().item_spacing.y = 4.0;
         for view in ["ACEScg Linear", "AgX", "Filmic", "Rec.709"] {
             let id = format!("motion-ocio-{view}");
             let sel = ctx.state.motion.ocio_view == view;

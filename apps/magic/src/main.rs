@@ -5,6 +5,7 @@
 #![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable))]
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod audio_player;
 mod capture;
 mod clipboard_image;
 mod control;
@@ -25,15 +26,13 @@ use std::sync::{Arc, mpsc};
 use std::time::{Duration, Instant};
 
 use clap::Parser;
-use craft_dialogs::Answer;
 #[cfg(target_os = "macos")]
 use craft_keymap::CommandRef;
 use craft_keymap::egui::Dispatcher;
 use egui::{Event, ViewportCommand};
 use magic::{AutomationRoots, Session};
 use magic_ui_egui::{
-    ActiveModal, AutomationRegistry, MagicPalette, PickerTarget, UiAction, UiShellState, ViewCtx,
-    ViewMode,
+    ActiveModal, AutomationRegistry, MagicPalette, UiAction, UiShellState, ViewCtx, ViewMode,
 };
 use rpc::{ControlEnvelope, DeferredReply};
 use serde_json::{Value, json};
@@ -138,6 +137,7 @@ pub(crate) struct MagicDesktopApp {
     pub(crate) registry: AutomationRegistry,
     pub(crate) dialogs: dialogs::DialogHost,
     pub(crate) file_sync: file_sync::FileSyncMonitor,
+    pub(crate) audio_player: audio_player::AudioTransportPlayer,
     pub(crate) key_dispatcher: Dispatcher,
     pub(crate) lifecycle: lifecycle::Lifecycle,
     pub(crate) control_rx: Option<mpsc::Receiver<ControlEnvelope>>,
@@ -204,6 +204,7 @@ impl MagicDesktopApp {
             registry: AutomationRegistry::default(),
             dialogs: dialogs::DialogHost::new(&cc.egui_ctx),
             file_sync,
+            audio_player: audio_player::AudioTransportPlayer::default(),
             key_dispatcher: Dispatcher::new(),
             lifecycle: lifecycle::Lifecycle::default(),
             control_rx,
@@ -233,6 +234,7 @@ impl MagicDesktopApp {
         let is_project_switch = matches!(id, "project.open" | "project.new" | "project.close" | "file.open" | "file.new" | "file.close");
         if is_project_switch && self.session.project_path.is_some() {
             lifecycle::verify_clean(&self.session, &self.ui_state)?;
+            self.audio_player.stop(&mut self.ui_state);
         }
         let result = if id == "clipboard.import_image" {
             clipboard_image::import_image(&mut self.session, &params)?
@@ -258,6 +260,27 @@ impl MagicDesktopApp {
             "song.lyrics" => self.ui_state.cache.song_lyrics = result.clone(),
             "storyboard.pages" => self.ui_state.cache.storyboard_pages = result.clone(),
             "storyboard.check" => self.ui_state.cache.storyboard_check = result.clone(),
+            "storyboard.new" | "storyboard.set" | "storyboard.wizard" => {
+                if let Ok(pages) = self.session.execute("storyboard.pages", json!({"full": true})) {
+                    self.ui_state.cache.storyboard_pages = pages;
+                }
+                if let Ok(chk) = self.session.execute("storyboard.check", json!({})) {
+                    self.ui_state.cache.storyboard_check = chk;
+                }
+            }
+            "words.save" | "words.letter" | "motion.save" | "motion.publish" | "character.action" => {
+                let sec = match self.ui_state.effective_view() {
+                    magic_ui_egui::ViewMode::Animation => self.ui_state.animation.scrub_seconds,
+                    magic_ui_egui::ViewMode::Design => self.ui_state.lyrics.scrub_seconds,
+                    magic_ui_egui::ViewMode::Motion => self.ui_state.motion.start_sec,
+                    _ => self.ui_state.audio_time_sec,
+                };
+                if let Ok(fr) = self.session.execute("video.frame", json!({"seconds": sec}))
+                    && let Some(f) = fr["frame"].as_str()
+                {
+                    self.ui_state.cache.last_video_frame = Some(f.to_owned());
+                }
+            }
             "storyboard.thumbnail" => {
                 if let Some(out) = result["out"].as_str() {
                     self.ui_state.cache.last_storyboard_thumb = Some(out.to_owned());
@@ -322,17 +345,18 @@ impl MagicDesktopApp {
         let now = ctx.input(|i| i.time);
         match action {
             UiAction::SwitchView(next) => {
+                if matches!(next, ViewMode::Home | ViewMode::Storyboard) {
+                    self.audio_player.stop(&mut self.ui_state);
+                }
                 self.ui_state.view = next;
                 self.refresh_view_data(next);
             }
             UiAction::NavigateAuthoring { view, seconds } => {
-                self.ui_state.view = view;
-                match view {
-                    ViewMode::Design => self.ui_state.lyrics.scrub_seconds = seconds,
-                    ViewMode::Motion => self.ui_state.motion.start_sec = seconds,
-                    ViewMode::Animation => self.ui_state.animation.scrub_seconds = seconds,
-                    _ => {}
+                if matches!(view, ViewMode::Home | ViewMode::Storyboard) {
+                    self.audio_player.stop(&mut self.ui_state);
                 }
+                self.ui_state.view = view;
+                self.audio_player.seek(&mut self.ui_state, seconds);
                 self.refresh_view_data(view);
             }
             UiAction::SelectCharacter { id, jump_animation } => {
@@ -354,9 +378,10 @@ impl MagicDesktopApp {
                 self.dialogs.open_picker(target, &title, &extensions, directory, save);
             }
             UiAction::ToggleAudio => {
-                if self.ui_state.song_audio_path().is_some() {
-                    self.ui_state.audio_playing = !self.ui_state.audio_playing;
-                }
+                self.audio_player.toggle(&mut self.ui_state);
+            }
+            UiAction::SeekAudio(sec) => {
+                self.audio_player.seek(&mut self.ui_state, sec);
             }
             UiAction::SnapWindow => {
                 self.ui_state.window_snapped_right = !self.ui_state.window_snapped_right;
@@ -388,7 +413,7 @@ impl MagicDesktopApp {
             UiAction::OpenUrl(url) => diagnostics::open_https_url(ctx, &url),
             UiAction::OpenAbout => self.ui_state.active_modal = Some(ActiveModal::About),
             UiAction::CloseProject => {
-                self.ui_state.audio_playing = false;
+                self.audio_player.stop(&mut self.ui_state);
                 match self.execute_engine(ctx, "file.close", json!({})) {
                     Ok(_) => self.ui_state.view = ViewMode::Home,
                     Err(err) => self.ui_state.set_toast(now, err),
@@ -429,6 +454,9 @@ impl MagicDesktopApp {
                 if let Ok(chars) = self.session.execute("character.list", json!({})) {
                     self.ui_state.cache.characters = chars;
                 }
+                if let Ok(film) = self.session.execute("video.film", json!({})) {
+                    self.ui_state.cache.film_status = film;
+                }
                 diagnostics::hydrate_selected_character(&mut self.session, &mut self.ui_state);
             }
             ViewMode::Design => {
@@ -438,6 +466,9 @@ impl MagicDesktopApp {
                 if let Ok(fx) = self.session.execute("words.effects", json!({})) {
                     self.ui_state.cache.words_effects = fx;
                 }
+                if let Ok(film) = self.session.execute("video.film", json!({})) {
+                    self.ui_state.cache.film_status = film;
+                }
             }
             ViewMode::Motion => {
                 if let Ok(mot) = self.session.execute("motion.read", json!({})) {
@@ -445,6 +476,9 @@ impl MagicDesktopApp {
                 }
                 if let Ok(fx) = self.session.execute("motion.effects", json!({})) {
                     self.ui_state.cache.motion_effects = fx;
+                }
+                if let Ok(film) = self.session.execute("video.film", json!({})) {
+                    self.ui_state.cache.film_status = film;
                 }
             }
             ViewMode::Studio => {
@@ -454,89 +488,6 @@ impl MagicDesktopApp {
                 }
                 if let Ok(tl) = self.session.execute("video.timeline", json!({})) {
                     self.ui_state.cache.timeline = tl;
-                }
-            }
-        }
-    }
-
-    fn handle_picker_answer(&mut self, ctx: &egui::Context, target: PickerTarget, answer: Answer) {
-        let now = ctx.input(|i| i.time);
-        match answer {
-            Answer::Cancelled | Answer::Message(_) => {}
-            Answer::Unavailable(why) => {
-                self.ui_state.set_toast(now, format!("File dialog unavailable: {why}"));
-            }
-            Answer::Paths(paths) => {
-                let Some(first) = paths.first() else { return };
-                let path_str = first.to_string_lossy().into_owned();
-                let ext = first.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase).unwrap_or_default();
-                match target {
-                    PickerTarget::OpenProject => {
-                        let _ = self.execute_engine(ctx, "file.open", json!({"path": path_str}));
-                        self.ui_state.view = ViewMode::Project;
-                    }
-                    PickerTarget::SaveProjectAs => {
-                        let _ = self.execute_engine(ctx, "file.saveAs", json!({"path": path_str}));
-                    }
-                    PickerTarget::NewProjectRoot => self.ui_state.home.new_root = path_str,
-                    PickerTarget::NewProjectAudio => self.ui_state.home.new_audio = path_str,
-                    PickerTarget::SetSongAudio => {
-                        let _ = self.execute_engine(ctx, "workshop.set_audio", json!({"path": path_str}));
-                    }
-                    PickerTarget::ImportTranscript => {
-                        let _ = self.execute_engine(ctx, "workshop.import_transcript", json!({"path": path_str, "replace": true}));
-                    }
-                    PickerTarget::AddProjectAsset => {
-                        if matches!(ext.as_str(), "ecproj" | "pcraft" | "psd" | "vectorcraft" | "anicraft") {
-                            let _ = self.execute_engine(ctx, "character.import", json!({"path": path_str}));
-                        } else {
-                            let _ = self.execute_engine(ctx, "project.add_asset", json!({"path": path_str, "kind": "image"}));
-                        }
-                    }
-                    PickerTarget::ImportTrunkFile => {
-                        if matches!(ext.as_str(), "ecproj" | "pcraft" | "psd" | "vectorcraft" | "anicraft") {
-                            let _ = self.execute_engine(ctx, "character.import", json!({"path": path_str}));
-                        } else {
-                            let _ = self.execute_engine(ctx, "project.import_file", json!({"path": path_str}));
-                        }
-                    }
-                    PickerTarget::MotionTraceImage => {
-                        let _ = self.execute_engine(ctx, "vector.trace", json!({"path": path_str, "ignore_white": true}));
-                    }
-                    PickerTarget::ImportLottie => {
-                        self.ui_state.motion.lottie_show_warnings = true;
-                        let _ = self.execute_engine(ctx, "effect.lottie", json!({"mode": "import", "path": path_str, "ecproj": "motion/actions.ecproj"}));
-                    }
-                    PickerTarget::ImportAep => {
-                        let _ = self.execute_engine(ctx, "effect.import_aep", json!({"path": path_str, "dry_run": true}));
-                    }
-                    PickerTarget::ImportLut => {
-                        let _ = self.execute_engine(ctx, "video.finish", json!({"op": "lut_import", "path": path_str}));
-                        self.ui_state.set_toast(now, "Loaded 3D LUT (.cube / .3dl)");
-                    }
-                    PickerTarget::ImportFcgt => {
-                        let _ = self.execute_engine(ctx, "bridge.templates", json!({"action": "install", "path": path_str}));
-                        self.ui_state.set_toast(now, "Installed native graphic template");
-                    }
-                    PickerTarget::ImportFontDir => {
-                        self.ui_state.lyrics.font_dir_extra = path_str.clone();
-                        diagnostics::apply_app_font_dirs(&path_str);
-                        let _ = self.execute_engine(ctx, "prefs.set", json!({"key": "lyrics.font_dirs", "value": path_str}));
-                        self.ui_state.set_toast(now, "Saved EFFECTCRAFT_FONT_DIRS folder");
-                    }
-                    PickerTarget::ImportWasmPlugin => {
-                        let _ = self.execute_engine(
-                            ctx,
-                            "effect.exec",
-                            json!({"path": "motion/actions.ecproj", "id": "effect.plugins.load", "params": {"path": path_str}, "save": true}),
-                        );
-                        self.ui_state.set_toast(now, "Loaded WebAssembly (.wasm) plug-in into EffectCraft");
-                    }
-                    PickerTarget::ImportModel3d => {
-                        let cid = self.ui_state.selected_character_id.clone().unwrap_or_else(|| "lead".into());
-                        let _ = self.execute_engine(ctx, "character.layer.new3dModel", json!({"character": cid, "path": path_str}));
-                        self.ui_state.set_toast(now, "Imported 3D model into EffectCraft comp");
-                    }
                 }
             }
         }
@@ -622,14 +573,8 @@ impl eframe::App for MagicDesktopApp {
         let reg_ref = &self.registry;
         self.pending_captures.retain_mut(|cap| !cap.poll(ppp, reg_ref));
 
-        if self.ui_state.audio_playing {
-            self.ui_state.audio_time_sec += dt;
-            if self.ui_state.audio_duration_sec > 0.0 && self.ui_state.audio_time_sec >= self.ui_state.audio_duration_sec {
-                self.ui_state.audio_time_sec = 0.0;
-                self.ui_state.audio_playing = false;
-            } else {
-                ctx.request_repaint_after(Duration::from_millis(50));
-            }
+        if self.audio_player.tick_frame(&mut self.ui_state, dt) {
+            ctx.request_repaint_after(Duration::from_millis(42));
         }
 
         if !self.control_input_only {
@@ -691,7 +636,7 @@ impl eframe::App for MagicDesktopApp {
         }
 
         for (target, answer) in self.dialogs.drain_answers() {
-            self.handle_picker_answer(&egui_ctx, target, answer);
+            audio_player::dispatch_picker_answer(self, &egui_ctx, target, answer);
         }
 
         self.registry.begin_frame();
@@ -725,6 +670,7 @@ impl eframe::App for MagicDesktopApp {
     }
 
     fn on_exit(&mut self) {
+        self.audio_player.stop_os_process();
         if self.lifecycle.restart_requested()
             && let Ok(exe) = std::env::current_exe()
         {

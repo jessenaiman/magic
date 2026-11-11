@@ -107,22 +107,18 @@ fn collect_pngs_sorted(dir: &Path, max_depth: usize) -> Vec<PathBuf> {
 
 fn discover_film_craft_outputs(dir: &Path, fcproj: &Path) -> Value {
     let program_frames = collect_pngs_sorted(&dir.join("film/frames"), 1);
-    let mut v1_frames = collect_pngs_sorted(&dir.join("storyboard/renders"), 1);
-    v1_frames.extend(collect_pngs_sorted(&dir.join("storyboard/.preview"), 1));
-    v1_frames.extend(collect_pngs_sorted(&dir.join("assets/backgrounds"), 1));
+    let v1_frames = collect_pngs_sorted(&dir.join("assets/backgrounds"), 1);
     let mut v2_frames = collect_pngs_sorted(&dir.join("film/.linked-cache"), 0);
     v2_frames.extend(collect_pngs_sorted(&dir.join("assets/characters"), 3));
     v2_frames.retain(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("png")));
     let v3_frames = collect_pngs_sorted(&dir.join("lettering/.preview"), 0);
     let mut v4_frames = collect_pngs_sorted(&dir.join("motion/.preview"), 0);
     v4_frames.extend(collect_pngs_sorted(&dir.join("motion/svg"), 0));
-    let storyboard_doc = dir.join("storyboard.designcraft");
     let lyrics_ecproj = dir.join("lettering/lyrics.ecproj");
     let motion_ecproj = dir.join("motion/actions.ecproj");
     let linked_comps = linked_comp::inspect_linked_comps(dir);
     json!({
         "fcproj": file_info(fcproj),
-        "storyboard_designcraft": file_info(&storyboard_doc),
         "lyrics_ecproj": file_info(&lyrics_ecproj),
         "motion_ecproj": file_info(&motion_ecproj),
         "linked_compositions": linked_comps,

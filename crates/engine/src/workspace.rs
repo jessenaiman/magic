@@ -171,6 +171,10 @@ fn find_project_craft_doc(s: &crate::Session, target: CraftTarget) -> Option<Pat
             .into_iter()
             .find(|p| p.is_file())
             .or_else(|| find_first_with_ext(dir, &["designcraft"], 3)),
+        CraftTarget::Pdf => [dir.join("storyboard.pdf"), dir.join("storyboard-template.pdf")]
+            .into_iter()
+            .find(|p| p.is_file())
+            .or_else(|| find_first_with_ext(dir, &["pdf"], 3)),
         CraftTarget::Deck => find_first_with_ext(dir, &["deckcraft", "pptx"], 3),
         CraftTarget::Effect => {
             let lyrics = dir.join("lettering/lyrics.ecproj");

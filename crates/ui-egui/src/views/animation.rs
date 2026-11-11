@@ -1,10 +1,11 @@
 //! `Animations` view (`#view-animation`): Craft-project-native character rigging & animation
-//! matching `04-animations-craft-rig.jpg`, backed directly by `PhotoCraft` (`.pcraft` / `.psd`),
-//! `VectorCraft` (`.vectorcraft` / `.svg`), headless `anicraft-cli`, `EffectCraft` (`.ecproj`),
-//! and `Sheet 08` Zone B supplementary controls (`animation_inspector.rs`: `T11`–`T20`).
+//! matching `04-animations-craft-rig.jpg`, with underlying audio transport and `EffectCraft`
+//! (`V2 .ecproj`) ↔ `FilmCraft` (`V1 .fcproj`) track switching.
+
+use std::collections::HashMap;
 
 use craft_ui::layout::{SplitAxis, SplitSize, split_rect};
-use egui::{Align, Align2, FontId, Layout, Pos2, Rect, RichText, ScrollArea, Sense, Shape, Stroke, Ui, Vec2};
+use egui::{Align2, FontId, Pos2, Rect, RichText, ScrollArea, Sense, Shape, Stroke, Ui, Vec2};
 use serde_json::{Value, json};
 
 use crate::controls::{
@@ -12,9 +13,8 @@ use crate::controls::{
     paint_filmbar_frame, paint_local_image, pill_toggle, ring_slider_h, xy_path_pad,
 };
 use crate::state::{UiAction, ViewCtx};
-use crate::views::animation_inspector::{
-    draw_puppet_and_3d_inspector, draw_theatre_dock, draw_time_and_stagger_card,
-};
+use crate::views::animation_dock::draw_theatre_dock;
+use crate::views::animation_inspector::{draw_puppet_and_3d_inspector, draw_time_and_stagger_card};
 use crate::widgets::{BtnSpec, action_button, status_pill};
 
 pub fn show(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
@@ -22,8 +22,9 @@ pub fn show(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     ui.add_space(6.0);
     let cid = active_character(ctx);
     let remaining = ui.available_rect_before_wrap();
+    let dock_h = if ctx.state.animation.dock_tab == "curves" { 214.0 } else { 194.0 };
     if ctx.state.show_bottom_dock
-        && let Some(vert) = split_rect(remaining, SplitAxis::Vertical, SplitSize::FixedSecond(148.0), 8.0, 220.0)
+        && let Some(vert) = split_rect(remaining, SplitAxis::Vertical, SplitSize::FixedSecond(dock_h), 8.0, 200.0)
     {
         let mut upper = child_pane(ui, vert.first, "anim_upper");
         draw_upper_columns(&mut upper, ctx);
@@ -44,6 +45,61 @@ fn character_entries(ctx: &ViewCtx<'_>) -> Vec<Value> {
         .and_then(Value::as_array)
         .cloned()
         .unwrap_or_default()
+}
+
+fn humanize_slug(raw: &str) -> String {
+    if raw.contains(' ') {
+        return raw.to_owned();
+    }
+    raw.split(['-', '_'])
+        .filter(|s| !s.is_empty())
+        .map(|part| {
+            let mut ch = part.chars();
+            match ch.next() {
+                Some(f) => format!("{}{}", f.to_uppercase(), ch.as_str()),
+                None => String::new(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn resolve_character_display_name(ch: &Value) -> String {
+    let id = ch["id"].as_str().unwrap_or("character");
+    let raw = ch["name"].as_str().unwrap_or(id);
+    let generic = matches!(
+        raw.to_ascii_lowercase().as_str(),
+        "parts" | "front" | "side" | "back" | "sprites" | "cutout" | "rig" | "layers"
+    );
+    if !generic {
+        return humanize_slug(raw);
+    }
+    if let Some(grp) = ch["group"].as_str().filter(|g| !g.is_empty() && !g.eq_ignore_ascii_case("animations")) {
+        return humanize_slug(grp);
+    }
+    for ptr in ["/folder", "/views/0/drawing", "/views/0/latest_frame", "/views/0/pcraft_path", "/views/0/ecproj_path"] {
+        if let Some(path_str) = ch.pointer(ptr).and_then(Value::as_str) {
+            let segs: Vec<&str> = path_str
+                .split(['/', '\\'])
+                .filter(|s| {
+                    !s.is_empty()
+                        && !s.contains('.')
+                        && !matches!(
+                            s.to_ascii_lowercase().as_str(),
+                            "assets" | "characters" | "animations" | "parts" | "sprites" | "frames" | "front" | "side" | "back" | "source" | "rig"
+                        )
+                })
+                .collect();
+            if let Some(last) = segs.last() {
+                return humanize_slug(last);
+            }
+        }
+    }
+    if !matches!(id.to_ascii_lowercase().as_str(), "parts" | "front" | "cutout") {
+        humanize_slug(id)
+    } else {
+        "Character Rig".into()
+    }
 }
 
 fn active_character_obj(ctx: &ViewCtx<'_>) -> Option<Value> {
@@ -111,22 +167,16 @@ fn select_rendered_character_frame(ctx: &ViewCtx<'_>, char_obj: Option<&Value>, 
         .map(str::to_owned)
 }
 
-fn active_background_thumb(ctx: &ViewCtx<'_>) -> Option<String> {
-    ctx.state
-        .cache
-        .snapshot
-        .pointer("/data/drawer/backgrounds/0/thumb")
-        .and_then(Value::as_str)
-        .map(str::to_owned)
-}
-
 fn draw_upper_columns(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     let cid = active_character(ctx);
     let char_obj = active_character_obj(ctx);
     let view_obj = active_view_obj(char_obj.as_ref());
     let body = ui.available_rect_before_wrap();
+    let left_w = if body.width() >= 1180.0 { 286.0 } else { 246.0 };
+    let right_w = if body.width() >= 1180.0 { 320.0 } else { 272.0 };
+
     let after_left = if ctx.state.show_nav_rail
-        && let Some(left_split) = split_rect(body, SplitAxis::Horizontal, SplitSize::FixedFirst(272.0), 8.0, 200.0)
+        && let Some(left_split) = split_rect(body, SplitAxis::Horizontal, SplitSize::FixedFirst(left_w), 8.0, 200.0)
     {
         let mut left = child_pane(ui, left_split.first, "anim_left");
         draw_action_and_path_column(&mut left, ctx);
@@ -136,7 +186,7 @@ fn draw_upper_columns(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     };
 
     if ctx.state.show_right_inspector
-        && let Some(right_split) = split_rect(after_left, SplitAxis::Horizontal, SplitSize::FixedSecond(304.0), 8.0, 220.0)
+        && let Some(right_split) = split_rect(after_left, SplitAxis::Horizontal, SplitSize::FixedSecond(right_w), 8.0, 220.0)
     {
         let mut stage = child_pane(ui, right_split.first, "anim_stage");
         draw_stage(&mut stage, ctx);
@@ -152,15 +202,29 @@ fn draw_upper_columns(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
 fn draw_roster_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     let chars = character_entries(ctx);
     let current = active_character(ctx);
+    let has_char = !current.is_empty();
+    let mut name_counts: HashMap<String, usize> = HashMap::new();
+
     let bar = ctx.pal.panel_frame().show(ui, |ui| {
+        ui.set_min_width(ui.available_width());
         ui.horizontal_wrapped(|ui| {
-            ui.label(RichText::new("CHARACTER ROSTER:").monospace().size(10.5).color(ctx.pal.text_muted));
+            ui.spacing_mut().item_spacing.x = 5.0;
+            ui.spacing_mut().item_spacing.y = 4.0;
+            ui.label(RichText::new("CHARACTER ROSTER:").monospace().size(10.0).color(ctx.pal.text_muted));
             if chars.is_empty() {
                 ui.label(RichText::new("No .pcraft / .ecproj characters yet — import via + Add Asset or Scribbles").size(11.0).color(ctx.pal.text_muted));
             }
-            for ch in &chars {
+            for (idx, ch) in chars.iter().enumerate() {
                 let id = ch["id"].as_str().unwrap_or_default();
-                let name = ch["name"].as_str().unwrap_or(id);
+                let base_name = resolve_character_display_name(ch);
+                let seen = name_counts.entry(base_name.clone()).or_insert(0);
+                *seen += 1;
+                let unique_name = if *seen > 1 {
+                    format!("{base_name} #{}", idx + 1)
+                } else {
+                    base_name
+                };
+
                 let v0 = ch["views"].as_array().and_then(|vs| vs.first());
                 let mut craft_tags = Vec::new();
                 if v0.and_then(|v| v["pcraft_path"].as_str()).is_some() {
@@ -175,81 +239,86 @@ fn draw_roster_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                     craft_tags.push(".ecproj");
                 }
                 let tag_str = if craft_tags.is_empty() {
-                    ch["animation_style"].as_str().unwrap_or("cutout").to_owned()
+                    match ch["animation_style"].as_str().unwrap_or("cutout") {
+                        "cutout_2_5d" => "2.5D rig",
+                        "sprite_2d" => "2D sprite",
+                        "rig_3d" => "3D rig",
+                        other => other,
+                    }
+                    .to_owned()
                 } else {
                     craft_tags.join(" · ")
                 };
-                let pill_lbl = format!("{name} ({tag_str})");
+                let pill_lbl = format!("{unique_name} ({tag_str})");
                 let btn_id = format!("anim-char-{id}");
-                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new(&btn_id, "user", &pill_lbl, name).selected(current == id)).clicked() {
+                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new(&btn_id, "user", &pill_lbl, &unique_name).selected(current == id)).clicked() {
                     ctx.push(UiAction::SelectCharacter {
                         id: id.to_owned(),
                         jump_animation: false,
                     });
                 }
             }
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                let has_char = !current.is_empty();
-                if action_button(
-                    ui,
-                    ctx.reg,
-                    ctx.pal,
-                    BtnSpec::new("anim-scribbles-open", "sparkles", "Scribbles", "Open Fidget & Scribbles character/sheet stager")
-                        .selected(ctx.state.fidget_open),
-                )
-                .clicked()
-                {
-                    ctx.state.fidget_open = true;
-                }
-                let active_ecproj = active_character_obj(ctx).and_then(|c| {
-                    c.pointer("/views/0/ecproj_path")
-                        .and_then(Value::as_str)
-                        .or_else(|| c.pointer("/action_ecprojs/0/path").and_then(Value::as_str))
-                        .map(str::to_owned)
-                });
-                if let Some(ec_path) = active_ecproj
-                    && action_button(
-                        ui,
-                        ctx.reg,
-                        ctx.pal,
-                        BtnSpec::new("character-link-filmcraft", "link", "Link V2", "Dynamic-link character .ecproj onto FilmCraft V2"),
-                    )
-                    .clicked()
-                {
-                    ctx.exec(
-                        "video.link_effectcraft",
-                        json!({"project": ec_path, "track": "V2"}),
-                        Some("Linked character .ecproj onto FilmCraft V2"),
-                    );
-                }
-                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("character-open-effectcraft", "external", "EffectCraft", "Open .ecproj in EffectCraft").enabled(has_char)).clicked() {
-                    ctx.exec("character.open", json!({"character": current, "app": "effectcraft"}), Some("Opened .ecproj in EffectCraft"));
-                }
-                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("character-open-vectorcraft", "pen", "VectorCraft", "Open .vectorcraft / .svg in VectorCraft").enabled(has_char)).clicked() {
-                    ctx.exec("character.open", json!({"character": current, "app": "vectorcraft"}), Some("Opened VectorCraft"));
-                }
-                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("character-open-photocraft", "image", "PhotoCraft", "Open .pcraft / .psd in PhotoCraft").enabled(has_char)).clicked() {
-                    ctx.exec("character.open", json!({"character": current, "app": "photocraft"}), Some("Opened .pcraft in PhotoCraft"));
-                }
-                if action_button(
-                    ui,
-                    ctx.reg,
-                    ctx.pal,
-                    BtnSpec::new("character-rig-run", "wand", "Rig .ecproj", "Build EffectCraft .ecproj from .pcraft/.psd")
-                        .primary()
-                        .enabled(has_char),
-                )
-                .clicked()
-                {
-                    ctx.exec("character.rig", json!({"character": current}), Some("Built EffectCraft puppet rig (.ecproj)"));
-                }
-                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("character-cut-run", "scissors", "Cut .pcraft", "Cut layered parts into .pcraft via PhotoCraft").enabled(has_char)).clicked() {
-                    ctx.exec("character.cut", json!({"character": current, "remove_background": true}), Some("Cut parts into .pcraft"));
-                }
-                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("character-mark-run", "pin", "Mark", "Mark puppet joints").enabled(has_char)).clicked() {
-                    ctx.exec("character.mark", json!({"character": current}), Some("Marked puppet joints"));
-                }
+
+            ui.label(RichText::new("·").color(ctx.pal.border));
+            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("character-mark-run", "pin", "Mark", "Mark puppet joints").enabled(has_char)).clicked() {
+                ctx.exec("character.mark", json!({"character": current}), Some("Marked puppet joints"));
+            }
+            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("character-cut-run", "scissors", "Cut .pcraft", "Cut layered parts into .pcraft via PhotoCraft").enabled(has_char)).clicked() {
+                ctx.exec("character.cut", json!({"character": current, "remove_background": true}), Some("Cut parts into .pcraft"));
+            }
+            if action_button(
+                ui,
+                ctx.reg,
+                ctx.pal,
+                BtnSpec::new("character-rig-run", "wand", "Rig .ecproj", "Build EffectCraft .ecproj from .pcraft/.psd")
+                    .primary()
+                    .enabled(has_char),
+            )
+            .clicked()
+            {
+                ctx.exec("character.rig", json!({"character": current}), Some("Built EffectCraft puppet rig (.ecproj)"));
+            }
+            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("character-open-photocraft", "image", "PhotoCraft", "Open .pcraft / .psd in PhotoCraft").enabled(has_char)).clicked() {
+                ctx.exec("character.open", json!({"character": current, "app": "photocraft"}), Some("Opened .pcraft in PhotoCraft"));
+            }
+            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("character-open-vectorcraft", "pen", "VectorCraft", "Open .vectorcraft / .svg in VectorCraft").enabled(has_char)).clicked() {
+                ctx.exec("character.open", json!({"character": current, "app": "vectorcraft"}), Some("Opened VectorCraft"));
+            }
+            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("character-open-effectcraft", "external", "EffectCraft", "Open .ecproj in EffectCraft").enabled(has_char)).clicked() {
+                ctx.exec("character.open", json!({"character": current, "app": "effectcraft"}), Some("Opened .ecproj in EffectCraft"));
+            }
+            let active_ecproj = active_character_obj(ctx).and_then(|c| {
+                c.pointer("/views/0/ecproj_path")
+                    .and_then(Value::as_str)
+                    .or_else(|| c.pointer("/action_ecprojs/0/path").and_then(Value::as_str))
+                    .map(str::to_owned)
             });
+            if let Some(ec_path) = active_ecproj
+                && action_button(
+                    ui,
+                    ctx.reg,
+                    ctx.pal,
+                    BtnSpec::new("character-link-filmcraft", "link", "Link V2", "Dynamic-link character .ecproj onto FilmCraft V2"),
+                )
+                .clicked()
+            {
+                ctx.exec(
+                    "video.link_effectcraft",
+                    json!({"project": ec_path, "track": "V2"}),
+                    Some("Linked character .ecproj onto FilmCraft V2"),
+                );
+            }
+            if action_button(
+                ui,
+                ctx.reg,
+                ctx.pal,
+                BtnSpec::new("anim-scribbles-open", "sparkles", "Scribbles", "Open Fidget & Scribbles character/sheet stager")
+                    .selected(ctx.state.fidget_open),
+            )
+            .clicked()
+            {
+                ctx.state.fidget_open = true;
+            }
         });
     });
     ctx.reg.record("anim-roster-bar", "Character Roster", &bar.response, None);
@@ -259,18 +328,17 @@ fn draw_action_and_path_column(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     let cid = active_character(ctx);
     let scroll_out = ScrollArea::vertical().id_salt("anim_left_scroll").auto_shrink([false, false]).show(ui, |ui| {
         fill_card(ui, ctx.pal, false, |ui| {
-            ui.horizontal(|ui| {
+            ui.horizontal_wrapped(|ui| {
                 ui.label(RichText::new("Animation Style").size(11.5).strong());
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    let mode_lbl = match ctx.state.animation.style_tab.as_str() {
-                        "sprite-2d" => "2D Sprite (.anicraft)",
-                        "rig-3d" => "3D Anim (.ecproj)",
-                        _ => "2.5D Cutout Rig",
-                    };
-                    ui.label(RichText::new(mode_lbl).size(10.5).color(ctx.pal.text_secondary));
-                });
+                let mode_lbl = match ctx.state.animation.style_tab.as_str() {
+                    "sprite-2d" => "2D Sprite",
+                    "rig-3d" => "3D Rig",
+                    _ => "2.5D Cutout Rig",
+                };
+                ui.label(RichText::new(mode_lbl).size(10.5).color(ctx.pal.text_muted));
             });
-            ui.horizontal(|ui| {
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing.x = 4.0;
                 for (tid, lbl, tip) in [
                     ("sprite-2d", "2D Sprite", "Headless anicraft-cli sprite cycle -> .ecproj"),
                     ("cutout-2-5d", "2.5D Rig", "2.5D PhotoCraft (.pcraft) + EffectCraft (.ecproj)"),
@@ -289,11 +357,11 @@ fn draw_action_and_path_column(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         fill_card(ui, ctx.pal, false, |ui| {
             ui.horizontal(|ui| {
                 ui.label(RichText::new("▷ Action").size(12.0).strong().color(ctx.pal.accent_sky));
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    ui.label(RichText::new(&ctx.state.animation.selected_action).monospace().size(10.0).color(ctx.pal.text_muted));
-                });
+                ui.label(RichText::new(&ctx.state.animation.selected_action).monospace().size(10.0).color(ctx.pal.text_muted));
             });
             ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing.x = 4.0;
+                ui.spacing_mut().item_spacing.y = 4.0;
                 for (act, lbl) in [
                     ("idle", "Idle"),
                     ("fly", "Fly"),
@@ -320,16 +388,14 @@ fn draw_action_and_path_column(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
 
         let amb = ctx.pal.accent_amber;
         fill_card(ui, ctx.pal, false, |ui| {
-            ui.horizontal(|ui| {
+            ui.horizontal_wrapped(|ui| {
                 ui.label(RichText::new("✎ Path & depth").size(12.0).strong().color(amb));
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    ui.label(
-                        RichText::new(format!("{:.0}% → {:.0}%", ctx.state.animation.start_size_pct, ctx.state.animation.end_size_pct))
-                            .monospace()
-                            .size(10.0)
-                            .color(ctx.pal.text_muted),
-                    );
-                });
+                ui.label(
+                    RichText::new(format!("{:.0}% → {:.0}%", ctx.state.animation.start_size_pct, ctx.state.animation.end_size_pct))
+                        .monospace()
+                        .size(10.0)
+                        .color(ctx.pal.text_muted),
+                );
             });
             xy_path_pad(
                 ui,
@@ -343,7 +409,8 @@ fn draw_action_and_path_column(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("anim-travel-dur", "Travel duration", 0.2..=12.0, "s", amb), &mut ctx.state.animation.travel_duration);
             ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("anim-start-size", "Start size", 20.0..=250.0, "%", amb), &mut ctx.state.animation.start_size_pct);
             ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("anim-end-size", "End size", 20.0..=250.0, "%", amb), &mut ctx.state.animation.end_size_pct);
-            ui.horizontal(|ui| {
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing.x = 4.0;
                 if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-clear-path", "Clear", "Clear root path in .ecproj")).clicked() && !cid.is_empty() {
                     ctx.exec("character.save_path", json!({"character": cid, "points": []}), Some("Cleared walk path in .ecproj"));
                 }
@@ -375,12 +442,90 @@ fn draw_action_and_path_column(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     ctx.reg.record("motion-layers", "Action & Path", &resp, None);
 }
 
+fn draw_stage_audio_and_track_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str, total_marks: usize) {
+    let has_audio = ctx.state.song_audio_path().is_some();
+    let play_icon = if ctx.state.audio_playing { "pause" } else { "play" };
+    let play_lbl = if ctx.state.audio_playing { "Pause" } else { "Play Audio" };
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 5.0;
+        ui.spacing_mut().item_spacing.y = 4.0;
+        if action_button(
+            ui,
+            ctx.reg,
+            ctx.pal,
+            BtnSpec::new("anim-audio-play", play_icon, play_lbl, "Play / pause underlying song or FilmCraft audio track")
+                .primary()
+                .enabled(has_audio),
+        )
+        .clicked()
+        {
+            ctx.push(UiAction::ToggleAudio);
+        }
+        ui.label(
+            RichText::new(format!("0:{:04.1}", ctx.state.animation.scrub_seconds))
+                .monospace()
+                .size(9.8)
+                .color(if ctx.state.audio_playing { ctx.pal.accent_emerald } else { ctx.pal.text_muted }),
+        );
+        for (src, lbl, tip) in [
+            ("effectcraft", "EC · V2 Rig", "Isolate EffectCraft .ecproj character rig track"),
+            ("filmcraft", "FC · Film Track", "Preview underlying FilmCraft V1 / program sequence track"),
+            ("overlay", "FC + EC", "Composite EffectCraft V2 rig over FilmCraft V1 sequence"),
+        ] {
+            let id = format!("anim-track-src-{src}");
+            let sel = ctx.state.animation.track_source == src;
+            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, lbl, tip).selected(sel)).clicked() {
+                ctx.state.animation.track_source = src.into();
+                let solo = src == "effectcraft";
+                let enabled = src != "filmcraft";
+                ctx.exec("video.exec", json!({"id": "timeline.setTrack", "params": {"track": "V2", "enabled": enabled, "solo": solo}, "save": false}), None);
+                ctx.exec("video.frame", json!({"seconds": ctx.state.animation.scrub_seconds}), None);
+            }
+        }
+        for (aud, lbl, tip) in [
+            ("song", "♪ Song", "Monitor underlying song audio stem"),
+            ("filmcraft", "FC Mix", "Monitor rendered FilmCraft sequence audio mix"),
+        ] {
+            let id = format!("anim-audio-src-{aud}");
+            let sel = ctx.state.animation.audio_source == aud;
+            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, lbl, tip).selected(sel)).clicked() {
+                ctx.state.animation.audio_source = aud.into();
+                if ctx.state.audio_playing {
+                    let t = ctx.state.animation.scrub_seconds;
+                    ctx.push(UiAction::SeekAudio(t));
+                }
+            }
+        }
+        pill_toggle(ui, ctx.reg, ctx.pal, "motion-grid", "Grid", &mut ctx.state.animation.show_grid, ctx.pal.accent_sky);
+        let marks_lbl = format!("Marks ({total_marks})");
+        pill_toggle(ui, ctx.reg, ctx.pal, "motion-marks", &marks_lbl, &mut ctx.state.animation.show_marks, ctx.pal.accent_emerald);
+        pill_toggle(ui, ctx.reg, ctx.pal, "motion-path-visible", "Path", &mut ctx.state.animation.show_path_hud, ctx.pal.accent_amber);
+        if ctx.state.animation.puppet_record_live {
+            status_pill(ui, ctx.pal, "REC Pin Drag", ctx.pal.danger);
+        }
+        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("anim-render-frame", "image", "Render", "Render active EffectCraft or FilmCraft frame at playhead").enabled(!cid.is_empty() || ctx.state.animation.track_source == "filmcraft")).clicked() {
+            if ctx.state.animation.track_source == "filmcraft" {
+                ctx.exec("video.frame", json!({"seconds": ctx.state.animation.scrub_seconds}), Some("Rendered FilmCraft frame"));
+            } else {
+                ctx.exec("character.frame", json!({"character": cid, "time": ctx.state.animation.scrub_seconds}), Some("Rendered EffectCraft frame"));
+            }
+        }
+        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("motion-export", "film", "Publish V2", "Render ProRes 4444 V2 pass into FilmCraft").primary().enabled(!cid.is_empty())).clicked() {
+            ctx.exec(
+                "character.shot",
+                json!({"character": cid, "sprite": ctx.state.animation.selected_action, "duration": ctx.state.animation.action_duration, "studio": true}),
+                Some("Published V2 Character Animation"),
+            );
+        }
+    });
+}
+
 fn draw_stage(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     let char_obj = active_character_obj(ctx);
     let view_obj = active_view_obj(char_obj.as_ref());
     let cid = active_character(ctx);
     let frame_path = select_rendered_character_frame(ctx, char_obj.as_ref(), view_obj.as_ref());
-    let bg_thumb = active_background_thumb(ctx);
+    let film_bg = ctx.state.film_frame_at_time(ctx.state.animation.scrub_seconds);
     let joints = view_obj.as_ref().and_then(|v| v["joints"].as_array()).cloned().unwrap_or_default();
     let pins = view_obj.as_ref().and_then(|v| v["pins"].as_array()).cloned().unwrap_or_default();
     let total_marks = joints.len() + pins.len();
@@ -390,27 +535,7 @@ fn draw_stage(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         .unwrap_or("assets/characters/rig.ecproj");
 
     let panel = fill_card(ui, ctx.pal, true, |ui| {
-        ui.horizontal_wrapped(|ui| {
-            pill_toggle(ui, ctx.reg, ctx.pal, "motion-grid", "Grid", &mut ctx.state.animation.show_grid, ctx.pal.accent_sky);
-            let marks_lbl = format!("Rig Marks ({total_marks})");
-            pill_toggle(ui, ctx.reg, ctx.pal, "motion-marks", &marks_lbl, &mut ctx.state.animation.show_marks, ctx.pal.accent_emerald);
-            pill_toggle(ui, ctx.reg, ctx.pal, "motion-path-visible", "Walk Path", &mut ctx.state.animation.show_path_hud, ctx.pal.accent_amber);
-            if ctx.state.animation.puppet_record_live {
-                status_pill(ui, ctx.pal, "REC Pin Drag", ctx.pal.danger);
-            }
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("motion-export", "film", "Publish V2", "Render ProRes 4444 V2 pass into FilmCraft").primary().enabled(!cid.is_empty())).clicked() {
-                    ctx.exec(
-                        "character.shot",
-                        json!({"character": cid, "sprite": ctx.state.animation.selected_action, "duration": ctx.state.animation.action_duration, "studio": true}),
-                        Some("Published V2 Character Animation"),
-                    );
-                }
-                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("anim-render-frame", "image", "Render Frame", "Render EffectCraft .ecproj frame at scrub time").enabled(!cid.is_empty())).clicked() {
-                    ctx.exec("character.frame", json!({"character": cid, "time": ctx.state.animation.scrub_seconds}), Some("Rendered EffectCraft frame"));
-                }
-            });
-        });
+        draw_stage_audio_and_track_bar(ui, ctx, &cid, total_marks);
 
         let avail = ui.available_size();
         let sense = if ctx.state.animation.puppet_record_live {
@@ -418,7 +543,12 @@ fn draw_stage(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         } else {
             Sense::click()
         };
-        let (outer_rect, resp) = ui.allocate_exact_size(Vec2::new(avail.x.max(200.0), (avail.y - 6.0).max(160.0)), sense);
+        let (outer_rect, resp) = ui.allocate_exact_size(Vec2::new(avail.x.max(180.0), (avail.y - 6.0).max(140.0)), sense);
+        let tc_badge = match ctx.state.animation.track_source.as_str() {
+            "filmcraft" => "V1 · FilmCraft .fcproj",
+            "overlay" => "FC V1 + EC V2 · Composite",
+            _ => "V2 · .pcraft / .ecproj",
+        };
         let inner = paint_filmbar_frame(
             ui,
             outer_rect,
@@ -427,10 +557,16 @@ fn draw_stage(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                 orientation: FilmbarOrientation::Horizontal,
                 selected: ctx.state.animation.puppet_record_live,
                 hovered: resp.hovered(),
-                timecode: Some("V2 · .pcraft / .ecproj"),
+                timecode: Some(tc_badge),
             },
         );
-        let _ = paint_local_image(ui, inner, bg_thumb.as_deref(), ctx.pal.bg_stage, 4);
+        ui.painter().rect_filled(inner, egui::CornerRadius::same(4), ctx.pal.bg_stage);
+        if matches!(ctx.state.animation.track_source.as_str(), "filmcraft" | "overlay") {
+            let painted_fc = paint_local_image(ui, inner, film_bg.as_deref(), ctx.pal.bg_stage, 4);
+            if ctx.state.animation.track_source == "filmcraft" && !painted_fc {
+                paint_craft_doc_card(ui, inner.shrink(16.0), ctx.pal, "FC", "film/Song.fcproj", "Click Assemble in Studio or Render to preview FilmCraft V1 track");
+            }
+        }
 
         if ctx.state.animation.show_grid || ctx.state.animation.view_layout != "active" {
             let mid = inner.center();
@@ -447,14 +583,16 @@ fn draw_stage(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             }
         }
 
-        let char_h = (inner.height() * 0.74).clamp(90.0, 290.0);
-        let char_rect = Rect::from_center_size(inner.center(), Vec2::new(char_h * 1.25, char_h));
-        if !paint_local_image(ui, char_rect, frame_path.as_deref(), egui::Color32::TRANSPARENT, 4) {
-            paint_craft_doc_card(ui, char_rect, ctx.pal, "EC", ecproj_file.rsplit('/').next().unwrap_or(ecproj_file), "Click Render Frame or Rig .ecproj to render character");
+        let char_h = (inner.height() * 0.78).clamp(80.0, 320.0);
+        let char_w = (inner.width() * 0.72).min(char_h * 1.35).max(80.0);
+        let char_rect = Rect::from_center_size(inner.center(), Vec2::new(char_w, char_h));
+        if ctx.state.animation.track_source != "filmcraft" {
+            if !paint_local_image(ui, char_rect, frame_path.as_deref(), egui::Color32::TRANSPARENT, 4) {
+                paint_craft_doc_card(ui, char_rect, ctx.pal, "EC", ecproj_file.rsplit('/').next().unwrap_or(ecproj_file), "Click Render or Rig .ecproj to render character");
+            }
+            capture_live_puppet_drag(ui, ctx, &cid, char_rect, &resp);
+            paint_stage_overlays(ui, ctx, inner, char_rect, view_obj.as_ref(), &joints, &pins);
         }
-
-        capture_live_puppet_drag(ui, ctx, &cid, char_rect, &resp);
-        paint_stage_overlays(ui, ctx, inner, char_rect, view_obj.as_ref(), &joints, &pins);
         ctx.reg.record("motion-canvas", "Animation Canvas", &resp, None);
     });
     ctx.reg.record("motion-stage", "Animation Stage", &panel.response, None);

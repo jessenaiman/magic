@@ -126,14 +126,13 @@ impl Default for ProjectViewState {
 pub struct StoryboardViewState {
     pub current_page: usize,
     pub zoom: f64,
-    pub show_wizard: bool,
-    pub style_d01: String,
-    pub world_l01: String,
-    pub character_c01: String,
-    pub motion_m01: String,
-    pub selected_slot: String,
-    pub slot_value: String,
-    pub archetype: String,
+    pub double_page_mode: bool,
+    pub req_filter: String,
+    pub scroll_to_page: Option<usize>,
+    pub editing_page: Option<usize>,
+    pub editing_slot: Option<String>,
+    pub draft_text: String,
+    pub focus_requested: bool,
 }
 
 impl Default for StoryboardViewState {
@@ -141,14 +140,13 @@ impl Default for StoryboardViewState {
         Self {
             current_page: 0,
             zoom: 100.0,
-            show_wizard: false,
-            style_d01: String::new(),
-            world_l01: String::new(),
-            character_c01: String::new(),
-            motion_m01: String::new(),
-            selected_slot: "cover_title".into(),
-            slot_value: String::new(),
-            archetype: "scene".into(),
+            double_page_mode: true,
+            req_filter: "all".into(),
+            scroll_to_page: None,
+            editing_page: None,
+            editing_slot: None,
+            draft_text: String::new(),
+            focus_requested: false,
         }
     }
 }
@@ -205,6 +203,8 @@ pub struct LyricsViewState {
     pub move_preset: String,
     pub draw_enabled: bool,
     pub backdrop_mode: String,
+    pub track_source: String,
+    pub audio_source: String,
 }
 
 impl Default for LyricsViewState {
@@ -260,6 +260,8 @@ impl Default for LyricsViewState {
             move_preset: "pop".into(),
             draw_enabled: false,
             backdrop_mode: "scene".into(),
+            track_source: "overlay".into(),
+            audio_source: "filmcraft".into(),
         }
     }
 }
@@ -300,6 +302,8 @@ pub struct MotionViewState {
     pub tracker_mode: String,
     pub alpha_queue_preset: String,
     pub lottie_show_warnings: bool,
+    pub track_source: String,
+    pub audio_source: String,
 }
 
 impl Default for MotionViewState {
@@ -339,6 +343,8 @@ impl Default for MotionViewState {
             tracker_mode: "point".into(),
             alpha_queue_preset: "ProRes 4444 XQ".into(),
             lottie_show_warnings: false,
+            track_source: "overlay".into(),
+            audio_source: "filmcraft".into(),
         }
     }
 }
@@ -409,6 +415,8 @@ pub struct AnimationViewState {
     pub curve_handle_in: [f32; 2],
     pub curve_handle_out: [f32; 2],
     pub prop_filter: String,
+    pub track_source: String,
+    pub audio_source: String,
 }
 
 impl Default for AnimationViewState {
@@ -478,6 +486,8 @@ impl Default for AnimationViewState {
             curve_handle_in: [0.33, 0.15],
             curve_handle_out: [0.67, 0.85],
             prop_filter: "U".into(),
+            track_source: "effectcraft".into(),
+            audio_source: "filmcraft".into(),
         }
     }
 }
@@ -535,6 +545,8 @@ pub struct StudioViewState {
     pub audio_auto_mode: String,
     pub audio_duck_db: f64,
     pub mixer_insert_slot: usize,
+    pub mixer_gains_db: [f64; 3],
+    pub mixer_mutes: [bool; 3],
     pub title_text: String,
     pub title_vertical: bool,
     pub title_pin_edge: String,
@@ -599,7 +611,9 @@ impl Default for StudioViewState {
             audio_auto_mode: "Latch".into(),
             audio_duck_db: -9.5,
             mixer_insert_slot: 0,
-            title_text: "Pterodactyl Song".into(),
+            mixer_gains_db: [0.0, -3.0, 0.0],
+            mixer_mutes: [false; 3],
+            title_text: String::new(),
             title_vertical: false,
             title_pin_edge: "bottom-left".into(),
             title_roll_crawl: "static".into(),
