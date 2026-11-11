@@ -1,0 +1,15 @@
+:root {
+  --magic-accent: #35e1c0;
+  --magic-amber: #f0a83c;
+}
+.coal, .ayu, .navy {
+  --links: #35e1c0;
+  --sidebar-active: #35e1c0;
+}
+main table {
+  width: 100%;
+  border-collapse: collapse;
+}
+main code {
+  border-radius: 4px;
+}

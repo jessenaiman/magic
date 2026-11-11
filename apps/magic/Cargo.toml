@@ -1,0 +1,38 @@
+[package]
+name = "magic"
+description = "Magic Studio pure-Rust desktop coordinator over magic-engine and the ArtCraft suite"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "magic"
+path = "src/main.rs"
+
+[dependencies]
+arboard = { workspace = true }
+clap = { workspace = true }
+craft-atomic = { workspace = true }
+craft-dialogs = { workspace = true }
+craft-font-catalog = { workspace = true }
+craft-keymap = { workspace = true }
+craft-menu = { workspace = true }
+craft-platform = { workspace = true }
+craft-quit = { workspace = true }
+craft-ui = { workspace = true }
+craft-util = { workspace = true }
+craft-window = { workspace = true }
+eframe = { workspace = true }
+egui = { workspace = true }
+image = { workspace = true }
+log = { workspace = true }
+magic = { workspace = true }
+magic-ui-egui = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+subtle = { workspace = true }
