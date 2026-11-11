@@ -24,7 +24,6 @@ Follow the exact ArtCraft MCP pattern in [`docs/mcp.md`](docs/mcp.md) (matching 
 ## 3. Repository Hygiene & House Rules (`storytold/craft-contrib`)
 
 - Do **not** create custom paraphrased animation skill files or markdown research/log dumps in the repository. Link directly to official outside ArtCraft documentation and verified tutorials.
-- Do not restore `docs/craft-reference/` copies of sibling Craft documentation. Link to the official upstream docs; `cargo xtask layers` rejects that directory. Keep change history in Git and communicate archive intake exclusions in the PR.
 - Keep every source file focused on one responsibility and under 900 lines; leave a `// TODO:` comment (never a `todo!()` panic) when a headless CLI integration step needs follow-up verification on the host.
 - Never introduce Tauri, webviews, JavaScript, or TypeScript; all desktop UI lives in `crates/ui-egui` (`magic-ui-egui`) and `apps/magic`.
 - Run `cargo xtask ci` (fmt, layers, Clippy `-D warnings`, workspace tests) before opening a PR, and report honestly which checks ran vs which were skipped.
