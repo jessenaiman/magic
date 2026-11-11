@@ -13,10 +13,7 @@ use std::io::Write;
 use clap::Parser;
 
 #[derive(Parser)]
-#[command(
-    name = "magic-mcp",
-    about = "Magic Studio Model Context Protocol server (stdio JSON-RPC 2.0; binary entrypoint for `magic-cli mcp`)"
-)]
+#[command(name = "magic-mcp", about = "Magic Studio Model Context Protocol server (stdio JSON-RPC 2.0; binary entrypoint for `magic-cli mcp`)")]
 struct McpCli {
     /// Connect to a running `magic --control <PORT>` window (`127.0.0.1:9875` or `9875`)
     #[arg(long, visible_aliases = ["bridge", "control"])]

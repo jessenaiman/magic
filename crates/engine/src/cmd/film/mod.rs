@@ -10,13 +10,11 @@ pub mod finishing;
 pub mod linked_comp;
 pub mod markers;
 pub use bridge::{
-    cmd_bridge_control, cmd_bridge_history, cmd_bridge_preflight, cmd_bridge_status, cmd_bridge_templates,
-    cmd_effect_import_aep, cmd_effect_lottie, cmd_words_captions_sync,
+    cmd_bridge_control, cmd_bridge_history, cmd_bridge_preflight, cmd_bridge_status, cmd_bridge_templates, cmd_effect_import_aep, cmd_effect_lottie,
+    cmd_words_captions_sync,
 };
 pub use finishing::cmd_video_finish;
-pub use linked_comp::{
-    cmd_video_bake_link, cmd_video_link_effectcraft, cmd_video_list_ec_comps, cmd_video_sync_links,
-};
+pub use linked_comp::{cmd_video_bake_link, cmd_video_link_effectcraft, cmd_video_list_ec_comps, cmd_video_sync_links};
 pub use markers::cmd_video_markers;
 
 use std::path::{Path, PathBuf};
@@ -42,11 +40,7 @@ struct Film {
 
 fn film(s: &Session) -> Result<Film> {
     let dir = crate::workshop::project_dir(s)?;
-    let name = s
-        .project_path
-        .as_ref()
-        .and_then(|p| p.file_stem())
-        .map_or("Film".into(), |n| n.to_string_lossy().into_owned());
+    let name = s.project_path.as_ref().and_then(|p| p.file_stem()).map_or("Film".into(), |n| n.to_string_lossy().into_owned());
     let project = s
         .video_project_path
         .clone()
@@ -65,11 +59,7 @@ pub(crate) fn link(s: &mut Session, project: &Path) -> Result<()> {
 
 impl Film {
     fn require(&self) -> Result<&Path> {
-        if self.project.is_file() {
-            Ok(&self.project)
-        } else {
-            Err(bad("No film timeline yet; run video.assemble first"))
-        }
+        if self.project.is_file() { Ok(&self.project) } else { Err(bad("No film timeline yet; run video.assemble first")) }
     }
     fn preview(&self) -> PathBuf {
         self.dir.join("film").join(format!("{}-preview.mp4", self.name))
@@ -80,11 +70,8 @@ impl Film {
 }
 
 fn file_info(path: &Path) -> Value {
-    let modified = std::fs::metadata(path)
-        .and_then(|m| m.modified())
-        .ok()
-        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-        .map(|d| d.as_millis() as u64);
+    let modified =
+        std::fs::metadata(path).and_then(|m| m.modified()).ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_millis() as u64);
     json!({"path": path, "exists": path.is_file(), "modified": modified})
 }
 
@@ -459,7 +446,9 @@ pub fn cmd_video_export(s: &mut Session, p: &Value) -> Result<Value> {
     let (out, options) = export_destination(&f, p);
     export_with(&f, &out, false, &options)?;
     let validation = inspect_export_status(&f, &out);
-    Ok(json!({"ok": true, "export": out, "timeline": f.project, "export_ready": validation["valid"] == true, "validation": validation, "export_options": options}))
+    Ok(
+        json!({"ok": true, "export": out, "timeline": f.project, "export_ready": validation["valid"] == true, "validation": validation, "export_options": options}),
+    )
 }
 
 pub fn cmd_video_exec(s: &mut Session, p: &Value) -> Result<Value> {

@@ -8,20 +8,8 @@ use std::time::Instant;
 
 use crate::Result;
 
-pub(crate) const SETS: &[(&str, &[&str])] = &[(
-    "workspace",
-    &[
-        "craft-util",
-        "craft-scribbles",
-        "magic-engine",
-        "magic-mcp",
-        "magic-ui-egui",
-        "magic-cli",
-        "magic",
-        "magic-tui",
-        "xtask",
-    ],
-)];
+pub(crate) const SETS: &[(&str, &[&str])] =
+    &[("workspace", &["craft-util", "craft-scribbles", "magic-engine", "magic-mcp", "magic-ui-egui", "magic-cli", "magic", "magic-tui", "xtask"])];
 
 pub(crate) fn packages(set: &[&str]) -> Vec<String> {
     set.iter().flat_map(|name| ["-p".to_owned(), (*name).to_owned()]).collect()

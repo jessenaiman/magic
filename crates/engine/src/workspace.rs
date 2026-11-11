@@ -292,8 +292,7 @@ fn resolve_effect_exec_target(s: &crate::Session, p: &Value) -> Result<PathBuf> 
                     return Ok(candidate);
                 }
             }
-            Ok(find_project_craft_doc(s, CraftTarget::Effect)
-                .unwrap_or_else(|| proj_dir.join("assets/characters/rig.ecproj")))
+            Ok(find_project_craft_doc(s, CraftTarget::Effect).unwrap_or_else(|| proj_dir.join("assets/characters/rig.ecproj")))
         }
         _ => find_project_craft_doc(s, CraftTarget::Effect)
             .ok_or_else(|| EngineError::InvalidParams("path=<.ecproj> or domain=lyrics|motion|character is required".into())),
@@ -310,9 +309,9 @@ pub fn cmd_effect_exec(s: &mut crate::Session, p: &Value) -> Result<Value> {
         return Err(EngineError::InvalidParams("id=<effectcraft command> or steps=[...] is required".into()));
     };
     let read_only = steps.len() == 1
-        && steps[0]["id"].as_str().is_some_and(|id| {
-            matches!(id, "comp.info" | "text.fonts" | "text.fontFeatures" | "layer.channels" | "edit.history.list" | "footage.check")
-        });
+        && steps[0]["id"]
+            .as_str()
+            .is_some_and(|id| matches!(id, "comp.info" | "text.fonts" | "text.fontFeatures" | "layer.channels" | "edit.history.list" | "footage.check"));
     let save = p["save"].as_bool().unwrap_or(!read_only);
     let dir = path.parent().unwrap_or_else(|| Path::new("."));
     let results = crate::cmd::character::effectcraft(dir, path.is_file().then_some(path.as_path()), &steps, save)?;

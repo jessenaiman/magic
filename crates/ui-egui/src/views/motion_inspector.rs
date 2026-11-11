@@ -11,55 +11,23 @@
 //!   Multi-Channel OpenEXR (`EXtractoR`, `Cryptomatte`), `Preserve RGB`, & `OCIO` Display Transform.
 
 use egui::{Align, Layout, RichText, ScrollArea, Ui};
-use magic::craft_effects::{
-    EFFECTCRAFT_19_CATEGORIES, EFFECTCRAFT_38_BLEND_MODES, MOTION_EFFECTS,
-};
+use magic::craft_effects::{EFFECTCRAFT_19_CATEGORIES, EFFECTCRAFT_38_BLEND_MODES, MOTION_EFFECTS};
 use serde_json::{Value, json};
 
-use crate::controls::{
-    EffectRowSpec, ScalarSpec, effect_row_button, fill_card, pill_toggle, ring_slider_h,
-    rotary_dial,
-};
+use crate::controls::{EffectRowSpec, ScalarSpec, effect_row_button, fill_card, pill_toggle, ring_slider_h, rotary_dial};
 use crate::state::{PickerTarget, UiAction, ViewCtx};
 use crate::widgets::{BtnSpec, action_button, status_pill, text_input};
 
 /// Toolbar `.lottie` / `.json` export & import buttons (`T04`).
 pub fn draw_lottie_toolbar_buttons(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
-    if action_button(
-        ui,
-        ctx.reg,
-        ctx.pal,
-        BtnSpec::new("motion-lottie-export", "upload", ".lottie", "Export V4 comp as Bodymovin .lottie (T04)"),
-    )
-    .clicked()
-    {
-        ctx.exec(
-            "effect.lottie",
-            json!({"mode": "export", "format": "dotlottie", "dotlottie": true}),
-            Some("Exported .lottie motion package"),
-        );
+    if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("motion-lottie-export", "upload", ".lottie", "Export V4 comp as Bodymovin .lottie (T04)")).clicked() {
+        ctx.exec("effect.lottie", json!({"mode": "export", "format": "dotlottie", "dotlottie": true}), Some("Exported .lottie motion package"));
     }
-    if action_button(
-        ui,
-        ctx.reg,
-        ctx.pal,
-        BtnSpec::label_only("motion-lottie-json", ".json", "Export Lottie .json"),
-    )
-    .clicked()
-    {
-        ctx.exec(
-            "effect.lottie",
-            json!({"mode": "export", "format": "json", "dotlottie": false}),
-            Some("Exported Lottie .json"),
-        );
+    if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("motion-lottie-json", ".json", "Export Lottie .json")).clicked() {
+        ctx.exec("effect.lottie", json!({"mode": "export", "format": "json", "dotlottie": false}), Some("Exported Lottie .json"));
     }
-    if action_button(
-        ui,
-        ctx.reg,
-        ctx.pal,
-        BtnSpec::label_only("motion-lottie-import", "+ Lottie", "Import .lottie / .json into motion/actions.ecproj (T04)"),
-    )
-    .clicked()
+    if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("motion-lottie-import", "+ Lottie", "Import .lottie / .json into motion/actions.ecproj (T04)"))
+        .clicked()
     {
         ctx.push(UiAction::PickFile {
             target: PickerTarget::ImportLottie,
@@ -73,23 +41,9 @@ pub fn draw_lottie_toolbar_buttons(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
 
 /// Collapsible Lottie feature-degradation warnings strip (`T04`).
 pub fn draw_lottie_warnings_strip(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
-    let warnings = ctx
-        .state
-        .cache
-        .lottie_last
-        .get("warnings")
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
-    let out_path = ctx
-        .state
-        .cache
-        .lottie_last
-        .get("output")
-        .or_else(|| ctx.state.cache.lottie_last.get("project"))
-        .and_then(Value::as_str)
-        .unwrap_or_default()
-        .to_owned();
+    let warnings = ctx.state.cache.lottie_last.get("warnings").and_then(Value::as_array).cloned().unwrap_or_default();
+    let out_path =
+        ctx.state.cache.lottie_last.get("output").or_else(|| ctx.state.cache.lottie_last.get("project")).and_then(Value::as_str).unwrap_or_default().to_owned();
     if out_path.is_empty() && warnings.is_empty() {
         return;
     }
@@ -148,13 +102,7 @@ pub fn draw_layer_compositing_switches(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         ui.spacing_mut().item_spacing.x = 4.0;
         ui.spacing_mut().item_spacing.y = 4.0;
         ui.label(RichText::new("Matte:").size(10.5).color(ctx.pal.text_muted));
-        for (m, lbl) in [
-            ("none", "None"),
-            ("alpha", "Alpha"),
-            ("alphaInverted", "Alpha Inv"),
-            ("luma", "Luma"),
-            ("lumaInverted", "Luma Inv"),
-        ] {
+        for (m, lbl) in [("none", "None"), ("alpha", "Alpha"), ("alphaInverted", "Alpha Inv"), ("luma", "Luma"), ("lumaInverted", "Luma Inv")] {
             let id = format!("motion-matte-{m}");
             let sel = ctx.state.motion.track_matte == m;
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, lbl, "layer.setTrackMatte").selected(sel)).clicked() {
@@ -166,11 +114,7 @@ pub fn draw_layer_compositing_switches(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
 
     ui.horizontal_wrapped(|ui| {
         if pill_toggle(ui, ctx.reg, ctx.pal, "motion-sw-mblur", "Motion Blur", &mut ctx.state.motion.motion_blur, ctx.pal.accent_emerald).changed() {
-            ctx.exec(
-                "effect.exec",
-                json!({"domain": "motion", "command": "layer.setSwitch", "params": {"motionBlur": ctx.state.motion.motion_blur}}),
-                None,
-            );
+            ctx.exec("effect.exec", json!({"domain": "motion", "command": "layer.setSwitch", "params": {"motionBlur": ctx.state.motion.motion_blur}}), None);
         }
         if pill_toggle(ui, ctx.reg, ctx.pal, "motion-sw-adj", "Adjustment", &mut ctx.state.motion.adjustment_layer, ctx.pal.accent_amber).changed() {
             ctx.exec(
@@ -218,14 +162,11 @@ pub fn draw_motion_inspector(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             }
         });
         ui.separator();
-        ScrollArea::vertical()
-            .id_salt("motion_right_insp_scroll")
-            .auto_shrink([false, false])
-            .show(ui, |ui| match ctx.state.motion.inspector_tab.as_str() {
-                "fx" => draw_fx_308_and_blend_tab(ui, ctx),
-                "track" => draw_tracking_and_exr_tab(ui, ctx),
-                _ => draw_shapes_and_masks_tab(ui, ctx),
-            });
+        ScrollArea::vertical().id_salt("motion_right_insp_scroll").auto_shrink([false, false]).show(ui, |ui| match ctx.state.motion.inspector_tab.as_str() {
+            "fx" => draw_fx_308_and_blend_tab(ui, ctx),
+            "track" => draw_tracking_and_exr_tab(ui, ctx),
+            _ => draw_shapes_and_masks_tab(ui, ctx),
+        });
     });
     ctx.reg.record("motion-inspector", "Motion Inspector", &panel.response, None);
 }
@@ -233,12 +174,30 @@ pub fn draw_motion_inspector(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
 fn draw_shapes_and_masks_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
-        rotary_dial(ui, ctx.reg, ctx.pal, ScalarSpec::new("motion-arc-dial", "Arc Angle", -90.0..=90.0, "°", ctx.pal.accent_amber), &mut ctx.state.motion.arc_bend_deg);
-        rotary_dial(ui, ctx.reg, ctx.pal, ScalarSpec::new("motion-taper-dial", "Turbulence", 0.0..=100.0, "%", ctx.pal.accent_emerald), &mut ctx.state.motion.taper_pct);
+        rotary_dial(
+            ui,
+            ctx.reg,
+            ctx.pal,
+            ScalarSpec::new("motion-arc-dial", "Arc Angle", -90.0..=90.0, "°", ctx.pal.accent_amber),
+            &mut ctx.state.motion.arc_bend_deg,
+        );
+        rotary_dial(
+            ui,
+            ctx.reg,
+            ctx.pal,
+            ScalarSpec::new("motion-taper-dial", "Turbulence", 0.0..=100.0, "%", ctx.pal.accent_emerald),
+            &mut ctx.state.motion.taper_pct,
+        );
     });
     ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("motion-pos-x", "X Offset", 0.0..=1920.0, "px", ctx.pal.accent_amber), &mut ctx.state.motion.pos_x);
     ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("motion-pos-y", "Y Offset", 0.0..=1080.0, "px", ctx.pal.accent_amber), &mut ctx.state.motion.pos_y);
-    ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("motion-stroke-w", "Stroke Width", 1.0..=40.0, "px", ctx.pal.accent_emerald), &mut ctx.state.motion.stroke_width);
+    ring_slider_h(
+        ui,
+        ctx.reg,
+        ctx.pal,
+        ScalarSpec::new("motion-stroke-w", "Stroke Width", 1.0..=40.0, "px", ctx.pal.accent_emerald),
+        &mut ctx.state.motion.stroke_width,
+    );
 
     ui.separator();
     ui.label(RichText::new("9 Shape Layer Operators (T27)").size(11.5).strong().color(ctx.pal.accent_emerald));
@@ -274,12 +233,7 @@ fn draw_shapes_and_masks_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
         ui.spacing_mut().item_spacing.y = 4.0;
-        for (mode, lbl) in [
-            ("add", "Add"),
-            ("subtract", "Subtract"),
-            ("intersect", "Intersect"),
-            ("difference", "Diff"),
-        ] {
+        for (mode, lbl) in [("add", "Add"), ("subtract", "Subtract"), ("intersect", "Intersect"), ("difference", "Diff")] {
             let id = format!("motion-mask-mode-{mode}");
             let sel = ctx.state.motion.mask_mode == mode;
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, lbl, "Set Bezier mask mode").selected(sel)).clicked() {
@@ -287,8 +241,20 @@ fn draw_shapes_and_masks_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             }
         }
     });
-    ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("motion-mask-feather", "Mask Feather", 0.0..=80.0, "px", ctx.pal.accent_sky), &mut ctx.state.motion.mask_feather);
-    ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("motion-mask-exp", "Mask Expansion", -40.0..=40.0, "px", ctx.pal.accent_amber), &mut ctx.state.motion.mask_expansion);
+    ring_slider_h(
+        ui,
+        ctx.reg,
+        ctx.pal,
+        ScalarSpec::new("motion-mask-feather", "Mask Feather", 0.0..=80.0, "px", ctx.pal.accent_sky),
+        &mut ctx.state.motion.mask_feather,
+    );
+    ring_slider_h(
+        ui,
+        ctx.reg,
+        ctx.pal,
+        ScalarSpec::new("motion-mask-exp", "Mask Expansion", -40.0..=40.0, "px", ctx.pal.accent_amber),
+        &mut ctx.state.motion.mask_expansion,
+    );
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
         ui.spacing_mut().item_spacing.y = 4.0;
@@ -314,7 +280,9 @@ fn draw_shapes_and_masks_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                 Some("Interpolated Bezier mask vertices"),
             );
         }
-        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("motion-face-track", "Face Track AI", "MediaPipe faceDetailed + extractFaceMeasurements")).clicked() {
+        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("motion-face-track", "Face Track AI", "MediaPipe faceDetailed + extractFaceMeasurements"))
+            .clicked()
+        {
             ctx.exec(
                 "effect.exec",
                 json!({"domain": "motion", "command": "track.mask", "params": {"method": "faceDetailed", "extractFaceMeasurements": true}}),
@@ -336,7 +304,9 @@ fn representative_effects_for_category(cat: &str) -> &'static [(&'static str, &'
         "matte" => &[("ec.matte.choker", "Simple Choker"), ("ec.matte.refine_soft", "Refine Soft Matte")],
         "noise_grain" => &[("ec.noise.fractal", "Fractal Noise"), ("ec.noise.add_grain", "Add Grain"), ("ec.noise.median", "Median")],
         "perspective" => &[("ec.perspective.dropshadow", "Drop Shadow"), ("ec.perspective.bevelalpha", "Bevel Alpha"), ("ec.perspective.sphere", "CC Sphere")],
-        "simulation" => &[("ec.sim.particle3d", "Particle Emitter 3D"), ("ec.sim.shatter", "Shatter"), ("ec.sim.rainfall", "Rainfall"), ("ec.sim.caustics", "Caustics")],
+        "simulation" => {
+            &[("ec.sim.particle3d", "Particle Emitter 3D"), ("ec.sim.shatter", "Shatter"), ("ec.sim.rainfall", "Rainfall"), ("ec.sim.caustics", "Caustics")]
+        }
         "stylize" => &[("ec.stylize.glow", "Glow"), ("ec.stylize.glass_relief", "Glass Relief"), ("ec.stylize.posterize", "Posterize")],
         "text" => &[("ec.text.numbers", "Numbers"), ("ec.text.timecode", "Timecode")],
         "time" => &[("ec.time.echo", "Echo"), ("ec.time.posterize_time", "Posterize Time"), ("ec.time.timewarp", "Timewarp")],
@@ -344,7 +314,12 @@ fn representative_effects_for_category(cat: &str) -> &'static [(&'static str, &'
         "utility" => &[("EXtractoR", "EXtractoR 32f"), ("Cryptomatte", "Cryptomatte"), ("OCIO Display Transform", "OCIO Transform")],
         "audio" => &[("ec.audio.reverb", "Reverb"), ("ec.audio.param_eq", "Parametric EQ"), ("ec.audio.stereo_mixer", "Stereo Mixer")],
         "wasm_plugin" => &[("wasm.custom.halftone", "WASM Halftone Shader"), ("wasm.custom.kaleido", "WASM Kaleidoscope")],
-        _ => &[("ec.generate.writeon", "Write-On"), ("ec.generate.scribble", "Scribble"), ("ec.generate.audio_spectrum", "Audio Spectrum"), ("ec.generate.gradient_ramp", "Gradient Ramp")],
+        _ => &[
+            ("ec.generate.writeon", "Write-On"),
+            ("ec.generate.scribble", "Scribble"),
+            ("ec.generate.audio_spectrum", "Audio Spectrum"),
+            ("ec.generate.gradient_ramp", "Gradient Ramp"),
+        ],
     }
 }
 
@@ -353,19 +328,8 @@ fn draw_fx_308_and_blend_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     for fx in MOTION_EFFECTS.iter().take(6) {
         let btn_id = format!("motion-fx-{}", fx.id);
         let sel = ctx.state.motion.selected_effect_id == fx.id;
-        if effect_row_button(
-            ui,
-            ctx.reg,
-            ctx.pal,
-            EffectRowSpec {
-                id: &btn_id,
-                badge: fx.badge,
-                label: fx.label,
-                effect_id: fx.craft_command,
-                selected: sel,
-            },
-        )
-        .clicked()
+        if effect_row_button(ui, ctx.reg, ctx.pal, EffectRowSpec { id: &btn_id, badge: fx.badge, label: fx.label, effect_id: fx.craft_command, selected: sel })
+            .clicked()
         {
             ctx.state.motion.selected_effect_id = fx.id.into();
             ctx.exec(
@@ -385,13 +349,8 @@ fn draw_fx_308_and_blend_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     ui.separator();
     ui.horizontal_wrapped(|ui| {
         ui.label(RichText::new("19-Category 308-FX Browser (T29)").size(11.5).strong().color(ctx.pal.accent_sky));
-        if action_button(
-            ui,
-            ctx.reg,
-            ctx.pal,
-            BtnSpec::label_only("motion-load-wasm", "+ .wasm", "Load custom WASM effect plug-in (effect.plugins.load)"),
-        )
-        .clicked()
+        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("motion-load-wasm", "+ .wasm", "Load custom WASM effect plug-in (effect.plugins.load)"))
+            .clicked()
         {
             ctx.push(UiAction::PickFile {
                 target: PickerTarget::ImportWasmPlugin,
@@ -429,20 +388,7 @@ fn draw_fx_308_and_blend_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         }
         let id = format!("motion-ec308-{match_name}");
         let sel = ctx.state.motion.selected_effect_id == *match_name;
-        if effect_row_button(
-            ui,
-            ctx.reg,
-            ctx.pal,
-            EffectRowSpec {
-                id: &id,
-                badge: "EC",
-                label,
-                effect_id: match_name,
-                selected: sel,
-            },
-        )
-        .clicked()
-        {
+        if effect_row_button(ui, ctx.reg, ctx.pal, EffectRowSpec { id: &id, badge: "EC", label, effect_id: match_name, selected: sel }).clicked() {
             ctx.state.motion.selected_effect_id = (*match_name).to_owned();
             ctx.exec(
                 "effect.exec",
@@ -461,11 +407,7 @@ fn draw_tracking_and_exr_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
         ui.spacing_mut().item_spacing.y = 4.0;
-        for (tm, lbl) in [
-            ("point", "1-Pt"),
-            ("twoPoint", "2-Pt Scale/Rot"),
-            ("perspectiveCornerPin", "4-Corner Pin"),
-        ] {
+        for (tm, lbl) in [("point", "1-Pt"), ("twoPoint", "2-Pt Scale/Rot"), ("perspectiveCornerPin", "4-Corner Pin")] {
             let id = format!("motion-trk-mode-{tm}");
             let sel = ctx.state.motion.tracker_mode == tm;
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, lbl, "Select track.motion mode").selected(sel)).clicked() {
@@ -537,16 +479,7 @@ fn draw_tracking_and_exr_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             );
         }
     });
-    if pill_toggle(
-        ui,
-        ctx.reg,
-        ctx.pal,
-        "motion-preserve-rgb",
-        "Preserve RGB (Raw Color)",
-        &mut ctx.state.motion.preserve_rgb,
-        ctx.pal.accent_amber,
-    )
-    .changed()
+    if pill_toggle(ui, ctx.reg, ctx.pal, "motion-preserve-rgb", "Preserve RGB (Raw Color)", &mut ctx.state.motion.preserve_rgb, ctx.pal.accent_amber).changed()
     {
         ctx.exec(
             "effect.exec",

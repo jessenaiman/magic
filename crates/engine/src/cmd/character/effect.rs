@@ -71,11 +71,7 @@ pub fn cmd_puppet_null_rig(s: &mut Session, p: &Value) -> Result<Value> {
     let project = view.require("ecproj", "character.rig")?;
     let layer = p["layer"].as_str().unwrap_or("#1");
     let mode = p["mode"].as_str().unwrap_or("points_follow_nulls");
-    let ec_cmd = if mode == "nulls_follow_points" {
-        "paths.nullsFollowPoints"
-    } else {
-        "paths.pointsFollowNulls"
-    };
+    let ec_cmd = if mode == "nulls_follow_points" { "paths.nullsFollowPoints" } else { "paths.pointsFollowNulls" };
     let result = effect_one(&view, &project, ec_cmd, json!({"layer": layer}))?;
     Ok(json!({"ok": true, "layer": layer, "command": ec_cmd, "result": result}))
 }

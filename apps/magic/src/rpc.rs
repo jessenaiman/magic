@@ -48,11 +48,7 @@ impl MagicDesktopApp {
             "ui.click" | "ui.move" | "ui.drag" | "ui.scroll" | "ui.key" | "ui.type" | "ui.text" => {
                 match self.enqueue_synthetic_input(ctx, &env.method, &env.params) {
                     Ok(summary) => {
-                        self.deferred_replies.push(DeferredReply {
-                            frames_left: 1,
-                            result: summary,
-                            reply: env.reply,
-                        });
+                        self.deferred_replies.push(DeferredReply { frames_left: 1, result: summary, reply: env.reply });
                         ctx.request_repaint();
                     }
                     Err(err) => {
@@ -67,12 +63,7 @@ impl MagicDesktopApp {
         }
     }
 
-    fn begin_screenshot(
-        &mut self,
-        ctx: &egui::Context,
-        params: &Value,
-        reply: mpsc::Sender<Result<Value, String>>,
-    ) -> Result<(), String> {
+    fn begin_screenshot(&mut self, ctx: &egui::Context, params: &Value, reply: mpsc::Sender<Result<Value, String>>) -> Result<(), String> {
         only_keys(params, "ui.screenshot", &["path", "panel", "id"])?;
         if self.pending_captures.len() >= 4 {
             return Err("too many concurrent screenshot requests (limit: 4)".into());
@@ -88,13 +79,10 @@ impl MagicDesktopApp {
             return Err("ui.screenshot accepts either `panel` or `id`, not both".into());
         }
         let (target, is_temp) = capture::target_path(path_str)?;
-        if !is_temp
-            && let Some(roots) = &self.session.automation_roots
-        {
+        if !is_temp && let Some(roots) = &self.session.automation_roots {
             roots.check_write(&target).map_err(|e| e.to_string())?;
         }
-        self.pending_captures
-            .push(capture::PendingCapture::start(ctx, target, is_temp, panel, widget_id, reply));
+        self.pending_captures.push(capture::PendingCapture::start(ctx, target, is_temp, panel, widget_id, reply));
         ctx.request_repaint();
         Ok(())
     }
@@ -118,15 +106,9 @@ impl MagicDesktopApp {
             }
             "ui.type" | "ui.text" => {
                 only_keys(params, method, &["text", "id"])?;
-                let text = params
-                    .get("text")
-                    .and_then(Value::as_str)
-                    .ok_or("ui.type requires `text` string")?;
+                let text = params.get("text").and_then(Value::as_str).ok_or("ui.type requires `text` string")?;
                 if let Some(id) = params.get("id").and_then(Value::as_str) {
-                    let elem = self
-                        .registry
-                        .get(id)
-                        .ok_or_else(|| format!("ui.type: widget `{id}` is missing or off-screen"))?;
+                    let elem = self.registry.get(id).ok_or_else(|| format!("ui.type: widget `{id}` is missing or off-screen"))?;
                     if !elem.enabled {
                         return Err(format!("ui.type: widget `{id}` is disabled"));
                     }
@@ -152,10 +134,7 @@ impl MagicDesktopApp {
         let ws_parent = ws_dir.as_deref().and_then(std::path::Path::parent);
         match id {
             "engine.execute" => {
-                let cmd = params["command"]
-                    .as_str()
-                    .or_else(|| params["id"].as_str())
-                    .ok_or("engine.execute requires `command`")?;
+                let cmd = params["command"].as_str().or_else(|| params["id"].as_str()).ok_or("engine.execute requires `command`")?;
                 if matches!(cmd, "engine.execute" | "ui.menu.invoke") {
                     return Err("nested dispatch is not supported".into());
                 }
@@ -166,10 +145,7 @@ impl MagicDesktopApp {
                 if self.control_input_only {
                     return Err("ui.menu.invoke is disabled under --control-input-only".into());
                 }
-                let cmd_id = params["id"]
-                    .as_str()
-                    .or_else(|| params["command"].as_str())
-                    .ok_or("ui.menu.invoke requires `id`")?;
+                let cmd_id = params["id"].as_str().or_else(|| params["command"].as_str()).ok_or("ui.menu.invoke requires `id`")?;
                 let inner = params.get("params").cloned().unwrap_or_else(|| json!({}));
                 let cref = CommandRef::with_params(cmd_id, inner);
                 if let Some(act) = magic_ui_egui::menus::translate_menu_command(&cref, &mut self.ui_state) {
@@ -179,19 +155,9 @@ impl MagicDesktopApp {
             }
             "engine.commands" => {
                 only_keys(&params, id, &["filter", "enabledOnly", "enabled_only"])?;
-                let enabled_only = params
-                    .get("enabledOnly")
-                    .or_else(|| params.get("enabled_only"))
-                    .and_then(Value::as_bool)
-                    .unwrap_or(false);
-                let mut listed = self.execute_engine(
-                    ctx,
-                    "command.list",
-                    json!({"filter": params.get("filter").and_then(Value::as_str).unwrap_or("")}),
-                )?;
-                if enabled_only
-                    && let Some(arr) = listed["commands"].as_array_mut()
-                {
+                let enabled_only = params.get("enabledOnly").or_else(|| params.get("enabled_only")).and_then(Value::as_bool).unwrap_or(false);
+                let mut listed = self.execute_engine(ctx, "command.list", json!({"filter": params.get("filter").and_then(Value::as_str).unwrap_or("")}))?;
+                if enabled_only && let Some(arr) = listed["commands"].as_array_mut() {
                     arr.retain(|c| c["enabled"] == true);
                     listed["count"] = json!(arr.len());
                 }
@@ -307,10 +273,7 @@ impl MagicDesktopApp {
         let comp_w = params.get("width").and_then(Value::as_f64).unwrap_or(1920.0).max(1.0);
         let comp_h = params.get("height").and_then(Value::as_f64).unwrap_or(1080.0).max(1.0);
         let stage_id = self.active_stage_element_id(params.get("stage").and_then(Value::as_str));
-        let elem = self
-            .registry
-            .get(stage_id)
-            .ok_or_else(|| format!("ui.viewer.locate: stage `{stage_id}` is not visible on screen"))?;
+        let elem = self.registry.get(stage_id).ok_or_else(|| format!("ui.viewer.locate: stage `{stage_id}` is not visible on screen"))?;
         let wx = f64::from(elem.rect.min.x) + (comp_x / comp_w).clamp(0.0, 1.0) * f64::from(elem.rect.width());
         let wy = f64::from(elem.rect.min.y) + (comp_y / comp_h).clamp(0.0, 1.0) * f64::from(elem.rect.height());
         Ok(json!({
@@ -326,14 +289,8 @@ impl MagicDesktopApp {
         only_keys(params, "ui.viewer.hit", &["id", "x", "y", "width", "height", "stage"])?;
         let comp_w = params.get("width").and_then(Value::as_f64).unwrap_or(1920.0).max(1.0);
         let comp_h = params.get("height").and_then(Value::as_f64).unwrap_or(1080.0).max(1.0);
-        let stage_id = params
-            .get("id")
-            .and_then(Value::as_str)
-            .unwrap_or_else(|| self.active_stage_element_id(params.get("stage").and_then(Value::as_str)));
-        let elem = self
-            .registry
-            .get(stage_id)
-            .ok_or_else(|| format!("ui.viewer.hit: stage `{stage_id}` is not visible on screen"))?;
+        let stage_id = params.get("id").and_then(Value::as_str).unwrap_or_else(|| self.active_stage_element_id(params.get("stage").and_then(Value::as_str)));
+        let elem = self.registry.get(stage_id).ok_or_else(|| format!("ui.viewer.hit: stage `{stage_id}` is not visible on screen"))?;
         let wx = params.get("x").and_then(Value::as_f64).unwrap_or_else(|| f64::from(elem.rect.center().x));
         let wy = params.get("y").and_then(Value::as_f64).unwrap_or_else(|| f64::from(elem.rect.center().y));
         let fx = ((wx - f64::from(elem.rect.min.x)) / f64::from(elem.rect.width().max(1.0))).clamp(0.0, 1.0);
@@ -362,10 +319,7 @@ impl MagicDesktopApp {
         only_keys(params, "ui.timeline.locate", &["time", "track", "id"])?;
         let time = params.get("time").and_then(Value::as_f64).unwrap_or(self.ui_state.audio_time_sec).max(0.0);
         let tl_id = params.get("id").and_then(Value::as_str).unwrap_or_else(|| self.timeline_widget_id());
-        let elem = self
-            .registry
-            .get(tl_id)
-            .ok_or_else(|| format!("ui.timeline.locate: timeline `{tl_id}` is not visible on screen"))?;
+        let elem = self.registry.get(tl_id).ok_or_else(|| format!("ui.timeline.locate: timeline `{tl_id}` is not visible on screen"))?;
         let dur = self.ui_state.audio_duration_sec.max(10.0);
         let gutter = 88.0_f64.min(f64::from(elem.rect.width()) * 0.2);
         let span_w = (f64::from(elem.rect.width()) - gutter).max(1.0);
@@ -386,10 +340,7 @@ impl MagicDesktopApp {
         let wx = params.get("x").and_then(Value::as_f64).ok_or("ui.timeline.hit requires numeric `x`")?;
         let wy = params.get("y").and_then(Value::as_f64).ok_or("ui.timeline.hit requires numeric `y`")?;
         let tl_id = params.get("id").and_then(Value::as_str).unwrap_or_else(|| self.timeline_widget_id());
-        let elem = self
-            .registry
-            .get(tl_id)
-            .ok_or_else(|| format!("ui.timeline.hit: timeline `{tl_id}` is not visible on screen"))?;
+        let elem = self.registry.get(tl_id).ok_or_else(|| format!("ui.timeline.hit: timeline `{tl_id}` is not visible on screen"))?;
         let dur = self.ui_state.audio_duration_sec.max(10.0);
         let gutter = 88.0_f64.min(f64::from(elem.rect.width()) * 0.2);
         let span_w = (f64::from(elem.rect.width()) - gutter).max(1.0);
@@ -409,10 +360,7 @@ impl MagicDesktopApp {
     fn control_render_frame(&mut self, ctx: &egui::Context, params: &Value) -> Result<Value, String> {
         only_keys(params, "render.frame", &["stage", "time", "page", "path", "max_side"])?;
         let sec = params.get("time").and_then(Value::as_f64).unwrap_or(self.ui_state.audio_time_sec).max(0.0);
-        let stage = params
-            .get("stage")
-            .and_then(Value::as_str)
-            .unwrap_or_else(|| self.ui_state.effective_view().as_id());
+        let stage = params.get("stage").and_then(Value::as_str).unwrap_or_else(|| self.ui_state.effective_view().as_id());
         match stage {
             "storyboard" => self.execute_engine(ctx, "storyboard.thumbnail", json!({"page": params["page"].as_u64().unwrap_or(0), "scale": 1.0})),
             "lyrics" | "design" => self.execute_engine(ctx, "words.preview_frame", json!({"time": sec})),
@@ -641,10 +589,7 @@ impl MagicDesktopApp {
             ctx.send_viewport_cmd(ViewportCommand::Focus);
             return Ok(json!({"ok": true}));
         };
-        let elem = self
-            .registry
-            .get(id)
-            .ok_or_else(|| format!("Control `{id}` is missing or hidden"))?;
+        let elem = self.registry.get(id).ok_or_else(|| format!("Control `{id}` is missing or hidden"))?;
         if !elem.enabled {
             return Err(format!("Control `{id}` is disabled"));
         }
@@ -658,9 +603,7 @@ impl MagicDesktopApp {
         only_keys(params, "ui.resize", &["width", "height"])?;
         let side = |key: &str, range: std::ops::RangeInclusive<u64>| -> Result<f32, String> {
             let value = params.get(key).and_then(Value::as_u64).filter(|v| range.contains(v));
-            value
-                .map(|v| v as f32)
-                .ok_or_else(|| format!("{key} must be an integer from {} to {}", range.start(), range.end()))
+            value.map(|v| v as f32).ok_or_else(|| format!("{key} must be an integer from {} to {}", range.start(), range.end()))
         };
         let width = side("width", 320..=7680)?;
         let height = side("height", 240..=4320)?;

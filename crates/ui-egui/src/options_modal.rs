@@ -6,10 +6,7 @@
 //! Uses custom themed popups — `Interface Style` (`Aurora`, `Modern`, `Classic`,
 //! `Minimal`, `Ocean`, `Forest`, `Plum`, `Sand`) renders as a custom themed dropdown list.
 
-use egui::{
-    Align, Align2, Color32, CornerRadius, FontId, Layout, Order, Pos2, Rect, RichText, ScrollArea,
-    Sense, Stroke, StrokeKind, Ui, Vec2,
-};
+use egui::{Align, Align2, Color32, CornerRadius, FontId, Layout, Order, Pos2, Rect, RichText, ScrollArea, Sense, Stroke, StrokeKind, Ui, Vec2};
 use serde_json::{Value, json};
 
 use crate::controls::{ScalarSpec, pill_toggle, ring_slider_h};
@@ -61,16 +58,14 @@ pub fn draw_options_window(egui_ctx: &egui::Context, ctx: &mut ViewCtx<'_>) -> b
             });
             ui.separator();
 
-            ScrollArea::vertical()
-                .id_salt("options_body_scroll")
-                .auto_shrink([false, false])
-                .max_height(440.0)
-                .show(ui, |ui| match ctx.state.ai.options_tab.as_str() {
+            ScrollArea::vertical().id_salt("options_body_scroll").auto_shrink([false, false]).max_height(440.0).show(ui, |ui| {
+                match ctx.state.ai.options_tab.as_str() {
                     "general" => draw_general_tab(ui, ctx),
                     "bridge" => crate::shell_bridge::draw_options_bridge_and_history_tab(ui, ctx),
                     "autosave" => draw_autosave_tab(ui, ctx),
                     _ => draw_ai_llm_tab(ui, ctx),
-                });
+                }
+            });
         });
     keep_open
 }
@@ -90,8 +85,7 @@ fn draw_general_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             ui,
             ctx.reg,
             ctx.pal,
-            BtnSpec::label_only("pref-interface-style-btn", &lbl, "Select MailCraft/Magic interface style preset")
-                .selected(ctx.state.ai.style_menu_open),
+            BtnSpec::label_only("pref-interface-style-btn", &lbl, "Select MailCraft/Magic interface style preset").selected(ctx.state.ai.style_menu_open),
         );
         style_btn_rect = resp.rect;
         if resp.clicked() {
@@ -108,20 +102,9 @@ fn draw_general_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         ui.allocate_ui_with_layout(Vec2::new(170.0, 26.0), Layout::left_to_right(Align::Center), |ui| {
             ui.label(RichText::new("Colour mode").size(12.5).color(ctx.pal.text_primary));
         });
-        for (mode, word) in [
-            (ThemeMode::Dark, "Dark"),
-            (ThemeMode::Light, "Light"),
-            (ThemeMode::System, "System"),
-        ] {
+        for (mode, word) in [(ThemeMode::Dark, "Dark"), (ThemeMode::Light, "Light"), (ThemeMode::System, "System")] {
             let id = format!("pref-theme-{}", mode.as_str());
-            if action_button(
-                ui,
-                ctx.reg,
-                ctx.pal,
-                BtnSpec::new(&id, "eye", word, "Set colour mode").selected(ctx.state.theme_mode == mode),
-            )
-            .clicked()
-            {
+            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new(&id, "eye", word, "Set colour mode").selected(ctx.state.theme_mode == mode)).clicked() {
                 ctx.state.theme_mode = mode;
                 ctx.exec("prefs.set", json!({"key": "appearance.theme", "value": mode.as_str()}), None);
             }
@@ -129,17 +112,7 @@ fn draw_general_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     });
 
     ui.add_space(4.0);
-    if pill_toggle(
-        ui,
-        ctx.reg,
-        ctx.pal,
-        "pref-high-contrast",
-        "High contrast borders & text",
-        &mut ctx.state.high_contrast,
-        ctx.pal.accent_emerald,
-    )
-    .changed()
-    {
+    if pill_toggle(ui, ctx.reg, ctx.pal, "pref-high-contrast", "High contrast borders & text", &mut ctx.state.high_contrast, ctx.pal.accent_emerald).changed() {
         let hc = ctx.state.high_contrast;
         ctx.exec("prefs.set", json!({"key": "appearance.accessible_contrast", "value": hc}), None);
     }
@@ -161,13 +134,7 @@ fn draw_general_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                 StrokeKind::Inside,
             );
             ui.painter().circle_filled(Pos2::new(r.min.x + 11.0, r.center().y), 5.0, sw);
-            ui.painter().text(
-                Pos2::new(r.min.x + 21.0, r.center().y),
-                Align2::LEFT_CENTER,
-                choice.label(),
-                FontId::proportional(11.0),
-                ctx.pal.text_primary,
-            );
+            ui.painter().text(Pos2::new(r.min.x + 21.0, r.center().y), Align2::LEFT_CENTER, choice.label(), FontId::proportional(11.0), ctx.pal.text_primary);
             if resp.clicked() {
                 ctx.state.accent_choice = choice;
                 ctx.exec("prefs.set", json!({"key": "appearance.accent", "value": choice.as_str()}), None);
@@ -184,14 +151,7 @@ fn draw_general_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         for &pct in INTERFACE_SIZE_PRESETS {
             let id = format!("pref-scale-{pct}");
             let lbl = format!("{pct}%");
-            if action_button(
-                ui,
-                ctx.reg,
-                ctx.pal,
-                BtnSpec::label_only(&id, &lbl, "Set UI zoom percentage").selected(ctx.state.ui_scale_pct == pct),
-            )
-            .clicked()
-            {
+            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, &lbl, "Set UI zoom percentage").selected(ctx.state.ui_scale_pct == pct)).clicked() {
                 ctx.state.ui_scale_pct = pct;
                 ctx.exec("prefs.set", json!({"key": "appearance.ui_scale", "value": pct}), None);
             }
@@ -200,59 +160,52 @@ fn draw_general_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
 }
 
 fn draw_interface_style_popup(egui_ctx: &egui::Context, ctx: &mut ViewCtx<'_>, pos: Pos2) {
-    egui::Area::new(egui::Id::unique("interface_style_popup"))
-        .fixed_pos(pos)
-        .order(Order::Foreground)
-        .show(egui_ctx, |ui| {
-            egui::Frame::new()
-                .fill(ctx.pal.bg_elevated)
-                .corner_radius(CornerRadius::same(8))
-                .inner_margin(egui::Margin::same(6))
-                .stroke(Stroke::new(1.0, ctx.pal.border))
-                .show(ui, |ui| {
-                    ui.set_width(156.0);
-                    ui.vertical(|ui| {
-                        for st in [
-                            InterfaceStyle::Classic,
-                            InterfaceStyle::Modern,
-                            InterfaceStyle::Minimal,
-                            InterfaceStyle::Aurora,
-                            InterfaceStyle::Ocean,
-                            InterfaceStyle::Forest,
-                            InterfaceStyle::Plum,
-                            InterfaceStyle::Sand,
-                        ] {
-                            let active = ctx.state.interface_style == st;
-                            let (r, resp) = ui.allocate_exact_size(Vec2::new(144.0, 24.0), Sense::click());
-                            let fill = if active {
-                                ctx.pal.accent_violet.gamma_multiply(0.38)
-                            } else if resp.hovered() {
-                                ctx.pal.bg_hover
-                            } else {
-                                Color32::TRANSPARENT
-                            };
-                            ui.painter().rect_filled(r, CornerRadius::same(5), fill);
-                            ui.painter().text(
-                                Pos2::new(r.min.x + 10.0, r.center().y),
-                                Align2::LEFT_CENTER,
-                                st.label(),
-                                FontId::proportional(12.0),
-                                if active { Color32::WHITE } else { ctx.pal.text_primary },
-                            );
-                            if resp.clicked() {
-                                ctx.state.interface_style = st;
-                                ctx.state.ai.style_menu_open = false;
-                                ctx.exec(
-                                    "prefs.set",
-                                    json!({"key": "appearance.interface_style", "value": st.as_str()}),
-                                    Some("Updated Interface Style"),
-                                );
-                            }
-                            ctx.reg.record(format!("pref-style-{}", st.as_str()), st.label(), &resp, None);
+    egui::Area::new(egui::Id::unique("interface_style_popup")).fixed_pos(pos).order(Order::Foreground).show(egui_ctx, |ui| {
+        egui::Frame::new()
+            .fill(ctx.pal.bg_elevated)
+            .corner_radius(CornerRadius::same(8))
+            .inner_margin(egui::Margin::same(6))
+            .stroke(Stroke::new(1.0, ctx.pal.border))
+            .show(ui, |ui| {
+                ui.set_width(156.0);
+                ui.vertical(|ui| {
+                    for st in [
+                        InterfaceStyle::Classic,
+                        InterfaceStyle::Modern,
+                        InterfaceStyle::Minimal,
+                        InterfaceStyle::Aurora,
+                        InterfaceStyle::Ocean,
+                        InterfaceStyle::Forest,
+                        InterfaceStyle::Plum,
+                        InterfaceStyle::Sand,
+                    ] {
+                        let active = ctx.state.interface_style == st;
+                        let (r, resp) = ui.allocate_exact_size(Vec2::new(144.0, 24.0), Sense::click());
+                        let fill = if active {
+                            ctx.pal.accent_violet.gamma_multiply(0.38)
+                        } else if resp.hovered() {
+                            ctx.pal.bg_hover
+                        } else {
+                            Color32::TRANSPARENT
+                        };
+                        ui.painter().rect_filled(r, CornerRadius::same(5), fill);
+                        ui.painter().text(
+                            Pos2::new(r.min.x + 10.0, r.center().y),
+                            Align2::LEFT_CENTER,
+                            st.label(),
+                            FontId::proportional(12.0),
+                            if active { Color32::WHITE } else { ctx.pal.text_primary },
+                        );
+                        if resp.clicked() {
+                            ctx.state.interface_style = st;
+                            ctx.state.ai.style_menu_open = false;
+                            ctx.exec("prefs.set", json!({"key": "appearance.interface_style", "value": st.as_str()}), Some("Updated Interface Style"));
                         }
-                    });
+                        ctx.reg.record(format!("pref-style-{}", st.as_str()), st.label(), &resp, None);
+                    }
                 });
-        });
+            });
+    });
 }
 
 fn role_status_summary(ctx: &ViewCtx<'_>, role_id: &str) -> (String, Color32) {
@@ -302,9 +255,11 @@ fn draw_ai_llm_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                 status_pill(ui, ctx.pal, lbl, col);
             });
             ui.label(
-                RichText::new("Shared store & OS keychain secrets managed via craft-ai-client / craft-ai-native. Raw API keys are never written to project files.")
-                    .size(10.5)
-                    .color(ctx.pal.text_muted),
+                RichText::new(
+                    "Shared store & OS keychain secrets managed via craft-ai-client / craft-ai-native. Raw API keys are never written to project files.",
+                )
+                .size(10.5)
+                .color(ctx.pal.text_muted),
             );
         });
     });
@@ -329,16 +284,8 @@ fn draw_fidget_role_box(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                 status_pill(ui, ctx.pal, &status_txt, status_col);
             });
             ui.horizontal_wrapped(|ui| {
-                if pill_toggle(
-                    ui,
-                    ctx.reg,
-                    ctx.pal,
-                    "ai-fidget-enabled",
-                    "Enable Fidget rephrasing",
-                    &mut ctx.state.ai.fidget_enabled,
-                    ctx.pal.accent_emerald,
-                )
-                .changed()
+                if pill_toggle(ui, ctx.reg, ctx.pal, "ai-fidget-enabled", "Enable Fidget rephrasing", &mut ctx.state.ai.fidget_enabled, ctx.pal.accent_emerald)
+                    .changed()
                 {
                     ctx.exec("ai.configure", json!({"fidget_enabled": ctx.state.ai.fidget_enabled}), None);
                 }
@@ -406,7 +353,9 @@ fn draw_scribbles_role_box(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                 text_input(ui, ctx.reg, "ai-scribbles-conn", "Scribbles connection ID", &mut ctx.state.ai.scribbles_connection, "local-sub", 150.0);
                 ui.label(RichText::new("Model").size(11.0).color(ctx.pal.text_muted));
                 text_input(ui, ctx.reg, "ai-scribbles-model", "Scribbles model ID", &mut ctx.state.ai.scribbles_model, "my-image-model", 180.0);
-                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("ai-scribbles-bind", "check", "Bind Scribbles", "Bind Scribbles in ToolDesk").primary()).clicked() {
+                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("ai-scribbles-bind", "check", "Bind Scribbles", "Bind Scribbles in ToolDesk").primary())
+                    .clicked()
+                {
                     let sc = ctx.state.ai.scribbles_connection.trim().to_owned();
                     let sm = ctx.state.ai.scribbles_model.trim().to_owned();
                     ctx.exec("ai.configure", json!({"scribbles_connection": sc, "scribbles_model": sm}), Some("Bound Scribbles model"));
@@ -418,14 +367,7 @@ fn draw_scribbles_role_box(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
 }
 
 fn draw_discovered_connections(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
-    let conns = ctx
-        .state
-        .cache
-        .ai_status
-        .get("connections")
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
+    let conns = ctx.state.cache.ai_status.get("connections").and_then(Value::as_array).cloned().unwrap_or_default();
     if conns.is_empty() {
         return;
     }
@@ -434,11 +376,7 @@ fn draw_discovered_connections(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         for c in &conns {
             let cid = c["id"].as_str().unwrap_or_default();
             let prov = c["provider"].as_str().unwrap_or("openai");
-            let first_model = c
-                .pointer("/models/0/id")
-                .and_then(Value::as_str)
-                .unwrap_or_default()
-                .to_owned();
+            let first_model = c.pointer("/models/0/id").and_then(Value::as_str).unwrap_or_default().to_owned();
             let lbl = format!("{cid} ({prov})");
             let btn_id = format!("ai-pick-conn-{cid}");
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&btn_id, &lbl, "Fill connection & first model")).clicked() {
@@ -544,11 +482,7 @@ fn draw_consent_ledger_box(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     ctx.pal.inset_frame().show(ui, |ui| {
         ui.horizontal_wrapped(|ui| {
             ui.label(RichText::new("Outbound Disclosure Consent (`ConsentLedger`):").size(11.5).strong());
-            for (term, lbl) in [
-                ("session", "Allow This Session"),
-                ("thirty_days", "Allow 30 Days"),
-                ("until_revoked", "Allow Until Revoked"),
-            ] {
+            for (term, lbl) in [("session", "Allow This Session"), ("thirty_days", "Allow 30 Days"), ("until_revoked", "Allow Until Revoked")] {
                 let id = format!("ai-consent-{term}");
                 if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, lbl, "Record disclosure consent")).clicked() {
                     ctx.exec("ai.consent", json!({"agree": true, "term": term}), Some("Recorded outbound AI consent"));
@@ -564,16 +498,8 @@ fn draw_consent_ledger_box(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
 fn draw_autosave_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     ui.label(RichText::new("Project & AutoSave").size(15.0).strong().color(ctx.pal.accent_emerald));
     ui.add_space(6.0);
-    if pill_toggle(
-        ui,
-        ctx.reg,
-        ctx.pal,
-        "pref-autosave-enabled",
-        "Automatically save project drafts",
-        &mut ctx.state.autosave_enabled,
-        ctx.pal.accent_emerald,
-    )
-    .changed()
+    if pill_toggle(ui, ctx.reg, ctx.pal, "pref-autosave-enabled", "Automatically save project drafts", &mut ctx.state.autosave_enabled, ctx.pal.accent_emerald)
+        .changed()
     {
         let en = ctx.state.autosave_enabled;
         ctx.exec("prefs.set", json!({"key": "autosave.enabled", "value": en}), None);
@@ -608,7 +534,14 @@ pub fn draw_fidget_stager_window(egui_ctx: &egui::Context, ctx: &mut ViewCtx<'_>
                 let (st_lbl, st_col) = role_status_summary(ctx, "fidget");
                 status_pill(ui, ctx.pal, &st_lbl, st_col);
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("fidget-open-ai-prefs", "settings", "AI Options", "Configure Fidget & Scribbles models")).clicked() {
+                    if action_button(
+                        ui,
+                        ctx.reg,
+                        ctx.pal,
+                        BtnSpec::new("fidget-open-ai-prefs", "settings", "AI Options", "Configure Fidget & Scribbles models"),
+                    )
+                    .clicked()
+                    {
                         ctx.state.ai.options_tab = "ai".into();
                         ctx.push(UiAction::OpenPreferences);
                     }
@@ -689,10 +622,7 @@ pub fn draw_fidget_stager_window(egui_ctx: &egui::Context, ctx: &mut ViewCtx<'_>
             if !ctx.state.ai.staged_prompt.is_empty() {
                 ui.separator();
                 ui.label(RichText::new("Staged Scribbles Prompt (Review / Edit before Generate):").size(11.0).color(ctx.pal.accent_amber));
-                let edit_resp = ui.add_sized(
-                    [ui.available_width().max(260.0), 86.0],
-                    egui::TextEdit::multiline(&mut ctx.state.ai.staged_prompt),
-                );
+                let edit_resp = ui.add_sized([ui.available_width().max(260.0), 86.0], egui::TextEdit::multiline(&mut ctx.state.ai.staged_prompt));
                 ctx.reg.record("fidget-staged-prompt", "Staged Prompt", &edit_resp, Some(ctx.state.ai.staged_prompt.clone()));
                 if action_button(
                     ui,
@@ -705,11 +635,7 @@ pub fn draw_fidget_stager_window(egui_ctx: &egui::Context, ctx: &mut ViewCtx<'_>
                     let tpl = ctx.state.ai.scribbles_template.clone();
                     let final_p = ctx.state.ai.staged_prompt.trim().to_owned();
                     let cid = ctx.state.selected_character_id.clone();
-                    ctx.exec(
-                        "scribbles.generate",
-                        json!({"kind": tpl, "prompt": final_p, "character": cid}),
-                        Some("Generated asset via Scribbles"),
-                    );
+                    ctx.exec("scribbles.generate", json!({"kind": tpl, "prompt": final_p, "character": cid}), Some("Generated asset via Scribbles"));
                 }
             }
         });
@@ -728,12 +654,13 @@ pub fn draw_report_problem_window(egui_ctx: &egui::Context, ctx: &mut ViewCtx<'_
         .default_width(480.0)
         .anchor(Align2::CENTER_CENTER, Vec2::ZERO)
         .show(egui_ctx, |ui| {
-            ui.label(RichText::new("Describe what happened (diagnostics scrub home paths to `~` and omit all tokens/keys):").size(11.5).color(ctx.pal.text_secondary));
-            text_input(ui, ctx.reg, "problem-summary", "Summary", &mut ctx.state.ai.problem_summary, "Short summary of the issue…", 450.0);
-            let steps_resp = ui.add_sized(
-                [450.0, 80.0],
-                egui::TextEdit::multiline(&mut ctx.state.ai.problem_steps).hint_text("Steps to reproduce…"),
+            ui.label(
+                RichText::new("Describe what happened (diagnostics scrub home paths to `~` and omit all tokens/keys):")
+                    .size(11.5)
+                    .color(ctx.pal.text_secondary),
             );
+            text_input(ui, ctx.reg, "problem-summary", "Summary", &mut ctx.state.ai.problem_summary, "Short summary of the issue…", 450.0);
+            let steps_resp = ui.add_sized([450.0, 80.0], egui::TextEdit::multiline(&mut ctx.state.ai.problem_steps).hint_text("Steps to reproduce…"));
             ctx.reg.record("problem-steps", "Steps to reproduce", &steps_resp, None);
             ui.horizontal(|ui| {
                 if action_button(
@@ -772,7 +699,7 @@ pub fn draw_command_palette_popup(egui_ctx: &egui::Context, ctx: &mut ViewCtx<'_
         .filter(|spec| {
             spec.id.to_ascii_lowercase().contains(&q)
                 || spec.label.to_ascii_lowercase().contains(&q)
-                || spec.category.to_ascii_lowercase().contains(&q)
+                || spec.menu.iter().any(|part| part.to_ascii_lowercase().contains(&q))
         })
         .take(10)
         .collect();

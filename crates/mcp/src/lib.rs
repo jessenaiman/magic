@@ -22,11 +22,7 @@ pub const DEFAULT_CONTROL_ADDR: &str = "127.0.0.1:9875";
 /// Normalize `"9875"` -> `"127.0.0.1:9875"` or keep an explicit `"127.0.0.1:9875"`.
 pub fn normalize_control_addr(spec: &str) -> String {
     let trimmed = spec.trim();
-    if trimmed.contains(':') {
-        trimmed.to_owned()
-    } else {
-        format!("127.0.0.1:{trimmed}")
-    }
+    if trimmed.contains(':') { trimmed.to_owned() } else { format!("127.0.0.1:{trimmed}") }
 }
 
 /// Default control address for auto-discovery (`MAGIC_CONTROL_PORT` if set, else `127.0.0.1:9875`).
@@ -40,9 +36,7 @@ pub fn default_control_addr() -> String {
 
 /// True when `id` addresses the live `eframe`/`egui` desktop shell rather than `Session::execute`.
 pub fn is_live_shell_method(id: &str) -> bool {
-    id.starts_with("ui.")
-        || id.starts_with("window.")
-        || matches!(id, "app.quit" | "app.restart" | "app.hide" | "perf.stats" | "render.frame")
+    id.starts_with("ui.") || id.starts_with("window.") || matches!(id, "app.quit" | "app.restart" | "app.hide" | "perf.stats" | "render.frame")
 }
 
 fn is_direct_control_method(id: &str) -> bool {
@@ -55,11 +49,7 @@ pub fn interpolate_batch_params(params: &Value, prior_results: &[Value]) -> Valu
     match params {
         Value::String(s) => resolve_step_ref(s, prior_results).unwrap_or_else(|| Value::String(s.clone())),
         Value::Array(items) => Value::Array(items.iter().map(|v| interpolate_batch_params(v, prior_results)).collect()),
-        Value::Object(map) => Value::Object(
-            map.iter()
-                .map(|(k, v)| (k.clone(), interpolate_batch_params(v, prior_results)))
-                .collect(),
-        ),
+        Value::Object(map) => Value::Object(map.iter().map(|(k, v)| (k.clone(), interpolate_batch_params(v, prior_results))).collect()),
         other => other.clone(),
     }
 }
@@ -79,11 +69,7 @@ fn resolve_step_ref(expr: &str, prior_results: &[Value]) -> Option<Value> {
     let mut cur = root;
     if let Some(path) = tail {
         for seg in path.split('.') {
-            cur = if let Ok(i) = seg.parse::<usize>() {
-                cur.get(i)?
-            } else {
-                cur.get(seg)?
-            };
+            cur = if let Ok(i) = seg.parse::<usize>() { cur.get(i)? } else { cur.get(seg)? };
         }
     }
     Some(cur.clone())
@@ -109,9 +95,7 @@ impl Headless {
     }
 
     pub fn with_roots(roots: Option<AutomationRoots>) -> Self {
-        Self {
-            session: Session::user_session().with_automation_roots(roots),
-        }
+        Self { session: Session::user_session().with_automation_roots(roots) }
     }
 }
 
@@ -130,19 +114,13 @@ pub struct Remote {
 
 impl Remote {
     pub fn new(addr: impl Into<String>, token: Option<String>) -> Self {
-        Self {
-            addr: normalize_control_addr(&addr.into()),
-            token,
-            next_id: 1,
-        }
+        Self { addr: normalize_control_addr(&addr.into()), token, next_id: 1 }
     }
 
     /// Connect to a live `magic --control` socket and verify reachability at server startup.
     pub fn connect_verified(addr: impl Into<String>, token: Option<String>) -> Result<Self, String> {
         let normalized = normalize_control_addr(&addr.into());
-        let sock: SocketAddr = normalized
-            .parse()
-            .map_err(|_| format!("invalid loopback control address `{normalized}`"))?;
+        let sock: SocketAddr = normalized.parse().map_err(|_| format!("invalid loopback control address `{normalized}`"))?;
         if !sock.ip().is_loopback() || sock.port() == 0 {
             return Err("control address must be loopback (127.0.0.1 or ::1) with port 1..=65535".into());
         }
@@ -152,11 +130,7 @@ impl Remote {
         if tok.len() != 64 || !tok.bytes().all(|b| b.is_ascii_hexdigit()) {
             return Err("MAGIC_CONTROL_TOKEN must contain 64 hexadecimal characters".into());
         }
-        Ok(Self {
-            addr: normalized,
-            token: Some(tok),
-            next_id: 1,
-        })
+        Ok(Self { addr: normalized, token: Some(tok), next_id: 1 })
     }
 }
 
@@ -179,11 +153,7 @@ impl Backend for Remote {
         stream.set_write_timeout(Some(Duration::from_secs(120))).map_err(|e| e.to_string())?;
         let req_id = self.next_id;
         self.next_id += 1;
-        let (method, params) = if is_direct_control_method(id) {
-            (id, params)
-        } else {
-            ("engine.execute", json!({"command": id, "params": params}))
-        };
+        let (method, params) = if is_direct_control_method(id) { (id, params) } else { ("engine.execute", json!({"command": id, "params": params})) };
         let mut msg = json!({
             "id": req_id,
             "method": method,
@@ -231,8 +201,7 @@ pub fn run_mcp_server(
 
     if let Some(spec) = connect {
         let addr = normalize_control_addr(spec);
-        let remote = Remote::connect_verified(&addr, magic::workspace::control_token())
-            .map_err(|e| format!("{bin_name}: cannot connect to {addr}: {e}"))?;
+        let remote = Remote::connect_verified(&addr, magic::workspace::control_token()).map_err(|e| format!("{bin_name}: cannot connect to {addr}: {e}"))?;
         let _ = writeln!(std::io::stderr(), "{bin_name}: connected to live Magic window at {addr}");
         return Server::new(remote).serve();
     }

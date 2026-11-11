@@ -122,11 +122,11 @@ impl CraftTarget {
         let ext = path.extension()?.to_str()?.to_ascii_lowercase();
         match ext.as_str() {
             "fcproj" | "fcgt" => Some(Self::Film),
-            "pcraft" | "psd" | "psb" | "pdn" | "ora" | "xcf" | "kra" | "afphoto" | "exr" | "hdr"
-            | "fits" | "qoi" | "tga" | "heic" | "heif" => Some(Self::Photo),
+            "pcraft" | "psd" | "psb" | "pdn" | "ora" | "xcf" | "kra" | "afphoto" | "exr" | "hdr" | "fits" | "qoi" | "tga" | "heic" | "heif" => {
+                Some(Self::Photo)
+            }
             "ecproj" | "ectemplate" => Some(Self::Effect),
-            "vectorcraft" | "vcraft" | "drawcraft" | "svg" | "svgz" | "ai" | "eps" | "dxf"
-            | "emf" | "wmf" | "af" | "afdesign" | "afpub" => Some(Self::Vector),
+            "vectorcraft" | "vcraft" | "drawcraft" | "svg" | "svgz" | "ai" | "eps" | "dxf" | "emf" | "wmf" | "af" | "afdesign" | "afpub" => Some(Self::Vector),
             "designcraft" | "idml" => Some(Self::Design),
             "pdf" => Some(Self::Pdf),
             "deckcraft" | "pptx" => Some(Self::Deck),
@@ -213,10 +213,7 @@ impl CraftTarget {
         if self.wire() == ControlWire::CmdParams {
             return (command.to_string(), params.clone());
         }
-        if command.starts_with("ui.")
-            || command.starts_with("app.")
-            || matches!(command, "session.inspect" | "render.frame" | "perf.stats")
-        {
+        if command.starts_with("ui.") || command.starts_with("app.") || matches!(command, "session.inspect" | "render.frame" | "perf.stats") {
             return (command.to_string(), params.clone());
         }
         match self {
@@ -300,10 +297,7 @@ impl CraftTarget {
     pub fn mcp_confined_hint(self, root: &Path) -> String {
         let r = root.display();
         match self {
-            Self::Photo | Self::Vector => format!(
-                "{} mcp --automation-read-root {r} --automation-write-root {r}",
-                self.cli_name()
-            ),
+            Self::Photo | Self::Vector => format!("{} mcp --automation-read-root {r} --automation-write-root {r}", self.cli_name()),
             Self::Pdf => format!("pdfcraft-cli mcp --compact --root {r}"),
             _ => self.mcp_headless_hint().to_string(),
         }

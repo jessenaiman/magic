@@ -428,11 +428,7 @@ pub fn cmd_project_open(s: &mut Session, params: &Value) -> Result<Value> {
     }
     let journal = autosave_journal_path(&path);
     let use_journal = params["recover_autosave"] == true && journal.is_file();
-    let doc = if use_journal {
-        read_project_document(&journal)?
-    } else {
-        read_project_document(&path)?
-    };
+    let doc = if use_journal { read_project_document(&journal)? } else { read_project_document(&path)? };
     if doc.get("format").and_then(Value::as_str) != Some(PROJECT_FORMAT) {
         return Err(EngineError::InvalidParams(format!("{} is not a Magic Studio project", path.display())));
     }
