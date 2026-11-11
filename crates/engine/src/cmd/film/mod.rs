@@ -120,44 +120,6 @@ fn existing_track_slot(sequence: &Value, track_name: &str) -> Option<(u64, u64, 
     Some((track_id, clip_id, item_id))
 }
 
-fn same_render_source(source: &Path, movie: &Path) -> bool {
-    if source == movie || matches!((source.canonicalize(), movie.canonicalize()), (Ok(a), Ok(b)) if a == b) {
-        return true;
-    }
-    let parts: Vec<_> = movie.components().collect();
-    let Some(media) = parts.iter().rposition(|part| part.as_os_str() == "media") else { return false };
-    let suffix: PathBuf = parts[media..].iter().collect();
-    parts.len() - media >= 4 && source.ends_with(suffix)
-}
-
-fn legacy_track_slot(sequence: &Value, movie: &Path, media: &Value) -> Result<Option<(u64, u64, u64)>> {
-    let mut slots = Vec::new();
-    for track in sequence["video"].as_array().into_iter().flatten() {
-        for clip in track["items"].as_array().into_iter().flatten() {
-            let Some((track_id, clip_id, item_id)) = track["id"].as_u64().zip(clip["clip"].as_u64()).zip(clip["item"].as_u64()).map(|((t, c), i)| (t, c, i))
-            else {
-                continue;
-            };
-            if clip["startFrame"].as_u64() != Some(0) || clip["endFrame"] != sequence["durationFrames"] {
-                continue;
-            }
-            let owned = media
-                .as_array()
-                .into_iter()
-                .flatten()
-                .any(|item| item["item"].as_u64() == Some(item_id) && item["path"].as_str().is_some_and(|path| same_render_source(Path::new(path), movie)));
-            if owned {
-                slots.push((track_id, clip_id, item_id));
-            }
-        }
-    }
-    match slots.as_slice() {
-        [] => Ok(None),
-        [slot] => Ok(Some(*slot)),
-        _ => Err(bad(format!("Multiple existing full-song clips match {}; select a single {movie:?} track first", movie.display()))),
-    }
-}
-
 fn publish_track_live(project: &Path, movie: &Path, track_name: &str) -> Option<Result<Value>> {
     let sequence = match crate::CraftHub::try_live(crate::CraftTarget::Film, project, "sequence.inspect", &json!({}), false)? {
         Ok(seq) => seq,
@@ -182,11 +144,7 @@ fn publish_track_sequence(
     sequence: &Value,
     run: &mut impl FnMut(&str, Value) -> Result<Value>,
 ) -> Result<Value> {
-    let slot = match existing_track_slot(sequence, track_name) {
-        Some(slot) => Some(slot),
-        None => legacy_track_slot(sequence, movie, &run("media.status", json!({}))?)?,
-    };
-    if let Some((track, clip, item)) = slot {
+    if let Some((track, clip, item)) = existing_track_slot(sequence, track_name) {
         run("media.replaceFootage", json!({"item": item, "path": movie}))?;
         run("timeline.setTrack", json!({"track": track, "name": track_name, "enabled": true}))?;
         run("file.save", json!({}))?;
@@ -314,11 +272,6 @@ pub(crate) fn media_duration_ticks(filename: &Path, require_video: bool) -> Resu
         return Err(EngineError::InvalidParams(format!("{} has invalid duration {} ticks", filename.display(), duration.0)));
     }
     Ok(duration)
-}
-
-#[allow(dead_code)]
-pub(crate) fn media_duration(filename: &Path, require_video: bool) -> Result<f64> {
-    media_duration_ticks(filename, require_video).map(|t| t.seconds())
 }
 
 fn export_with(f: &Film, out: &Path, draft: bool, options: &Value) -> Result<()> {

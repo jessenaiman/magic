@@ -16,7 +16,7 @@ use clap::Parser;
 #[command(name = "magic-mcp", about = "Magic Studio Model Context Protocol server (stdio JSON-RPC 2.0; binary entrypoint for `magic-cli mcp`)")]
 struct McpCli {
     /// Connect to a running `magic --control <PORT>` window (`127.0.0.1:9876` or `9876`)
-    #[arg(long)]
+    #[arg(long, visible_alias = "bridge")]
     connect: Option<String>,
     /// Run an in-process headless engine session without probing `--control`
     #[arg(long)]

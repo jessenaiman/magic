@@ -1,4 +1,4 @@
-//! `cargo xtask ci`: fmt, layers, Clippy (`-D warnings`) and the UI build (`tsc && vite build`).
+//! `cargo xtask ci`: build groups, fmt, architecture layers, Clippy (`-D warnings`), and workspace test compilation.
 //! A failing gate prints the tool's full output and appends one JSON line to
 //! `target/ci-report.jsonl` — the tools own the measurements; this only carries their answers.
 use std::process::Command;
@@ -8,7 +8,7 @@ use crate::Result;
 
 /// Workspace crates gated by `cargo xtask ci`. [`check_sets`] fails when a crate is in no group.
 pub(crate) const SETS: &[(&str, &[&str])] =
-    &[("tauri", &["craft-util", "craft-scribbles", "magic-engine", "magic-mcp", "magic-cli", "magic", "magic-tui", "xtask"])];
+    &[("workspace", &["craft-util", "craft-scribbles", "magic-engine", "magic-mcp", "magic-ui-egui", "magic-cli", "magic", "magic-tui", "xtask"])];
 
 /// `-p` arguments for one group.
 pub(crate) fn packages(set: &[&str]) -> Vec<String> {
@@ -71,11 +71,9 @@ fn clippy() -> Result<()> {
     Ok(())
 }
 
-/// `tsc && vite build` for the desktop UI — the gate whose absence lets TS breakage land.
-fn ui() -> Result<()> {
-    let mut cmd = Command::new("bun");
-    cmd.arg("run").arg("build").current_dir(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../apps/magic"));
-    run(&mut cmd)
+fn tests() -> Result<()> {
+    let cargo = env!("CARGO");
+    run(Command::new(cargo).args(["test", "--workspace", "--no-run"]))
 }
 
 /// Cheapest gates first, so a mistake fails before the expensive builds start.
@@ -90,6 +88,6 @@ pub(crate) fn ci() -> Result<()> {
     stage("fmt", || run(Command::new(cargo).args(["fmt", "--check"])))?;
     stage("layers", crate::policy::layers)?;
     stage("clippy", clippy)?;
-    stage("ui", ui)?;
+    stage("tests", tests)?;
     Ok(())
 }

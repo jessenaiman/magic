@@ -5,6 +5,7 @@ members = [
     "crates/scribbles",
     "crates/engine",
     "crates/mcp",
+    "crates/ui-egui",
     "apps/magic",
     "apps/magic-cli",
     "apps/magic-tui",
@@ -16,7 +17,7 @@ version = "0.17.0"
 edition = "2024"
 license = "LicenseRef-Magic-Studio-NonResale"
 rust-version = "1.95"
-repository = "https://github.com/jessenaiman/magic-studio-app"
+repository = "https://github.com/jessenaiman/magic"
 
 [workspace.dependencies]
 # Magic's own workspace crates
@@ -24,34 +25,55 @@ craft-util = { path = "crates/craft-util" }
 craft-scribbles = { path = "crates/scribbles" }
 magic = { package = "magic-engine", path = "crates/engine" }
 magic-mcp = { path = "crates/mcp" }
+magic-ui-egui = { path = "crates/ui-egui" }
+
+# Pure-Rust desktop UI stack (`storytold/egui` 0.37 suite fork)
+egui = { version = "0.37", features = ["default_fonts"] }
+eframe = { version = "0.37", default-features = false, features = [
+    "accesskit",
+    "default_fonts",
+    "wayland",
+    "x11",
+    "wgpu",
+    "links",
+    "clipboard",
+] }
+egui_extras = { version = "0.37", default-features = false, features = ["svg", "image", "file"] }
 
 # Shared Craft foundation libraries (`storytold/craft-libs`) — sibling Craft apps (`filmcraft`,
 # `effectcraft`, `designcraft`, `photocraft`, `vectorcraft`, `deckcraft`, `anicraft`, `texturecraft`)
 # are never linked as Rust crates; Magic drives the system-installed binaries via `--control` and
 # `<product>-cli` through `crates/craft-util` and `crates/engine/src/craft_hub/`.
-craft-atomic = { git = "https://github.com/storytold/craft-libs" }
-craft-audio = { git = "https://github.com/storytold/craft-libs", features = ["decode", "peaks"] }
-craft-dialogs = { git = "https://github.com/storytold/craft-libs" }
-craft-doc = { git = "https://github.com/storytold/craft-libs" }
-craft-docpath = { git = "https://github.com/storytold/craft-libs" }
-craft-ecproj-format = { git = "https://github.com/storytold/craft-libs" }
-craft-keymap = { git = "https://github.com/storytold/craft-libs" }
-craft-media = { git = "https://github.com/storytold/craft-libs", default-features = false }
-craft-pcraft-format = { git = "https://github.com/storytold/craft-libs" }
-craft-settings = { git = "https://github.com/storytold/craft-libs" }
-craft-update = { git = "https://github.com/storytold/craft-libs" }
-craft-vectorcraft-format = { git = "https://github.com/storytold/craft-libs" }
+craft-atomic = { git = "https://github.com/storytold/craft-libs", rev = "1ee01a4c58729d781638b8afbd8982726dbdefcb" }
+craft-audio = { git = "https://github.com/storytold/craft-libs", rev = "1ee01a4c58729d781638b8afbd8982726dbdefcb", features = ["decode", "peaks"] }
+craft-dialogs = { git = "https://github.com/storytold/craft-libs", rev = "1ee01a4c58729d781638b8afbd8982726dbdefcb" }
+craft-doc = { git = "https://github.com/storytold/craft-libs", rev = "1ee01a4c58729d781638b8afbd8982726dbdefcb" }
+craft-docpath = { git = "https://github.com/storytold/craft-libs", rev = "1ee01a4c58729d781638b8afbd8982726dbdefcb" }
+craft-ecproj-format = { git = "https://github.com/storytold/craft-libs", rev = "1ee01a4c58729d781638b8afbd8982726dbdefcb" }
+craft-font-catalog = { git = "https://github.com/storytold/craft-libs", rev = "1ee01a4c58729d781638b8afbd8982726dbdefcb", features = ["system"] }
+craft-keymap = { git = "https://github.com/storytold/craft-libs", rev = "1ee01a4c58729d781638b8afbd8982726dbdefcb", features = ["egui"] }
+craft-media = { git = "https://github.com/storytold/craft-libs", rev = "1ee01a4c58729d781638b8afbd8982726dbdefcb", default-features = false, features = ["isobmff", "matroska", "ogg", "serde"] }
+craft-menu = { git = "https://github.com/storytold/craft-libs", rev = "1ee01a4c58729d781638b8afbd8982726dbdefcb" }
+craft-pcraft-format = { git = "https://github.com/storytold/craft-libs", rev = "1ee01a4c58729d781638b8afbd8982726dbdefcb" }
+craft-platform = { git = "https://github.com/storytold/craft-libs", rev = "1ee01a4c58729d781638b8afbd8982726dbdefcb", features = ["egui", "appearance"] }
+craft-quit = { git = "https://github.com/storytold/craft-libs", rev = "1ee01a4c58729d781638b8afbd8982726dbdefcb", features = ["egui"] }
+craft-settings = { git = "https://github.com/storytold/craft-libs", rev = "1ee01a4c58729d781638b8afbd8982726dbdefcb" }
+craft-ui = { git = "https://github.com/storytold/craft-libs", rev = "1ee01a4c58729d781638b8afbd8982726dbdefcb", features = ["serde", "system_fonts", "color_fonts"] }
+craft-update = { git = "https://github.com/storytold/craft-libs", rev = "1ee01a4c58729d781638b8afbd8982726dbdefcb" }
+craft-vectorcraft-format = { git = "https://github.com/storytold/craft-libs", rev = "1ee01a4c58729d781638b8afbd8982726dbdefcb" }
+craft-window = { git = "https://github.com/storytold/craft-libs", rev = "1ee01a4c58729d781638b8afbd8982726dbdefcb", features = ["egui"] }
 
 # Shared Craft AI integrations (`storytold/craft-ai-integrations`)
-craft-ai-client = { git = "https://github.com/storytold/craft-ai-integrations" }
-craft-ai-core = { git = "https://github.com/storytold/craft-ai-integrations" }
-craft-ai-native = { git = "https://github.com/storytold/craft-ai-integrations" }
+craft-ai-client = { git = "https://github.com/storytold/craft-ai-integrations", rev = "3ba1ddb764d7d4d660e777296975c44470c45dc4" }
+craft-ai-core = { git = "https://github.com/storytold/craft-ai-integrations", rev = "3ba1ddb764d7d4d660e777296975c44470c45dc4" }
+craft-ai-native = { git = "https://github.com/storytold/craft-ai-integrations", rev = "3ba1ddb764d7d4d660e777296975c44470c45dc4" }
 
 # CLI, TUI, MCP, desktop control, and system foundations
+arboard = { version = "3", features = ["wayland-data-control"] }
 clap = { version = "4", features = ["derive", "env"] }
 flate2 = "1"
 glam = "0.24"
-image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
 log = "0.4"
 rustix = { version = "1", features = ["fs", "net", "process"] }
 serde = { version = "1", features = ["derive", "rc"] }
@@ -59,6 +81,22 @@ serde_json = "1"
 sha2 = "0.10"
 subtle = "2.6"
 thiserror = "2"
+
+# Unified ArtCraft suite patches (`storytold/egui` 0.37 & `storytold/winit` 0.30.13)
+[patch.crates-io]
+ecolor = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
+eframe = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
+egui = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
+egui-wgpu = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
+egui-winit = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
+egui_extras = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
+egui_glow = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
+egui_kittest = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
+egui_system_font_provider = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
+emath = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
+epaint = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
+epaint_default_fonts = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
+winit = { git = "https://github.com/storytold/winit.git", rev = "a517b3846ee8457d84ee4975110bfda6797c44dc" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

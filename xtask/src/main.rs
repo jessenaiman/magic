@@ -1,7 +1,11 @@
-//! Repository tasks: `cargo xtask ci` runs the quality gates (fmt, layers, Clippy, UI build —
-//! failures land in `target/ci-report.jsonl`), `layers` runs the architecture boundary gate.
+//! Repository tasks: `cargo xtask ci` runs the quality gates (build groups, fmt, layers, Clippy,
+//! workspace tests — failures land in `target/ci-report.jsonl`), `layers` runs the architecture gate.
 //! Install locally with `./install.sh --from-source` (or `cargo install --path apps/magic-cli --locked`).
+
+#![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable))]
+
 use clap::{Parser, Subcommand};
+
 mod ci;
 mod policy;
 
@@ -14,7 +18,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Task {
-    /// Check formatting, layers, Clippy (`-D warnings`) and the desktop UI build.
+    /// Check formatting, layers, Clippy (`-D warnings`) and workspace test compilation.
     Ci,
     /// Check Magic's crates against the layers in docs/architecture.md.
     Layers,

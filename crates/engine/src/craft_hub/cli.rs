@@ -497,6 +497,11 @@ pub fn probe_media(filename: &Path) -> Result<Value> {
     {
         return Ok(audio_info);
     }
+    if craft_util::media::is_isobmff_file(filename)
+        && let Ok(container_info) = craft_util::media::probe_container_in_process(filename)
+    {
+        return Ok(container_info);
+    }
     if let Ok(bin) = require_executable(CraftTarget::Film.cli_name()) {
         let _slot = crate::workspace::acquire_tool_slot();
         let mut cmd = scrubbed_command(&bin, CraftTarget::Film, None);

@@ -1,15 +1,41 @@
-//! Layer, UI-boundary, and cross-app isolation gates (`docs/architecture.md › Layers`).
+//! Layer, UI-boundary, pure-Rust non-Tauri, and cross-app isolation gates (`docs/architecture.md › Layers`).
 use crate::Result;
 use serde_json::Value;
 use std::process::Command;
 
 /// Magic's own workspace crates and their layers (`docs/architecture.md › Layers`).
-const LAYERS: &[(&str, u8)] =
-    &[("craft-util", 4), ("craft-scribbles", 4), ("magic-engine", 5), ("magic-mcp", 6), ("magic", 7), ("magic-cli", 7), ("magic-tui", 7), ("xtask", 7)];
+const LAYERS: &[(&str, u8)] = &[
+    ("craft-util", 4),
+    ("craft-scribbles", 4),
+    ("magic-engine", 5),
+    ("magic-mcp", 6),
+    ("magic-ui-egui", 6),
+    ("magic", 7),
+    ("magic-cli", 7),
+    ("magic-tui", 7),
+    ("xtask", 7),
+];
 
-/// UI / windowing crates (L6): allowed only in L7 shells (`magic`), never in headless L0–L5 crates
-/// (`craft-util`, `craft-scribbles`, `magic-engine`).
-const UI_CRATES: &[&str] = &["craft-ui", "craft-dialogs", "craft-keymap", "egui", "eframe", "winit", "rfd", "tauri", "webkit2gtk"];
+/// UI / windowing crates (L6): allowed only in L6 UI crates (`magic-ui-egui`) or L7 shells (`magic`),
+/// never in headless L0–L5 crates (`craft-util`, `craft-scribbles`, `magic-engine`).
+const UI_CRATES: &[&str] = &[
+    "craft-ui",
+    "craft-menu",
+    "craft-window",
+    "craft-quit",
+    "craft-platform",
+    "craft-dialogs",
+    "craft-keymap",
+    "egui",
+    "egui_extras",
+    "eframe",
+    "winit",
+    "rfd",
+    "arboard",
+];
+
+/// Non-Tauri / pure-Rust enforcement: webview shells and plugins are forbidden across the entire workspace.
+const FORBIDDEN_WEBVIEW: &[&str] = &["tauri", "tauri-build", "wry", "tao", "webkit2gtk"];
 
 /// Sibling ArtCraft product crates are strictly forbidden as Cargo dependencies: Magic shares only
 /// `storytold/craft-libs` (`craft-*`) and `storytold/craft-ai-integrations`, and drives installed
@@ -35,7 +61,7 @@ fn layer_of(name: &str) -> Option<u8> {
     if let Some((_, l)) = LAYERS.iter().find(|(n, _)| *n == name) {
         return Some(*l);
     }
-    if UI_CRATES.contains(&name) || name.ends_with("-ui-egui") || name.starts_with("tauri-") {
+    if UI_CRATES.contains(&name) || name.ends_with("-ui-egui") {
         return Some(6);
     }
     name.starts_with("craft-").then_some(3)
@@ -78,12 +104,16 @@ pub(crate) fn layers() -> Result<()> {
             continue;
         };
         for d in deps {
+            if FORBIDDEN_WEBVIEW.contains(&d.as_str()) || d.starts_with("tauri-") {
+                errors.push(format!("{name} depends on forbidden webview/Tauri crate {d}: Magic Studio is pure Rust (eframe + egui + craft-libs)"));
+                continue;
+            }
             if FORBIDDEN_SIBLING_PREFIXES.iter().any(|p| d.starts_with(p)) {
                 errors.push(format!("{name} depends on sibling app crate {d}: drive installed Craft apps via CraftHub (--control / <product>-cli) instead"));
                 continue;
             }
             let Some(dl) = layer_of(d) else { continue };
-            if dl >= l {
+            if dl > l || (dl == l && name != "magic-ui-egui") {
                 errors.push(format!("{name} (L{l}) depends on {d} (L{dl}): edges must go down"));
             }
         }

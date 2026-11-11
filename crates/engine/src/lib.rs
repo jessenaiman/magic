@@ -1,9 +1,10 @@
 //! Shared project state and command dispatch for Magic Studio's lightweight coordinator workspace.
 //!
-//! The desktop Tauri shell, `magic-cli`, and `magic-cli mcp` share the same command registry
-//! and [`Session::execute`] entry point. Magic coordinates installed ArtCraft applications
-//! (`DesignCraft`, `PhotoCraft`, `VectorCraft`, `EffectCraft`, `FilmCraft`, and headless
-//! `anicraft-cli`) via [`CraftHub`] rather than reimplementing media/compositor servers in-process.
+//! The pure-Rust `eframe` + `egui` desktop shell (`magic`), `magic-cli`, and `magic-cli mcp` share
+//! the same command registry and [`Session::execute`] entry point. Magic coordinates installed
+//! ArtCraft applications (`DesignCraft`, `PhotoCraft`, `VectorCraft`, `EffectCraft`, `FilmCraft`,
+//! and headless `anicraft-cli`) via [`CraftHub`] rather than reimplementing media/compositor
+//! servers in-process.
 //!
 //! # Start here
 //!
@@ -26,6 +27,7 @@ pub mod command_sets;
 pub mod commands;
 pub mod confinement;
 pub mod craft_ai_codex;
+pub mod craft_effects;
 pub mod craft_hub;
 pub mod doc_state;
 pub mod doctor;

@@ -33,24 +33,17 @@ fn forward_target(target: CraftTarget, caller: &str, params: &Value) -> Result<V
     CraftHub::live_control(target, port, method, &inner).map_err(|e| format!("{}: {e}", target.name()))
 }
 
-/// `ui.filmcraft {method, params?, port?}`: send any FilmCraft `--control` method to the open
-/// system `filmcraft --control` window.
-pub(super) fn control(params: &Value) -> Result<Value, String> {
+pub fn control(params: &Value) -> Result<Value, String> {
     super::only_keys(params, "ui.filmcraft", &["method", "params", "port"])?;
     forward_target(CraftTarget::Film, "ui.filmcraft", params)
 }
 
-/// `ui.effectcraft {method, params?, port?}`: send any EffectCraft `--control` method to the open
-/// system `effectcraft --control` window.
-pub(super) fn control_effect(params: &Value) -> Result<Value, String> {
+pub fn control_effect(params: &Value) -> Result<Value, String> {
     super::only_keys(params, "ui.effectcraft", &["method", "params", "port"])?;
     forward_target(CraftTarget::Effect, "ui.effectcraft", params)
 }
 
-/// `ui.craft {app, method, params?, port?}`: send any `--control` method to an open system
-/// ArtCraft desktop window that supports live UI (`filmcraft`, `effectcraft`, `designcraft`,
-/// `photocraft`, `vectorcraft`, `deckcraft`, `texturecraft`).
-pub(super) fn control_any(params: &Value) -> Result<Value, String> {
+pub fn control_any(params: &Value) -> Result<Value, String> {
     super::only_keys(params, "ui.craft", &["app", "method", "params", "port"])?;
     let app = params["app"].as_str().ok_or("ui.craft needs an app name")?;
     let target = CraftTarget::from_name(app).ok_or_else(|| format!("ui.craft: unknown Craft app `{app}`"))?;

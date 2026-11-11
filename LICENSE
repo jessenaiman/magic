@@ -22,7 +22,7 @@ Without a separate written commercial license from Jesse Naiman, you may NOT:
 (c) incorporate the Software's UI design, templates, or source code into a competing commercial software application or paid AI/video tool.
 
 5. Commercial Licensing Inquiries
-To request a commercial software, OEM, enterprise hosting, or resale license for Magic Studio, contact Jesse Naiman directly via https://github.com/jessenaiman/magic-studio-app.
+To request a commercial software, OEM, enterprise hosting, or resale license for Magic Studio, contact Jesse Naiman directly via https://github.com/jessenaiman/magic.
 
 6. Third-Party Open-Source Components
 Magic Studio links to community-maintained open-source libraries — including `storytold/craft-libs` and crates from crates.io — which remain governed by their respective open-source licenses (`MIT OR Apache-2.0` and others as listed in `NOTICE` and `ATTRIBUTION.md`). Nothing in this License restricts your rights under the separate licenses of those upstream third-party libraries when obtained from their upstream repositories.

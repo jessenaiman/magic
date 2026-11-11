@@ -43,28 +43,12 @@ fn saved_path(path: &Path, project: &Path) -> PathBuf {
 }
 
 fn opened_path(path: &str, project: &Path) -> PathBuf {
-    if let Ok(resolved) = craft_docpath::resolve_absolute(path, Some(project))
-        && resolved.exists()
-    {
+    if let Ok(resolved) = craft_docpath::resolve_absolute(path, Some(project)) {
         return resolved;
     }
     let parent = project.parent().unwrap_or(Path::new("."));
     let raw = Path::new(path);
-    if raw.is_absolute() {
-        if raw.exists() {
-            return raw.to_path_buf();
-        }
-        for marker in ["/assets/", "/storyboard/", "/animation/", "/design/", "/lettering/", "/motion/", "/film/"] {
-            if let Some(idx) = path.find(marker) {
-                let candidate = parent.join(&path[idx + 1..]);
-                if candidate.exists() {
-                    return candidate;
-                }
-            }
-        }
-        return raw.to_path_buf();
-    }
-    parent.join(raw)
+    if raw.is_absolute() { raw.to_path_buf() } else { parent.join(raw) }
 }
 
 pub fn project_document(s: &Session) -> Value {
@@ -390,6 +374,11 @@ fn apply_opened_state(s: &mut Session, path: &Path, doc: &Value, assets: Vec<cra
 
 pub fn cmd_project_open(s: &mut Session, params: &Value) -> Result<Value> {
     let path = project_file_path(s, params)?;
+    if params["read_only"] != true
+        && let Some(project_dir) = path.parent()
+    {
+        let _ = craft_util::media::sweep_orphan_craft_tmp(project_dir);
+    }
     let doc = read_project_document(&path)?;
     if doc.get("format").and_then(Value::as_str) != Some(PROJECT_FORMAT) {
         return Err(EngineError::InvalidParams(format!("{} is not a Magic Studio project", path.display())));

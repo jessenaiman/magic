@@ -6,7 +6,7 @@
 
 use std::io::{BufRead, Write};
 
-use clap::{CommandFactory, Parser, Subcommand};
+use clap::{Args, CommandFactory, Parser, Subcommand};
 use serde_json::{Value, json};
 
 const AFTER_HELP: &str = "\
@@ -29,7 +29,7 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub save_as: Option<String>,
     /// Connect to a running `magic --control <PORT>` window (`127.0.0.1:9876` or `9876`)
-    #[arg(long, global = true)]
+    #[arg(long, visible_alias = "bridge", global = true)]
     pub connect: Option<String>,
     /// Preview mutations without applying them
     #[arg(long, global = true)]
@@ -53,49 +53,52 @@ pub struct Cli {
     command: Option<Cmd>,
 }
 
+#[derive(Args)]
+struct NewArgs {
+    /// Destination `.magic` path (or omit and pass `--root` + `--name`)
+    #[arg(long)]
+    path: Option<String>,
+    /// Parent folder when creating `<root>/<slug>/<name>.magic`
+    #[arg(long)]
+    root: Option<String>,
+    /// Project name / title
+    #[arg(long)]
+    name: Option<String>,
+    /// Required song audio file to transcribe and sync onto the FilmCraft lyric track
+    #[arg(long)]
+    audio: Option<String>,
+    /// Optional pre-existing timed transcript JSON
+    #[arg(long)]
+    transcript: Option<String>,
+    /// Optional interactive or parameter-driven Storyboard setup wizard
+    #[arg(long)]
+    wizard: bool,
+    /// Optional D01 overall visual style for `A-Cover`
+    #[arg(long)]
+    style: Option<String>,
+    /// Optional L01 world / location prompt for `B-World`
+    #[arg(long)]
+    world: Option<String>,
+    /// Optional C01 lead character prompt for `C-Character`
+    #[arg(long)]
+    character: Option<String>,
+    /// Optional M01 song-action motion drawing spec for `D-Motion`
+    #[arg(long)]
+    motion: Option<String>,
+    /// Project mode (`project` or `animation`)
+    #[arg(long)]
+    mode: Option<String>,
+    /// Overwrite an existing `.magic` project
+    #[arg(long)]
+    overwrite: bool,
+    /// Additional `key=value` parameters
+    arguments: Vec<String>,
+}
+
 #[derive(Subcommand)]
 enum Cmd {
     /// Create a new song project: requires `--audio` to transcribe timestamps, sync FilmCraft lyrics, and initialize `storyboard.designcraft`
-    New {
-        /// Destination `.magic` path (or omit and pass `--root` + `--name`)
-        #[arg(long)]
-        path: Option<String>,
-        /// Parent folder when creating `<root>/<slug>/<name>.magic`
-        #[arg(long)]
-        root: Option<String>,
-        /// Project name / title
-        #[arg(long)]
-        name: Option<String>,
-        /// Required song audio file to transcribe and sync onto the FilmCraft lyric track
-        #[arg(long)]
-        audio: Option<String>,
-        /// Optional pre-existing timed transcript JSON
-        #[arg(long)]
-        transcript: Option<String>,
-        /// Optional interactive or parameter-driven Storyboard setup wizard
-        #[arg(long)]
-        wizard: bool,
-        /// Optional D01 overall visual style for `A-Cover`
-        #[arg(long)]
-        style: Option<String>,
-        /// Optional L01 world / location prompt for `B-World`
-        #[arg(long)]
-        world: Option<String>,
-        /// Optional C01 lead character prompt for `C-Character`
-        #[arg(long)]
-        character: Option<String>,
-        /// Optional M01 song-action motion drawing spec for `D-Motion`
-        #[arg(long)]
-        motion: Option<String>,
-        /// Project mode (`project` or `animation`)
-        #[arg(long)]
-        mode: Option<String>,
-        /// Overwrite an existing `.magic` project
-        #[arg(long)]
-        overwrite: bool,
-        /// Additional `key=value` parameters
-        arguments: Vec<String>,
-    },
+    New(NewArgs),
     /// List engine commands (id and label; `describe` shows one in full)
     Commands { filter: Option<String> },
     /// Describe one command as JSON
@@ -169,10 +172,6 @@ fn call_live_control(connect: Option<&str>, method: &str, params: Value) -> Resu
     magic_mcp::Backend::execute(&mut remote, method, params)
 }
 
-fn requires_live_control(id: &str) -> bool {
-    id.starts_with("ui.") || matches!(id, "app.quit" | "app.restart" | "app.hide")
-}
-
 struct Target {
     session: Option<magic::Session>,
     connect: Option<String>,
@@ -184,7 +183,7 @@ struct Target {
 
 impl Target {
     fn call(&mut self, id: &str, params: Value) -> Result<Value, String> {
-        if self.connect.is_some() || requires_live_control(id) {
+        if self.connect.is_some() || magic_mcp::is_live_shell_method(id) {
             return call_live_control(self.connect.as_deref(), id, params);
         }
         let session = self.session.as_mut().ok_or("no headless session: --connect runs commands in the live app")?;
@@ -226,71 +225,52 @@ fn prompt_optional(label: &str) -> Option<String> {
     None
 }
 
-#[allow(clippy::too_many_arguments)]
-fn run_new(
-    target: &mut Target,
-    path: Option<String>,
-    root: Option<String>,
-    name: Option<String>,
-    audio: Option<String>,
-    transcript: Option<String>,
-    wizard: bool,
-    style: Option<String>,
-    world: Option<String>,
-    character: Option<String>,
-    motion: Option<String>,
-    mode: Option<String>,
-    overwrite: bool,
-    arguments: Vec<String>,
-) -> Result<(), String> {
-    let mut params = parse_params(&arguments, None)?;
-    if let Some(v) = path {
-        params["path"] = json!(v);
+fn put_opt_str(params: &mut Value, key: &str, val: Option<String>) {
+    if let Some(v) = val {
+        params[key] = json!(v);
     }
-    if let Some(v) = root {
-        params["root"] = json!(v);
+}
+
+fn build_wizard_params(base: Option<Value>, args: &NewArgs) -> Value {
+    let mut wiz = base.filter(Value::is_object).unwrap_or_else(|| json!({}));
+    let wizard = args.wizard;
+    if let Some(v) = args.style.clone().or_else(|| wizard.then(|| prompt_optional("Wizard [1/4] Overall Visual Style (D01, optional)")).flatten()) {
+        wiz["style"] = json!(v);
     }
-    if let Some(v) = name {
-        params["name"] = json!(v);
+    if let Some(v) = args.world.clone().or_else(|| wizard.then(|| prompt_optional("Wizard [2/4] Master World Location (L01, optional)")).flatten()) {
+        wiz["world"] = json!(v.clone());
+        wiz["world_prompt"] = json!(v);
     }
-    if let Some(v) = audio {
-        params["audio"] = json!(v);
+    if let Some(v) = args.character.clone().or_else(|| wizard.then(|| prompt_optional("Wizard [3/4] Lead Character Prompt (C01, optional)")).flatten()) {
+        wiz["character"] = json!(v);
     }
-    if let Some(v) = transcript {
-        params["transcript"] = json!(v);
+    if let Some(v) = args.motion.clone().or_else(|| wizard.then(|| prompt_optional("Wizard [4/4] Song-Action Motion Spec (M01, optional)")).flatten()) {
+        wiz["motion"] = json!(v);
     }
-    if let Some(v) = mode {
-        params["mode"] = json!(v);
-    }
-    if overwrite {
+    wiz
+}
+
+fn run_new(target: &mut Target, args: NewArgs) -> Result<(), String> {
+    let mut params = parse_params(&args.arguments, None)?;
+    put_opt_str(&mut params, "path", args.path.clone());
+    put_opt_str(&mut params, "root", args.root.clone());
+    put_opt_str(&mut params, "name", args.name.clone());
+    put_opt_str(&mut params, "audio", args.audio.clone());
+    put_opt_str(&mut params, "transcript", args.transcript.clone());
+    put_opt_str(&mut params, "mode", args.mode.clone());
+    if args.overwrite {
         params["overwrite"] = json!(true);
     }
-
     let is_anim = params.get("mode").and_then(Value::as_str) == Some("animation");
     if !is_anim && params.get("audio").and_then(Value::as_str).is_none_or(|s| s.trim().is_empty()) {
         return Err(
             "magic-cli new requires --audio <SONG_FILE> (or audio=<SONG_FILE>) so Magic can transcribe timestamps, sync the FilmCraft lyric track, and start the storyboard.".into(),
         );
     }
-
-    let mut wiz = params.get("wizard").cloned().filter(Value::is_object).unwrap_or_else(|| json!({}));
-    if let Some(v) = style.or_else(|| wizard.then(|| prompt_optional("Wizard [1/4] Overall Visual Style (D01, optional)")).flatten()) {
-        wiz["style"] = json!(v);
-    }
-    if let Some(v) = world.or_else(|| wizard.then(|| prompt_optional("Wizard [2/4] Master World Location (L01, optional)")).flatten()) {
-        wiz["world"] = json!(v);
-        wiz["world_prompt"] = json!(v);
-    }
-    if let Some(v) = character.or_else(|| wizard.then(|| prompt_optional("Wizard [3/4] Lead Character Prompt (C01, optional)")).flatten()) {
-        wiz["character"] = json!(v);
-    }
-    if let Some(v) = motion.or_else(|| wizard.then(|| prompt_optional("Wizard [4/4] Song-Action Motion Spec (M01, optional)")).flatten()) {
-        wiz["motion"] = json!(v);
-    }
+    let wiz = build_wizard_params(params.get("wizard").cloned(), &args);
     if wiz.as_object().is_some_and(|m| !m.is_empty()) {
         params["wizard"] = wiz;
     }
-
     target.run("project.new", params)
 }
 
@@ -344,20 +324,20 @@ fn ui_action(action: &str, target: Option<String>, mut args: Vec<String>, raw: O
     let method = match action {
         "inspect" => "ui.inspect".to_owned(),
         "state" => "ui.state".to_owned(),
-        "view" => "ui.set_view".to_owned(),
+        "view" => "ui.set".to_owned(),
         "playback" => "ui.playback".to_owned(),
         "quit" => "app.quit".to_owned(),
         id if id.contains('.') => id.to_owned(),
         id => format!("ui.{id}"),
     };
     if let Some(target) = target {
-        let key = match method.as_str() {
-            "ui.focus" | "ui.click" => Some("id"),
-            "ui.set_view" => Some("view"),
-            "ui.playback" => Some("action"),
-            "ui.key" => Some("key"),
-            "ui.type" | "ui.text" => Some("text"),
-            "ui.screenshot" => Some("path"),
+        let key = match (action, method.as_str()) {
+            ("view", _) | (_, "ui.set_view") => Some("view"),
+            (_, "ui.focus" | "ui.click") => Some("id"),
+            (_, "ui.playback") => Some("action"),
+            (_, "ui.key") => Some("key"),
+            (_, "ui.type" | "ui.text") => Some("text"),
+            (_, "ui.screenshot") => Some("path"),
             _ => None,
         };
         let bare = !target.contains('=') && !target.starts_with('{');
@@ -452,9 +432,7 @@ fn run(cli: Cli) -> Result<(), String> {
             target.run(&id, params)
         }
         (None, Some(command)) => match command {
-            Cmd::New { path, root, name, audio, transcript, wizard, style, world, character, motion, mode, overwrite, arguments } => {
-                run_new(&mut target, path, root, name, audio, transcript, wizard, style, world, character, motion, mode, overwrite, arguments)
-            }
+            Cmd::New(args) => run_new(&mut target, args),
             Cmd::Commands { filter } => list_commands(&mut target, filter),
             Cmd::Describe { id } => describe(&id),
             Cmd::Inspect { target: what } => inspect(&mut target, what),

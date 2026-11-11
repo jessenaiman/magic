@@ -1,13 +1,13 @@
-//! Import clipboard artwork through the normal project asset pipeline.
+//! Import clipboard artwork through the normal project asset pipeline using `arboard`
+//! (`arboard` + `image`, zero webview plugins).
+
+use std::io::Write;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+
 use image::{ColorType, ImageEncoder, codecs::png::PngEncoder};
 use magic::Session;
 use serde_json::{Value, json};
-use std::{
-    io::Write,
-    path::{Path, PathBuf},
-    sync::atomic::{AtomicU64, Ordering},
-};
-use tauri_plugin_clipboard_manager::ClipboardExt;
 
 fn encode_png(rgba: &[u8], width: u32, height: u32) -> Result<Vec<u8>, String> {
     let expected = (width as usize).checked_mul(height as usize).and_then(|n| n.checked_mul(4));
@@ -23,6 +23,7 @@ struct TempImage {
     dir: PathBuf,
     path: PathBuf,
 }
+
 impl Drop for TempImage {
     fn drop(&mut self) {
         let _ = std::fs::remove_dir_all(&self.dir);
@@ -68,7 +69,6 @@ impl TempImage {
     }
 }
 
-/// Extract and validate PNG/JPEG/WebP artwork bytes from a `text/uri-list` or copied file path in clipboard text.
 fn artwork_bytes_from_clipboard_text(text: &str) -> Result<Vec<u8>, String> {
     let raw = text.lines().map(str::trim).find(|line| !line.is_empty() && !line.starts_with('#')).ok_or("Clipboard text is empty")?;
     let path_str = raw.strip_prefix("file://").unwrap_or(raw);
@@ -81,17 +81,21 @@ fn artwork_bytes_from_clipboard_text(text: &str) -> Result<Vec<u8>, String> {
     encode_png(decoded.as_raw(), decoded.width(), decoded.height())
 }
 
-/// Call on a worker thread: the clipboard plugin warns that reads can deadlock the Linux UI thread.
-pub fn import_image(app: &tauri::AppHandle, session: &mut Session, params: &Value) -> Result<Value, String> {
+pub fn import_image(session: &mut Session, params: &Value) -> Result<Value, String> {
     let expected = params.get("expected_project").and_then(Value::as_str).ok_or("expected_project is required")?;
     let project = session.project_path.as_ref().ok_or("No project is open")?;
     if project.to_str() != Some(expected) {
         return Err("The active project changed; clipboard import was not run".into());
     }
     let name = params.get("name").and_then(Value::as_str).map(str::trim).filter(|n| !n.is_empty()).unwrap_or("Clipboard artwork");
-    let png = match app.clipboard().read_image() {
-        Ok(image) => encode_png(image.rgba(), image.width(), image.height())?,
-        Err(image_err) => match app.clipboard().read_text() {
+    let mut clipboard = arboard::Clipboard::new().map_err(|e| format!("Cannot open system clipboard: {e}"))?;
+    let png = match clipboard.get_image() {
+        Ok(img) => {
+            let w = u32::try_from(img.width).map_err(|_| "Clipboard image width overflows u32")?;
+            let h = u32::try_from(img.height).map_err(|_| "Clipboard image height overflows u32")?;
+            encode_png(img.bytes.as_ref(), w, h)?
+        }
+        Err(image_err) => match clipboard.get_text() {
             Ok(text) => artwork_bytes_from_clipboard_text(&text).map_err(|_| format!("Cannot read an image from the clipboard: {image_err}"))?,
             Err(_) => return Err(format!("Cannot read an image from the clipboard: {image_err}")),
         },

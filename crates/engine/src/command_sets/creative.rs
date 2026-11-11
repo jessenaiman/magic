@@ -62,8 +62,8 @@ fn specs_words() -> Vec<CommandSpec> {
         ),
         query_spec!(
             "words.effects",
-            "EffectCraft Text & Range Presets",
-            "{\"kind\":\"optional: text, drawing or background\"}",
+            "CLI-Mapped Craft Typography Effects (EffectCraft, VectorCraft & PhotoCraft)",
+            "{\"app\":\"optional effectcraft|vectorcraft|photocraft\",\"category\":\"optional\",\"filter\":\"optional\"}",
             crate::cmd::words::cmd_words_effects
         ),
         cmd_spec!(
@@ -154,6 +154,12 @@ fn specs_words() -> Vec<CommandSpec> {
 fn specs_motion() -> Vec<CommandSpec> {
     vec![
         query_spec!("motion.read", "Song-Action Motion Cues & Timed Words (motion/actions.ecproj)", "{}", crate::cmd::motion::cmd_motion_read),
+        query_spec!(
+            "motion.effects",
+            "CLI-Mapped Craft Vector & Motion Effects (VectorCraft, EffectCraft & PhotoCraft)",
+            "{\"app\":\"optional vectorcraft|effectcraft|photocraft\",\"category\":\"optional\",\"filter\":\"optional\"}",
+            crate::cmd::motion::cmd_motion_effects
+        ),
         cmd_spec!(
             "motion.save",
             "Save Song-Action Drawing Cue (VectorCraft Trace / SVG + EffectCraft Trim Paths)",

@@ -2,19 +2,24 @@ name: Packaging Lint
 
 on:
   push:
-    branches: [main]
+    branches: [main, release]
     paths:
+      - ".github/workflows/**"
       - "packaging/**"
-      - ".github/workflows/packaging-lint.yml"
-      - ".github/workflows/release.yml"
+      - "assets/app-icon/**"
   pull_request:
     paths:
+      - ".github/workflows/**"
       - "packaging/**"
-      - ".github/workflows/packaging-lint.yml"
-      - ".github/workflows/release.yml"
+      - "assets/app-icon/**"
+  workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: packaging-lint-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   packaging-lint:

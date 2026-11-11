@@ -11,7 +11,7 @@
 
 - [Lightweight Coordinator Overview](architecture/overview.md)
 - [ArtCraft Suite Delegation & Track Isolation](architecture/craft-suite-delegation.md)
-- [Tauri Base Control & Styling System](architecture/base-controls.md)
+- [Native `egui` & `craft-ui` Widget System](architecture/base-controls.md)
 
 # Formats & Pipelines
 

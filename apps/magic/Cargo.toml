@@ -1,10 +1,11 @@
 [package]
 name = "magic"
-description = "Magic Studio desktop app over magic-engine"
+description = "Magic Studio pure-Rust desktop coordinator over magic-engine and the ArtCraft suite"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
+repository.workspace = true
 
 [lints]
 workspace = true
@@ -13,42 +14,25 @@ workspace = true
 name = "magic"
 path = "src/main.rs"
 
-[features]
-default = ["custom-protocol"]
-custom-protocol = ["tauri/custom-protocol"]
-# Release builds ship without the webview inspector; debug builds always include it.
-devtools = ["tauri/devtools"]
-
-[build-dependencies]
-tauri-build = { version = "2", features = [] }
-
 [dependencies]
-magic = { workspace = true }
-image = { workspace = true }
-serde = { workspace = true, features = ["derive"] }
-serde_json = { workspace = true }
-tauri = { version = "2", features = ["protocol-asset"] }
+arboard = { workspace = true }
+clap = { workspace = true }
+craft-atomic = { workspace = true }
 craft-dialogs = { workspace = true }
+craft-font-catalog = { workspace = true }
 craft-keymap = { workspace = true }
-tauri-plugin-opener = "2"
-tauri-plugin-log = "2"
-log = "0.4"
-clap = { version = "4.6", features = ["derive", "env"] }
-tauri-plugin-window-state = "2"
-tauri-plugin-single-instance = "2"
-tauri-plugin-clipboard-manager = "2"
-tauri-plugin-fs = "2"
-tauri-plugin-notification = "2"
-tauri-plugin-global-shortcut = "2"
-tauri-plugin-os = "2"
+craft-menu = { workspace = true }
+craft-platform = { workspace = true }
+craft-quit = { workspace = true }
+craft-ui = { workspace = true }
+craft-util = { workspace = true }
+craft-window = { workspace = true }
+eframe = { workspace = true }
+egui = { workspace = true }
+image = { workspace = true }
+log = { workspace = true }
+magic = { workspace = true }
+magic-ui-egui = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 subtle = { workspace = true }
-tauri-plugin-persisted-scope = "2"
-
-# Window capture for `ui.screenshot`: WebKitGTK snapshot encoded as PNG by cairo. Both crates are
-# already in the Tauri dependency graph; `png` only exposes cairo's PNG writer.
-[target.'cfg(target_os = "linux")'.dependencies]
-webkit2gtk = "2.0"
-cairo-rs = { version = "0.18", features = ["png"] }
-
-[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
-tauri-plugin-positioner = "2"

@@ -1,9 +1,9 @@
 ---
-title: Getting Started with Magic Studio
+title: Getting started
 description: Create a song project, complete the 4 Storyboard Main Title Pages, and assemble your first FilmCraft preview.
 ---
 
-## 1. Check Installed ArtCraft Apps
+## 1. Check installed ArtCraft apps
 
 Run the built-in suite check to confirm which ArtCraft apps and `<craft>-cli` binaries are available on your machine:
 
@@ -11,17 +11,21 @@ Run the built-in suite check to confirm which ArtCraft apps and `<craft>-cli` bi
 magic-cli exec app.doctor
 ```
 
-## 2. Start From a Song Recording
+## 2. Start from a song recording
 
 Every full Magic Studio project begins with an audio recording so timestamps synchronize lyrics, facial visemes, motion cues, and scene cuts:
 
 ```sh
-magic-cli new   --root ~/Videos/Magic   --name "Babys Boat"   --audio ~/Music/babys-boat.wav   --wizard
+magic-cli new \
+  --root ~/Videos/Magic \
+  --name "Babys Boat" \
+  --audio ~/Music/babys-boat.wav \
+  --wizard
 ```
 
-Or launch the desktop window (`magic`), click **+ New** on the Home view, pick your song audio file, and open the **Storyboard** tab.
+Or launch the desktop window (`magic`), click **New** on the Home view (or choose **File ▸ New Song Project…**), pick your song audio file, and open the **Storyboard** tab.
 
-## 3. Complete the Four Main Title Pages First
+## 3. Complete the four main title pages first
 
 In **Storyboard**, complete the four master reference spreads until their traffic lights turn green:
 1. **A-Cover** — Overall visual style and key art.

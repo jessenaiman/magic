@@ -8,11 +8,13 @@ use super::{FONTS, KINETIC_LIBRARY, MOVES, invalid, one_of};
 /// `words.effect_install`: register an EffectCraft preset/overlay effect in `lettering/effects/<name>.json`.
 pub fn cmd_words_effect_install(s: &mut Session, p: &Value) -> Result<Value> {
     let dir = crate::cmd::words::workspace_dir(s)?;
-    let name = p["name"]
+    let raw_name = p["name"]
         .as_str()
-        .filter(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-'))
-        .ok_or_else(|| invalid("name must be a valid effect name (letters, digits or '-')"))?;
-    let rel = format!("lettering/effects/{name}.json");
+        .filter(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.')))
+        .ok_or_else(|| invalid("name must be a valid Craft effect id (letters, digits, '.', '_' or '-')"))?;
+    let safe_stem: String = raw_name.chars().map(|c| if c == '.' { '-' } else { c }).collect();
+    let rel = format!("lettering/effects/{safe_stem}.json");
+    let name = raw_name;
     let target = dir.join(&rel);
     if target.is_file() {
         return Ok(json!({"name":name,"src":rel,"installed":false,"already":true}));
@@ -20,18 +22,31 @@ pub fn cmd_words_effect_install(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(parent) = target.parent() {
         fs::create_dir_all(parent)?;
     }
-    let spec = json!({
-        "name": name,
-        "engine": "effectcraft",
-        "text_variable": "text",
-        "cues": true,
-        "variables": {
-            "text": {"id": "text", "type": "string", "role": "content"},
-            "cues": {"id": "cues", "type": "string", "role": "timing"},
-            "color": {"id": "color", "type": "string"},
-            "speed": {"id": "speed", "type": "number"}
-        }
-    });
+    let spec = if let Some(mapped) = crate::craft_effects::find_lyrics_effect(name) {
+        json!({
+            "id": mapped.id,
+            "name": mapped.label,
+            "badge": mapped.badge,
+            "engine": mapped.craft_app,
+            "craft_command": mapped.craft_command,
+            "match_name": mapped.match_name,
+            "category": mapped.category,
+            "params": (mapped.default_params)(),
+        })
+    } else {
+        json!({
+            "name": name,
+            "engine": "effectcraft",
+            "text_variable": "text",
+            "cues": true,
+            "variables": {
+                "text": {"id": "text", "type": "string", "role": "content"},
+                "cues": {"id": "cues", "type": "string", "role": "timing"},
+                "color": {"id": "color", "type": "string"},
+                "speed": {"id": "speed", "type": "number"}
+            }
+        })
+    };
     crate::doc_state::write_file(&target, serde_json::to_vec_pretty(&spec).map_err(|e| invalid(e.to_string()))?)?;
     Ok(json!({"name":name,"src":rel,"installed":true,"already":false}))
 }

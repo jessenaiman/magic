@@ -5,7 +5,7 @@
   "slug": "magic",
   "description": "Song-driven storyboard, animation, kinetic lyrics, and FilmCraft studio coordinator over the ArtCraft suite",
   "license": "LicenseRef-Magic-Studio-NonResale",
-  "repository": "https://github.com/jessenaiman/magic-studio-app",
+  "repository": "https://github.com/jessenaiman/magic",
   "binaries": {
     "desktop": "magic",
     "cli": "magic-cli",

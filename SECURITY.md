@@ -9,4 +9,4 @@
 
 ## Reporting a Vulnerability
 
-Please do **not** open public issues for security vulnerabilities. Report vulnerabilities privately through [GitHub Security Advisories](https://github.com/jessenaiman/magic-studio-app/security/advisories/new).
+Please do **not** open public issues for security vulnerabilities. Report vulnerabilities privately through [GitHub Security Advisories](https://github.com/jessenaiman/magic/security/advisories/new).

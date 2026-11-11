@@ -146,7 +146,7 @@ fn find_first_with_ext(dir: &Path, exts: &[&str], depth: usize) -> Option<PathBu
         .ok()?
         .flatten()
         .map(|e| e.path())
-        .filter(|p| !p.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with('.') || n == "node_modules" || n == "frames"))
+        .filter(|p| !p.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with('.') || n == "target" || n == "frames"))
         .collect();
     entries.sort();
     for entry in &entries {

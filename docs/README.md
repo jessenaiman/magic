@@ -9,7 +9,7 @@ Magic Studio uses **two official ArtCraft documentation surfaces** — no ad-hoc
 
 - **[Control Protocol (`--control`)](control-protocol.md)** — Complete loopback JSON-lines protocol for `magic --control 9876`, `magic-cli --connect`, `magic-cli mcp`, and `EffectCraft`/`FilmCraft` bridges, including the review checklist of enhancement controls.
 - **[MCP Server (`magic-cli mcp`)](mcp.md)** — Remote (`--connect 127.0.0.1:9876`) vs Headless (`--headless`) setup, `.mcp.json` configuration, and `--automation-read-root` / `--automation-write-root` confinement.
-- **[Architecture & Layer Boundaries](architecture.md)** — Single-responsibility crate hierarchy (`craft-util`, `craft-scribbles`, `magic-engine`, `magic-mcp`, `magic-cli`, `magic`) and `FilmCraft` `V1`–`V4` track isolation.
+- **[Architecture & Layer Boundaries](architecture.md)** — Single-responsibility crate hierarchy (`craft-util`, `craft-scribbles`, `magic-engine`, `magic-mcp`, `magic-ui-egui`, `magic-cli`, `magic`, `magic-tui`) and `FilmCraft` `V1`–`V4` track isolation.
 - **[Feature Gaps & Unimplemented Requests](gaps.md)** — Actionable `- [ ]` checkmark lists grouped by subsystem covering missing features, `// TODO:` host checks, and control enhancements.
 - **[Craft-Wiki App Guides](wiki/README.md)** — Drop-in user documentation pages for [`storytold/craft-wiki`](https://github.com/storytold/craft-wiki).
 - **[House Rules](house-rules-core.md)** — Engineering standards from [`storytold/craft-contrib`](https://github.com/storytold/craft-contrib/blob/main/docs/house-rules-core.md).

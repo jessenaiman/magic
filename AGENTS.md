@@ -2,7 +2,7 @@
 
 > **Notice on Legacy Repository**: Do NOT read, reference, or import code/patterns from the legacy prototype repository (`jessenaiman/magic-studio-app`) unless the user explicitly requests it, as historical churn and divergent iterations can introduce AI psychosis and regressions. Historical development, early prototypes, and past discussions are preserved for human record at https://github.com/jessenaiman/magic-studio-app.
 
-Magic Studio is an ArtCraft coordinator application (`magic`, `magic-cli`, `magic-mcp`) built on [`storytold/craft-libs`](https://github.com/storytold/craft-libs) and governed by [`storytold/craft-contrib`](https://github.com/storytold/craft-contrib/blob/main/AGENTS.md).
+Magic Studio is a pure-Rust ArtCraft coordinator application (`magic`, `magic-cli`, `magic-mcp`) built on `eframe` + `egui` 0.37 + [`storytold/craft-libs`](https://github.com/storytold/craft-libs) and governed by [`storytold/craft-contrib`](https://github.com/storytold/craft-contrib/blob/main/AGENTS.md).
 
 ## 1. Drive Magic Through `magic-cli mcp` and Live `--control`
 
@@ -25,5 +25,6 @@ Follow the exact ArtCraft MCP pattern in [`docs/mcp.md`](docs/mcp.md) (matching 
 
 - Do **not** create custom paraphrased animation skill files or markdown research/log dumps in the repository. Link directly to official outside ArtCraft documentation and verified tutorials.
 - Keep every source file focused on one responsibility and under 900 lines; leave a `// TODO:` comment (never a `todo!()` panic) when a headless CLI integration step needs follow-up verification on the host.
-- Run `cargo xtask ci` (fmt, layers, Clippy `-D warnings`, UI build) before opening a PR, and report honestly which checks ran vs which were skipped.
+- Never introduce Tauri, webviews, JavaScript, or TypeScript; all desktop UI lives in `crates/ui-egui` (`magic-ui-egui`) and `apps/magic`.
+- Run `cargo xtask ci` (fmt, layers, Clippy `-D warnings`, workspace tests) before opening a PR, and report honestly which checks ran vs which were skipped.
 - Never add `Co-Authored-By` agent trailers, `Generated with ...` footers, or session transcripts to commits, PRs, or issues ([Rule 15](https://github.com/storytold/craft-contrib/blob/main/docs/house-rules-core.md)).

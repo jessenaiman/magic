@@ -2,8 +2,8 @@ Magic Studio Brand, Design & Template Terms
 
 Copyright (c) 2026 Jesse Naiman. All rights reserved.
 
-The "Magic Studio" name, wordmark, application icons (`apps/magic/icons/`), `.figcraft` UI design specifications, and visual identity are not licensed for commercial redistribution or rebranding.
+The "Magic Studio" name, wordmark, application icons (`assets/app-icon/`), `.figcraft` UI design specifications, and visual identity are not licensed for commercial redistribution or rebranding.
 
-- You may keep them unchanged in unmodified builds and non-commercial forks solely to identify Magic Studio by Jesse Naiman and link to https://github.com/jessenaiman/magic-studio-app.
+- You may keep them unchanged in unmodified builds and non-commercial forks solely to identify Magic Studio by Jesse Naiman and link to https://github.com/jessenaiman/magic.
 - You may not use the Magic Studio name, icon, or UI design to market, sell, or endorse another software product, paid service, or commercial fork without prior written permission from Jesse Naiman.
 - Videos and media works you create with Magic Studio are entirely yours and carry no branding restriction.

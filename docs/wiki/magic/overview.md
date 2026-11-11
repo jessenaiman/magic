@@ -1,11 +1,11 @@
 ---
-title: Magic Studio Overview
+title: Magic Studio
 description: Coordinate DesignCraft storyboards, PhotoCraft cutouts, EffectCraft puppet animation & kinetic lyrics, and FilmCraft timelines from one song recording.
 ---
 
-**Magic Studio** (`magic`, `magic-cli`, `magic-mcp`) is a lightweight song-to-video coordinator for the [ArtCraft](https://github.com/storytold) creative suite. Instead of duplicating raster, vector, compositing, or NLE engines, Magic Studio connects your recorded song to dedicated ArtCraft project files so every stage stays editable in its native application.
+**Magic Studio** (`magic`, `magic-cli`, `magic-mcp`) is a pure-Rust song-to-video coordinator (`eframe` + `egui` 0.37 + [`craft-libs`](https://github.com/storytold/craft-libs)) for the [ArtCraft](https://github.com/storytold) creative suite. Instead of duplicating raster, vector, compositing, or NLE engines, Magic Studio connects your recorded song to dedicated ArtCraft project files so every stage stays editable in its native application.
 
-## How Magic Studio Fits Into ArtCraft
+## How Magic Studio fits into ArtCraft
 
 | Stage | ArtCraft App | Output Track / File |
 |---|---|---|
@@ -18,4 +18,4 @@ description: Coordinate DesignCraft storyboards, PhotoCraft cutouts, EffectCraft
 
 ## Licensing
 
-You can freely create, distribute, and monetize commercial videos and music videos made with Magic Studio, modify the source code, and share non-commercial forks. Reselling Magic Studio or offering it as a commercial product/service requires a separate written license from Jesse Naiman (`LICENSE`).
+You can freely create, distribute, and monetize commercial videos and music videos made with Magic Studio, modify the source code, and share non-commercial forks. Reselling Magic Studio or offering it as a commercial product/service requires a separate written license from Jesse Naiman ([`LICENSE`](https://github.com/jessenaiman/magic/blob/main/LICENSE)).

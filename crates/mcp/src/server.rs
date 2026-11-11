@@ -4,7 +4,7 @@
 //! timeline, compositor, cutout, vector, and layout engine work to `<craft>-cli` tools (`FilmCraft`,
 //! `EffectCraft`, `DesignCraft`, `PhotoCraft`, `VectorCraft`, and headless `anicraft-cli`).
 
-use crate::Backend;
+use crate::{Backend, is_live_shell_method};
 use rmcp::handler::server::{router::tool::ToolRouter, wrapper::Parameters};
 use rmcp::model::{CallToolResult, ContentBlock as Content};
 use rmcp::{ServerHandler, ServiceExt, tool, tool_handler, tool_router};
@@ -59,23 +59,37 @@ struct FilePathParams {
 #[serde(deny_unknown_fields)]
 struct ElementsParams {
     prefix: Option<String>,
+    unidentified: Option<bool>,
+}
+
+#[derive(Debug, Default, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct ModifiersParams {
+    shift: Option<bool>,
+    alt: Option<bool>,
+    command: Option<bool>,
+    ctrl: Option<bool>,
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 struct ClickParams {
     id: Option<String>,
+    fx: Option<f64>,
+    fy: Option<f64>,
     x: Option<f64>,
     y: Option<f64>,
     button: Option<String>,
     count: Option<u32>,
-    modifiers: Option<Vec<String>>,
+    modifiers: Option<ModifiersParams>,
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 struct PointParams {
     id: Option<String>,
+    fx: Option<f64>,
+    fy: Option<f64>,
     x: Option<f64>,
     y: Option<f64>,
 }
@@ -85,24 +99,30 @@ struct PointParams {
 struct DragParams {
     from: PointParams,
     to: PointParams,
+    button: Option<String>,
     steps: Option<u32>,
-    modifiers: Option<Vec<String>>,
+    modifiers: Option<ModifiersParams>,
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 struct ScrollParams {
     id: Option<String>,
+    fx: Option<f64>,
+    fy: Option<f64>,
     x: Option<f64>,
     y: Option<f64>,
     dx: Option<f64>,
     dy: Option<f64>,
+    unit: Option<String>,
+    modifiers: Option<ModifiersParams>,
 }
 
-#[derive(Debug, Deserialize, JsonSchema)]
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 struct KeyParams {
     key: String,
+    modifiers: Option<ModifiersParams>,
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
@@ -116,7 +136,11 @@ struct TypeParams {
 #[serde(deny_unknown_fields)]
 struct ShotParams {
     path: Option<String>,
-    /// When `true` (default), captures the live desktop window (`--connect`).
+    /// Optional panel name to crop (`app-bar`, `stage-assets`, `central`, `app-footer`).
+    panel: Option<String>,
+    /// Optional registered widget automation ID to crop.
+    id: Option<String>,
+    /// When `true` (default), captures the live `eframe` window (`--connect`) via `craft-ui` `CaptureSlot`.
     /// When `false`, renders the storyboard spread at `page` headlessly via `designcraft-cli`.
     window: Option<bool>,
     page: Option<usize>,
@@ -164,7 +188,7 @@ impl Server {
         let id = id.to_owned();
         tokio::task::spawn_blocking(move || {
             let mut backend = backend.lock().map_err(|e| e.to_string())?;
-            if (id.starts_with("ui.") || matches!(id.as_str(), "app.quit" | "app.restart" | "app.hide")) && !backend.is_live() {
+            if is_live_shell_method(&id) && !backend.is_live() {
                 return Err("UI tools require a live `magic --control 9876` window (`magic-cli mcp --connect 127.0.0.1:9876`)".into());
             }
             backend.execute(&id, params)
@@ -263,57 +287,69 @@ impl Server {
         }
     }
 
-    #[tool(description = "Inspect the live desktop UI state. Requires `--connect` to a running `magic --control 9876` window.")]
+    #[tool(description = "Inspect the live eframe/egui desktop UI state. Requires `--connect` to a running `magic --control 9876` window.")]
     async fn inspect_ui(&self) -> CallToolResult {
         output(self.run("ui.inspect", json!({})).await)
     }
 
-    #[tool(description = "List live DOM element IDs, labels, enabled state and bounds. Requires `--connect`.")]
+    #[tool(description = "List on-screen egui widget automation IDs, labels, enabled state, and logical-point bounds. Requires `--connect`.")]
     async fn ui_elements(&self, Parameters(p): Parameters<ElementsParams>) -> CallToolResult {
-        output(self.run("ui.elements", json!({"prefix": p.prefix})).await)
+        output(self.run("ui.elements", compact(json!({"prefix": p.prefix, "unidentified": p.unidentified}))).await)
     }
 
-    #[tool(description = "Click a visible enabled element by ID from ui_elements, or window coordinates x,y. Requires `--connect`.")]
+    #[tool(description = "Click a visible enabled widget by automation ID (`{id, fx?, fy?}`) or logical window coordinates `{x, y}`. Requires `--connect`.")]
     async fn ui_click(&self, Parameters(p): Parameters<ClickParams>) -> CallToolResult {
+        if p.count.is_some_and(|c| c > 10) {
+            return output(Err("ui.click: count must be between 0 and 10".into()));
+        }
         output(self.run("ui.click", compact(json!(p))).await)
     }
 
-    #[tool(description = "Drag between `from` and `to` (`{id}` or `{x, y}`). Requires `--connect`.")]
+    #[tool(description = "Drag between `from` and `to` (`{id, fx?, fy?}` or `{x, y}`). Requires `--connect`.")]
     async fn ui_drag(&self, Parameters(p): Parameters<DragParams>) -> CallToolResult {
-        let params = json!({"from": compact(json!(p.from)), "to": compact(json!(p.to)), "steps": p.steps, "modifiers": p.modifiers});
+        if p.steps.is_some_and(|s| s > 1024) {
+            return output(Err("ui.drag: steps must be between 0 and 1024".into()));
+        }
+        let params = json!({
+            "from": compact(json!(p.from)),
+            "to": compact(json!(p.to)),
+            "button": p.button,
+            "steps": p.steps,
+            "modifiers": p.modifiers,
+        });
         output(self.run("ui.drag", compact(params)).await)
     }
 
-    #[tool(description = "Scroll an element or point by dx,dy pixels. Requires `--connect`.")]
+    #[tool(description = "Scroll a widget or logical point by `dx`, `dy`. Requires `--connect`.")]
     async fn ui_scroll(&self, Parameters(p): Parameters<ScrollParams>) -> CallToolResult {
         output(self.run("ui.scroll", compact(json!(p))).await)
     }
 
-    #[tool(description = "Send a key or chord (Enter, Tab, Escape, ArrowDown, Ctrl+K) to the focused element. Requires `--connect`.")]
+    #[tool(description = "Send a key or chord (`Enter`, `Tab`, `Escape`, `ArrowDown`, `Cmd+S`, `Physical+KeyZ`) through `craft-keymap`. Requires `--connect`.")]
     async fn ui_key(&self, Parameters(p): Parameters<KeyParams>) -> CallToolResult {
-        output(self.run("ui.key", json!({"key": p.key})).await)
+        output(self.run("ui.key", compact(json!(p))).await)
     }
 
-    #[tool(description = "Type text into the focused text field, or into `id`. Requires `--connect`.")]
+    #[tool(description = "Type text into the focused `egui` text field, or into `id`. Requires `--connect`.")]
     async fn ui_type(&self, Parameters(p): Parameters<TypeParams>) -> CallToolResult {
         output(self.run("ui.type", compact(json!(p))).await)
     }
 
     #[tool(
-        description = "Capture a PNG (`{window: true, path?}` for the live window via `--connect`, or `{window: false, page?}` for a headless DesignCraft storyboard spread)."
+        description = "Capture a PNG (`{window: true, path?, panel?, id?}` for the live eframe window via `craft-ui` `CaptureSlot`, or `{window: false, page?}` for a headless DesignCraft storyboard spread)."
     )]
     async fn screenshot(&self, Parameters(p): Parameters<ShotParams>) -> CallToolResult {
         if p.window == Some(false) {
             return output(self.run("storyboard.thumbnail", json!({"page": p.page.unwrap_or(0), "scale": 1.0})).await);
         }
-        output(self.run("ui.screenshot", compact(json!({"path": p.path}))).await)
+        output(self.run("ui.screenshot", compact(json!({"path": p.path, "panel": p.panel, "id": p.id}))).await)
     }
 
     #[tool(
-        description = "Call a live shell control method (`ui.set_view`, `ui.playback`, `ui.focus`, `ui.effectcraft`, `ui.filmcraft`, `app.quit`). Requires `--connect`."
+        description = "Call a live shell control method (`ui.set`, `ui.menu.list`, `ui.menu.invoke`, `ui.playback`, `ui.focus`, `ui.effectcraft`, `ui.filmcraft`, `perf.stats`, `app.quit`). Requires `--connect`."
     )]
     async fn ui_control(&self, Parameters(p): Parameters<ControlParams>) -> CallToolResult {
-        if !p.method.starts_with("ui.") && !matches!(p.method.as_str(), "app.quit" | "app.restart" | "app.hide") {
+        if !is_live_shell_method(&p.method) {
             return output(Err("Use run_command for engine commands".into()));
         }
         output(self.run(&p.method, p.params.unwrap_or_else(|| json!({}))).await)
@@ -326,7 +362,7 @@ impl ServerHandler for Server {
         rmcp::model::ServerConfig::new(rmcp::model::ServerCapabilities::builder().enable_tools().build())
             .with_server_info(rmcp::model::Implementation::new("magic", env!("CARGO_PKG_VERSION")))
             .with_instructions(
-                "Magic Studio is a lightweight coordinator shell over DesignCraft, PhotoCraft, VectorCraft, EffectCraft, and FilmCraft. Use list_commands then run_command / run_batch, plus inspect_document / open_file / save_file. Start `magic --control 9876` and connect with `magic-cli mcp --connect 127.0.0.1:9876` to watch the live window update (`inspect_ui`, `ui_elements`, `ui_click`, `screenshot`). For frame-accurate timeline or compositor timing, invoke FilmCraft (`video.*` / `filmcraft-cli`) or EffectCraft (`effect.exec` / `effectcraft-cli`)."
+                "Magic Studio is a pure-Rust eframe/egui coordinator shell over DesignCraft, PhotoCraft, VectorCraft, EffectCraft, and FilmCraft. Use list_commands then run_command / run_batch, plus inspect_document / open_file / save_file. Start `magic --control 9876` and connect with `magic-cli mcp --connect 127.0.0.1:9876` (or `--bridge`) to watch the live window update (`inspect_ui`, `ui_elements`, `ui_click`, `screenshot`). For frame-accurate timeline or compositor timing, invoke FilmCraft (`video.*` / `filmcraft-cli`) or EffectCraft (`effect.exec` / `effectcraft-cli`)."
                     .to_string(),
             )
     }

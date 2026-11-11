@@ -3,7 +3,7 @@
 #
 # Usage:
 #   ./install.sh                              # Install release binaries or build from source into ~/.local
-#   ./install.sh --from-source                # Build `magic`, `magic-cli`, and `magic-mcp` via Cargo + Bun
+#   ./install.sh --from-source                # Build pure-Rust `magic`, `magic-cli`, and `magic-mcp` via Cargo
 #   sudo ./install.sh --prefix /usr/local     # System-wide installation
 #   ./install.sh --uninstall                  # Cleanly remove installed binaries, desktop entry, and MIME registration
 
@@ -73,15 +73,8 @@ if [[ "$UNINSTALL" -eq 1 ]]; then
 fi
 
 if [[ "$FROM_SOURCE" -eq 1 ]] || [[ ! -x "$SCRIPT_DIR/target/release/magic-cli" && ! -x "$SCRIPT_DIR/bin/magic-cli" ]]; then
-  echo "Building Magic Studio CLI & MCP server (magic-cli, magic-mcp)..."
-  (cd "$SCRIPT_DIR" && cargo build --release --locked -p magic-cli)
-  if command -v bun >/dev/null 2>&1; then
-    echo "Building Magic Studio desktop UI & Tauri shell (magic)..."
-    (cd "$SCRIPT_DIR/apps/magic" && bun install --frozen-lockfile && bun run build)
-    (cd "$SCRIPT_DIR" && cargo build --release --locked -p magic)
-  else
-    echo "Note: 'bun' not found on PATH; skipped desktop webview bundle (installed magic-cli and magic-mcp)." >&2
-  fi
+  echo "Building Magic Studio pure-Rust workspace (magic, magic-cli, magic-mcp)..."
+  (cd "$SCRIPT_DIR" && cargo build --release -p magic-cli -p magic)
 fi
 
 resolve_bin() {
@@ -116,8 +109,8 @@ if [[ -f "$SCRIPT_DIR/packaging/linux/$APP_ID.xml" ]]; then
   install -m 0644 "$SCRIPT_DIR/packaging/linux/$APP_ID.xml" "$MIME_DIR/$APP_ID.xml"
 fi
 
-if [[ -f "$SCRIPT_DIR/apps/magic/icons/icon.png" ]]; then
-  install -m 0644 "$SCRIPT_DIR/apps/magic/icons/icon.png" "$ICON_DIR/$APP_ID.png"
+if [[ -f "$SCRIPT_DIR/assets/app-icon/icon.png" ]]; then
+  install -m 0644 "$SCRIPT_DIR/assets/app-icon/icon.png" "$ICON_DIR/$APP_ID.png"
 fi
 
 refresh_desktop_caches

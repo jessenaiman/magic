@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-Install the sibling [ArtCraft](https://github.com/storytold) tools you plan to orchestrate on `PATH` (or in standard `/Applications`, `~/.local/bin`, or `%LOCALAPPDATA%\Programs\ArtCraft` locations discovered by `magic-cli exec app.doctor`):
+Install Rust (`rustc 1.95+` via [`rustup`](https://rustup.rs); Linux builds also use standard system windowing/audio headers such as `libxkbcommon-dev`, `libwayland-dev`, `libx11-dev`, and `libasound2-dev` — no JavaScript bundler or webview runtime required) plus the sibling [ArtCraft](https://github.com/storytold) tools you plan to orchestrate on `PATH` (or in standard `/Applications`, `~/.local/bin`, or `%LOCALAPPDATA%\Programs\ArtCraft` locations discovered by `magic-cli exec app.doctor`):
 
 - [`DesignCraft`](https://github.com/storytold/designcraft) (`designcraft`, `designcraft-cli`) — storyboard spreads, PDF/PPTX export, and live layout
 - [`PhotoCraft`](https://github.com/storytold/photocraft) (`photocraft`, `photocraft-cli`) — subject isolation, part slicing, and `.pcraft` layers
@@ -13,8 +13,6 @@ Install the sibling [ArtCraft](https://github.com/storytold) tools you plan to o
 > **AniCraft Safety Note**: Early-alpha [`AniCraft`](https://github.com/storytold/AniCraft) is optional and invoked **headlessly only** (`anicraft-cli`) to export PNG sprite sequences into `EffectCraft`. Magic never opens the `anicraft` desktop GUI.
 
 ## Install From Source
-
-With Rust 1.88+, [Bun](https://bun.sh), and your platform's Tauri v2 prerequisites installed:
 
 ```sh
 ./install.sh --from-source

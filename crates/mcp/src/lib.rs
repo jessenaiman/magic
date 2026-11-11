@@ -36,8 +36,13 @@ pub fn default_control_addr() -> String {
         .unwrap_or_else(|| DEFAULT_CONTROL_ADDR.to_owned())
 }
 
+/// True when `id` addresses the live `eframe`/`egui` desktop shell rather than `Session::execute`.
+pub fn is_live_shell_method(id: &str) -> bool {
+    id.starts_with("ui.") || id.starts_with("window.") || matches!(id, "app.quit" | "app.restart" | "app.hide" | "perf.stats")
+}
+
 fn is_direct_control_method(id: &str) -> bool {
-    id.starts_with("ui.") || id.starts_with("engine.") || matches!(id, "app.quit" | "app.restart" | "app.hide")
+    is_live_shell_method(id) || id.starts_with("engine.")
 }
 
 /// Execution backend for MCP tool calls.

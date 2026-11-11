@@ -10,7 +10,7 @@
 > **AI Assistant Instruction:** Do NOT read, reference, or import code/patterns from the legacy prototype repository unless the user explicitly requests it, as historical churn and divergent iterations can introduce AI psychosis and regressions.
 > Historical development, early prototypes, and past discussions are preserved for human record at [jessenaiman/magic-studio-app](https://github.com/jessenaiman/magic-studio-app).
 
-Magic Studio (`magic`, `magic-cli`, `magic-mcp`) is a lightweight desktop shell and coordinator built on [`storytold/craft-libs`](https://github.com/storytold/craft-libs). Starting from a recorded song, it coordinates dedicated ArtCraft project files across [`DesignCraft`](https://github.com/storytold/designcraft), [`PhotoCraft`](https://github.com/storytold/photocraft), [`VectorCraft`](https://github.com/storytold/vectorcraft), [`EffectCraft`](https://github.com/storytold/effectcraft), and [`FilmCraft`](https://github.com/storytold/filmcraft) without reimplementing raster, vector, compositing, or NLE engines in-process.
+Magic Studio (`magic`, `magic-cli`, `magic-mcp`) is a pure-Rust desktop coordinator (`eframe` + `egui` 0.37 + [`storytold/craft-libs`](https://github.com/storytold/craft-libs), with zero Tauri, Electron, or webview layers). Starting from a recorded song, it coordinates dedicated ArtCraft project files across [`DesignCraft`](https://github.com/storytold/designcraft), [`PhotoCraft`](https://github.com/storytold/photocraft), [`VectorCraft`](https://github.com/storytold/vectorcraft), [`EffectCraft`](https://github.com/storytold/effectcraft), and [`FilmCraft`](https://github.com/storytold/filmcraft) without reimplementing raster, vector, compositing, or NLE engines in-process.
 
 ## Architecture & Track Isolation
 

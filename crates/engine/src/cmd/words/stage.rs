@@ -245,25 +245,31 @@ pub(crate) fn runtime_words_tools(lib: &Value) -> Value {
         "exits": EXITS,
         "effectcraft": runtime_effectcraft_tools().clone(),
         "filmcraft": runtime_filmcraft_tools().clone(),
+        "craft_effects": crate::craft_effects::lyrics_catalog_json(),
     })
 }
 
 pub fn cmd_words_effects(_s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(kind) = p["kind"].as_str()
-        && kind != "text"
+        && !matches!(kind, "text" | "warp" | "style")
     {
-        return Err(invalid("kind must be one of text"));
+        return Err(invalid("kind must be one of text, warp or style"));
     }
     let kinetic_library: Value = serde_json::from_str(KINETIC_LIBRARY).map_err(|e| invalid(e.to_string()))?;
     let tools = runtime_words_tools(&kinetic_library);
-    let text_presets = tools["effectcraft"]["text_presets"].clone();
+    let mapped = crate::craft_effects::query_lyrics_effects(p);
     Ok(json!({
-        "source": "effectcraft + filmcraft",
+        "ok": true,
+        "source": "effectcraft + vectorcraft + photocraft",
+        "domain": "lyrics",
+        "track": "V3",
+        "effects": mapped["effects"],
+        "installed": mapped["installed"],
         "kinds": {
             "text": {
-                "query": "word by word text reveal",
+                "query": "typography animators, warps and layer styles",
                 "tier": "native",
-                "effects": text_presets,
+                "effects": mapped["effects"],
             }
         },
         "tools": tools,
@@ -420,7 +426,7 @@ pub fn cmd_words_read(s: &mut Session, p: &Value) -> Result<Value> {
         "path": document_path(&dir),
         "document": doc,
         "in_video": in_video,
-        "fonts": [],
+        "fonts": craft_util::media::discover_installed_font_families(),
         "kinetic_library": kinetic_library,
         "tools": tools,
     }))

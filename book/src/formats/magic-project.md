@@ -1,12 +1,12 @@
 # `.magic` Project Format
 
-A `.magic` file (`application/x-magic-project`) is an atomic UTF-8 JSON manifest (`"format": "magic.project"`, `"version": 1`) written via `craft_atomic::atomic_write` at the root of a song workspace folder.
+A `.magic` file (`application/vnd.artcraft.magic+json`) is an atomic UTF-8 JSON manifest (`"format": "magic.project"`, `"version": 1`) written via `craft_atomic::atomic_write` at the root of a song workspace folder (with orphaned `.craft_tmp` siblings swept on open).
 
 ## Workspace Layout
 
 ```text
 my-song/
-├── My Song.magic              # Coordinator manifest (relative paths normalized via craft-docpath)
+├── My Song.magic              # Coordinator manifest (paths canonicalized via craft-docpath)
 ├── storyboard.designcraft     # DesignCraft production book + locked *_cli fineprint instructions
 ├── storyboard/
 │   ├── references.json        # Maps placed flat PNG slots back to source .ecproj/.pcraft/.vectorcraft files

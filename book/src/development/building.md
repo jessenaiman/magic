@@ -9,11 +9,11 @@ cargo xtask ci
 ```
 
 `cargo xtask ci` executes in order:
-1. **Build group completeness** (`xtask/src/ci.rs`) — verifies every workspace crate is registered in `SETS`.
+1. **Build group completeness** (`xtask/src/ci.rs`) — verifies every workspace crate is registered in `SETS` (`core`, `mcp`, `ui`, `apps`).
 2. **Formatting** (`cargo fmt --check`).
-3. **Architecture layer & sibling isolation check** (`cargo xtask layers`) — enforces `L4 -> L5 -> L6 -> L7`, blocks UI crates in `L4`/`L5`, and forbids sibling ArtCraft app crate dependencies.
-4. **Strict Clippy lint gate** (`cargo clippy ... -- -D warnings`) — denies `unwrap_used`, `expect_used`, `panic`, `todo`, `unimplemented`, `unreachable`, and direct `std::fs::write`.
-5. **Frontend TypeScript & Vite build** (`bun run build` in `apps/magic`).
+3. **Architecture layer & sibling isolation check** (`cargo xtask layers`) — enforces `L4 -> L5 -> L6 -> L7`, blocks UI crates in `L4`/`L5`, forbids Tauri/webview crates, and forbids sibling ArtCraft app crate dependencies.
+4. **Strict Clippy lint gate** (`cargo clippy --workspace --all-targets -- -D warnings`) — denies `unwrap_used`, `expect_used`, `panic`, `todo`, `unimplemented`, `unreachable`, wildcard imports, and direct `std::fs::write`.
+5. **Workspace test compilation** (`cargo test --workspace --no-run`).
 
 ## Continuous Integration (`storytold/craft-common-actions`)
 

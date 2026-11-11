@@ -1,129 +1,74 @@
-# Magic Studio Control Protocol (`--control`)
+# Control Protocol (`magic --control`)
 
-`magic --control <PORT>` opens an authenticated loopback JSON-lines socket (`127.0.0.1:9876` by default) so `magic-cli`, `magic-cli mcp` (`magic-mcp`), test harnesses, and agents can drive a live Magic Studio desktop window while you watch every change happen on screen.
+Magic Studio is a **pure-Rust `eframe` + `egui` 0.37 desktop coordinator shell** built on [`storytold/craft-libs`](https://github.com/storytold/craft-libs) (`craft-ui`, `craft-menu`, `craft-window`, `craft-dialogs`, `craft-keymap`, `craft-platform`, `craft-quit`). It coordinates song-first storyboards, character cutouts, kinetic lyrics, and multi-track assemblies across installed ArtCraft studio binaries ([`FilmCraft`](https://github.com/storytold/filmcraft/blob/main/docs/control-protocol.md), [`EffectCraft`](https://github.com/storytold/effectcraft/blob/main/docs/control-protocol.md), [`DesignCraft`](https://github.com/storytold/designcraft), [`PhotoCraft`](https://github.com/storytold/photocraft/blob/main/docs/control-protocol.md), and [`VectorCraft`](https://github.com/storytold/vectorcraft)). Early-alpha [`AniCraft`](https://github.com/storytold/AniCraft) is strictly excluded from live `--control` (`CraftTarget::Ani.allows_live_ui() == false`; `anicraft-cli` headless only).
 
-Magic Studio is intentionally a **lightweight Tauri coordinator shell** — not a server-side media renderer or frame/tick timeline engine. Frame-accurate timeline-to-storyboard and audio-to-frame synchronization live in [`FilmCraft`](https://github.com/storytold/filmcraft/blob/main/docs/control-protocol.md) (`filmcraft-cli` / `filmcraft --control`) and [`EffectCraft`](https://github.com/storytold/effectcraft/blob/main/docs/control-protocol.md) (`effectcraft-cli` / `effectcraft --control`), which Magic invokes as external CLI tools or forwards to via `ui.effectcraft` and `ui.filmcraft`. Early-alpha [`AniCraft`](https://github.com/storytold/AniCraft) is strictly excluded from live desktop `--control` (`CraftTarget::Ani.allows_live_ui() == false`) and runs headlessly via `anicraft-cli`.
+For MCP registration and headless vs live routing, see [`docs/mcp.md`](mcp.md).
 
-## 1. Every Way to Control Magic Studio
-
-| Surface | Invocation | When to use |
-|---|---|---|
-| **1. Live CLI (`magic-cli --connect`)** | `magic-cli --connect 127.0.0.1:9876 <subcommand>` | Run one coordinator command (`exec`, `storyboard`, `inspect`) or UI shell action (`ui inspect`, `ui click`, `ui playback`, `ui screenshot`) against the open `magic --control 9876` window. |
-| **2. Live or Headless MCP (`magic-cli mcp` / `magic-mcp`)** | `magic-cli mcp --connect 127.0.0.1:9876` or `magic-cli mcp --headless` | Connect Claude Code, Codex, or any [MCP](https://modelcontextprotocol.io) client over stdio ([MCP Server](mcp.md)). With no flag, probes `127.0.0.1:9876` (`MAGIC_CONTROL_PORT`) once and falls back to headless. |
-| **3. Headless CLI (`magic-cli`)** | `magic-cli --project song.magic --save exec <id> key=val` | Batch scripts, CI pipelines, and confined `--automation-read-root` / `--automation-write-root` runs driving `<craft>-cli` tools with no window. |
-| **4. Raw Loopback TCP Socket** | `127.0.0.1:9876` newline-delimited JSON | Custom harnesses or language bindings speaking JSON-lines directly to `apps/magic/src/control.rs`. |
-| **5. Sibling Studio Bridges (`ui.effectcraft`, `ui.filmcraft`, `ui.craft`)** | `magic-cli --connect 127.0.0.1:9876 exec ui.effectcraft --params '{"method":"ui.inspect"}'` | Forward native `--control` calls through Magic to an open [`EffectCraft`](https://github.com/storytold/effectcraft) (`7980`) or [`FilmCraft`](https://github.com/storytold/filmcraft) (`7878`) window when precise timeline/compositor inspection is needed. |
-
-## 2. Starting the Live Control Server
-
-Desktop launchers (`.desktop`, macOS Dock, Windows Start Menu) start `magic` **without** `--control`, so no TCP socket opens unless you opt in explicitly:
+## 1. Startup, Loopback Binding & Authentication
 
 ```sh
-# Start Magic Studio with the loopback control port on 127.0.0.1:9876
-magic --control 9876
+# Launch Magic Studio listening on loopback (default 127.0.0.1:9876):
+magic --control 9876 &
 
-# Open a project on a chosen view with confined read/write roots
-magic --project /work/demo/song.magic --view storyboard --control 127.0.0.1:9876 \
-  --automation-read-root /work/demo \
-  --automation-write-root /work/demo/out
+# Confine live control reads/writes to explicit workspace roots:
+magic --control 127.0.0.1:9876 \
+  --automation-read-root ~/Videos/Magic \
+  --automation-write-root ~/Videos/Magic &
 ```
 
-| Variable | Purpose |
-|---|---|
-| `MAGIC_CONTROL_PORT` | Default `--control` port or `127.0.0.1:<port>` when `--control` is omitted on the CLI (and default address probed by `magic-cli mcp`). |
-| `MAGIC_CONTROL_TOKEN` | Explicit 64-character hex authentication token. When unset, `magic --control` generates or reads `~/.config/magic/control-token` (`0600` permissions on Unix). |
+- **Loopback Only**: `--control` (`MAGIC_CONTROL_PORT`) accepts a port (`1..=65535`, bound on `127.0.0.1`) or an explicit loopback `SocketAddr` (`127.0.0.1:<port>` or `[::1]:<port>`). Non-loopback addresses exit with code `2`.
+- **Non-Activating Startup**: When `--control` is passed, Magic configures `egui::ViewportBuilder::with_active(false)` so automated launches do not steal OS keyboard focus from your editor or terminal.
+- **64-Hex Token Authentication**: Startup ensures a 64-hex-character secret in `~/.config/magic/control-token` (`0600` permissions) or reads `MAGIC_CONTROL_TOKEN`. Every request line must include `"token": "<64-hex>"`, verified in constant time (`subtle::ConstantTimeEq`). Never pass `MAGIC_CONTROL_TOKEN` on CLI arguments or commit it in `.mcp.json`.
+- **Sibling Bridges**: `CraftTarget::default_port` assigns distinct defaults when Magic launches sibling bridges (`FilmCraft` `9875` / `FILMCRAFT_CONTROL_PORT`, `EffectCraft` `9878` / `EFFECTCRAFT_CONTROL_PORT`); pass an explicit `port` in `ui.filmcraft` / `ui.effectcraft` whenever attaching to a standalone `filmcraft --control 9876` or `effectcraft --control 9877` window.
 
-Port validation runs **before** opening a window (`1..=65535`, loopback `127.0.0.1` or `::1` only). Passing `0`, a non-loopback address, or a malformed `MAGIC_CONTROL_TOKEN` exits with code `2`.
+## 2. Transport & Per-Frame `eframe` Drain
 
-## 3. Wire Framing & Security Contract
+- **Framing**: Newline-delimited JSON (`\n`), capped at `4 MiB` per request line and `16` concurrent loopback connections (`apps/magic/src/control.rs`).
+- **Smuggling Defense (`filmcraft#119`)**: Any non-JSON, oversized, unauthenticated, or malformed line replies with `{"id": null, "ok": false, "error": "...; closing the connection"}` and immediately drops the TCP socket so cross-origin browser `fetch()` smuggling cannot pipeline requests.
+- **UI Thread Execution**: Requests wake the `eframe` event loop (`ctx.request_repaint()`) and drain inside `eframe::App::logic` (`60s` reply timeout). Synthetic pointer/keyboard/text commands (`ui.click`, `ui.drag`, `ui.scroll`, `ui.key`, `ui.type`) inject `egui::Event`s in `raw_input_hook` and reply after the next `egui` frame processes them.
 
-Cross-checked against [`EffectCraft` `docs/control-protocol.md`](https://github.com/storytold/effectcraft/blob/main/docs/control-protocol.md) and [`FilmCraft` `docs/control-protocol.md`](https://github.com/storytold/filmcraft/blob/main/docs/control-protocol.md):
+## 3. Dispatch, Menus & Inspection Methods
 
-- **Transport**: TCP on `127.0.0.1:<port>` or `[::1]:<port>`, `TCP_NODELAY` enabled, max `16` concurrent connections, `120s` socket read/write timeout, `60s` UI webview reply timeout, and `4 MiB` (`4,194,304` bytes) maximum request line length.
-- **Request line** (UTF-8 JSON object terminated by `\n`):
-  ```json
-  {"id": 1, "token": "<64-hex>", "method": "ui.inspect", "params": {}}
-  ```
-- **Success / Error reply lines**:
-  ```json
-  {"id": 1, "ok": true, "result": {"view": "storyboard", "windowFocused": true}}
-  {"id": 2, "ok": false, "error": "ui.resize: unknown parameter `foo`; accepted: width, height"}
-  ```
-- **Browser-smuggling defense (`closing the connection`)**: Any oversized line, non-JSON line (such as an HTTP `POST / HTTP/1.1` header sent by browser `fetch()`), missing `method`, non-object `params`, or invalid `token` (checked in constant time via `subtle::ConstantTimeEq`) writes one `{"id": null, "ok": false, "error": "...; closing the connection"}` line and **immediately drops the TCP stream** (`filmcraft#119`).
-- **Strict parameter allow-lists**: Unknown parameter keys on any control method return an error rather than being silently ignored.
-
-## 4. Complete Method Reference (Cross-Checked With `EffectCraft` & `FilmCraft`)
-
-### 4.1 Coordinator Command Dispatch & Discovery
-
-| Method | `magic-cli` Equivalent | Parameters | Description |
-|---|---|---|---|
-| `engine.execute` (`ui.menu.invoke`) | `magic-cli --connect 127.0.0.1:9876 exec <id> [k=v ...]` | `{"command": "<id>", "params": {...}}` | Run any coordinator command from `magic::command_specs()` on the live session and emit `magic-session-changed` on mutation. |
-| `<domain.verb>` (direct) | `magic-cli --connect 127.0.0.1:9876 storyboard check` | Command-specific object | Direct shorthand for `engine.execute` on the control socket. |
-| `engine.commands` (`ui.menu.list`) | `magic-cli --connect 127.0.0.1:9876 commands [filter]` | `{"filter"?: "...", "enabledOnly"?: bool}` | List registered coordinator commands (`id`, `label`, `menu`, `shortcut`, `params`, `enabled`, `journal`). |
-
-### 4.2 Live Shell Inspection, Navigation & Audio Preview
-
-| Method | `magic-cli` Equivalent | Parameters | Description |
-|---|---|---|---|
-| `ui.inspect` (`ui.state`) | `magic-cli --connect 127.0.0.1:9876 ui inspect` | `{}` | Return active `view`, open `project`, `viewport` (`width`, `height`, `devicePixelRatio`), `windowFocused`, `keyboardFocus`, `focus`, active preview `playback`, `alerts`, `errors`, `cspViolations`, `os`, and `notification` state. |
-| `ui.drafts` | `magic-cli --connect 127.0.0.1:9876 ui drafts` | `{}` | Report unsaved frontend editor drafts (`{dirty, saving, drafts}`) checked by the non-destructive lifecycle gate. |
-| `ui.elements` | `magic-cli --connect 127.0.0.1:9876 ui elements prefix=tab-` | `{"prefix"?: "...", "unidentified"?: bool}` | List visible interactive DOM controls (`id`, `label`, `tag`, `enabled`, `value`, `data`, `media`, `rect: [x, y, w, h]`), or audit widgets missing automation IDs (`unidentified: true`). |
-| `ui.set` / `ui.set_view` | `magic-cli --connect 127.0.0.1:9876 ui view storyboard` | `{"view": "home"\|"project"\|"storyboard"\|"design"\|"motion"\|"gallery"\|"animation"\|"studio", "time"?: f64}` OR `{"id": "...", "value": "..."}` OR `{"id": "...", "checked": bool}` | Switch workspace view (with optional authoring timestamp on Lyrics/Motion) or set a form control / checkbox value with native DOM validation. |
-| `ui.playback` | `magic-cli --connect 127.0.0.1:9876 ui playback toggle` | `{"action": "play"\|"stop"\|"toggle"\|"status"}` | Control or query the active `<audio>` / `<video>` preview element in the shell (`playing`, `currentTime`, `duration`, `playbackRate`, `muted`, `volume`). |
-
-### 4.3 Pointer, Keyboard, Dialogs, Window Geometry & Lifecycle
-
-| Method | `magic-cli` Equivalent | Parameters | Description |
-|---|---|---|---|
-| `ui.click` | `magic-cli --connect 127.0.0.1:9876 ui click film-preview` | `{"id"?: "...", "x"?: f64, "y"?: f64, "button"?: "left"\|"middle"\|"right", "count"?: 1..=10, "modifiers"?: ["Ctrl"\|"Shift"\|"Alt"\|"Meta"]}` | Dispatch pointer/mouse click (and `dblclick` when `count == 2`) at an element's center or window coordinates. |
-| `ui.move` | `magic-cli --connect 127.0.0.1:9876 ui move x=400 y=300` | `{"id"?: "...", "x"?: f64, "y"?: f64, "modifiers"?: [...]}` | Move pointer to element center or `{x, y}`. |
-| `ui.drag` | `magic-cli --connect 127.0.0.1:9876 ui drag --params '{"from":{"id":"a"},"to":{"x":600,"y":300}}'` | `{"from": {"id"\|"x","y"}, "to": {"id"\|"x","y"}, "steps"?: 0..=1024, "button"?: "left", "modifiers"?: [...]}` | Interpolate pointer drag from `from` to `to` (default `12` steps). |
-| `ui.scroll` | `magic-cli --connect 127.0.0.1:9876 ui scroll list-rail dy=240` | `{"id"?: "...", "x"?: f64, "y"?: f64, "dx"?: f64, "dy"?: f64, "modifiers"?: [...]}` | Dispatch wheel event and scroll nearest scrollable ancestor. |
-| `ui.key` | `magic-cli --connect 127.0.0.1:9876 ui key Ctrl+S` | `{"key": "Enter"\|"Tab"\|"Escape"\|"Ctrl+K"\|..., "modifiers"?: [...]}` | Send `keydown` / default action / `keyup` to the focused element. |
-| `ui.keymap.press` | `magic-cli --connect 127.0.0.1:9876 ui keymap.press chord=Cmd+Z` | `{"chord": "..."}` | Trigger a `craft-keymap` shortcut binding directly. |
-| `ui.type` (`ui.text`) | `magic-cli --connect 127.0.0.1:9876 ui type "Hello" id=title-input` | `{"text": "...", "id"?: "..."}` | Focus optional `id` and insert up to `10,000` characters into an editable input/textarea. |
-| `ui.focus` | `magic-cli --connect 127.0.0.1:9876 ui focus` | `{"id"?: "..."}` | With `id`, focus that DOM element; without `id`, show and focus the native desktop window. |
-| `ui.dialog.state` / `ui.dialog.override` | `magic-cli --connect 127.0.0.1:9876 ui dialog.state` | `{}` / `{"next_file"?: "/abs/path", "clear"?: bool}` | Inspect or pre-seed native `craft-dialogs` file-picker responses for unattended automation. |
-| `ui.screenshot` | `magic-cli --connect 127.0.0.1:9876 ui screenshot /tmp/magic.png` | `{"path"?: "/abs/file.png"}` | Capture the live WebKitGTK window to an absolute `.png` path (or temp file) and return `{path, width, height, bytes}`. |
-| `ui.resize` | `magic-cli --connect 127.0.0.1:9876 ui resize width=1440 height=900` | `{"width": 320..=7680, "height": 240..=4320}` | Resize logical window bounds and verify actual window manager geometry. |
-| `app.hide` | `magic-cli --connect 127.0.0.1:9876 ui app.hide` | `{}` | Hide the main desktop window without terminating the session. |
-| `app.restart` | `magic-cli --connect 127.0.0.1:9876 ui app.restart` | `{"force"?: bool}` | Run the unsaved-work lifecycle check (unless `force: true`) and restart `magic`. |
-| `app.quit` | `magic-cli --connect 127.0.0.1:9876 ui quit` | `{"force"?: bool}` | Run the unsaved-work lifecycle check (unless `force: true`), flush the JSON reply, and exit `0`. |
-
-### 4.4 Sibling ArtCraft `--control` Bridges (`EffectCraft` & `FilmCraft`)
-
-When frame-accurate timeline scrubbing, compositor hit-testing, or audio meter inspection is needed, forward directly to the dedicated ArtCraft engine window:
-
-| Method | Parameters | Description |
+| Method | Parameters | Behavior |
 |---|---|---|
-| `ui.effectcraft` | `{"method": "<effectcraft-method>", "params"?: {...}, "port"?: 1..=65535}` | Forward any method from [`EffectCraft` `docs/control-protocol.md`](https://github.com/storytold/effectcraft/blob/main/docs/control-protocol.md) (`comp.info`, `puppet.*`, `render.frame`, `ui.inspect`, `ui.viewer.locate`, `ui.timeline.locate`) to the live `effectcraft --control` window. |
-| `ui.filmcraft` | `{"method": "<filmcraft-method>", "params"?: {...}, "port"?: 1..=65535}` | Forward any method from [`FilmCraft` `docs/control-protocol.md`](https://github.com/storytold/filmcraft/blob/main/docs/control-protocol.md) (`sequence.inspect`, `ui.playback`, `ui.timeline.hit`, `render.frame`) to the live `filmcraft --control` window. |
-| `ui.craft` | `{"app": "effectcraft"\|"filmcraft"\|"designcraft"\|"photocraft"\|"vectorcraft"\|"deckcraft"\|"texturecraft", "method": "...", "params"?: {...}, "port"?: 1..=65535}` | Forward a `--control` method to any supported live ArtCraft desktop app (`anicraft` is rejected by safety policy). |
+| `engine.execute` | `{command, params?}` | Executes a headless/engine command on the live `Session` without opening modal pickers; refreshes cached view data and triggers `ctx.request_repaint()`. |
+| `engine.commands` | `{filter?, enabledOnly?}` | Lists registered `CommandSpec` entries and their live `(spec.enabled)(&session)` status. |
+| `ui.menu.list` | `{}` | Returns the 9-menu [`craft-menu`](https://github.com/storytold/craft-libs/blob/main/crates/menu/README.md) bar (`File`, `Edit`, `View`, `Storyboard`, `Lyrics`, `Character`, `Film`, `Window`, `Help`) with live `enabled` states. |
+| `ui.menu.invoke` | `{id, params?}` | Runs a menu command just like clicking it in the `craft-menu` bar (opening a `craft-dialogs` picker or `egui` modal when `params` are omitted). |
+| `ui.inspect` (`ui.state`) | `{}` | Returns `{renderer: "eframe", view, requestedView, theme, project, viewport: {width, height, pixelsPerPoint}, fps, lastRenderMs, nativeMenuBar, windowFocused, keyboardFocus, dialog, drafts, playback}`. |
+| `ui.drafts` | `{}` | Reports `{dirty, saving, drafts}` from in-process `egui` stage editors. |
+| `ui.elements` | `{prefix?, unidentified?}` | Lists `{id, label, enabled, value?, rect: [x, y, w, h]}` in logical points for every widget registered in the last `egui` frame. |
+| `ui.set` (`ui.set_view`) | `{view?, time?, theme?, focused?}` or `{id, value\|checked}` | Switches workstation views (`home`, `project`, `storyboard`, `design`/`lyrics`, `motion`, `animation`, `studio`), sets `theme` (`dark`, `light`, `system`), or updates an on-screen `egui` input/checkbox by `id`. |
+| `ui.playback` | `{action?: "play"\|"stop"\|"toggle"\|"status"}` | Controls or queries the song transport clock. |
 
-## 5. Storyboard Fine-Print `magic-cli` Instructions (Read-Only)
+## 4. Synthetic `egui` Input, Dialogs, Screenshots & Lifecycle
 
-Every spread inside `crates/engine/templates/storyboard.designcraft` embeds locked, read-only fine-print `magic-cli` instruction frames (`*_cli`) on Layer 2 (`"CLI Fineprint (Read-Only)"`, `Geist Mono` `5.75pt`):
+| Method | Parameters | Behavior |
+|---|---|---|
+| `ui.click` | `{id, fx?, fy?}` or `{x, y}`, `{button?, count?, modifiers?}` | Moves pointer and clicks (`count` bounded `0..=10`, default `1`; `fx`/`fy` in `0.0..=1.0`; `modifiers`: `{shift?, alt?, command?, ctrl?}`). |
+| `ui.move` | `{id, fx?, fy?}` or `{x, y}` | Injects `egui::Event::PointerMoved` in logical points. |
+| `ui.drag` | `{from, to, button?, steps?, modifiers?}` | Interpolates a pointer drag (`steps` bounded `0..=1024`, default `12`, `0\|1 -> 2` per [`filmcraft#2784`](https://github.com/storytold/filmcraft/issues/2784)). |
+| `ui.scroll` | `{id?, x?, y?, dx?, dy?, unit?, source?, modifiers?}` | Injects `egui::Event::MouseWheel` (`unit`: `"point"` or `"line"`, `source`: `"wheel"` or `"trackpad"`). |
+| `ui.key` | `{key, modifiers?}` | Routes chords through [`craft-keymap`](https://github.com/storytold/craft-libs/blob/main/crates/keymap/README.md) or injects `egui::Event::Key` (`Enter`, `Escape`, `Tab`, `ArrowDown`, `Cmd+S`, `Physical+KeyZ`). |
+| `ui.keymap.press` | `{chord, typing?}` | Evaluates a `craft-keymap` chord directly against the command catalog. |
+| `ui.type` (`ui.text`) | `{text, id?}` | Optionally focuses widget `id`, then injects `egui::Event::Text(text)`. |
+| `ui.focus` | `{id?}` | `ui.focus {}` raises and focuses the OS window (`ViewportCommand::Focus`); `ui.focus {id}` requests `egui` keyboard focus on an enabled widget **without** stealing OS focus. |
+| `ui.resize` | `{width, height}` | Resizes logical inner viewport (`320..=7680` x `240..=4320`). |
+| `window.snap` | `{}` | Toggles left/right desktop window snap. |
+| `ui.dialog.state` / `ui.dialog.override` | `{}` / `{paths?, button?, cancelled?, unavailable?, clear?}` | Inspects or scripts [`craft-dialogs`](https://github.com/storytold/craft-libs) without opening blocking native sheets. Unsaved-close modal buttons register `dialog.unsaved.save`, `dialog.unsaved.dontSave`, and `dialog.unsaved.cancel`. |
+| `ui.screenshot` | `{path?, panel?, id?}` | Captures a `wgpu` PNG via [`craft-ui` `CaptureSlot`](https://github.com/storytold/craft-libs/blob/main/crates/ui/README.md) (`10s` presentation timeout), optionally cropped to `panel` (`app-bar`, `stage-assets`, `central`, `app-footer`) or widget `id`, written with `craft-atomic` (`0600` private dir when `path` is omitted). |
+| `perf.stats` | `{}` | Returns `{renderer: "eframe-wgpu", fps, lastRenderMs, pixelsPerPoint}`. |
+| `ui.filmcraft` / `ui.effectcraft` / `ui.craft` | `{app?, method, params?, port?}` | Proxies live `--control` commands to open studio windows (`AniCraft` refused). |
+| `app.hide` / `app.quit` / `app.restart` | `{force?}` | Hides, quits, or restarts cleanly through `lifecycle::verify_clean` and `craft_quit::on_close_request`. |
 
-- `magic-cli storyboard pages page=0` returns both editable `slots` and the read-only `cli_instructions` array (`readonly: true`, `locked: true`, `style: "CLI Fineprint"`).
-- `magic-cli storyboard add archetype=scene` automatically rewrites the duplicated spread's `*_cli` fine-print labels to the new `page=<N>` index and re-locks them.
-- Attempting to overwrite any `*_cli` slot via `magic-cli storyboard set` is rejected by `crates/engine/src/cmd/storyboard/crud.rs`.
+## 5. Review Checklist of Nice-to-Have `--control` Enhancements
 
-## 6. Review Checklist: Nice-to-Have `--control` Enhancements (`EffectCraft` & `FilmCraft` Comparison)
-
-Controls present in [`EffectCraft` `docs/control-protocol.md`](https://github.com/storytold/effectcraft/blob/main/docs/control-protocol.md) or [`FilmCraft` `docs/control-protocol.md`](https://github.com/storytold/filmcraft/blob/main/docs/control-protocol.md) that should be reviewed as optional lightweight shell enhancements for Magic Studio:
-
-### Security & Window Focus Ergonomics
-- [ ] **`--control-input-only` startup flag** — Restrict the `--control` socket to `ui.*` inspection/input methods and block direct `engine.execute` mutations (`EffectCraft` / `FilmCraft` input-only harness mode).
-- [ ] **Non-activating background window bring-forward** — Keep `magic --control` visible above background windows without stealing keyboard focus from the user's terminal (`FilmCraft` background window ordering).
-- [ ] **macOS App Nap opt-out while `--control` is active** — Prevent macOS from throttling webview timers during unattended `--control` sessions (`EffectCraft` / `FilmCraft`).
-
-### Cropped Captures & Cross-Platform Webview Snapshots
-- [ ] **`ui.screenshot {panel?, id?}` element/region crop** — Crop `ui.screenshot` directly to a named workspace region or DOM element ID (`EffectCraft` / `FilmCraft` `ui.screenshot {panel}`).
-- [ ] **macOS (`WKWebView`) and Windows (`WebView2`) `ui.screenshot` backends** — Extend `apps/magic/src/capture.rs` beyond Linux `WebKitGTK`.
-- [ ] **Optional `perf.stats` shell telemetry** — Expose lightweight webview frame timing and memory counters without duplicating `EffectCraft` / `FilmCraft` render-cache telemetry.
-
-### Stage & Timeline Coordinate Locators (Delegated vs Shell)
-- [ ] **`ui.viewer.locate` and `ui.viewer.hit` on Storyboard/Lyrics stage** — Map stage coordinates `(x, y)` to window pixels for interactive word-box and storyboard-slot drag tests (compositor-level `ui.viewer.locate` already runs in `EffectCraft` via `ui.effectcraft`).
-- [ ] **`ui.timeline.locate` and `ui.timeline.hit` on Lyrics/Motion cue strip** — Map song seconds to window coordinates on Magic's lightweight cue strip (tick-accurate NLE timeline hit-testing remains in `FilmCraft` via `ui.filmcraft`).
-- [ ] **Read-only MCP resources (`magic://document`, `magic://storyboard`, `magic://commands`)** — Expose MCP `resources/list` and `resources/read` URIs alongside tool calls in `crates/mcp` (`DesignCraft` MCP resource parity).
+- [ ] **`--control-input-only` startup flag** — Accept synthetic widget input over `--control` while ignoring physical keyboard, pointer, file-drop, and native menu input, reporting `{mode, nativeWindowFocused, effectiveWindowFocused}` under `ui.inspect.input` ([`FilmCraft` `docs/control-protocol.md`](https://github.com/storytold/filmcraft/blob/main/docs/control-protocol.md)).
+- [ ] **Non-activating background window bring-forward** — Raise occluded windows (`orderFrontRegardless` on macOS) when `CaptureSlot` needs a presented frame without taking keyboard focus ([`EffectCraft`](https://github.com/storytold/effectcraft/blob/main/docs/control-protocol.md), [`FilmCraft`](https://github.com/storytold/filmcraft/blob/main/docs/control-protocol.md)).
+- [ ] **macOS App Nap opt-out while `--control` is active** — Hold an `NSProcessInfo` latency-critical activity while `--control` is listening so macOS never starves `eframe` frame drains when occluded ([`FilmCraft` `docs/control-protocol.md`](https://github.com/storytold/filmcraft/blob/main/docs/control-protocol.md)).
+- [ ] **Inline `base64` & `max_side` options on `ui.screenshot`** — Return downscaled base64 PNG payloads inline alongside `CaptureSlot` panel/widget cropping when temp-file writes are unwanted ([`PhotoCraft`](https://github.com/storytold/photocraft/blob/main/docs/control-protocol.md)).
+- [ ] **Headless `egui_kittest` widget-ID audit test** — Enforce in `cargo test` that every interactive widget across all 8 Magic views registers a stable automation ID and passes AccessKit label checks offscreen ([`EffectCraft`](https://github.com/storytold/effectcraft/blob/main/docs/control-protocol.md), [`PhotoCraft` `AGENTS.md`](https://github.com/storytold/photocraft/blob/main/AGENTS.md)).
+- [ ] **`craft_ui::docking` & `craft_keymap::ui::ShortcutsDialog` control commands** — Expose `ui.dock`, `ui.dock.reset`, `ui.docking`, and `shortcuts.*` once user-customizable panel layouts and shortcut profiles are enabled ([`EffectCraft`](https://github.com/storytold/effectcraft/blob/main/docs/control-protocol.md), [`craft-keymap`](https://github.com/storytold/craft-libs/blob/main/crates/keymap/README.md)).
+- [ ] **Extended `perf.stats` `wgpu` & audio telemetry** — Report `wgpu` adapter/backend info and `craft-audio` preview peak dBFS / underrun counters ([`FilmCraft`](https://github.com/storytold/filmcraft/blob/main/docs/control-protocol.md)).
+- [ ] **Stage & cue-strip coordinate locators (`ui.viewer.locate` / `ui.timeline.locate`)** — Map Storyboard/Lyrics stage coordinates and song-cue seconds directly to logical window points ([`EffectCraft`](https://github.com/storytold/effectcraft/blob/main/docs/control-protocol.md), [`FilmCraft`](https://github.com/storytold/filmcraft/blob/main/docs/control-protocol.md)).
+- [ ] **Read-only MCP resources & async job polling (`jobs.list` / `jobs.cancel`)** — Expose `magic://document`, `magic://storyboard`, and `magic://commands` in `crates/mcp` plus non-blocking job polling for long `<craft>-cli` renders ([`PhotoCraft` `book/src/automation/mcp.md`](https://github.com/storytold/photocraft/blob/main/book/src/automation/mcp.md)).

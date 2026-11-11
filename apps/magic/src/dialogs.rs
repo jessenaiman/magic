@@ -1,173 +1,83 @@
-//! File and message dialogs through craft-dialogs, visible to and answerable over `--control`.
-//!
-//! `Dialogs` stays on the main thread. Other threads queue through `run_on_main_thread` and wait
-//! on a channel, so [`ask`] must not be called on the main thread. There is no frame loop here:
-//! craft-dialogs' wake-up runs [`pump`] whenever a request is queued or an answer comes in.
-//!
-//! A command given a path (control channel, CLI) never asks. `ui.dialog.override` answers the
-//! pickers the UI itself opens, through `set_override`, for automation.
-use craft_dialogs::{Answer, Dialogs, FileDialog, Kind, Message, MessageButtons, MessageLevel, MessageResult, Override, Request};
-use serde::Deserialize;
-use serde_json::{Value, json};
-use std::cell::{Cell, RefCell};
+//! Native file and message dialogs on the `eframe` main thread via [`craft_dialogs::Dialogs`],
+//! inspectable and scriptable over `--control` (`ui.dialog.state` and `ui.dialog.override`).
+
 use std::collections::VecDeque;
 use std::path::PathBuf;
-use std::sync::{Arc, mpsc};
-use tauri::Manager;
+use std::sync::Arc;
 
-struct Native {
-    dialogs: Dialogs<mpsc::Sender<Answer>>,
-    /// What was asked and not yet answered, oldest (the one on screen) first.
+use craft_dialogs::{Answer, Dialogs, FileDialog, Kind, MessageResult, Override, Request};
+use magic_ui_egui::PickerTarget;
+use serde_json::{Value, json};
+
+pub struct DialogHost {
+    dialogs: Dialogs<PickerTarget>,
     pending: VecDeque<Value>,
     last: Value,
     overridden: bool,
 }
 
-thread_local! {
-    static NATIVE: RefCell<Option<Native>> = const { RefCell::new(None) };
-    /// A wake-up that arrived while [`pump`] held the dialogs.
-    static AGAIN: Cell<bool> = const { Cell::new(false) };
-}
-
-impl Native {
-    fn new(app: &tauri::AppHandle) -> Self {
-        let handle = app.clone();
-        let dialogs = Dialogs::new(Arc::new(move || {
-            let target = handle.clone();
-            // Fails only once the event loop has ended, when no answer has anyone to go to.
-            let _ = handle.run_on_main_thread(move || pump(&target));
-        }));
+impl DialogHost {
+    pub fn new(ctx: &egui::Context) -> Self {
+        let wake_ctx = ctx.clone();
+        let dialogs = Dialogs::new(Arc::new(move || wake_ctx.request_repaint()));
         Self { dialogs, pending: VecDeque::new(), last: Value::Null, overridden: false }
     }
-}
 
-/// Shows what is queued and delivers what was answered. Main thread only. Tauri can run a wake-up
-/// inline when it is sent from the main thread, so a nested call only asks for another pass.
-fn pump(app: &tauri::AppHandle) {
-    let window = super::main_window(app).ok();
-    NATIVE.with(|cell| {
-        let Ok(mut slot) = cell.try_borrow_mut() else {
-            AGAIN.set(true);
-            return;
-        };
-        let Some(native) = slot.as_mut() else { return };
-        loop {
-            AGAIN.set(false);
-            native.dialogs.show_pending(window.as_ref());
-            for (reply, answer) in native.dialogs.take_answers() {
-                let request = native.pending.pop_front().unwrap_or(Value::Null);
-                native.last = json!({"request": request, "answer": describe_answer(&answer)});
-                // The asker gone meanwhile has no use for the answer.
-                let _ = reply.send(answer);
-            }
-            if !AGAIN.get() {
-                break;
-            }
-        }
-    });
-}
-
-/// Runs `work` on the main thread with the dialogs and waits for its result.
-fn on_main<R: Send + 'static>(app: &tauri::AppHandle, work: impl FnOnce(&mut Native) -> R + Send + 'static) -> Result<R, String> {
-    let (tx, rx) = mpsc::channel();
-    let handle = app.clone();
-    app.run_on_main_thread(move || {
-        let result = NATIVE.with_borrow_mut(|slot| work(slot.get_or_insert_with(|| Native::new(&handle))));
-        pump(&handle);
-        let _ = tx.send(result);
-    })
-    .map_err(|e| e.to_string())?;
-    rx.recv().map_err(|_| "the event loop ended before the dialog request ran".to_string())
-}
-
-/// Queues `request` and waits for its answer, however long the user takes.
-pub(super) fn ask(app: &tauri::AppHandle, request: Request) -> Result<Answer, String> {
-    let (tx, rx) = mpsc::channel();
-    on_main(app, move |native| {
-        native.pending.push_back(describe_request(&request));
-        match request {
-            Request::File(dialog) => native.dialogs.ask(dialog, tx),
-            Request::Message(message) => native.dialogs.ask_message(message, tx),
-        }
-    })?;
-    rx.recv().map_err(|_| "the dialog stopped without an answer".to_string())
-}
-
-/// `Unavailable` means no dialog could be shown: an error, recorded, never a Cancel.
-fn record_unavailable(app: &tauri::AppHandle, title: &str, why: &str) {
-    let project = super::state(app).session.try_lock().ok().and_then(|s| s.project_path.clone());
-    magic::activity::append(json!({
-        "stage": "handler_error",
-        "command": "ui.dialog",
-        "project": project,
-        "origin": "desktop",
-        "control": title,
-        "error": why.chars().take(350).collect::<String>(),
-        "pid": std::process::id(),
-        "severity": "error"
-    }));
-}
-
-/// A warning with an OK button. Blocks until it is closed.
-pub(super) fn warn(app: &tauri::AppHandle, title: &str, description: String) {
-    let message = Message { level: MessageLevel::Warning, title: title.to_owned(), description, buttons: MessageButtons::Ok };
-    match ask(app, Request::Message(message)) {
-        Ok(Answer::Unavailable(why)) | Err(why) => record_unavailable(app, title, &why),
-        Ok(_) => {}
+    pub fn is_open(&self) -> bool {
+        self.dialogs.is_open()
     }
-}
 
-#[derive(Deserialize)]
-pub struct PickFile {
-    title: String,
-    extensions: Option<Vec<String>>,
-    #[serde(default)]
-    directory: bool,
-    #[serde(default)]
-    multiple: bool,
-}
-
-fn file_dialog(options: &PickFile) -> FileDialog {
-    let mut dialog = match (options.directory, options.multiple) {
-        (true, _) => FileDialog::folder(),
-        (false, true) => FileDialog::open_many(),
-        (false, false) => FileDialog::open(),
-    }
-    .title(&options.title);
-    if let Some(extensions) = &options.extensions {
-        let extensions: Vec<&str> = extensions.iter().map(String::as_str).collect();
-        dialog = dialog.filter(&options.title, &extensions);
-    }
-    dialog
-}
-
-/// The webview previews a chosen file through the asset protocol before any command runs.
-fn grant_preview(app: &tauri::AppHandle, paths: &[PathBuf], directory: bool) -> Result<(), String> {
-    let scope = app.asset_protocol_scope();
-    for path in paths {
-        if directory { scope.allow_directory(path, true) } else { scope.allow_file(path) }.map_err(|e| e.to_string())?;
-    }
-    Ok(())
-}
-
-/// The UI's picker: null when cancelled, a path, or an array of paths for `multiple`.
-#[tauri::command]
-pub async fn pick_file(app: tauri::AppHandle, options: PickFile) -> Result<Value, String> {
-    tauri::async_runtime::spawn_blocking(move || match ask(&app, Request::File(file_dialog(&options))) {
-        Ok(Answer::Paths(paths)) => {
-            grant_preview(&app, &paths, options.directory)?;
-            let mut names = paths.iter().map(|path| path.to_string_lossy().into_owned());
-            Ok(if options.multiple { json!(names.collect::<Vec<_>>()) } else { names.next().map_or(Value::Null, Value::String) })
+    pub fn open_picker(&mut self, target: PickerTarget, title: &str, extensions: &[String], directory: bool, save: bool) {
+        let mut dialog = match (directory, save) {
+            (true, _) => FileDialog::folder(),
+            (false, true) => FileDialog::save(),
+            (false, false) => FileDialog::open(),
         }
-        Ok(Answer::Cancelled) => Ok(Value::Null),
-        Ok(Answer::Message(_)) => Err("a file dialog was answered with a message result".to_string()),
-        Ok(Answer::Unavailable(why)) | Err(why) => {
-            record_unavailable(&app, &options.title, &why);
-            Err(format!("The file dialog couldn't be shown: {why}"))
+        .title(title);
+        if !extensions.is_empty() {
+            let ext_refs: Vec<&str> = extensions.iter().map(String::as_str).collect();
+            dialog = dialog.filter(title, &ext_refs);
         }
-    })
-    .await
-    .map_err(|e| e.to_string())?
+        let req = Request::File(dialog.clone());
+        self.pending.push_back(describe_request(&req));
+        self.dialogs.ask(dialog, target);
+    }
+
+    pub fn drain_answers(&mut self) -> Vec<(PickerTarget, Answer)> {
+        let answers = self.dialogs.take_answers();
+        let mut out = Vec::with_capacity(answers.len());
+        for (target, answer) in answers {
+            let req = self.pending.pop_front().unwrap_or(Value::Null);
+            self.last = json!({
+                "request": req,
+                "answer": describe_answer(&answer),
+            });
+            out.push((target, answer));
+        }
+        out
+    }
+
+    pub fn show_pending(&mut self, frame: &eframe::Frame) {
+        self.dialogs.show_pending(Some(frame));
+    }
+
+    pub fn state_json(&self) -> Value {
+        json!({
+            "open": self.dialogs.is_open(),
+            "queued": self.dialogs.queued(),
+            "override": self.overridden,
+            "pending": self.pending,
+            "last": self.last,
+        })
+    }
+
+    pub fn apply_override(&mut self, params: &Value) -> Result<Value, String> {
+        let scripted = parse_scripted(params)?;
+        let ov = override_for(scripted);
+        self.overridden = ov.is_some();
+        self.dialogs.set_override(ov);
+        Ok(json!({"ok": true, "override": self.overridden}))
+    }
 }
 
 fn describe_request(request: &Request) -> Value {
@@ -209,7 +119,6 @@ fn describe_answer(answer: &Answer) -> Value {
     }
 }
 
-/// What `ui.dialog.override` asked for; the `Override` itself is built on the main thread.
 enum Scripted {
     Native,
     Answers { paths: Option<Vec<PathBuf>>, button: Option<MessageResult> },
@@ -219,7 +128,7 @@ enum Scripted {
 
 const OVERRIDE_FORMS: &str = "ui.dialog.override takes exactly one of: paths and/or button, cancelled: true, unavailable: reason, clear: true";
 
-fn scripted(params: &Value) -> Result<Scripted, String> {
+fn parse_scripted(params: &Value) -> Result<Scripted, String> {
     super::only_keys(params, "ui.dialog.override", &["paths", "button", "cancelled", "unavailable", "clear"])?;
     let paths = params.get("paths");
     let button = params.get("button");
@@ -234,18 +143,18 @@ fn scripted(params: &Value) -> Result<Scripted, String> {
         return Ok(if params.get("clear").is_some() { Scripted::Native } else { Scripted::Cancelled });
     }
     if let Some(why) = params.get("unavailable") {
-        return why.as_str().map(|why| Scripted::Unavailable(why.to_owned())).ok_or_else(|| "unavailable must be a string".to_string());
+        return why.as_str().map(|w| Scripted::Unavailable(w.to_owned())).ok_or_else(|| "unavailable must be a string".to_string());
     }
     let paths = paths
-        .map(|paths| {
-            let list = paths.as_array().filter(|list| !list.is_empty()).ok_or("paths must be a non-empty array of absolute paths")?;
+        .map(|raw| {
+            let list = raw.as_array().filter(|l| !l.is_empty()).ok_or("paths must be a non-empty array of absolute paths")?;
             list.iter()
-                .map(|path| path.as_str().map(PathBuf::from).filter(|path| path.is_absolute()).ok_or("paths must be a non-empty array of absolute paths"))
+                .map(|p| p.as_str().map(PathBuf::from).filter(|pb| pb.is_absolute()).ok_or("paths must be a non-empty array of absolute paths"))
                 .collect::<Result<Vec<_>, _>>()
         })
         .transpose()?;
     let button = button
-        .map(|button| match button.as_str() {
+        .map(|b| match b.as_str() {
             Some("ok") => Ok(MessageResult::Ok),
             Some("cancel") => Ok(MessageResult::Cancel),
             Some("yes") => Ok(MessageResult::Yes),
@@ -270,27 +179,4 @@ fn override_for(scripted: Scripted) -> Option<Override> {
             Request::Message(_) => button.clone().map_or_else(|| Answer::Unavailable("the override has no button for a message box".into()), Answer::Message),
         })),
     }
-}
-
-/// `ui.dialog.state` and `ui.dialog.override`.
-pub(super) fn control(app: &tauri::AppHandle, method: &str, params: &Value) -> Result<Value, String> {
-    if method == "ui.dialog.state" {
-        super::only_keys(params, method, &[])?;
-        return on_main(app, |native| {
-            json!({
-                "open": native.dialogs.is_open(),
-                "queued": native.dialogs.queued(),
-                "override": native.overridden,
-                "pending": native.pending,
-                "last": native.last,
-            })
-        });
-    }
-    let scripted = scripted(params)?;
-    on_main(app, move |native| {
-        let answers = override_for(scripted);
-        native.overridden = answers.is_some();
-        native.dialogs.set_override(answers);
-        json!({"ok": true, "override": native.overridden})
-    })
 }

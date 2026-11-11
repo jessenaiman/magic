@@ -196,7 +196,19 @@ fn sync_actions_ecproj(dir: &Path, cues: &[Value], duration_sec: f64) -> Result<
         }
 
         steps.push(("edit.pasteSvg".into(), json!({ "svg": svg, "name": layer_name })));
-        steps.push(("prop.set".into(), json!({ "layer": layer_name, "path": "transform/position", "value": [STAGE_W * 0.5, STAGE_H * 0.5, 0.0] })));
+        let px = cue["point_x"].as_f64().unwrap_or(STAGE_W * 0.5);
+        let py = cue["point_y"].as_f64().unwrap_or(STAGE_H * 0.5);
+        steps.push(("prop.set".into(), json!({ "layer": layer_name, "path": "transform/position", "value": [px, py, 0.0] })));
+        if let Some(bend) = cue["arc_bend"].as_f64().filter(|b| b.abs() > 0.01) {
+            steps.push(("prop.set".into(), json!({ "layer": layer_name, "path": "transform/rotation", "value": bend })));
+        }
+        if let Some(fx_id) = cue["effect_id"].as_str()
+            && let Some(mapped) = crate::craft_effects::find_motion_effect(fx_id)
+            && mapped.craft_app == "effectcraft"
+            && mapped.craft_command == "effect.apply"
+        {
+            steps.push(("effect.apply".into(), json!({ "layer": layer_name, "effect": mapped.match_name })));
+        }
         steps.push(("layer.addShapeItem".into(), json!({ "layer": layer_name, "kind": "trim" })));
         steps.push(("prop.addKey".into(), json!({ "layer": layer_name, "path": "contents/trim/end", "value": 0.0, "time": start, "timeBase": "comp" })));
         steps.push(("prop.addKey".into(), json!({ "layer": layer_name, "path": "contents/trim/end", "value": 100.0, "time": draw_end, "timeBase": "comp" })));
@@ -256,6 +268,7 @@ pub fn cmd_motion_read(s: &mut Session, _p: &Value) -> Result<Value> {
         "lines": lines,
         "cues": cues,
         "presets": action_sketch_presets(),
+        "craft_effects": crate::craft_effects::motion_catalog_json(),
         "backdrop": backdrop,
     }))
 }
@@ -297,7 +310,9 @@ pub fn cmd_motion_save(s: &mut Session, p: &Value) -> Result<Value> {
     let d = if let Some(img_raw) = p["image"].as_str().filter(|v| !v.trim().is_empty()) {
         let img = crate::workspace::resolve_workspace_path(s, img_raw);
         let svg_out = dir.join("motion/svg").join(format!("{cue_id}.svg"));
-        CraftHub::trace_subject_vector(&img, &svg_out, Some("lineArt"), true, true)?;
+        let trace_preset = if p["effect_id"].as_str() == Some("vc.trace.silhouette") { "silhouettes" } else { "lineArt" };
+        let use_strokes = trace_preset == "lineArt";
+        CraftHub::trace_subject_vector(&img, &svg_out, Some(trace_preset), true, use_strokes)?;
         traced_svg = Some(svg_out);
         String::new()
     } else if let Some(preset_id) = p.get("preset").and_then(Value::as_str) {
@@ -329,7 +344,17 @@ pub fn cmd_motion_save(s: &mut Session, p: &Value) -> Result<Value> {
         "clock": format_clock(start_tick.seconds()),
         "draw_duration": draw_dur,
         "hold_duration": hold_dur,
-        "craft_app": p["craft_app"].as_str().unwrap_or("vectorcraft"),
+        "effect_id": p["effect_id"].as_str().unwrap_or("ec.shape.trim_paths"),
+        "point_x": p["point_x"].as_f64().unwrap_or(STAGE_W * 0.5),
+        "point_y": p["point_y"].as_f64().unwrap_or(STAGE_H * 0.5),
+        "arc_bend": p["arc_bend"].as_f64().unwrap_or(0.0),
+        "taper": p["taper"].as_f64().unwrap_or(65.0),
+        "craft_app": p["effect_id"]
+            .as_str()
+            .and_then(crate::craft_effects::find_motion_effect)
+            .map(|m| m.craft_app)
+            .or_else(|| p["craft_app"].as_str())
+            .unwrap_or("vectorcraft"),
     });
 
     if let Some(cues) = doc["cues"].as_array_mut() {
@@ -429,4 +454,9 @@ pub fn cmd_motion_preview_frame(s: &mut Session, p: &Value) -> Result<Value> {
     }
     CraftHub::render_effect_frame(&ecproj, Some(COMP_NAME), time, 640, &out)?;
     Ok(json!({ "frame": out, "source": ecproj, "kind": "motion", "time": time }))
+}
+
+/// `motion.effects`: return distinct CLI-mapped VectorCraft, EffectCraft, and PhotoCraft motion effects.
+pub fn cmd_motion_effects(_s: &mut Session, p: &Value) -> Result<Value> {
+    Ok(crate::craft_effects::query_motion_effects(p))
 }

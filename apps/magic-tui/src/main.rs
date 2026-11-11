@@ -1,4 +1,7 @@
 //! Interactive Terminal User Interface (TUI) for Magic Studio (`apps/magic-tui`).
+
+#![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable))]
+
 use clap::Parser;
 use magic::{Session, command_specs};
 use std::io::{self, Write};
@@ -55,7 +58,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             continue;
         }
 
-        // Execute command
         match session.execute(trimmed, serde_json::json!({})) {
             Ok(val) => println!("{val}"),
             Err(err) => eprintln!("Error: {err}"),

@@ -1,9 +1,11 @@
-//! Keyboard shortcuts through craft-keymap. The command registry's shortcuts are the catalog.
-use craft_keymap::{Active, Bindable, Binding, Chord, Keymap, Lookup, Platform, Scope, Scopes};
-use serde_json::{Value, json};
+//! Keyboard shortcuts through [`craft_keymap`] and [`craft_keymap::egui::Dispatcher`].
+
 use std::sync::OnceLock;
 
-fn keymap() -> &'static Keymap {
+use craft_keymap::egui::Dispatcher;
+use craft_keymap::{Active, Bindable, Binding, Chord, CommandRef, Keymap, Lookup, Platform, Scope, Scopes};
+
+pub fn catalog_keymap() -> &'static Keymap {
     static KEYMAP: OnceLock<Keymap> = OnceLock::new();
     KEYMAP.get_or_init(|| {
         let catalog = magic::command_specs()
@@ -17,47 +19,20 @@ fn keymap() -> &'static Keymap {
     })
 }
 
-fn run(app: &tauri::AppHandle, command: &str) -> Result<Value, String> {
-    match command {
-        // These two need input, which the app asks for the way its buttons do.
-        "project.new" => super::dispatch(app, "ui.set_view", json!({"view": "home"}), true),
-        "project.open" => {
-            let title = "Open Magic Studio Project";
-            let dialog = craft_dialogs::FileDialog::open().title(title).filter("Magic Studio Project", &["magic"]);
-            match super::dialogs::ask(app, craft_dialogs::Request::File(dialog))? {
-                craft_dialogs::Answer::Paths(paths) => match paths.first() {
-                    Some(path) => super::dispatch(app, command, json!({"path": path}), true),
-                    None => Ok(Value::Null),
-                },
-                craft_dialogs::Answer::Unavailable(why) => Err(why),
-                _ => Ok(Value::Null),
-            }
-        }
-        _ => super::dispatch(app, command, json!({}), true),
+pub fn dispatch_frame_keys(ctx: &egui::Context, dispatcher: &mut Dispatcher, modal_open: bool) -> Vec<CommandRef> {
+    if modal_open || craft_menu::bar::is_open(ctx) {
+        return Vec::new();
     }
+    craft_menu::bar::leave_for_shortcut(ctx);
+    let active = Active { typing: ctx.egui_wants_keyboard_input(), ..Active::NONE };
+    let hits = ctx.input_mut(|input| dispatcher.dispatch(input, catalog_keymap(), &active));
+    hits.into_iter().map(|hit| hit.command).collect()
 }
 
-/// Runs what `chord` is bound to. `typing`: a text field has the keyboard.
-fn press(app: &tauri::AppHandle, chord: &str, typing: bool) -> Result<Value, String> {
-    let chord = Chord::parse(chord).map_err(|e| format!("invalid chord: {e:?}"))?;
-    match keymap().lookup(&chord, false, &Active { typing, ..Active::NONE }) {
-        Lookup::Run(command) => {
-            let result = run(app, &command.id)?;
-            Ok(json!({"handled": true, "command": command.id, "result": result}))
-        }
-        _ => Ok(json!({"handled": false})),
+pub fn lookup_chord(chord_str: &str, typing: bool) -> Result<Option<CommandRef>, String> {
+    let chord = Chord::parse(chord_str).map_err(|e| format!("invalid chord: {e:?}"))?;
+    match catalog_keymap().lookup(&chord, false, &Active { typing, ..Active::NONE }) {
+        Lookup::Run(cmd) => Ok(Some(cmd)),
+        _ => Ok(None),
     }
-}
-
-/// The key handler for the UI.
-#[tauri::command]
-pub async fn key_pressed(app: tauri::AppHandle, chord: String, typing: bool) -> Result<Value, String> {
-    tauri::async_runtime::spawn_blocking(move || press(&app, &chord, typing)).await.map_err(|e| e.to_string())?
-}
-
-/// `ui.keymap.press {chord, typing?}`: the same path a key press takes.
-pub(super) fn control(app: &tauri::AppHandle, params: &Value) -> Result<Value, String> {
-    super::only_keys(params, "ui.keymap.press", &["chord", "typing"])?;
-    let chord = params["chord"].as_str().ok_or("ui.keymap.press needs a chord")?;
-    press(app, chord, params["typing"] == true)
 }

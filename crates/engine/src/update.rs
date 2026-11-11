@@ -11,9 +11,9 @@ use craft_update::{release, version};
 use serde_json::{Value, json};
 
 /// The repository that publishes Magic Studio releases.
-const REPO: &str = "jessenaiman/magic-studio-app";
-const RELEASES_API: &str = "https://api.github.com/repos/jessenaiman/magic-studio-app/releases?per_page=10";
-const RELEASES_PAGE: &str = "https://github.com/jessenaiman/magic-studio-app/releases";
+const REPO: &str = "jessenaiman/magic";
+const RELEASES_API: &str = "https://api.github.com/repos/jessenaiman/magic/releases?per_page=10";
+const RELEASES_PAGE: &str = "https://github.com/jessenaiman/magic/releases";
 
 fn failed(message: impl Into<String>) -> EngineError {
     EngineError::ExternalTool("update".into(), message.into())
