@@ -9,12 +9,9 @@ use std::path::{Path, PathBuf};
 use craft_doc::{Limits, RenditionKind};
 use craft_media::isobmff::{TrackKind as IsoTrackKind, open as open_isobmff};
 use craft_pcraft_format::{
-    COMPOSITE, FORMAT_VERSION as PCRAFT_VERSION, FULL_COMPOSITE, Limits as PcraftLimits, MANIFEST,
-    SAVE_LOCK, Step as PcraftStep, THUMB, read_manifest,
+    COMPOSITE, FORMAT_VERSION as PCRAFT_VERSION, FULL_COMPOSITE, Limits as PcraftLimits, MANIFEST, SAVE_LOCK, Step as PcraftStep, THUMB, read_manifest,
 };
-use craft_vectorcraft_format::{
-    Contents as VectorContents, is_compressed as vc_is_compressed, sniff as vc_sniff, split_tail,
-};
+use craft_vectorcraft_format::{Contents as VectorContents, is_compressed as vc_is_compressed, sniff as vc_sniff, split_tail};
 use serde::de::IgnoredAny;
 use serde_json::{Value, json};
 
@@ -37,16 +34,10 @@ pub type EcprojHeadSummary = EcprojHeaderInfo;
 pub fn inspect_ecproj_head(path: &Path) -> Result<EcprojHeaderInfo> {
     let file = std::fs::File::open(path).map_err(|e| UtilError::Invalid(format!("{}: {e}", path.display())))?;
     match craft_ecproj_format::Head::read_from(std::io::BufReader::new(file)) {
-        Ok(head) => Ok(EcprojHeaderInfo {
-            schema: Some(head.schema),
-            saved_by: head.saved_by,
-            newer_than_lib: craft_ecproj_format::check_schema(head.schema).is_err(),
-        }),
-        Err(craft_ecproj_format::ReadError::TooNew { saved_by, .. }) => Ok(EcprojHeaderInfo {
-            schema: None,
-            saved_by,
-            newer_than_lib: true,
-        }),
+        Ok(head) => {
+            Ok(EcprojHeaderInfo { schema: Some(head.schema), saved_by: head.saved_by, newer_than_lib: craft_ecproj_format::check_schema(head.schema).is_err() })
+        }
+        Err(craft_ecproj_format::ReadError::TooNew { saved_by, .. }) => Ok(EcprojHeaderInfo { schema: None, saved_by, newer_than_lib: true }),
         Err(other) => Err(UtilError::Invalid(format!("{}: {other}", path.display()))),
     }
 }
@@ -142,23 +133,17 @@ pub fn extract_craft_preview(path: &Path, out_png: &Path) -> Result<bool> {
             .ok()
             .and_then(|raw| read_manifest::<IgnoredAny, craft_pcraft_format::Error>(&raw, &PcraftLimits::default(), PCRAFT_STEPS, PCRAFT_VERSION).ok());
         let candidates: Vec<&str> = match manifest_ok.as_ref() {
-            Some(m) => [m.full_composite.as_deref(), m.composite.as_deref(), m.thumbnail.as_deref()]
-                .into_iter()
-                .flatten()
-                .collect(),
+            Some(m) => [m.full_composite.as_deref(), m.composite.as_deref(), m.thumbnail.as_deref()].into_iter().flatten().collect(),
             None => vec![FULL_COMPOSITE, COMPOSITE, THUMB],
         };
         for rel in candidates {
             let candidate = path.join(rel);
             if candidate.is_file() {
-                let png = std::fs::read(&candidate)
-                    .map_err(|e| UtilError::Invalid(format!("{}: {e}", candidate.display())))?;
+                let png = std::fs::read(&candidate).map_err(|e| UtilError::Invalid(format!("{}: {e}", candidate.display())))?;
                 if let Some(parent) = out_png.parent() {
-                    std::fs::create_dir_all(parent)
-                        .map_err(|e| UtilError::Invalid(format!("{}: {e}", parent.display())))?;
+                    std::fs::create_dir_all(parent).map_err(|e| UtilError::Invalid(format!("{}: {e}", parent.display())))?;
                 }
-                craft_atomic::atomic_write(out_png, &png)
-                    .map_err(|e| UtilError::Invalid(format!("{}: {e}", out_png.display())))?;
+                craft_atomic::atomic_write(out_png, &png).map_err(|e| UtilError::Invalid(format!("{}: {e}", out_png.display())))?;
                 return Ok(true);
             }
         }
@@ -180,8 +165,7 @@ pub fn extract_craft_preview(path: &Path, out_png: &Path) -> Result<bool> {
     if let Some(parent) = out_png.parent() {
         std::fs::create_dir_all(parent).map_err(|e| UtilError::Invalid(format!("{}: {e}", parent.display())))?;
     }
-    craft_atomic::atomic_write(out_png, &rendition.bytes)
-        .map_err(|e| UtilError::Invalid(format!("{}: {e}", out_png.display())))?;
+    craft_atomic::atomic_write(out_png, &rendition.bytes).map_err(|e| UtilError::Invalid(format!("{}: {e}", out_png.display())))?;
     Ok(true)
 }
 
@@ -191,16 +175,14 @@ pub fn extract_craft_pdf(path: &Path, out_pdf: &Path) -> Result<bool> {
     if craft_doc::sniff(&bytes).is_none() {
         return Ok(false);
     }
-    let Some(pdf) = craft_doc::rendition(&bytes, RenditionKind::Pdf, &Limits::default())
-        .map_err(|e| UtilError::Invalid(format!("{}: {e}", path.display())))?
+    let Some(pdf) = craft_doc::rendition(&bytes, RenditionKind::Pdf, &Limits::default()).map_err(|e| UtilError::Invalid(format!("{}: {e}", path.display())))?
     else {
         return Ok(false);
     };
     if let Some(parent) = out_pdf.parent() {
         std::fs::create_dir_all(parent).map_err(|e| UtilError::Invalid(format!("{}: {e}", parent.display())))?;
     }
-    craft_atomic::atomic_write(out_pdf, &pdf.bytes)
-        .map_err(|e| UtilError::Invalid(format!("{}: {e}", out_pdf.display())))?;
+    craft_atomic::atomic_write(out_pdf, &pdf.bytes).map_err(|e| UtilError::Invalid(format!("{}: {e}", out_pdf.display())))?;
     Ok(true)
 }
 
@@ -235,31 +217,19 @@ pub fn probe_container_in_process(path: &Path) -> Result<Value> {
     }
     let file = std::fs::File::open(path).map_err(|e| UtilError::Invalid(format!("cannot read {}: {e}", path.display())))?;
     let mp4 = open_isobmff(&file).map_err(|e| UtilError::Invalid(format!("cannot demux {}: {e}", path.display())))?;
-    let movie_secs = if mp4.timescale > 0 {
-        (mp4.duration as f64) / (mp4.timescale as f64)
-    } else {
-        0.0
-    };
+    let movie_secs = if mp4.timescale > 0 { (mp4.duration as f64) / (mp4.timescale as f64) } else { 0.0 };
     let mut max_secs = movie_secs;
     let mut video_val = Value::Null;
     let mut audio_streams = Vec::new();
     for track in &mp4.tracks {
-        let t_secs = if track.timescale > 0 {
-            (track.duration as f64) / (track.timescale as f64)
-        } else {
-            0.0
-        };
+        let t_secs = if track.timescale > 0 { (track.duration as f64) / (track.timescale as f64) } else { 0.0 };
         if t_secs > max_secs {
             max_secs = t_secs;
         }
         let cp = serde_json::to_value(track.codec_params()).unwrap_or(Value::Null);
         match track.kind {
             IsoTrackKind::Video if video_val.is_null() => {
-                let fps = if t_secs > 0.0 && !track.samples.is_empty() {
-                    Some((track.samples.len() as f64) / t_secs)
-                } else {
-                    None
-                };
+                let fps = if t_secs > 0.0 && !track.samples.is_empty() { Some((track.samples.len() as f64) / t_secs) } else { None };
                 video_val = json!({
                     "codec": cp["codec"],
                     "width": cp["width"],
@@ -324,9 +294,7 @@ pub fn is_pure_audio_file(path: &Path) -> bool {
 
 /// True when `path` has an ISO BMFF video container extension (`mp4`, `mov`, `m4v`).
 pub fn is_isobmff_file(path: &Path) -> bool {
-    path.extension()
-        .and_then(|e| e.to_str())
-        .is_some_and(|e| matches!(e.to_ascii_lowercase().as_str(), "mp4" | "mov" | "m4v"))
+    path.extension().and_then(|e| e.to_str()).is_some_and(|e| matches!(e.to_ascii_lowercase().as_str(), "mp4" | "mov" | "m4v"))
 }
 
 /// Sweep orphaned `.{stem}.{pid}-{n}.craft_tmp` staging files left behind by abnormal process exits
@@ -348,10 +316,7 @@ pub fn sweep_orphan_craft_tmp(root: &Path) -> usize {
         };
         for entry in entries.flatten() {
             let candidate = entry.path();
-            let is_orphan = candidate
-                .file_name()
-                .and_then(|n| n.to_str())
-                .is_some_and(|n| n.starts_with('.') && n.ends_with(".craft_tmp"));
+            let is_orphan = candidate.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with('.') && n.ends_with(".craft_tmp"));
             if is_orphan && candidate.is_file() && std::fs::remove_file(&candidate).is_ok() {
                 removed += 1;
             }
@@ -368,9 +333,7 @@ fn candidate_font_dirs() -> Vec<PathBuf> {
         dirs.push(PathBuf::from(store));
     }
     if let Some(home) = std::env::var_os("HOME").map(PathBuf::from) {
-        let data_home = std::env::var_os("XDG_DATA_HOME")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| home.join(".local/share"));
+        let data_home = std::env::var_os("XDG_DATA_HOME").map(PathBuf::from).unwrap_or_else(|| home.join(".local/share"));
         dirs.push(data_home.join("craft-fonts"));
         dirs.push(data_home.join("fonts"));
         dirs.push(home.join("Library/Application Support/Craft Fonts"));
@@ -402,10 +365,7 @@ fn collect_font_stems(dir: &Path, depth: u8, out: &mut BTreeSet<String>) {
             collect_font_stems(&path, depth - 1, out);
             continue;
         }
-        let is_font = path
-            .extension()
-            .and_then(|e| e.to_str())
-            .is_some_and(|e| matches!(e.to_ascii_lowercase().as_str(), "ttf" | "otf" | "ttc" | "otc"));
+        let is_font = path.extension().and_then(|e| e.to_str()).is_some_and(|e| matches!(e.to_ascii_lowercase().as_str(), "ttf" | "otf" | "ttc" | "otc"));
         if !is_font {
             continue;
         }

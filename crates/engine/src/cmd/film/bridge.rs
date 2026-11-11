@@ -20,20 +20,14 @@ use std::path::PathBuf;
 use serde_json::{Value, json};
 
 use crate::craft_hub::control::{extract_doc_path, is_listening, live_control};
-use crate::craft_hub::discovery::{
-    control_addr, ensure_control_token, read_control_token, resolve_executable_path,
-};
+use crate::craft_hub::discovery::{control_addr, ensure_control_token, read_control_token, resolve_executable_path};
 use crate::time::TICKS_PER_SECOND;
 use crate::{CraftHub, CraftTarget, Result, Session};
 
 use super::{bad, film};
 
 fn resolve_ecproj_for_session(s: &Session, p: &Value) -> Result<PathBuf> {
-    if let Some(raw) = p["ecproj"]
-        .as_str()
-        .or_else(|| p["project"].as_str())
-        .filter(|v| !v.trim().is_empty())
-    {
+    if let Some(raw) = p["ecproj"].as_str().or_else(|| p["project"].as_str()).filter(|v| !v.trim().is_empty()) {
         return Ok(crate::workspace::resolve_workspace_path(s, raw.trim()));
     }
     let dir = crate::workshop::project_dir(s)?;
@@ -70,11 +64,8 @@ pub fn cmd_bridge_status(s: &mut Session, p: &Value) -> Result<Value> {
     let ec_live = ec_addr.is_some_and(is_listening);
     let fc_has_token = read_control_token(CraftTarget::Film, fc_port).is_some();
     let stored = crate::project_settings::stored_settings();
-    let mcp_autosave = stored
-        .pointer("/craft/effectcraft_mcp_autosave")
-        .or_else(|| stored.get("craft.effectcraft_mcp_autosave"))
-        .and_then(Value::as_bool)
-        .unwrap_or(true);
+    let mcp_autosave =
+        stored.pointer("/craft/effectcraft_mcp_autosave").or_else(|| stored.get("craft.effectcraft_mcp_autosave")).and_then(Value::as_bool).unwrap_or(true);
 
     let fc_open_doc = fc_live.then(|| probe_open_doc(CraftTarget::Film, Some(fc_port))).flatten();
     let ec_open_doc = ec_live.then(|| probe_open_doc(CraftTarget::Effect, Some(ec_port))).flatten();
@@ -127,10 +118,7 @@ pub fn cmd_bridge_control(s: &mut Session, p: &Value) -> Result<Value> {
     match action {
         "status" => cmd_bridge_status(s, p),
         "launch" | "open" => {
-            let file = p["path"]
-                .as_str()
-                .filter(|v| !v.trim().is_empty())
-                .map(|raw| crate::workspace::resolve_workspace_path(s, raw));
+            let file = p["path"].as_str().filter(|v| !v.trim().is_empty()).map(|raw| crate::workspace::resolve_workspace_path(s, raw));
             CraftHub::launch_with_control(target, file.as_deref(), port, ws_dir)
         }
         "focus" => CraftHub::live_control(target, port, "ui.focus", &json!({})),
@@ -145,10 +133,7 @@ pub fn cmd_bridge_control(s: &mut Session, p: &Value) -> Result<Value> {
             CraftHub::live_execute(target, port, cmd_id, &inner)
         }
         "control" => {
-            let method = p["method"]
-                .as_str()
-                .filter(|v| !v.trim().is_empty())
-                .ok_or_else(|| bad("bridge.control action=control requires `method`"))?;
+            let method = p["method"].as_str().filter(|v| !v.trim().is_empty()).ok_or_else(|| bad("bridge.control action=control requires `method`"))?;
             let inner = p.get("params").cloned().unwrap_or_else(|| json!({}));
             CraftHub::live_control(target, port, method, &inner)
         }
@@ -166,13 +151,7 @@ pub fn cmd_bridge_preflight(s: &mut Session, p: &Value) -> Result<Value> {
     if f.project.is_file() {
         fc_media = CraftHub::execute(CraftTarget::Film, Some(&f.project), "media.status", &json!({})).unwrap_or(Value::Null);
         if action == "relink" {
-            fc_missing = CraftHub::execute_and_save(
-                CraftTarget::Film,
-                &f.project,
-                "media.findMissing",
-                &json!({"searchDirs": [f.dir]}),
-            )
-            .unwrap_or(Value::Null);
+            fc_missing = CraftHub::execute_and_save(CraftTarget::Film, &f.project, "media.findMissing", &json!({"searchDirs": [f.dir]})).unwrap_or(Value::Null);
         } else {
             fc_missing = CraftHub::execute(CraftTarget::Film, Some(&f.project), "media.findMissing", &json!({})).unwrap_or(Value::Null);
         }
@@ -182,14 +161,8 @@ pub fn cmd_bridge_preflight(s: &mut Session, p: &Value) -> Result<Value> {
     let mut ec_footage = Value::Null;
     let mut source_guard = Value::Null;
     if ecproj.is_file() {
-        let out_candidate = p["output"]
-            .as_str()
-            .map(|raw| crate::workspace::resolve_workspace_path(s, raw))
-            .unwrap_or_else(|| f.export());
-        let steps = vec![
-            ("footage.check".to_string(), json!({"wait": true})),
-            ("file.checkOutput".to_string(), json!({"path": out_candidate})),
-        ];
+        let out_candidate = p["output"].as_str().map(|raw| crate::workspace::resolve_workspace_path(s, raw)).unwrap_or_else(|| f.export());
+        let steps = vec![("footage.check".to_string(), json!({"wait": true})), ("file.checkOutput".to_string(), json!({"path": out_candidate}))];
         if let Ok(res) = CraftHub::run_effect_steps(Some(&ecproj), false, &steps) {
             ec_footage = res.first().cloned().unwrap_or(Value::Null);
             source_guard = res.get(1).cloned().unwrap_or(Value::Null);
@@ -198,12 +171,9 @@ pub fn cmd_bridge_preflight(s: &mut Session, p: &Value) -> Result<Value> {
 
     let linked = super::linked_comp::inspect_linked_comps(&f.dir);
     let offline_links: Vec<&super::linked_comp::LinkedCompRecord> = linked.iter().filter(|r| r.status == "offline").collect();
-    let ec_missing_count = ec_footage["missing"]
-        .as_array()
-        .map_or(offline_links.len(), Vec::len);
-    let fc_offline_count = fc_media
-        .as_array()
-        .map_or(0, |arr| arr.iter().filter(|m| m["status"].as_str() == Some("offline") || m["status"].as_str() == Some("missing")).count());
+    let ec_missing_count = ec_footage["missing"].as_array().map_or(offline_links.len(), Vec::len);
+    let fc_offline_count =
+        fc_media.as_array().map_or(0, |arr| arr.iter().filter(|m| m["status"].as_str() == Some("offline") || m["status"].as_str() == Some("missing")).count());
     let overwrite_conflict = source_guard["blocked"].as_bool() == Some(true)
         || source_guard["overwritesSource"].as_bool() == Some(true)
         || source_guard["conflict"].as_bool() == Some(true);
@@ -225,10 +195,7 @@ pub fn cmd_bridge_preflight(s: &mut Session, p: &Value) -> Result<Value> {
 /// `bridge.history` (`T09`): inspect or jump EffectCraft/FilmCraft branching undo states
 /// (`edit.history.list` / `edit.history.goto`) or trigger crash-journal recovery (`file.recover`).
 pub fn cmd_bridge_history(s: &mut Session, p: &Value) -> Result<Value> {
-    let op = p["op"]
-        .as_str()
-        .or_else(|| p["action"].as_str())
-        .unwrap_or("list");
+    let op = p["op"].as_str().or_else(|| p["action"].as_str()).unwrap_or("list");
     let target_app = p["app"].as_str().unwrap_or("effectcraft");
 
     if op == "recover_filmcraft" || (op == "recover" && target_app == "filmcraft") {
@@ -306,10 +273,7 @@ pub fn cmd_bridge_history(s: &mut Session, p: &Value) -> Result<Value> {
 /// surfacing EffectCraft's incompatibility `warnings` list.
 pub fn cmd_effect_lottie(s: &mut Session, p: &Value) -> Result<Value> {
     let dir = crate::workshop::project_dir(s)?;
-    let mode = p["mode"]
-        .as_str()
-        .or_else(|| p["direction"].as_str())
-        .unwrap_or("export");
+    let mode = p["mode"].as_str().or_else(|| p["direction"].as_str()).unwrap_or("export");
     let ecproj = resolve_ecproj_for_session(s, p)?;
 
     if mode == "import" {
@@ -326,11 +290,8 @@ pub fn cmd_effect_lottie(s: &mut Session, p: &Value) -> Result<Value> {
         if let Some(parent) = ecproj.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        let res = CraftHub::run_effect_steps(
-            ecproj.is_file().then_some(ecproj.as_path()),
-            true,
-            &[("file.importLottie".into(), json!({"path": lottie_path}))],
-        )?;
+        let res =
+            CraftHub::run_effect_steps(ecproj.is_file().then_some(ecproj.as_path()), true, &[("file.importLottie".into(), json!({"path": lottie_path}))])?;
         let first = res.first().cloned().unwrap_or_else(|| json!({}));
         return Ok(json!({
             "ok": true,
@@ -381,12 +342,8 @@ pub fn cmd_effect_lottie(s: &mut Session, p: &Value) -> Result<Value> {
 /// `effect.import_aep` (`T05`): clean-room After Effects `.aep` / `.aepx` import (`file.importAep`)
 /// with `dryRun` conversion/loss report before committing `allowLosses`.
 pub fn cmd_effect_import_aep(s: &mut Session, p: &Value) -> Result<Value> {
-    let raw = p["path"]
-        .as_str()
-        .or_else(|| p["source"].as_str())
-        .map(str::trim)
-        .filter(|v| !v.is_empty())
-        .ok_or_else(|| bad("path=<.aep or .aepx> is required"))?;
+    let raw =
+        p["path"].as_str().or_else(|| p["source"].as_str()).map(str::trim).filter(|v| !v.is_empty()).ok_or_else(|| bad("path=<.aep or .aepx> is required"))?;
     let aep_path = crate::workspace::resolve_workspace_path(s, raw);
     if !aep_path.is_file() {
         return Err(bad(format!("After Effects file not found: {}", aep_path.display())));
@@ -403,17 +360,10 @@ pub fn cmd_effect_import_aep(s: &mut Session, p: &Value) -> Result<Value> {
         "allowLosses": allow_losses,
         "applySettings": p["apply_settings"].as_bool().unwrap_or(true),
     });
-    let res = CraftHub::run_effect_steps(
-        dest_ecproj.is_file().then_some(dest_ecproj.as_path()),
-        !dry_run,
-        &[("file.importAep".into(), import_params)],
-    )?;
+    let res = CraftHub::run_effect_steps(dest_ecproj.is_file().then_some(dest_ecproj.as_path()), !dry_run, &[("file.importAep".into(), import_params)])?;
     let first = res.first().cloned().unwrap_or_else(|| json!({}));
     let report = first.get("report").cloned().unwrap_or_else(|| first.clone());
-    let loss_count = report["losses"]
-        .as_array()
-        .or_else(|| report["warnings"].as_array())
-        .map_or(0, Vec::len);
+    let loss_count = report["losses"].as_array().or_else(|| report["warnings"].as_array()).map_or(0, Vec::len);
     Ok(json!({
         "ok": true,
         "dry_run": dry_run,
@@ -429,15 +379,9 @@ pub fn cmd_effect_import_aep(s: &mut Session, p: &Value) -> Result<Value> {
 /// (`essential.exportTemplate`, `essential.set`, `effectcraft-cli render --template --values`)
 /// and FilmCraft `.fcgt` (`graphics.template.*`).
 pub fn cmd_bridge_templates(s: &mut Session, p: &Value) -> Result<Value> {
-    let raw_check = p["path"]
-        .as_str()
-        .or_else(|| p["source"].as_str())
-        .or_else(|| p["template_path"].as_str())
-        .unwrap_or_default();
+    let raw_check = p["path"].as_str().or_else(|| p["source"].as_str()).or_else(|| p["template_path"].as_str()).unwrap_or_default();
     if raw_check.trim().to_ascii_lowercase().ends_with(".mogrt") {
-        return Err(bad(
-            "Clean-room policy: Adobe .mogrt packages are refused by FilmCraft & EffectCraft; use .fcgt or .ectemplate",
-        ));
+        return Err(bad("Clean-room policy: Adobe .mogrt packages are refused by FilmCraft & EffectCraft; use .fcgt or .ectemplate"));
     }
     let action = p["action"].as_str().unwrap_or("list");
     let inferred_ec = matches!(action, "export_ectemplate" | "set_essential" | "render_template")
@@ -451,10 +395,8 @@ pub fn cmd_bridge_templates(s: &mut Session, p: &Value) -> Result<Value> {
             if !tpl.is_file() {
                 return Err(bad(format!("EffectCraft template not found: {}", tpl.display())));
             }
-            let out = p["output"]
-                .as_str()
-                .map(|raw| crate::workspace::resolve_workspace_path(s, raw))
-                .unwrap_or_else(|| dir.join("exports/template-render.mov"));
+            let out =
+                p["output"].as_str().map(|raw| crate::workspace::resolve_workspace_path(s, raw)).unwrap_or_else(|| dir.join("exports/template-render.mov"));
             let res = CraftHub::render_effect_template(&tpl, p.get("values"), &out, p["time"].as_f64())?;
             return Ok(json!({"ok": true, "domain": "effectcraft", "template": tpl, "output": out, "result": res}));
         }
@@ -473,31 +415,19 @@ pub fn cmd_bridge_templates(s: &mut Session, p: &Value) -> Result<Value> {
                     std::fs::create_dir_all(parent)?;
                 }
                 let comp = p["comp"].as_str().unwrap_or("Lyrics");
-                let res = CraftHub::run_effect_steps(
-                    Some(&ecproj),
-                    false,
-                    &[("essential.exportTemplate".into(), json!({"comp": comp, "path": out}))],
-                )?;
+                let res = CraftHub::run_effect_steps(Some(&ecproj), false, &[("essential.exportTemplate".into(), json!({"comp": comp, "path": out}))])?;
                 Ok(json!({"ok": true, "domain": "effectcraft", "path": out, "result": res.first()}))
             }
             "set" | "set_essential" => {
                 let ctrl = p["control"].as_str().unwrap_or("Title");
                 let val = p.get("value").cloned().unwrap_or_else(|| json!(""));
                 let layer = p["layer"].as_str().unwrap_or("#1");
-                let res = CraftHub::run_effect_steps(
-                    Some(&ecproj),
-                    true,
-                    &[("essential.set".into(), json!({"layer": layer, "control": ctrl, "value": val}))],
-                )?;
+                let res = CraftHub::run_effect_steps(Some(&ecproj), true, &[("essential.set".into(), json!({"layer": layer, "control": ctrl, "value": val}))])?;
                 Ok(json!({"ok": true, "domain": "effectcraft", "control": ctrl, "result": res.first()}))
             }
             "install" | "instantiate" => {
                 let tpl = crate::workspace::resolve_workspace_path(s, raw_check);
-                let res = CraftHub::run_effect_steps(
-                    Some(&ecproj),
-                    true,
-                    &[("file.import".into(), json!({"paths": [tpl]}))],
-                )?;
+                let res = CraftHub::run_effect_steps(Some(&ecproj), true, &[("file.import".into(), json!({"paths": [tpl]}))])?;
                 Ok(json!({"ok": true, "domain": "effectcraft", "installed": tpl, "result": res.first()}))
             }
             _ => Ok(json!({"ok": true, "domain": "effectcraft", "extension": ".ectemplate", "ecproj": ecproj})),
@@ -510,23 +440,13 @@ pub fn cmd_bridge_templates(s: &mut Session, p: &Value) -> Result<Value> {
         "apply" => {
             let tpl = p["template"].as_str().unwrap_or("Slab Lower Third");
             let values = p.get("values").cloned().unwrap_or_else(|| json!({}));
-            let res = CraftHub::execute_and_save(
-                CraftTarget::Film,
-                &project,
-                "graphics.template.apply",
-                &json!({"template": tpl, "values": values}),
-            )?;
+            let res = CraftHub::execute_and_save(CraftTarget::Film, &project, "graphics.template.apply", &json!({"template": tpl, "values": values}))?;
             Ok(json!({"ok": true, "domain": "filmcraft", "template": tpl, "result": res}))
         }
         "set" => {
             let key = p["control"].as_str().or_else(|| p["key"].as_str()).unwrap_or("Title");
             let val = p.get("value").cloned().unwrap_or_else(|| json!(""));
-            let res = CraftHub::execute_and_save(
-                CraftTarget::Film,
-                &project,
-                "graphics.template.set",
-                &json!({"key": key, "value": val}),
-            )?;
+            let res = CraftHub::execute_and_save(CraftTarget::Film, &project, "graphics.template.set", &json!({"key": key, "value": val}))?;
             Ok(json!({"ok": true, "domain": "filmcraft", "control": key, "result": res}))
         }
         "export" | "export_fcgt" => {
@@ -538,12 +458,8 @@ pub fn cmd_bridge_templates(s: &mut Session, p: &Value) -> Result<Value> {
                 std::fs::create_dir_all(parent)?;
             }
             let name = p["name"].as_str().unwrap_or(&f.name);
-            let res = CraftHub::execute(
-                CraftTarget::Film,
-                Some(&project),
-                "graphics.template.export",
-                &json!({"name": name, "path": out, "embedFonts": true}),
-            )?;
+            let res =
+                CraftHub::execute(CraftTarget::Film, Some(&project), "graphics.template.export", &json!({"name": name, "path": out, "embedFonts": true}))?;
             Ok(json!({"ok": true, "domain": "filmcraft", "path": out, "result": res}))
         }
         "install" | "instantiate" => {
@@ -551,12 +467,7 @@ pub fn cmd_bridge_templates(s: &mut Session, p: &Value) -> Result<Value> {
                 return Err(bad("path=<.fcgt> is required"));
             }
             let resolved = crate::workspace::resolve_workspace_path(s, raw_check);
-            let res = CraftHub::execute_and_save(
-                CraftTarget::Film,
-                &project,
-                "graphics.template.install",
-                &json!({"path": resolved}),
-            )?;
+            let res = CraftHub::execute_and_save(CraftTarget::Film, &project, "graphics.template.install", &json!({"path": resolved}))?;
             Ok(json!({"ok": true, "domain": "filmcraft", "installed": resolved, "result": res}))
         }
         _ => {
@@ -587,12 +498,7 @@ pub fn cmd_words_captions_sync(s: &mut Session, p: &Value) -> Result<Value> {
         if let Some(parent) = pulled.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        let ex = CraftHub::execute(
-            CraftTarget::Film,
-            Some(&project),
-            "captions.export",
-            &json!({"path": pulled, "format": "srt", "track": "C1"}),
-        )?;
+        let ex = CraftHub::execute(CraftTarget::Film, Some(&project), "captions.export", &json!({"path": pulled, "format": "srt", "track": "C1"}))?;
         let imported = if pulled.is_file() {
             crate::cmd::project::transcript::cmd_workshop_import_transcript(s, &json!({"path": pulled, "replace": true})).ok()
         } else {
@@ -618,30 +524,17 @@ pub fn cmd_words_captions_sync(s: &mut Session, p: &Value) -> Result<Value> {
     );
 
     let mut results = Vec::new();
-    if let Ok(nt) = CraftHub::execute_and_save(
-        CraftTarget::Film,
-        &project,
-        "captions.newTrack",
-        &json!({"format": format_std, "name": "C1 Lyrics", "language": language}),
-    ) {
+    if let Ok(nt) =
+        CraftHub::execute_and_save(CraftTarget::Film, &project, "captions.newTrack", &json!({"format": format_std, "name": "C1 Lyrics", "language": language}))
+    {
         results.push(nt);
     }
     if srt_out.is_file()
-        && let Ok(imp) = CraftHub::execute_and_save(
-            CraftTarget::Film,
-            &project,
-            "captions.import",
-            &json!({"path": srt_out, "language": language}),
-        )
+        && let Ok(imp) = CraftHub::execute_and_save(CraftTarget::Film, &project, "captions.import", &json!({"path": srt_out, "language": language}))
     {
         results.push(imp);
     }
-    let _ = CraftHub::execute_and_save(
-        CraftTarget::Film,
-        &project,
-        "captions.setTrack",
-        &json!({"track": "C1", "enabled": true, "syncLock": true}),
-    );
+    let _ = CraftHub::execute_and_save(CraftTarget::Film, &project, "captions.setTrack", &json!({"track": "C1", "enabled": true, "syncLock": true}));
 
     let mut upgraded = Value::Null;
     if p["upgrade_to_graphic"].as_bool() == Some(true)
@@ -656,12 +549,7 @@ pub fn cmd_words_captions_sync(s: &mut Session, p: &Value) -> Result<Value> {
         if let Some(parent) = exp_path.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        if let Ok(ex) = CraftHub::execute(
-            CraftTarget::Film,
-            Some(&project),
-            "captions.export",
-            &json!({"path": exp_path, "format": file_ext, "track": "C1"}),
-        ) {
+        if let Ok(ex) = CraftHub::execute(CraftTarget::Film, Some(&project), "captions.export", &json!({"path": exp_path, "format": file_ext, "track": "C1"})) {
             sidecar = ex;
         }
     }

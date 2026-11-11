@@ -25,18 +25,12 @@ pub(crate) fn asset_role(dir: Option<&Path>, path: Option<&Path>) -> &'static st
     }
 }
 
-
 /// Resolve the flat project preview `.png` and linked Craft file metadata for any project asset
 /// (`.pcraft` ZIP or directory bundle, `.vectorcraft`, `.ecproj`, `.fcproj`, or image with sibling Craft project).
-pub(crate) fn resolve_asset_project_image(
-    project_dir: Option<&Path>,
-    asset_path: &Path,
-) -> (PathBuf, Option<String>, Option<String>) {
+pub(crate) fn resolve_asset_project_image(project_dir: Option<&Path>, asset_path: &Path) -> (PathBuf, Option<String>, Option<String>) {
     let ext = asset_path.extension().and_then(|e| e.to_str()).unwrap_or_default().to_ascii_lowercase();
     let stem = asset_path.file_stem().and_then(|n| n.to_str()).unwrap_or("asset");
-    let previews_dir = project_dir
-        .map(|d| d.join("assets/.previews"))
-        .unwrap_or_else(|| asset_path.parent().unwrap_or(Path::new(".")).join(".previews"));
+    let previews_dir = project_dir.map(|d| d.join("assets/.previews")).unwrap_or_else(|| asset_path.parent().unwrap_or(Path::new(".")).join(".previews"));
     let preview_png = previews_dir.join(format!("{stem}.png"));
 
     match ext.as_str() {
@@ -44,32 +38,28 @@ pub(crate) fn resolve_asset_project_image(
             if craft_util::media::extract_craft_preview(asset_path, &preview_png).unwrap_or(false) && preview_png.is_file() {
                 return (preview_png, Some(asset_path.to_string_lossy().into_owned()), Some("photocraft".into()));
             }
-            return (asset_path.to_path_buf(), Some(asset_path.to_string_lossy().into_owned()), Some("photocraft".into()));
+            (asset_path.to_path_buf(), Some(asset_path.to_string_lossy().into_owned()), Some("photocraft".into()))
         }
         "vectorcraft" | "vcraft" | "drawcraft" | "svg" => {
             if craft_util::media::extract_craft_preview(asset_path, &preview_png).unwrap_or(false) && preview_png.is_file() {
                 return (preview_png, Some(asset_path.to_string_lossy().into_owned()), Some("vectorcraft".into()));
             }
-            return (asset_path.to_path_buf(), Some(asset_path.to_string_lossy().into_owned()), Some("vectorcraft".into()));
+            (asset_path.to_path_buf(), Some(asset_path.to_string_lossy().into_owned()), Some("vectorcraft".into()))
         }
         "ecproj" => {
             let sibling_png = asset_path.with_extension("png");
             let img = if sibling_png.is_file() { sibling_png } else { asset_path.to_path_buf() };
-            return (img, Some(asset_path.to_string_lossy().into_owned()), Some("effectcraft".into()));
+            (img, Some(asset_path.to_string_lossy().into_owned()), Some("effectcraft".into()))
         }
         "fcproj" => {
             let sibling_png = asset_path.with_extension("png");
             let img = if sibling_png.is_file() { sibling_png } else { asset_path.to_path_buf() };
-            return (img, Some(asset_path.to_string_lossy().into_owned()), Some("filmcraft".into()));
+            (img, Some(asset_path.to_string_lossy().into_owned()), Some("filmcraft".into()))
         }
         _ => {
-            for (cand_ext, app) in [
-                ("pcraft", "photocraft"),
-                ("psd", "photocraft"),
-                ("vectorcraft", "vectorcraft"),
-                ("ecproj", "effectcraft"),
-                ("fcproj", "filmcraft"),
-            ] {
+            for (cand_ext, app) in
+                [("pcraft", "photocraft"), ("psd", "photocraft"), ("vectorcraft", "vectorcraft"), ("ecproj", "effectcraft"), ("fcproj", "filmcraft")]
+            {
                 let cand = asset_path.with_extension(cand_ext);
                 if cand.exists() {
                     return (asset_path.to_path_buf(), Some(cand.to_string_lossy().into_owned()), Some(app.into()));

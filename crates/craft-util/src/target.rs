@@ -207,10 +207,7 @@ impl CraftTarget {
         if self.wire() == ControlWire::CmdParams {
             return (command.to_string(), params.clone());
         }
-        if command.starts_with("ui.")
-            || command.starts_with("app.")
-            || matches!(command, "session.inspect" | "render.frame" | "perf.stats")
-        {
+        if command.starts_with("ui.") || command.starts_with("app.") || matches!(command, "session.inspect" | "render.frame" | "perf.stats") {
             return (command.to_string(), params.clone());
         }
         match self {

@@ -29,11 +29,7 @@ pub struct CraftHub;
 impl CraftHub {
     fn prefer_live_bridge() -> bool {
         let stored = crate::project_settings::stored_settings();
-        stored
-            .pointer("/craft/prefer_live_bridge")
-            .or_else(|| stored.get("craft.prefer_live_bridge"))
-            .and_then(Value::as_bool)
-            .unwrap_or(true)
+        stored.pointer("/craft/prefer_live_bridge").or_else(|| stored.get("craft.prefer_live_bridge")).and_then(Value::as_bool).unwrap_or(true)
     }
 
     pub fn execute(target: CraftTarget, doc: Option<&Path>, command: &str, params: &Value) -> Result<Value> {

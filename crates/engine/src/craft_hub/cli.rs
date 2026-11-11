@@ -298,11 +298,7 @@ pub fn exec_batch(target: CraftTarget, input: Option<&Path>, output: Option<&Pat
         CraftTarget::Pdf => {
             let tmp = ScopedTempDir::new("magic-pdfcraft")?;
             let script_path = tmp.path().join("steps.json");
-            let root_dir = input
-                .or(output)
-                .and_then(Path::parent)
-                .filter(|p| !p.as_os_str().is_empty())
-                .unwrap_or_else(|| Path::new("."));
+            let root_dir = input.or(output).and_then(Path::parent).filter(|p| !p.as_os_str().is_empty()).unwrap_or_else(|| Path::new("."));
             let mut script_steps: Vec<Value> = Vec::with_capacity(steps.len() + 2);
             if let Some(src) = input.filter(|p| p.is_file()) {
                 script_steps.push(json!({"tool": "doc_open", "params": {"path": src}}));
@@ -315,12 +311,7 @@ pub fn exec_batch(target: CraftTarget, input: Option<&Path>, output: Option<&Pat
             }
             let bytes = serde_json::to_vec_pretty(&script_steps).map_err(|e| EngineError::InvalidParams(e.to_string()))?;
             craft_atomic::atomic_write(&script_path, &bytes)?;
-            cmd.arg("run")
-                .arg("--script")
-                .arg(&script_path)
-                .arg("--root")
-                .arg(root_dir)
-                .arg("--report");
+            cmd.arg("run").arg("--script").arg(&script_path).arg("--root").arg(root_dir).arg("--report");
             let out = cmd.output().map_err(|e| EngineError::ExternalTool("pdfcraft-cli".into(), e.to_string()))?;
             let val = parse_cli_value(CraftTarget::Pdf, "run", &out)?;
             if let Some(arr) = val.get("steps").or_else(|| val.get("results")).and_then(Value::as_array) {
@@ -445,10 +436,7 @@ fn parse_batch_output(target: CraftTarget, out: &Output) -> Result<Vec<Value>> {
 }
 
 pub fn render_pdf_pages(doc: &Path, page: Option<usize>, scale: f64, destination: &Path) -> Result<()> {
-    let root_dir = doc
-        .parent()
-        .filter(|p| !p.as_os_str().is_empty())
-        .unwrap_or_else(|| Path::new("."));
+    let root_dir = doc.parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or_else(|| Path::new("."));
     let step = match page {
         Some(index) => ("page_render", json!({"page": index + 1, "scale": scale, "out": destination})),
         None => ("page_render", json!({"scale": scale, "out_dir": destination})),

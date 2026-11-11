@@ -5,9 +5,7 @@
 //! - `draw_history_recovery_window`: non-linear branching Undo History (`edit.history.list` / `goto`)
 //!   and 1-second crash-journal recovery (`file.recover`) across `FilmCraft` and `EffectCraft`.
 
-use egui::{
-    Align, Align2, CornerRadius, Layout, RichText, ScrollArea, Sense, Stroke, StrokeKind, Ui, Vec2,
-};
+use egui::{Align, Align2, CornerRadius, Layout, RichText, ScrollArea, Sense, Stroke, StrokeKind, Ui, Vec2};
 use serde_json::{Value, json};
 
 use crate::controls::pill_toggle;
@@ -17,41 +15,11 @@ use crate::widgets::{BtnSpec, action_button, text_input};
 
 /// Live `FC :9876` (`FILMCRAFT_CONTROL_TOKEN`) & `EC :9877` (`--autosave`) bridge indicators (`T07`).
 pub fn draw_footer_bridge_pills(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
-    let fc_port = ctx
-        .state
-        .cache
-        .bridge_status
-        .pointer("/filmcraft/port")
-        .and_then(Value::as_u64)
-        .unwrap_or(9876);
-    let ec_port = ctx
-        .state
-        .cache
-        .bridge_status
-        .pointer("/effectcraft/port")
-        .and_then(Value::as_u64)
-        .unwrap_or(9877);
-    let fc_live = ctx
-        .state
-        .cache
-        .bridge_status
-        .pointer("/filmcraft/tcp_listening")
-        .and_then(Value::as_bool)
-        .unwrap_or(false);
-    let fc_tok = ctx
-        .state
-        .cache
-        .bridge_status
-        .pointer("/filmcraft/token_ready")
-        .and_then(Value::as_bool)
-        .unwrap_or(true);
-    let ec_live = ctx
-        .state
-        .cache
-        .bridge_status
-        .pointer("/effectcraft/tcp_listening")
-        .and_then(Value::as_bool)
-        .unwrap_or(false);
+    let fc_port = ctx.state.cache.bridge_status.pointer("/filmcraft/port").and_then(Value::as_u64).unwrap_or(9876);
+    let ec_port = ctx.state.cache.bridge_status.pointer("/effectcraft/port").and_then(Value::as_u64).unwrap_or(9877);
+    let fc_live = ctx.state.cache.bridge_status.pointer("/filmcraft/tcp_listening").and_then(Value::as_bool).unwrap_or(false);
+    let fc_tok = ctx.state.cache.bridge_status.pointer("/filmcraft/token_ready").and_then(Value::as_bool).unwrap_or(true);
+    let ec_live = ctx.state.cache.bridge_status.pointer("/effectcraft/tcp_listening").and_then(Value::as_bool).unwrap_or(false);
 
     let fc_lbl = format!("FC :{fc_port}");
     let ec_lbl = format!("EC :{ec_port}");
@@ -75,15 +43,7 @@ pub fn draw_footer_bridge_pills(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     );
 }
 
-fn draw_bridge_chip(
-    ui: &mut Ui,
-    ctx: &mut ViewCtx<'_>,
-    id: &str,
-    label: &str,
-    live: bool,
-    token_ready: bool,
-    tooltip: &str,
-) {
+fn draw_bridge_chip(ui: &mut Ui, ctx: &mut ViewCtx<'_>, id: &str, label: &str, live: bool, token_ready: bool, tooltip: &str) {
     let dot_col = if live {
         ctx.pal.accent_emerald
     } else if token_ready {
@@ -92,46 +52,22 @@ fn draw_bridge_chip(
         ctx.pal.danger
     };
     let font = egui::FontId::monospace(9.5);
-    let galley = ui
-        .painter()
-        .layout_no_wrap(label.to_owned(), font.clone(), ctx.pal.text_secondary);
+    let galley = ui.painter().layout_no_wrap(label.to_owned(), font.clone(), ctx.pal.text_secondary);
     let (rect, resp) = ui.allocate_exact_size(Vec2::new(galley.size().x + 20.0, 18.0), Sense::click());
     let fill = if resp.hovered() { ctx.pal.bg_hover } else { ctx.pal.bg_input };
-    ui.painter().rect(
-        rect,
-        CornerRadius::same(9),
-        fill,
-        Stroke::new(1.0, dot_col.gamma_multiply(0.55)),
-        StrokeKind::Inside,
-    );
-    ui.painter()
-        .circle_filled(egui::pos2(rect.min.x + 7.5, rect.center().y), 2.8, dot_col);
-    ui.painter().text(
-        egui::pos2(rect.min.x + 13.5, rect.center().y),
-        Align2::LEFT_CENTER,
-        label,
-        font,
-        ctx.pal.text_secondary,
-    );
+    ui.painter().rect(rect, CornerRadius::same(9), fill, Stroke::new(1.0, dot_col.gamma_multiply(0.55)), StrokeKind::Inside);
+    ui.painter().circle_filled(egui::pos2(rect.min.x + 7.5, rect.center().y), 2.8, dot_col);
+    ui.painter().text(egui::pos2(rect.min.x + 13.5, rect.center().y), Align2::LEFT_CENTER, label, font, ctx.pal.text_secondary);
     let resp = resp.on_hover_text(tooltip);
     if resp.clicked() {
-        ctx.exec(
-            "bridge.status",
-            json!({"ensure_tokens": true}),
-            Some("Probed FilmCraft (:9876) & EffectCraft (:9877) control bridges"),
-        );
+        ctx.exec("bridge.status", json!({"ensure_tokens": true}), Some("Probed FilmCraft (:9876) & EffectCraft (:9877) control bridges"));
     }
     ctx.reg.record(id, label, &resp, Some(live.to_string()));
 }
 
 /// Options window tab for `T07` (`:9876` / `:9877` live `--control` & `mcp --autosave`) and `T09` (History & Recovery).
 pub fn draw_options_bridge_and_history_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
-    ui.label(
-        RichText::new("FilmCraft (:9876) & EffectCraft (:9877) --control Bridge")
-            .size(15.0)
-            .strong()
-            .color(ctx.pal.accent_emerald),
-    );
+    ui.label(RichText::new("FilmCraft (:9876) & EffectCraft (:9877) --control Bridge").size(15.0).strong().color(ctx.pal.accent_emerald));
     ui.add_space(4.0);
     ui.label(
         RichText::new(
@@ -153,11 +89,7 @@ pub fn draw_options_bridge_and_history_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     )
     .changed()
     {
-        ctx.exec(
-            "prefs.set",
-            json!({"key": "craft.prefer_live_bridge", "value": ctx.state.ai.prefer_live_bridge}),
-            None,
-        );
+        ctx.exec("prefs.set", json!({"key": "craft.prefer_live_bridge", "value": ctx.state.ai.prefer_live_bridge}), None);
     }
     if pill_toggle(
         ui,
@@ -170,64 +102,30 @@ pub fn draw_options_bridge_and_history_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     )
     .changed()
     {
-        ctx.exec(
-            "prefs.set",
-            json!({"key": "craft.effectcraft_mcp_autosave", "value": ctx.state.ai.ec_mcp_autosave}),
-            None,
-        );
+        ctx.exec("prefs.set", json!({"key": "craft.effectcraft_mcp_autosave", "value": ctx.state.ai.ec_mcp_autosave}), None);
     }
 
     ui.add_space(6.0);
     ui.horizontal(|ui| {
         ui.label(RichText::new("FilmCraft Port:").size(11.5));
-        if text_input(
-            ui,
-            ctx.reg,
-            "pref-fc-port",
-            "FilmCraft --control port",
-            &mut ctx.state.ai.fc_port_str,
-            "9876",
-            72.0,
-        )
-        .lost_focus()
+        if text_input(ui, ctx.reg, "pref-fc-port", "FilmCraft --control port", &mut ctx.state.ai.fc_port_str, "9876", 72.0).lost_focus()
             && let Ok(port) = ctx.state.ai.fc_port_str.trim().parse::<u16>()
         {
             ctx.exec("prefs.set", json!({"key": "craft.filmcraft_port", "value": port}), None);
         }
-        if action_button(
-            ui,
-            ctx.reg,
-            ctx.pal,
-            BtnSpec::new("opt-launch-fc", "film", "Launch FilmCraft :9876", "Spawn filmcraft --control 9876"),
-        )
-        .clicked()
-        {
+        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("opt-launch-fc", "film", "Launch FilmCraft :9876", "Spawn filmcraft --control 9876")).clicked() {
             ctx.exec("bridge.control", json!({"app": "filmcraft", "action": "launch"}), Some("Launched FilmCraft --control"));
         }
     });
     ui.horizontal(|ui| {
         ui.label(RichText::new("EffectCraft Port:").size(11.5));
-        if text_input(
-            ui,
-            ctx.reg,
-            "pref-ec-port",
-            "EffectCraft --control port",
-            &mut ctx.state.ai.ec_port_str,
-            "9877",
-            72.0,
-        )
-        .lost_focus()
+        if text_input(ui, ctx.reg, "pref-ec-port", "EffectCraft --control port", &mut ctx.state.ai.ec_port_str, "9877", 72.0).lost_focus()
             && let Ok(port) = ctx.state.ai.ec_port_str.trim().parse::<u16>()
         {
             ctx.exec("prefs.set", json!({"key": "craft.effectcraft_port", "value": port}), None);
         }
-        if action_button(
-            ui,
-            ctx.reg,
-            ctx.pal,
-            BtnSpec::new("opt-launch-ec", "sparkles", "Launch EffectCraft :9877", "Spawn effectcraft --control 9877"),
-        )
-        .clicked()
+        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("opt-launch-ec", "sparkles", "Launch EffectCraft :9877", "Spawn effectcraft --control 9877"))
+            .clicked()
         {
             ctx.exec("bridge.control", json!({"app": "effectcraft", "action": "launch"}), Some("Launched EffectCraft --control"));
         }
@@ -284,13 +182,8 @@ pub fn draw_history_recovery_window(egui_ctx: &egui::Context, ctx: &mut ViewCtx<
         .anchor(Align2::LEFT_TOP, egui::vec2(18.0, 42.0))
         .show(egui_ctx, |ui| {
             ui.horizontal(|ui| {
-                if action_button(
-                    ui,
-                    ctx.reg,
-                    ctx.pal,
-                    BtnSpec::new("history-refresh", "refresh", "Refresh", "Query edit.history.list & crash journals"),
-                )
-                .clicked()
+                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("history-refresh", "refresh", "Refresh", "Query edit.history.list & crash journals"))
+                    .clicked()
                 {
                     ctx.exec("bridge.history", json!({"op": "list"}), None);
                 }
@@ -302,11 +195,7 @@ pub fn draw_history_recovery_window(egui_ctx: &egui::Context, ctx: &mut ViewCtx<
                 )
                 .clicked()
                 {
-                    ctx.exec(
-                        "bridge.history",
-                        json!({"op": "recover_filmcraft", "app": "filmcraft"}),
-                        Some("Recovered FilmCraft crash journal"),
-                    );
+                    ctx.exec("bridge.history", json!({"op": "recover_filmcraft", "app": "filmcraft"}), Some("Recovered FilmCraft crash journal"));
                 }
                 if action_button(
                     ui,
@@ -316,29 +205,14 @@ pub fn draw_history_recovery_window(egui_ctx: &egui::Context, ctx: &mut ViewCtx<
                 )
                 .clicked()
                 {
-                    ctx.exec(
-                        "bridge.history",
-                        json!({"op": "recover_effectcraft", "app": "effectcraft"}),
-                        Some("Recovered EffectCraft crash journal"),
-                    );
+                    ctx.exec("bridge.history", json!({"op": "recover_effectcraft", "app": "effectcraft"}), Some("Recovered EffectCraft crash journal"));
                 }
             });
 
-            let journals = ctx
-                .state
-                .cache
-                .bridge_history
-                .get("recovery_journals")
-                .and_then(Value::as_array)
-                .cloned()
-                .unwrap_or_default();
+            let journals = ctx.state.cache.bridge_history.get("recovery_journals").and_then(Value::as_array).cloned().unwrap_or_default();
             if !journals.is_empty() {
                 ui.add_space(4.0);
-                ui.label(
-                    RichText::new(format!("Rolling backups / crash journals in .history/: {}", journals.len()))
-                        .size(11.0)
-                        .color(ctx.pal.accent_amber),
-                );
+                ui.label(RichText::new(format!("Rolling backups / crash journals in .history/: {}", journals.len())).size(11.0).color(ctx.pal.accent_amber));
             }
 
             ui.separator();
@@ -376,11 +250,7 @@ pub fn draw_history_recovery_window(egui_ctx: &egui::Context, ctx: &mut ViewCtx<
                     ui.horizontal(|ui| {
                         ui.label(RichText::new(format!("FC #{idx}")).monospace().size(10.0).color(ctx.pal.accent_emerald));
                         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&btn_id, lbl, "Jump FilmCraft history")).clicked() {
-                            ctx.exec(
-                                "bridge.history",
-                                json!({"op": "goto", "app": "filmcraft", "index": idx}),
-                                Some("Jumped FilmCraft undo state"),
-                            );
+                            ctx.exec("bridge.history", json!({"op": "goto", "app": "filmcraft", "index": idx}), Some("Jumped FilmCraft undo state"));
                         }
                     });
                 }
@@ -389,18 +259,9 @@ pub fn draw_history_recovery_window(egui_ctx: &egui::Context, ctx: &mut ViewCtx<
                     let depth = item["branch"].as_u64().or_else(|| item["depth"].as_u64()).unwrap_or(0);
                     let btn_id = format!("history-goto-ec-{idx}");
                     ui.horizontal(|ui| {
-                        ui.label(
-                            RichText::new(format!("EC #{idx} b{depth}"))
-                                .monospace()
-                                .size(10.0)
-                                .color(ctx.pal.accent_sky),
-                        );
+                        ui.label(RichText::new(format!("EC #{idx} b{depth}")).monospace().size(10.0).color(ctx.pal.accent_sky));
                         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&btn_id, lbl, "Jump EffectCraft branching history")).clicked() {
-                            ctx.exec(
-                                "bridge.history",
-                                json!({"op": "goto", "app": "effectcraft", "index": idx}),
-                                Some("Jumped EffectCraft undo branch"),
-                            );
+                            ctx.exec("bridge.history", json!({"op": "goto", "app": "effectcraft", "index": idx}), Some("Jumped EffectCraft undo branch"));
                         }
                     });
                 }
@@ -521,18 +382,15 @@ pub fn draw_toast_if_active(egui_ctx: &egui::Context, ctx: &mut ViewCtx<'_>) {
     if ctx.state.toast_message.is_empty() || now > ctx.state.toast_until {
         return;
     }
-    egui::Area::new(egui::Id::unique("app-toast"))
-        .anchor(Align2::RIGHT_BOTTOM, egui::vec2(-16.0, -48.0))
-        .order(egui::Order::Foreground)
-        .show(egui_ctx, |ui| {
-            let resp = egui::Frame::new()
-                .fill(ctx.pal.bg_elevated)
-                .corner_radius(CornerRadius::same(8))
-                .inner_margin(egui::Margin::symmetric(12, 8))
-                .stroke(Stroke::new(1.0, ctx.pal.accent_emerald))
-                .show(ui, |ui| {
-                    ui.label(RichText::new(&ctx.state.toast_message).color(ctx.pal.text_primary));
-                });
-            ctx.reg.record("app-toast", &ctx.state.toast_message, &resp.response, None);
-        });
+    egui::Area::new(egui::Id::unique("app-toast")).anchor(Align2::RIGHT_BOTTOM, egui::vec2(-16.0, -48.0)).order(egui::Order::Foreground).show(egui_ctx, |ui| {
+        let resp = egui::Frame::new()
+            .fill(ctx.pal.bg_elevated)
+            .corner_radius(CornerRadius::same(8))
+            .inner_margin(egui::Margin::symmetric(12, 8))
+            .stroke(Stroke::new(1.0, ctx.pal.accent_emerald))
+            .show(ui, |ui| {
+                ui.label(RichText::new(&ctx.state.toast_message).color(ctx.pal.text_primary));
+            });
+        ctx.reg.record("app-toast", &ctx.state.toast_message, &resp.response, None);
+    });
 }

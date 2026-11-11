@@ -272,9 +272,7 @@ pub fn run_controls(target: &mut Target, args: ControlsArgs) -> Result<(), Strin
         .iter()
         .filter(|c| {
             (q.is_empty() || c.id.to_ascii_lowercase().contains(&q) || c.label.to_ascii_lowercase().contains(&q))
-                && (stage_q.is_empty()
-                    || c.id.to_ascii_lowercase().starts_with(&stage_q)
-                    || c.menu.iter().any(|m| m.to_ascii_lowercase().contains(&stage_q)))
+                && (stage_q.is_empty() || c.id.to_ascii_lowercase().starts_with(&stage_q) || c.menu.iter().any(|m| m.to_ascii_lowercase().contains(&stage_q)))
         })
         .map(magic::commands::CommandSpec::describe)
         .collect();
@@ -283,11 +281,7 @@ pub fn run_controls(target: &mut Target, args: ControlsArgs) -> Result<(), Strin
         .filter(|(m, d)| q.is_empty() || m.to_ascii_lowercase().contains(&q) || d.to_ascii_lowercase().contains(&q))
         .map(|(m, d)| json!({"method": m, "description": d}))
         .collect();
-    let live_elements = if args.live && target.connect.is_some() {
-        target.call("ui.elements", json!({})).ok()
-    } else {
-        None
-    };
+    let live_elements = if args.live && target.connect.is_some() { target.call("ui.elements", json!({})).ok() } else { None };
     emit(&json!({
         "ok": true,
         "default_ports": {
@@ -348,10 +342,7 @@ pub fn run_bridge(target: &mut Target, cmd: BridgeCmd) -> Result<(), String> {
             }
             target.run("bridge.templates", p)
         }
-        BridgeCmd::Open { app, path, port } => target.run(
-            "bridge.control",
-            json!({"app": app, "action": "launch", "path": path, "port": port}),
-        ),
+        BridgeCmd::Open { app, path, port } => target.run("bridge.control", json!({"app": app, "action": "launch", "path": path, "port": port})),
         BridgeCmd::Close => target.run("workspace.close_opened", json!({})),
         BridgeCmd::Fc { command_or_method, port, params, arguments } => {
             forward_sibling(target, "filmcraft", &command_or_method, port, params.as_deref(), &arguments)
@@ -381,11 +372,7 @@ fn forward_sibling(
 }
 
 pub fn run_interchange(target: &mut Target, args: InterchangeArgs) -> Result<(), String> {
-    let direction = if args.direction == "import" || args.target == "effect_to_film" {
-        "effect_to_film"
-    } else {
-        "film_to_effect"
-    };
+    let direction = if args.direction == "import" || args.target == "effect_to_film" { "effect_to_film" } else { "film_to_effect" };
     target.run(
         "video.markers",
         json!({

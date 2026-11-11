@@ -65,10 +65,6 @@ pub(crate) fn bad(message: impl Into<String>) -> EngineError {
     EngineError::InvalidParams(message.into())
 }
 
-pub(crate) fn path_arg(path: &Path) -> String {
-    path.to_string_lossy().into_owned()
-}
-
 fn matches_character_name(folder_name: &str, id: &str) -> bool {
     let sanitized = crate::workspace::sanitize_asset_id(folder_name);
     folder_name.eq_ignore_ascii_case(id) || sanitized == id || id.starts_with(&format!("{sanitized}_"))
@@ -97,11 +93,10 @@ pub(crate) fn discover_character_folders(project_dir: &Path) -> Vec<(String, Opt
             || entry.join("rig").is_dir()
             || entry.join("parts.json").is_file()
             || entry.join("character.magic").is_file()
-            || std::fs::read_dir(&entry)
-                .into_iter()
-                .flatten()
-                .flatten()
-                .any(|f| f.path().is_file() && crate::workspace::has_extension(&f.path(), &["pcraft", "psd", "ecproj", "vectorcraft", "svg", "anicraft", "png", "webp", "jpg", "jpeg"]));
+            || std::fs::read_dir(&entry).into_iter().flatten().flatten().any(|f| {
+                f.path().is_file()
+                    && crate::workspace::has_extension(&f.path(), &["pcraft", "psd", "ecproj", "vectorcraft", "svg", "anicraft", "png", "webp", "jpg", "jpeg"])
+            });
         if direct_has_craft {
             out.push((name.to_owned(), None, entry));
             continue;
@@ -118,10 +113,7 @@ pub(crate) fn discover_character_folders(project_dir: &Path) -> Vec<(String, Opt
         }
     }
 
-    for anim_chars_root in [
-        project_dir.join("animations/characters"),
-        project_dir.join("assets/animations/characters"),
-    ] {
+    for anim_chars_root in [project_dir.join("animations/characters"), project_dir.join("assets/animations/characters")] {
         let mut anim_entries: Vec<PathBuf> =
             std::fs::read_dir(&anim_chars_root).into_iter().flatten().flatten().map(|e| e.path()).filter(|p| p.is_dir()).collect();
         anim_entries.sort();

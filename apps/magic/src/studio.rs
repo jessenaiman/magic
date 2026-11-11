@@ -17,11 +17,8 @@ fn optional_port(params: &Value, method_name: &str) -> Result<Option<u16>, Strin
     if raw.is_null() {
         return Ok(None);
     }
-    let port = raw
-        .as_u64()
-        .and_then(|n| u16::try_from(n).ok())
-        .filter(|&n| n > 0)
-        .ok_or_else(|| format!("{method_name}: port must be an integer from 1 to 65535"))?;
+    let port =
+        raw.as_u64().and_then(|n| u16::try_from(n).ok()).filter(|&n| n > 0).ok_or_else(|| format!("{method_name}: port must be an integer from 1 to 65535"))?;
     Ok(Some(port))
 }
 
@@ -42,10 +39,8 @@ fn forward_target(target: CraftTarget, caller: &str, params: &Value, workspace_d
             "focus" => CraftHub::live_control(target, port, "ui.focus", &json!({})).map_err(|e| format!("{}: {e}", target.name())),
             "close" => CraftHub::close_opened_apps().map_err(|e| e.to_string()),
             "status" => {
-                let addr = port.map_or_else(
-                    || CraftHub::control_addr(target).map_err(|e| e.to_string()),
-                    |p| Ok(std::net::SocketAddr::from(([127, 0, 0, 1], p))),
-                )?;
+                let addr =
+                    port.map_or_else(|| CraftHub::control_addr(target).map_err(|e| e.to_string()), |p| Ok(std::net::SocketAddr::from(([127, 0, 0, 1], p))))?;
                 let listening = magic::craft_hub::control::is_listening(addr);
                 Ok(json!({
                     "ok": true,
@@ -64,10 +59,7 @@ fn forward_target(target: CraftTarget, caller: &str, params: &Value, workspace_d
     if let Some(cmd) = params.get("command").and_then(Value::as_str).filter(|s| !s.trim().is_empty()) {
         return CraftHub::live_execute(target, port, cmd, &inner).map_err(|e| format!("{}: {e}", target.name()));
     }
-    let method = params["method"]
-        .as_str()
-        .filter(|s| !s.trim().is_empty())
-        .ok_or_else(|| format!("{caller} requires `method`, `command`, or `action`"))?;
+    let method = params["method"].as_str().filter(|s| !s.trim().is_empty()).ok_or_else(|| format!("{caller} requires `method`, `command`, or `action`"))?;
     CraftHub::live_control(target, port, method, &inner).map_err(|e| format!("{}: {e}", target.name()))
 }
 

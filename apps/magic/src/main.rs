@@ -31,9 +31,7 @@ use craft_keymap::CommandRef;
 use craft_keymap::egui::Dispatcher;
 use egui::{Event, ViewportCommand};
 use magic::{AutomationRoots, Session};
-use magic_ui_egui::{
-    ActiveModal, AutomationRegistry, MagicPalette, UiAction, UiShellState, ViewCtx, ViewMode,
-};
+use magic_ui_egui::{ActiveModal, AutomationRegistry, MagicPalette, UiAction, UiShellState, ViewCtx, ViewMode};
 use rpc::{ControlEnvelope, DeferredReply};
 use serde_json::{Value, json};
 
@@ -114,11 +112,7 @@ fn install_macos_menu(ctx: &egui::Context, initial: &UiShellState) -> Option<Mac
         sync_frame: Box::<dyn FnMut(&egui::Context, &UiShellState, bool, &dyn Fn(&str) -> bool) -> Vec<CommandRef>>::from(Box::new(
             move |egui_ctx, state, modal, is_enabled| {
                 let mut menu = frame_ref.borrow_mut();
-                menu.set_gate(Gate {
-                    modal,
-                    recording_shortcut: false,
-                    text_editing: egui_ctx.egui_wants_keyboard_input(),
-                });
+                menu.set_gate(Gate { modal, recording_shortcut: false, text_editing: egui_ctx.egui_wants_keyboard_input() });
                 let clicks = menu.take_clicks(egui_ctx);
                 let hash = egui_ctx.cumulative_frame_nr();
                 let _ = menu.sync_with(hash, || {
@@ -166,26 +160,12 @@ impl MagicDesktopApp {
         control_rx: Option<mpsc::Receiver<ControlEnvelope>>,
     ) -> Self {
         magic_ui_egui::install_loaders(&cc.egui_ctx);
-        let mut ui_state = UiShellState {
-            view: initial_view,
-            ..UiShellState::default()
-        };
+        let mut ui_state = UiShellState { view: initial_view, ..UiShellState::default() };
         diagnostics::hydrate_prefs_and_ai(&mut session, &mut ui_state);
-        MagicPalette::resolve(
-            ui_state.theme_mode,
-            ui_state.interface_style,
-            ui_state.accent_choice,
-            ui_state.high_contrast,
-            None,
-        )
-        .apply(&cc.egui_ctx);
+        MagicPalette::resolve(ui_state.theme_mode, ui_state.interface_style, ui_state.accent_choice, ui_state.high_contrast, None).apply(&cc.egui_ctx);
 
         #[cfg(target_os = "macos")]
-        let native_menu = if in_window_menus {
-            None
-        } else {
-            install_macos_menu(&cc.egui_ctx, &ui_state)
-        };
+        let native_menu = if in_window_menus { None } else { install_macos_menu(&cc.egui_ctx, &ui_state) };
         #[cfg(target_os = "macos")]
         let use_in_window = in_window_menus || native_menu.is_none();
         #[cfg(not(target_os = "macos"))]
@@ -387,10 +367,7 @@ impl MagicDesktopApp {
                 self.ui_state.window_snapped_right = !self.ui_state.window_snapped_right;
                 let x = if self.ui_state.window_snapped_right { 640.0 } else { 0.0 };
                 ctx.send_viewport_cmd(ViewportCommand::OuterPosition(egui::pos2(x, 0.0)));
-                self.ui_state.set_toast(
-                    now,
-                    if self.ui_state.window_snapped_right { "Snapped window right" } else { "Snapped window left" },
-                );
+                self.ui_state.set_toast(now, if self.ui_state.window_snapped_right { "Snapped window right" } else { "Snapped window left" });
             }
             UiAction::OpenPreferences => {
                 let _ = self.execute_engine(ctx, "ai.status", json!({}));
@@ -514,11 +491,8 @@ impl MagicDesktopApp {
                     && !matches!(ext.as_str(), "ecproj" | "pcraft" | "psd" | "vectorcraft" | "anicraft")
                 {
                     let asset_path = val["path"].as_str().map(PathBuf::from).unwrap_or(path);
-                    let _ = self.execute_engine(
-                        ctx,
-                        "effect.exec",
-                        json!({"path": ec_doc, "id": "file.import", "params": {"paths": [asset_path]}, "save": true}),
-                    );
+                    let _ =
+                        self.execute_engine(ctx, "effect.exec", json!({"path": ec_doc, "id": "file.import", "params": {"paths": [asset_path]}, "save": true}));
                 }
             }
         }
@@ -643,19 +617,10 @@ impl eframe::App for MagicDesktopApp {
         let mut emitted = Vec::new();
         {
             let session_ref = &self.session;
-            let mut view_ctx = ViewCtx {
-                state: &mut self.ui_state,
-                reg: &mut self.registry,
-                pal: &palette,
-                actions: &mut emitted,
-            };
-            magic_ui_egui::shell::draw_workstation(
-                ui,
-                &mut view_ctx,
-                keymap::catalog_keymap(),
-                self.in_window_menus,
-                |cid| magic::find_command(cid).is_some_and(|spec| (spec.enabled)(session_ref).is_ok()),
-            );
+            let mut view_ctx = ViewCtx { state: &mut self.ui_state, reg: &mut self.registry, pal: &palette, actions: &mut emitted };
+            magic_ui_egui::shell::draw_workstation(ui, &mut view_ctx, keymap::catalog_keymap(), self.in_window_menus, |cid| {
+                magic::find_command(cid).is_some_and(|spec| (spec.enabled)(session_ref).is_ok())
+            });
         }
         for action in emitted {
             self.handle_ui_action(&egui_ctx, action);
@@ -682,11 +647,7 @@ impl eframe::App for MagicDesktopApp {
 fn load_app_icon() -> Option<Arc<egui::IconData>> {
     let decoded = image::load_from_memory(APP_ICON_PNG).ok()?.into_rgba8();
     let (width, height) = decoded.dimensions();
-    Some(Arc::new(egui::IconData {
-        rgba: decoded.into_raw(),
-        width,
-        height,
-    }))
+    Some(Arc::new(egui::IconData { rgba: decoded.into_raw(), width, height }))
 }
 
 fn diag(message: std::fmt::Arguments) {
@@ -704,20 +665,13 @@ fn start_control_bridge(
         token,
         Arc::new(move |method, params| {
             let (reply_tx, reply_rx) = mpsc::channel();
-            tx.send(ControlEnvelope {
-                method: method.to_owned(),
-                params,
-                reply: reply_tx,
-            })
-            .map_err(|_| "Magic desktop event loop has exited".to_string())?;
+            tx.send(ControlEnvelope { method: method.to_owned(), params, reply: reply_tx }).map_err(|_| "Magic desktop event loop has exited".to_string())?;
             if let Ok(guard) = wake_slot.lock()
                 && let Some(ctx) = guard.as_ref()
             {
                 ctx.request_repaint();
             }
-            reply_rx
-                .recv_timeout(CONTROL_REPLY_TIMEOUT)
-                .map_err(|_| "UI did not respond within 60 seconds".to_string())?
+            reply_rx.recv_timeout(CONTROL_REPLY_TIMEOUT).map_err(|_| "UI did not respond within 60 seconds".to_string())?
         }),
     )?;
     Ok((addr, rx))
@@ -752,11 +706,7 @@ fn main() {
             std::process::exit(2);
         }
     };
-    let token = if cli.control.is_some() {
-        magic::workspace::ensure_control_token().unwrap_or_default()
-    } else {
-        String::new()
-    };
+    let token = if cli.control.is_some() { magic::workspace::ensure_control_token().unwrap_or_default() } else { String::new() };
     if cli.control.is_some() && (token.len() != 64 || !token.bytes().all(|b| b.is_ascii_hexdigit())) {
         diag(format_args!("MAGIC_CONTROL_TOKEN must contain 64 hexadecimal characters"));
         std::process::exit(2);
@@ -823,14 +773,7 @@ fn main() {
             if let Ok(mut slot) = wake_ctx.lock() {
                 *slot = Some(cc.egui_ctx.clone());
             }
-            Ok(Box::new(MagicDesktopApp::new(
-                cc,
-                session,
-                initial_view,
-                in_window_menus,
-                control_input_only,
-                control_rx,
-            )))
+            Ok(Box::new(MagicDesktopApp::new(cc, session, initial_view, in_window_menus, control_input_only, control_rx)))
         }),
     );
     if let Err(error) = run_res {

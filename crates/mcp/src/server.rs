@@ -190,10 +190,7 @@ fn output(result: Result<Value, String>) -> CallToolResult {
 
 impl Server {
     pub fn new(backend: impl Backend + Send + 'static) -> Self {
-        Self {
-            backend: Arc::new(Mutex::new(Box::new(backend))),
-            tool_router: Self::tool_router(),
-        }
+        Self { backend: Arc::new(Mutex::new(Box::new(backend))), tool_router: Self::tool_router() }
     }
 
     pub fn serve(&mut self) -> Result<(), String> {
@@ -227,13 +224,7 @@ impl Server {
             let filtered: Vec<Value> = commands
                 .into_iter()
                 .filter(|c| !p.enabled_only.unwrap_or(false) || c["enabled"] == true)
-                .map(|c| {
-                    if p.compact.unwrap_or(false) {
-                        json!({"id": c["id"], "label": c["label"]})
-                    } else {
-                        c
-                    }
-                })
+                .map(|c| if p.compact.unwrap_or(false) { json!({"id": c["id"], "label": c["label"]}) } else { c })
                 .collect();
             json!(filtered)
         }))
@@ -273,11 +264,7 @@ impl Server {
             }
         }
         let value = json!({"completed": completed, "failed": failed, "results": results});
-        if failed > 0 {
-            CallToolResult::error(vec![Content::text(value.to_string())])
-        } else {
-            output(Ok(value))
-        }
+        if failed > 0 { CallToolResult::error(vec![Content::text(value.to_string())]) } else { output(Ok(value)) }
     }
 
     async fn exec_doc_inspect(&self, target: Option<&str>) -> CallToolResult {
@@ -343,7 +330,9 @@ impl Server {
         self.exec_batch(p).await
     }
 
-    #[tool(description = "Inspect open `.magic` project, storyboard, FilmCraft timeline, or `:9876`/`:9877` bridge (`all|project|storyboard|timeline|bridge|preflight|history`).")]
+    #[tool(
+        description = "Inspect open `.magic` project, storyboard, FilmCraft timeline, or `:9876`/`:9877` bridge (`all|project|storyboard|timeline|bridge|preflight|history`)."
+    )]
     async fn inspect_document(&self, Parameters(p): Parameters<DocInspectParams>) -> CallToolResult {
         self.exec_doc_inspect(p.target.as_deref()).await
     }
@@ -458,7 +447,9 @@ impl Server {
         output(self.run("ui.type", compact(json!(p))).await)
     }
 
-    #[tool(description = "Capture a PNG (`{window: true, path?, panel?, id?}` for the live eframe window, or `{window: false, page?}` for a headless DesignCraft storyboard spread).")]
+    #[tool(
+        description = "Capture a PNG (`{window: true, path?, panel?, id?}` for the live eframe window, or `{window: false, page?}` for a headless DesignCraft storyboard spread)."
+    )]
     async fn screenshot(&self, Parameters(p): Parameters<ShotParams>) -> CallToolResult {
         if p.window == Some(false) {
             return output(self.run("storyboard.thumbnail", json!({"page": p.page.unwrap_or(0), "scale": 1.0})).await);
@@ -466,7 +457,9 @@ impl Server {
         output(self.run("ui.screenshot", compact(json!({"path": p.path, "panel": p.panel, "id": p.id}))).await)
     }
 
-    #[tool(description = "Call a live shell control method (`ui.set`, `ui.viewer.locate`, `ui.viewer.hit`, `ui.timeline.locate`, `ui.timeline.hit`, `ui.menu.list`, `ui.menu.invoke`, `ui.playback`, `ui.focus`, `ui.effectcraft`, `ui.filmcraft`, `render.frame`, `perf.stats`, `app.quit`). Requires `--connect`.")]
+    #[tool(
+        description = "Call a live shell control method (`ui.set`, `ui.viewer.locate`, `ui.viewer.hit`, `ui.timeline.locate`, `ui.timeline.hit`, `ui.menu.list`, `ui.menu.invoke`, `ui.playback`, `ui.focus`, `ui.effectcraft`, `ui.filmcraft`, `render.frame`, `perf.stats`, `app.quit`). Requires `--connect`."
+    )]
     async fn ui_control(&self, Parameters(p): Parameters<ControlParams>) -> CallToolResult {
         if !is_live_shell_method(&p.method) {
             return output(Err("Use run_command / command_run for engine commands".into()));

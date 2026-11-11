@@ -15,9 +15,7 @@ fn encode_png(rgba: &[u8], width: u32, height: u32) -> Result<Vec<u8>, String> {
         return Err("Clipboard image has invalid dimensions or pixel data".into());
     }
     let mut png = Vec::new();
-    PngEncoder::new(&mut png)
-        .write_image(rgba, width, height, ColorType::Rgba8.into())
-        .map_err(|e| format!("Could not encode clipboard image: {e}"))?;
+    PngEncoder::new(&mut png).write_image(rgba, width, height, ColorType::Rgba8.into()).map_err(|e| format!("Could not encode clipboard image: {e}"))?;
     Ok(png)
 }
 
@@ -37,11 +35,7 @@ impl TempImage {
         static NEXT: AtomicU64 = AtomicU64::new(0);
         let parent = project.parent().ok_or("Project has no parent directory")?;
         let parent = parent.canonicalize().map_err(|e| format!("Cannot resolve project directory: {e}"))?;
-        let candidates = [
-            Some(std::env::temp_dir()),
-            std::env::var_os("HOME").map(PathBuf::from),
-            std::env::current_dir().ok(),
-        ];
+        let candidates = [Some(std::env::temp_dir()), std::env::var_os("HOME").map(PathBuf::from), std::env::current_dir().ok()];
         for base in candidates.into_iter().flatten() {
             let Ok(base) = base.canonicalize() else { continue };
             if base.starts_with(&parent) {
@@ -57,10 +51,7 @@ impl TempImage {
                 }
                 match builder.create(&dir) {
                     Ok(()) => {
-                        let temporary = Self {
-                            path: dir.join("clipboard.png"),
-                            dir,
-                        };
+                        let temporary = Self { path: dir.join("clipboard.png"), dir };
                         let mut file = std::fs::OpenOptions::new()
                             .write(true)
                             .create_new(true)
@@ -79,11 +70,7 @@ impl TempImage {
 }
 
 fn artwork_bytes_from_clipboard_text(text: &str) -> Result<Vec<u8>, String> {
-    let raw = text
-        .lines()
-        .map(str::trim)
-        .find(|line| !line.is_empty() && !line.starts_with('#'))
-        .ok_or("Clipboard text is empty")?;
+    let raw = text.lines().map(str::trim).find(|line| !line.is_empty() && !line.starts_with('#')).ok_or("Clipboard text is empty")?;
     let path_str = raw.strip_prefix("file://").unwrap_or(raw);
     let path = Path::new(path_str);
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or_default().to_ascii_lowercase();
@@ -100,12 +87,7 @@ pub fn import_image(session: &mut Session, params: &Value) -> Result<Value, Stri
     if project.to_str() != Some(expected) {
         return Err("The active project changed; clipboard import was not run".into());
     }
-    let name = params
-        .get("name")
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|n| !n.is_empty())
-        .unwrap_or("Clipboard artwork");
+    let name = params.get("name").and_then(Value::as_str).map(str::trim).filter(|n| !n.is_empty()).unwrap_or("Clipboard artwork");
     let mut clipboard = arboard::Clipboard::new().map_err(|e| format!("Cannot open system clipboard: {e}"))?;
     let png = match clipboard.get_image() {
         Ok(img) => {
@@ -114,16 +96,10 @@ pub fn import_image(session: &mut Session, params: &Value) -> Result<Value, Stri
             encode_png(img.bytes.as_ref(), w, h)?
         }
         Err(image_err) => match clipboard.get_text() {
-            Ok(text) => artwork_bytes_from_clipboard_text(&text)
-                .map_err(|_| format!("Cannot read an image from the clipboard: {image_err}"))?,
+            Ok(text) => artwork_bytes_from_clipboard_text(&text).map_err(|_| format!("Cannot read an image from the clipboard: {image_err}"))?,
             Err(_) => return Err(format!("Cannot read an image from the clipboard: {image_err}")),
         },
     };
     let temp = TempImage::create(project, &png)?;
-    session
-        .execute(
-            "project.add_asset",
-            json!({"path": temp.path, "kind": "image", "name": name, "image": name}),
-        )
-        .map_err(|e| e.to_string())
+    session.execute("project.add_asset", json!({"path": temp.path, "kind": "image", "name": name, "image": name})).map_err(|e| e.to_string())
 }

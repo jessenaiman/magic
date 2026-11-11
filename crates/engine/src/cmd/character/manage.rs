@@ -21,8 +21,7 @@ fn rendered_pngs(dir: &Path) -> Result<Vec<PathBuf>> {
 fn collect_view_frames(dir: &Path) -> Vec<PathBuf> {
     let frames_root = dir.join("frames");
     let mut out = rendered_pngs(&frames_root).unwrap_or_default();
-    let mut subdirs: Vec<PathBuf> =
-        std::fs::read_dir(&frames_root).into_iter().flatten().flatten().map(|e| e.path()).filter(|p| p.is_dir()).collect();
+    let mut subdirs: Vec<PathBuf> = std::fs::read_dir(&frames_root).into_iter().flatten().flatten().map(|e| e.path()).filter(|p| p.is_dir()).collect();
     subdirs.sort();
     for sub in subdirs {
         out.extend(rendered_pngs(&sub).unwrap_or_default());
@@ -67,15 +66,8 @@ fn discover_character_action_ecprojs(project_dir: &Path, folder: &Path, raw_id: 
     let mut ecprojs = Vec::new();
     collect_ecprojs_in_dir(folder, 2, &mut ecprojs);
 
-    let proj_slug = project_dir
-        .file_name()
-        .and_then(|n| n.to_str())
-        .map(crate::workspace::sanitize_asset_id)
-        .unwrap_or_default();
-    let mut anim_roots = vec![
-        project_dir.join("animations"),
-        project_dir.join("assets/animations"),
-    ];
+    let proj_slug = project_dir.file_name().and_then(|n| n.to_str()).map(crate::workspace::sanitize_asset_id).unwrap_or_default();
+    let mut anim_roots = vec![project_dir.join("animations"), project_dir.join("assets/animations")];
     if let Some(parent) = project_dir.parent() {
         anim_roots.push(parent.join("animations"));
     }
@@ -171,17 +163,10 @@ fn build_view_summary(dir: &Path, canonical_id: &str, raw_id: &str, view_name: &
         .or_else(|| is_flat.then(|| find_initial_cutout(dir)).flatten());
     let rendered_frames = collect_view_frames(dir);
     let extracted_craft_png = if rendered_frames.is_empty() && drawing.is_none() {
-        photo_doc
-            .as_deref()
-            .or(vector_doc.as_deref())
-            .and_then(|doc_path| {
-                let out = dir.join(".preview").join(format!("{canonical_id}-{view_name}-craft.png"));
-                if out.is_file() || craft_util::media::extract_craft_preview(doc_path, &out).unwrap_or(false) {
-                    out.is_file().then_some(out)
-                } else {
-                    None
-                }
-            })
+        photo_doc.as_deref().or(vector_doc.as_deref()).and_then(|doc_path| {
+            let out = dir.join(".preview").join(format!("{canonical_id}-{view_name}-craft.png"));
+            if out.is_file() || craft_util::media::extract_craft_preview(doc_path, &out).unwrap_or(false) { out.is_file().then_some(out) } else { None }
+        })
     } else {
         None
     };
@@ -540,10 +525,7 @@ fn animation_documents(s: &Session) -> Result<Vec<Value>> {
     for folder in ["motion", "lettering", "animations", "assets/animations"] {
         collect_ecprojs_in_dir(&root.join(folder), 3, &mut paths);
     }
-    Ok(paths
-        .iter()
-        .map(|path| json!({"name": path.file_stem().map(|n| n.to_string_lossy().into_owned()), "path": path}))
-        .collect())
+    Ok(paths.iter().map(|path| json!({"name": path.file_stem().map(|n| n.to_string_lossy().into_owned()), "path": path})).collect())
 }
 
 pub fn cmd_animation_view(s: &mut Session, p: &Value) -> Result<Value> {
@@ -764,11 +746,9 @@ pub fn cmd_character_open(s: &mut Session, p: &Value) -> Result<Value> {
             ("effectcraft", crate::CraftTarget::Effect, chosen)
         }
         "photocraft" => ("photocraft", crate::CraftTarget::Photo, view.require_photo_doc("character.cut")?),
-        "vectorcraft" => (
-            "vectorcraft",
-            crate::CraftTarget::Vector,
-            view.vector_doc().ok_or_else(|| bad("no VectorCraft .vectorcraft or .svg found for this character"))?,
-        ),
+        "vectorcraft" => {
+            ("vectorcraft", crate::CraftTarget::Vector, view.vector_doc().ok_or_else(|| bad("no VectorCraft .vectorcraft or .svg found for this character"))?)
+        }
         "anicraft" => {
             return Err(bad(
                 "AniCraft desktop UI is disabled for safety while in early alpha; run headless `anicraft.exec` or `character.sprite` and inspect inside EffectCraft (`app=\"effectcraft\"`).",

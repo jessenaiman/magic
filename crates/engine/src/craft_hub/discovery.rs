@@ -26,7 +26,7 @@ pub fn control_addr(target: CraftTarget) -> Result<SocketAddr> {
     let stored = crate::project_settings::stored_settings();
     let cfg_port = stored
         .pointer(&format!("/craft/{}_port", target.name()))
-        .or_else(|| stored.get(&format!("craft.{}_port", target.name())))
+        .or_else(|| stored.get(format!("craft.{}_port", target.name())))
         .and_then(Value::as_u64)
         .and_then(|n| u16::try_from(n).ok());
     Ok(craft_util::discovery::control_addr(target, cfg_port))
@@ -42,12 +42,8 @@ pub fn scrubbed_command(bin: &Path, target: CraftTarget, port: Option<u16>) -> C
     let mut cmd = craft_util::discovery::scrubbed_command(bin, target, port);
     if target == CraftTarget::Effect {
         let stored = crate::project_settings::stored_settings();
-        let cfg_dirs = stored
-            .pointer("/lyrics/font_dirs")
-            .or_else(|| stored.get("lyrics.font_dirs"))
-            .and_then(Value::as_str)
-            .map(str::trim)
-            .filter(|s| !s.is_empty());
+        let cfg_dirs =
+            stored.pointer("/lyrics/font_dirs").or_else(|| stored.get("lyrics.font_dirs")).and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty());
         let env_dirs = std::env::var("EFFECTCRAFT_FONT_DIRS").ok();
         let merged = match (env_dirs.as_deref().map(str::trim).filter(|s| !s.is_empty()), cfg_dirs) {
             (Some(e), Some(c)) if e != c => Some(format!("{e}:{c}")),

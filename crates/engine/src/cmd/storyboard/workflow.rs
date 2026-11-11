@@ -5,10 +5,7 @@
 use serde_json::{Value, json};
 
 use super::crud::cmd_storyboard_set;
-use super::{
-    PDF_TEMPLATE, PageInfo, doc_path, fail, human_slot_title, master_sections,
-    parse_storyboard_pages, storyboard_media_references,
-};
+use super::{PDF_TEMPLATE, PageInfo, doc_path, fail, human_slot_title, master_sections, parse_storyboard_pages, storyboard_media_references};
 use crate::{Result, Session};
 
 fn evaluate_page_light(page: &PageInfo) -> (Value, Vec<Value>) {
@@ -96,11 +93,7 @@ pub fn cmd_storyboard_check(s: &mut Session, p: &Value) -> Result<Value> {
 
     let mut sections = Vec::with_capacity(sec_names.len());
     for sec_name in &sec_names {
-        let sec_reqs: Vec<Value> = requirements
-            .iter()
-            .filter(|r| r["section"].as_str() == Some(sec_name.as_str()))
-            .cloned()
-            .collect();
+        let sec_reqs: Vec<Value> = requirements.iter().filter(|r| r["section"].as_str() == Some(sec_name.as_str())).cloned().collect();
         let sec_pages: Vec<usize> = pages.iter().filter(|pg| &pg.section == sec_name).map(|pg| pg.index).collect();
         let total_req = sec_reqs.len();
         let filled_req = sec_reqs.iter().filter(|r| r["filled"] == true).count();
@@ -123,10 +116,8 @@ pub fn cmd_storyboard_check(s: &mut Session, p: &Value) -> Result<Value> {
     let missing_total = total_required.saturating_sub(filled_total);
     let production_ready = missing_total == 0 && total_required > 0;
     let title_sections_complete = sections.iter().take(3).all(|sec| sec["light"] == "green");
-    let scenes_complete = sections
-        .iter()
-        .find(|sec| sec["section"].as_str().is_some_and(|n| n.eq_ignore_ascii_case("scenes")))
-        .is_some_and(|sec| sec["light"] == "green");
+    let scenes_complete =
+        sections.iter().find(|sec| sec["section"].as_str().is_some_and(|n| n.eq_ignore_ascii_case("scenes"))).is_some_and(|sec| sec["light"] == "green");
 
     Ok(json!({
         "ok": true,
@@ -171,10 +162,7 @@ pub fn cmd_storyboard_wizard(s: &mut Session, p: &Value) -> Result<Value> {
         ("character", "char_exact_prompt"),
         ("motion", "motion_subheading"),
     ] {
-        if let (Some(val), Some(pg_idx)) = (
-            p.get(param).and_then(Value::as_str).filter(|v| !v.trim().is_empty()),
-            find_slot_page(slot),
-        ) {
+        if let (Some(val), Some(pg_idx)) = (p.get(param).and_then(Value::as_str).filter(|v| !v.trim().is_empty()), find_slot_page(slot)) {
             let mut fields = serde_json::Map::new();
             fields.insert(slot.into(), json!(val));
             batch.push(json!({"page": pg_idx, "fields": fields}));

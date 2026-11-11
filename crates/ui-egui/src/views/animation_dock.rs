@@ -1,10 +1,7 @@
 //! `04 Animations` bottom Theatre, Property-Reveal Keys, & Value/Speed Cubic Bezier Graph Editor
 //! dock (`Sheet 08` Zone B — `T19` & `T20`), with live `EffectCraft` ↔ `FilmCraft` track lane sync.
 
-use egui::{
-    Align, Align2, Color32, CornerRadius, FontId, Layout, Pos2, RichText, Sense, Stroke,
-    StrokeKind, Ui, Vec2,
-};
+use egui::{Align, Align2, Color32, CornerRadius, FontId, Layout, Pos2, RichText, Sense, Stroke, StrokeKind, Ui, Vec2};
 use serde_json::{Value, json};
 
 use crate::controls::{ScalarSpec, fill_card, paint_cubic_bezier, ring_slider_h};
@@ -40,9 +37,7 @@ pub fn draw_theatre_dock(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str) {
                     ui,
                     ctx.reg,
                     ctx.pal,
-                    BtnSpec::new("anim-place-v2", "film", "Place on V2", "Place animated clip onto FilmCraft V2")
-                        .primary()
-                        .enabled(!cid.is_empty()),
+                    BtnSpec::new("anim-place-v2", "film", "Place on V2", "Place animated clip onto FilmCraft V2").primary().enabled(!cid.is_empty()),
                 )
                 .clicked()
                 {
@@ -105,7 +100,9 @@ fn draw_theatre_clips_and_timeline(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str
                 ctx.state.animation.selected_action = clip.into();
             }
         }
-        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("theatre-save-action", "Save Action", "Persist custom action clip").enabled(!cid.is_empty())).clicked() {
+        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("theatre-save-action", "Save Action", "Persist custom action clip").enabled(!cid.is_empty()))
+            .clicked()
+        {
             ctx.exec(
                 "character.action",
                 json!({"character": cid, "action": ctx.state.animation.selected_action, "duration": ctx.state.animation.action_duration}),
@@ -146,11 +143,7 @@ fn draw_theatre_clips_and_timeline(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str
         filmbar: false,
         waveform: !show_fc && has_audio,
         dirty: ctx.state.dirty_tracks.contains("V2"),
-        spans: vec![CraftTimelineSpan {
-            start_sec: 0.0,
-            end_sec: cyc_dur,
-            label: act_lbl,
-        }],
+        spans: vec![CraftTimelineSpan { start_sec: 0.0, end_sec: cyc_dur, label: act_lbl }],
         keyframes: &motion_keys,
         frames: &[],
         empty_hint: "",
@@ -162,11 +155,7 @@ fn draw_theatre_clips_and_timeline(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str
         filmbar: false,
         waveform: false,
         dirty: false,
-        spans: vec![CraftTimelineSpan {
-            start_sec: 0.0,
-            end_sec: cyc_dur,
-            label: part_lbl,
-        }],
+        spans: vec![CraftTimelineSpan { start_sec: 0.0, end_sec: cyc_dur, label: part_lbl }],
         keyframes: &pose_keys,
         frames: &[],
         empty_hint: "",
@@ -253,13 +242,7 @@ fn draw_property_reveal_dock(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str) {
 fn draw_bezier_graph_editor_dock(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str) {
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
-        for (interp, lbl) in [
-            ("linear", "Linear"),
-            ("bezier", "Bezier"),
-            ("continuousBezier", "Continuous Bezier"),
-            ("hold", "Hold"),
-            ("roving", "Roving"),
-        ] {
+        for (interp, lbl) in [("linear", "Linear"), ("bezier", "Bezier"), ("continuousBezier", "Continuous Bezier"), ("hold", "Hold"), ("roving", "Roving")] {
             let id = format!("anim-interp-{interp}");
             let sel = ctx.state.animation.key_interp == interp;
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, lbl, "keys.setInterpolation").selected(sel)).clicked() {
@@ -279,14 +262,22 @@ fn draw_bezier_graph_editor_dock(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str) 
             ctx.state.animation.key_interp = "bezier".into();
             ctx.state.animation.curve_handle_out = [0.36, 0.04];
             ctx.state.animation.curve_handle_in = [0.64, 0.96];
-            ctx.exec("effect.exec", json!({"domain": "character", "character": cid, "command": "keys.easyEase", "params": {"mode": "both"}}), Some("Applied Easy Ease (F9)"));
+            ctx.exec(
+                "effect.exec",
+                json!({"domain": "character", "character": cid, "command": "keys.easyEase", "params": {"mode": "both"}}),
+                Some("Applied Easy Ease (F9)"),
+            );
         }
 
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-graph-prev", "◀", "Previous keyframe")).clicked() {
             ctx.state.animation.scrub_seconds = (ctx.state.animation.scrub_seconds - 0.5).max(0.0);
         }
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-graph-key", "◆", "Add keyframe at playhead")).clicked() {
-            ctx.exec("effect.exec", json!({"domain": "character", "character": cid, "command": "prop.addKey", "params": {"time": ctx.state.animation.scrub_seconds}}), None);
+            ctx.exec(
+                "effect.exec",
+                json!({"domain": "character", "character": cid, "command": "prop.addKey", "params": {"time": ctx.state.animation.scrub_seconds}}),
+                None,
+            );
         }
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-graph-next", "▶", "Next keyframe")).clicked() {
             let max_d = active_timeline_span(ctx);
@@ -315,17 +306,8 @@ fn draw_bezier_graph_editor_dock(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str) 
     let graph_h = (ui.available_height() - 2.0).clamp(96.0, 134.0);
     let (rect, resp) = ui.allocate_exact_size(Vec2::new(graph_w, graph_h), Sense::click_and_drag());
     let painter = ui.painter().with_clip_rect(rect);
-    painter.rect(
-        rect,
-        CornerRadius::same(7),
-        Color32::from_rgb(0x0a, 0x0f, 0x16),
-        Stroke::new(1.0, ctx.pal.border),
-        StrokeKind::Inside,
-    );
-    let pad = egui::Rect::from_min_max(
-        Pos2::new(rect.min.x + 38.0, rect.min.y + 18.0),
-        Pos2::new(rect.max.x - 16.0, rect.max.y - 16.0),
-    );
+    painter.rect(rect, CornerRadius::same(7), Color32::from_rgb(0x0a, 0x0f, 0x16), Stroke::new(1.0, ctx.pal.border), StrokeKind::Inside);
+    let pad = egui::Rect::from_min_max(Pos2::new(rect.min.x + 38.0, rect.min.y + 18.0), Pos2::new(rect.max.x - 16.0, rect.max.y - 16.0));
 
     let gstroke = Stroke::new(1.0, Color32::from_rgba_unmultiplied(44, 58, 80, 75));
     for (gy, lbl) in [(0.0_f32, "100%"), (0.5, "50%"), (1.0, "0%")] {
@@ -338,13 +320,7 @@ fn draw_bezier_graph_editor_dock(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str) 
         let fx = (step as f32) * 0.25;
         let x = pad.min.x + fx * pad.width();
         painter.line_segment([Pos2::new(x, pad.min.y), Pos2::new(x, pad.max.y)], gstroke);
-        painter.text(
-            Pos2::new(x, rect.max.y - 7.0),
-            Align2::CENTER_CENTER,
-            format!("{:.1}s", (fx as f64) * dur),
-            FontId::monospace(8.5),
-            ctx.pal.text_muted,
-        );
+        painter.text(Pos2::new(x, rect.max.y - 7.0), Align2::CENTER_CENTER, format!("{:.1}s", (fx as f64) * dur), FontId::monospace(8.5), ctx.pal.text_muted);
     }
 
     let p0 = Pos2::new(pad.min.x, pad.max.y);

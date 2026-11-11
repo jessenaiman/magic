@@ -9,8 +9,7 @@ use std::path::{Path, PathBuf};
 use serde_json::{Value, json};
 
 use super::{
-    FieldState, ImageLinkMeta, PDF_TEMPLATE, PageInfo, bad, doc_path, field_key,
-    load_field_state, master_sections, parse_storyboard_pages, save_field_state,
+    FieldState, ImageLinkMeta, PDF_TEMPLATE, PageInfo, bad, doc_path, field_key, load_field_state, master_sections, parse_storyboard_pages, save_field_state,
     sync_assets_into_state,
 };
 use crate::craft_hub::cli::render_pdf_pages;
@@ -19,11 +18,7 @@ use crate::{CraftHub, CraftTarget, Result, Session};
 pub(crate) fn page_index(pages: &[PageInfo], p: &Value) -> Result<usize> {
     if let Some(n) = p.get("page").and_then(Value::as_u64) {
         let idx = n as usize;
-        return if idx < pages.len() {
-            Ok(idx)
-        } else {
-            Err(bad(&format!("no page {n}; storyboard.pdf has {} pages", pages.len())))
-        };
+        return if idx < pages.len() { Ok(idx) } else { Err(bad(&format!("no page {n}; storyboard.pdf has {} pages", pages.len()))) };
     }
     if let Some(label) = p.get("slot").or_else(|| p.get("label")).and_then(Value::as_str) {
         return pages
@@ -33,13 +28,8 @@ pub(crate) fn page_index(pages: &[PageInfo], p: &Value) -> Result<usize> {
             .ok_or_else(|| bad(&format!("no unlocked field `{label}` in storyboard")));
     }
     if let Some(n) = p.get("scene").and_then(Value::as_u64) {
-        let scene_pages: Vec<&PageInfo> = pages
-            .iter()
-            .filter(|pg| pg.slots.iter().any(|s| s.label == "scene_id"))
-            .collect();
-        let base = scene_pages
-            .get((n as usize).wrapping_sub(1))
-            .ok_or_else(|| bad(&format!("no scene {n}")))?;
+        let scene_pages: Vec<&PageInfo> = pages.iter().filter(|pg| pg.slots.iter().any(|s| s.label == "scene_id")).collect();
+        let base = scene_pages.get((n as usize).wrapping_sub(1)).ok_or_else(|| bad(&format!("no scene {n}")))?;
         return Ok(base.index);
     }
     Err(bad("give `page`, `label`, or `scene`"))
@@ -58,23 +48,12 @@ fn find_page_preview_png(pdf_path: &Path, page_idx: usize) -> Option<PathBuf> {
             return Some(candidate);
         }
     }
-    let mut rail_dirs: Vec<PathBuf> = std::fs::read_dir(&preview_dir)
-        .into_iter()
-        .flatten()
-        .flatten()
-        .map(|e| e.path())
-        .filter(|p| p.is_dir())
-        .collect();
+    let mut rail_dirs: Vec<PathBuf> = std::fs::read_dir(&preview_dir).into_iter().flatten().flatten().map(|e| e.path()).filter(|p| p.is_dir()).collect();
     rail_dirs.sort();
     rail_dirs.reverse();
     for rdir in rail_dirs {
-        let mut pngs: Vec<PathBuf> = std::fs::read_dir(&rdir)
-            .into_iter()
-            .flatten()
-            .flatten()
-            .map(|e| e.path())
-            .filter(|p| p.extension().is_some_and(|e| e == "png"))
-            .collect();
+        let mut pngs: Vec<PathBuf> =
+            std::fs::read_dir(&rdir).into_iter().flatten().flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|e| e == "png")).collect();
         pngs.sort();
         if let Some(found) = pngs.get(page_idx) {
             return Some(found.clone());
@@ -85,24 +64,15 @@ fn find_page_preview_png(pdf_path: &Path, page_idx: usize) -> Option<PathBuf> {
 
 /// Rule 4: Resolve any project asset or Craft document into `(flat_project_image_png, linked_file, asset_id, craft_app)`
 /// so Storyboard stores the flat project image together with metadata linking the files.
-fn resolve_storyboard_image_with_link(
-    s: &Session,
-    pdf_path: &Path,
-    raw: &str,
-    explicit_link: Option<&str>,
-) -> Result<ImageLinkMeta> {
+fn resolve_storyboard_image_with_link(s: &Session, pdf_path: &Path, raw: &str, explicit_link: Option<&str>) -> Result<ImageLinkMeta> {
     let project_dir = s.project_path.as_deref().and_then(Path::parent);
     if let Some(asset) = s.project_assets.iter().find(|a| a.id == raw || a.name == raw)
         && let Some(ref apath) = asset.path
     {
-        let (proj_img, linked_file, craft_app) =
-            crate::cmd::project::assets::resolve_asset_project_image(project_dir, apath);
+        let (proj_img, linked_file, craft_app) = crate::cmd::project::assets::resolve_asset_project_image(project_dir, apath);
         return Ok(ImageLinkMeta {
             image: proj_img.to_string_lossy().into_owned(),
-            linked_file: explicit_link
-                .map(str::to_owned)
-                .or(linked_file)
-                .or_else(|| Some(apath.to_string_lossy().into_owned())),
+            linked_file: explicit_link.map(str::to_owned).or(linked_file).or_else(|| Some(apath.to_string_lossy().into_owned())),
             asset_id: Some(asset.id.clone()),
             craft_app,
         });
@@ -113,20 +83,13 @@ fn resolve_storyboard_image_with_link(
         return Err(bad(&format!("file not found: {}", input.display())));
     }
     let dir_for_preview = project_dir.or_else(|| pdf_path.parent());
-    let (proj_img, linked_file, craft_app) =
-        crate::cmd::project::assets::resolve_asset_project_image(dir_for_preview, &input);
-    let matched_asset_id = s
-        .project_assets
-        .iter()
-        .find(|a| a.path.as_deref() == Some(input.as_path()) || a.path.as_deref() == Some(proj_img.as_path()))
-        .map(|a| a.id.clone());
+    let (proj_img, linked_file, craft_app) = crate::cmd::project::assets::resolve_asset_project_image(dir_for_preview, &input);
+    let matched_asset_id =
+        s.project_assets.iter().find(|a| a.path.as_deref() == Some(input.as_path()) || a.path.as_deref() == Some(proj_img.as_path())).map(|a| a.id.clone());
 
     Ok(ImageLinkMeta {
         image: proj_img.to_string_lossy().into_owned(),
-        linked_file: explicit_link
-            .map(str::to_owned)
-            .or(linked_file)
-            .or_else(|| Some(input.to_string_lossy().into_owned())),
+        linked_file: explicit_link.map(str::to_owned).or(linked_file).or_else(|| Some(input.to_string_lossy().into_owned())),
         asset_id: matched_asset_id,
         craft_app,
     })
@@ -155,11 +118,8 @@ fn apply_page_edits(
         text_entries.push((label.to_string(), text.to_string()));
     }
     for (label, text) in text_entries {
-        let slot = page
-            .slots
-            .iter()
-            .find(|sl| sl.label == label && !sl.locked)
-            .ok_or_else(|| bad(&format!("page {page_idx} has no unlocked field `{label}`")))?;
+        let slot =
+            page.slots.iter().find(|sl| sl.label == label && !sl.locked).ok_or_else(|| bad(&format!("page {page_idx} has no unlocked field `{label}`")))?;
         let fkey = slot.form_name.clone();
         state.text.insert(fkey.clone(), text.clone());
         pdf_steps.push(("form_fill", json!({"field": fkey, "value": text})));
@@ -218,12 +178,7 @@ pub fn cmd_storyboard_new(s: &mut Session, p: &Value) -> Result<Value> {
     let mut state = FieldState::default();
     if let Some(title) = p.get("title").and_then(Value::as_str).filter(|t| !t.trim().is_empty()) {
         state.text.insert("p00_cover_title".into(), title.trim().to_owned());
-        let _ = CraftHub::run_batch(
-            CraftTarget::Pdf,
-            Some(&path),
-            Some(&path),
-            &[("form_fill", json!({"field": "p00_cover_title", "value": title.trim()}))],
-        );
+        let _ = CraftHub::run_batch(CraftTarget::Pdf, Some(&path), Some(&path), &[("form_fill", json!({"field": "p00_cover_title", "value": title.trim()}))]);
     }
     sync_assets_into_state(s, &mut state);
     save_field_state(&path, &state)?;
@@ -383,13 +338,8 @@ pub fn cmd_storyboard_thumbnail(s: &mut Session, p: &Value) -> Result<Value> {
         let dir = preview_root.join(format!("rail-{}", (scale * 100.0).round()));
         std::fs::create_dir_all(&dir)?;
         let _ = render_pdf_pages(&pdf, None, scale, &dir);
-        let mut files: Vec<PathBuf> = std::fs::read_dir(&dir)
-            .into_iter()
-            .flatten()
-            .flatten()
-            .map(|e| e.path())
-            .filter(|p| p.extension().is_some_and(|x| x == "png"))
-            .collect();
+        let mut files: Vec<PathBuf> =
+            std::fs::read_dir(&dir).into_iter().flatten().flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "png")).collect();
         files.sort();
         return Ok(json!({"ok": true, "rail": true, "files": files}));
     }
@@ -442,19 +392,9 @@ pub fn cmd_storyboard_open(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let port = match p.get("control") {
         None | Some(Value::Null) => None,
-        Some(v) => Some(
-            v.as_u64()
-                .and_then(|n| u16::try_from(n).ok())
-                .filter(|&n| n > 0)
-                .ok_or_else(|| bad("control must be 1..=65535"))?,
-        ),
+        Some(v) => Some(v.as_u64().and_then(|n| u16::try_from(n).ok()).filter(|&n| n > 0).ok_or_else(|| bad("control must be 1..=65535"))?),
     };
-    let mut receipt = CraftHub::launch_with_control(
-        CraftTarget::Pdf,
-        Some(&pdf_path),
-        port,
-        s.project_path.as_deref().and_then(Path::parent),
-    )?;
+    let mut receipt = CraftHub::launch_with_control(CraftTarget::Pdf, Some(&pdf_path), port, s.project_path.as_deref().and_then(Path::parent))?;
     if let Some(page) = p.get("page").and_then(Value::as_u64) {
         let _ = CraftHub::execute(CraftTarget::Pdf, Some(&pdf_path), "ui.command", &json!({"id": "view.goto_page", "page": page + 1}));
         receipt["focused_page"] = json!(page);
