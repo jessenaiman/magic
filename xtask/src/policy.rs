@@ -98,6 +98,10 @@ pub(crate) fn layers() -> Result<()> {
     let md = metadata()?;
     let crates = workspace_crates(&md);
     let mut errors = Vec::new();
+    let root = md["workspace_root"].as_str().ok_or("cargo metadata omitted workspace_root")?;
+    if std::path::Path::new(root).join("docs/craft-reference").exists() {
+        errors.push("docs/craft-reference: remove vendored sibling Craft documentation and link to upstream docs instead".to_owned());
+    }
     for (name, deps) in &crates {
         let Some(l) = layer_of(name) else {
             errors.push(format!("{name}: not assigned a layer (add it to xtask LAYERS and docs/architecture.md › Layers)"));
