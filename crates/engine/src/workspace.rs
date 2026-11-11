@@ -174,7 +174,7 @@ fn find_project_craft_doc(s: &crate::Session, target: CraftTarget) -> Option<Pat
         CraftTarget::Deck => find_first_with_ext(dir, &["deckcraft", "pptx"], 3),
         CraftTarget::Effect => {
             let lyrics = dir.join("lettering/lyrics.ecproj");
-            lyrics.is_file().then_some(lyrics).or_else(|| find_first_with_ext(dir, &["ecproj"], 3))
+            lyrics.is_file().then_some(lyrics).or_else(|| find_first_with_ext(dir, &["ecproj"], 4))
         }
         CraftTarget::Film => {
             let stem = s.project_path.as_deref().and_then(|p| p.file_stem()).and_then(|n| n.to_str()).unwrap_or("Film");
@@ -210,6 +210,11 @@ fn craft_doc_info(path: &Path) -> Option<Value> {
         "generator": info.generator,
         "supported": info.supported,
     }))
+}
+
+/// Close sibling Craft apps spawned by Magic during this session (`Close apps opened by Magic`).
+pub fn cmd_workspace_close_opened(_s: &mut crate::Session, _params: &Value) -> Result<Value> {
+    CraftHub::close_opened_apps()
 }
 
 /// Open a project file in the Craft app that owns its format (with `--control` enabled), launch a
@@ -275,8 +280,6 @@ fn parse_step_pairs(p: &Value, default_cmd: Option<&str>) -> Result<Vec<(String,
     Ok(out)
 }
 
-/// Run PhotoCraft commands via `CraftHub` (live `photocraft --control` window when open in-place,
-/// else installed `photocraft-cli`).
 pub fn cmd_photo_exec(s: &mut crate::Session, p: &Value) -> Result<Value> {
     let raw = p["path"].as_str().ok_or_else(|| EngineError::InvalidParams("path is required".into()))?;
     let path = resolve_workspace_path(s, raw);
@@ -289,11 +292,31 @@ pub fn cmd_photo_exec(s: &mut crate::Session, p: &Value) -> Result<Value> {
     Ok(json!({"ok": true, "path": path, "pcraft": save, "info": info, "results": results, "via": "photocraft"}))
 }
 
-/// Run EffectCraft commands via `CraftHub` (live `effectcraft --control` window when open, else
-/// installed `effectcraft-cli`).
+fn resolve_effect_exec_target(s: &crate::Session, p: &Value) -> Result<PathBuf> {
+    if let Some(raw) = p["path"].as_str().filter(|v| !v.trim().is_empty()) {
+        return Ok(resolve_workspace_path(s, raw));
+    }
+    let proj_dir = crate::workshop::project_dir(s)?;
+    match p["domain"].as_str().unwrap_or_default() {
+        "lyrics" | "words" => Ok(proj_dir.join("lettering/lyrics.ecproj")),
+        "motion" => Ok(proj_dir.join("motion/actions.ecproj")),
+        "character" | "animation" => {
+            if let Some(cid) = p["character"].as_str().filter(|c| !c.trim().is_empty()) {
+                let candidate = proj_dir.join("assets/characters").join(cid).join("rig.ecproj");
+                if candidate.is_file() {
+                    return Ok(candidate);
+                }
+            }
+            Ok(find_project_craft_doc(s, CraftTarget::Effect)
+                .unwrap_or_else(|| proj_dir.join("assets/characters/rig.ecproj")))
+        }
+        _ => find_project_craft_doc(s, CraftTarget::Effect)
+            .ok_or_else(|| EngineError::InvalidParams("path=<.ecproj> or domain=lyrics|motion|character is required".into())),
+    }
+}
+
 pub fn cmd_effect_exec(s: &mut crate::Session, p: &Value) -> Result<Value> {
-    let raw = p["path"].as_str().ok_or_else(|| EngineError::InvalidParams("path=<.ecproj> is required".into()))?;
-    let path = resolve_workspace_path(s, raw);
+    let path = resolve_effect_exec_target(s, p)?;
     let steps: Vec<Value> = if let Some(arr) = p["steps"].as_array() {
         arr.clone()
     } else if let Some(id) = p["id"].as_str().or_else(|| p["command"].as_str()) {
@@ -301,14 +324,17 @@ pub fn cmd_effect_exec(s: &mut crate::Session, p: &Value) -> Result<Value> {
     } else {
         return Err(EngineError::InvalidParams("id=<effectcraft command> or steps=[...] is required".into()));
     };
+    let read_only = steps.len() == 1
+        && steps[0]["id"].as_str().is_some_and(|id| {
+            matches!(id, "comp.info" | "text.fonts" | "text.fontFeatures" | "layer.channels" | "edit.history.list" | "footage.check")
+        });
+    let save = p["save"].as_bool().unwrap_or(!read_only);
     let dir = path.parent().unwrap_or_else(|| Path::new("."));
-    let results = crate::cmd::character::effectcraft(dir, Some(&path), &steps, p["save"] == true)?;
+    let results = crate::cmd::character::effectcraft(dir, path.is_file().then_some(path.as_path()), &steps, save)?;
     let info = craft_doc_info(&path);
     Ok(json!({"ok": true, "path": path, "info": info, "results": results, "via": "effectcraft"}))
 }
 
-/// Run VectorCraft commands via `CraftHub` (live `vectorcraft --control` window when open in-place,
-/// else installed `vectorcraft-cli`).
 pub fn cmd_vector_exec(s: &mut crate::Session, p: &Value) -> Result<Value> {
     let raw = p["path"].as_str().ok_or_else(|| EngineError::InvalidParams("path is required".into()))?;
     let path = resolve_workspace_path(s, raw);
@@ -325,8 +351,6 @@ pub fn cmd_vector_exec(s: &mut crate::Session, p: &Value) -> Result<Value> {
     Ok(json!({"ok": true, "path": path, "vectorcraft": save, "info": info, "results": results, "via": "vectorcraft"}))
 }
 
-/// Resolve an installed tool executable from `<TOOL_NAME>` env override, `config.toml`, ArtCraft
-/// Launcher `.desktop` entry, `PATH`, or `~/.local/bin/<name>`.
 pub fn resolve_tool(name: &str) -> String {
     resolve_executable_path(name).map_or_else(|| name.to_string(), |p| p.to_string_lossy().into_owned())
 }
@@ -361,15 +385,12 @@ pub(crate) fn acquire_tool_slot() -> ToolSlotGuard {
     ToolSlotGuard
 }
 
-/// Audio file extensions recognized by the workshop.
 pub(crate) const AUDIO_EXTENSIONS: &[&str] = &["wav", "mp3", "flac", "m4a", "aac", "ogg"];
 
-/// True when `path` has one of `allowed` extensions (case-insensitive).
 pub(crate) fn has_extension(path: &Path, allowed: &[&str]) -> bool {
     path.extension().and_then(|e| e.to_str()).is_some_and(|e| allowed.iter().any(|a| a.eq_ignore_ascii_case(e)))
 }
 
-/// Validate and resolve an audio path for the workshop song.
 pub(crate) fn song_audio_path(s: &crate::Session, raw: &str) -> Result<PathBuf> {
     let path = resolve_workspace_path(s, raw);
     if !path.is_file() || !has_extension(&path, AUDIO_EXTENSIONS) {
@@ -391,13 +412,10 @@ pub(crate) fn try_sanitize_asset_id(raw: &str) -> Option<String> {
     (!trimmed.is_empty()).then_some(trimmed)
 }
 
-/// Sanitize a user-supplied or file-stem name into a stable asset id.
 pub fn sanitize_asset_id(raw: &str) -> String {
     try_sanitize_asset_id(raw).unwrap_or_else(|| "asset".to_string())
 }
 
-/// Derive a sanitized asset id from an optional user-typed name, falling back to the file stem
-/// only when no name is typed.
 pub fn asset_id_for_import(typed_name: Option<&str>, path: &Path) -> String {
     typed_name
         .and_then(try_sanitize_asset_id)

@@ -1,12 +1,13 @@
 //! ArtCraft project file trunk (`project.trunk`) and multi-format file import (`project.import_file`).
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
 use serde::Serialize;
 use serde_json::{Value, json};
 
+use crate::cmd::film::linked_comp::{LinkedCompRecord, inspect_linked_comps};
 use crate::cmd::project::cmd_project_add_asset;
 use crate::cmd::project::workshop::{IMAGE_EXTENSIONS, project_dir, song_seconds};
 use crate::workspace::{AUDIO_EXTENSIONS, has_extension, resolve_workspace_path};
@@ -31,6 +32,7 @@ struct ProjectFiles {
     project_dir: PathBuf,
     count: usize,
     registered_asset_count: usize,
+    linked_comp_count: usize,
     files: Vec<ProjectFile>,
     external_assets: Vec<ProjectAsset>,
     missing_assets: Vec<ProjectAsset>,
@@ -53,6 +55,8 @@ struct ProjectFile {
     visual_kind: &'static str,
     current_timeline: bool,
     can_animate: bool,
+    can_link_filmcraft: bool,
+    linked_comp: Option<LinkedCompRecord>,
     assets: Vec<ProjectAsset>,
     size_bytes: u64,
     modified_ms: u64,
@@ -64,8 +68,8 @@ fn visual_kind(class: &FileClass) -> &'static str {
         "FC" | "MP4" | "MOV" | "WEBM" => "film",
         "EC" => "motion",
         "DC" | "PDF" => "design",
-        "VC" | "SVG" => "vector",
-        "PC" | "PNG" | "JPG" | "WEBP" => "image",
+        "VC" | "VCRAFT" | "SVG" => "vector",
+        "PC" | "PCRAFT" | "PNG" | "JPG" | "WEBP" => "image",
         "MP3" | "WAV" | "FLAC" => "audio",
         "MAGIC" => "project",
         _ if class.group == "texture_3d" => "model",
@@ -79,7 +83,7 @@ fn classify_file(path: &Path) -> Option<FileClass> {
     match ext.as_str() {
         "magic" => Some(FileClass {
             group: "project_files",
-            group_label: "Project & supporting files",
+            group_label: "Project & Supporting Files",
             group_order: 6,
             craft_priority: 0,
             badge: "MAGIC",
@@ -88,7 +92,7 @@ fn classify_file(path: &Path) -> Option<FileClass> {
         }),
         "designcraft" | "idml" => Some(FileClass {
             group: "design_pdf",
-            group_label: "DesignCraft & PDF",
+            group_label: "DesignCraft (.designcraft)",
             group_order: 1,
             craft_priority: 1,
             badge: "DC",
@@ -97,16 +101,16 @@ fn classify_file(path: &Path) -> Option<FileClass> {
         }),
         "pdf" => Some(FileClass {
             group: "design_pdf",
-            group_label: "DesignCraft & PDF",
+            group_label: "DesignCraft (.designcraft)",
             group_order: 1,
             craft_priority: 3,
             badge: "PDF",
-            open_label: "Open",
+            open_label: "Open in DesignCraft",
             is_craft_project: false,
         }),
         "fcproj" => Some(FileClass {
             group: "filmcraft",
-            group_label: "FilmCraft",
+            group_label: "FilmCraft (.fcproj)",
             group_order: 0,
             craft_priority: 1,
             badge: "FC",
@@ -115,7 +119,7 @@ fn classify_file(path: &Path) -> Option<FileClass> {
         }),
         "ecproj" | "anicraft" => Some(FileClass {
             group: "effect_film",
-            group_label: "EffectCraft & Clips",
+            group_label: "EffectCraft (.ecproj)",
             group_order: 2,
             craft_priority: 1,
             badge: "EC",
@@ -124,7 +128,7 @@ fn classify_file(path: &Path) -> Option<FileClass> {
         }),
         "mp4" | "mov" | "webm" | "mkv" => Some(FileClass {
             group: "effect_film",
-            group_label: "EffectCraft & Clips",
+            group_label: "EffectCraft (.ecproj)",
             group_order: 2,
             craft_priority: 3,
             badge: if ext == "mov" {
@@ -134,30 +138,39 @@ fn classify_file(path: &Path) -> Option<FileClass> {
             } else {
                 "MP4"
             },
-            open_label: "Play",
+            open_label: "Open in FilmCraft",
+            is_craft_project: false,
+        }),
+        "json" if matches!(name.as_str(), "animation-map.json" | "linked-compositions.json") => Some(FileClass {
+            group: "effect_film",
+            group_label: "EffectCraft (.ecproj)",
+            group_order: 2,
+            craft_priority: 2,
+            badge: "JSON",
+            open_label: "Open",
             is_craft_project: false,
         }),
         "pcraft" | "psd" => Some(FileClass {
             group: "photo_vector",
-            group_label: "PhotoCraft & VectorCraft",
+            group_label: "PhotoCraft & VectorCraft (.pcraft / .svg)",
             group_order: 3,
             craft_priority: 1,
-            badge: "PC",
+            badge: "PCRAFT",
             open_label: "Open in PhotoCraft",
             is_craft_project: true,
         }),
         "vectorcraft" | "vcraft" | "drawcraft" => Some(FileClass {
             group: "photo_vector",
-            group_label: "PhotoCraft & VectorCraft",
+            group_label: "PhotoCraft & VectorCraft (.pcraft / .svg)",
             group_order: 3,
             craft_priority: 2,
-            badge: "VC",
+            badge: "VCRAFT",
             open_label: "Open in VectorCraft",
             is_craft_project: true,
         }),
         "svg" => Some(FileClass {
             group: "photo_vector",
-            group_label: "PhotoCraft & VectorCraft",
+            group_label: "PhotoCraft & VectorCraft (.pcraft / .svg)",
             group_order: 3,
             craft_priority: 3,
             badge: "SVG",
@@ -166,7 +179,7 @@ fn classify_file(path: &Path) -> Option<FileClass> {
         }),
         "png" | "jpg" | "jpeg" | "webp" => Some(FileClass {
             group: "photo_vector",
-            group_label: "PhotoCraft & VectorCraft",
+            group_label: "PhotoCraft & VectorCraft (.pcraft / .svg)",
             group_order: 3,
             craft_priority: 4,
             badge: if ext == "png" {
@@ -176,12 +189,12 @@ fn classify_file(path: &Path) -> Option<FileClass> {
             } else {
                 "JPG"
             },
-            open_label: "Open",
+            open_label: "Open in PhotoCraft",
             is_craft_project: false,
         }),
         "tcraft" | "mcraft" => Some(FileClass {
             group: "texture_3d",
-            group_label: "3D & Texture",
+            group_label: "3D & Texture (.tcraft / .glb)",
             group_order: 4,
             craft_priority: 1,
             badge: "TC",
@@ -190,7 +203,7 @@ fn classify_file(path: &Path) -> Option<FileClass> {
         }),
         "glb" | "gltf" | "blend" | "cadcraft" | "solidcraft" | "step" | "stp" => Some(FileClass {
             group: "texture_3d",
-            group_label: "3D & Texture",
+            group_label: "3D & Texture (.tcraft / .glb)",
             group_order: 4,
             craft_priority: 2,
             badge: if ext == "glb" || ext == "gltf" {
@@ -205,7 +218,7 @@ fn classify_file(path: &Path) -> Option<FileClass> {
         }),
         "mp3" | "wav" | "flac" | "m4a" | "aac" | "ogg" => Some(FileClass {
             group: "audio_words",
-            group_label: "Audio & Lyrics",
+            group_label: "Audio & Timed Lyrics",
             group_order: 5,
             craft_priority: 1,
             badge: if ext == "wav" {
@@ -215,21 +228,21 @@ fn classify_file(path: &Path) -> Option<FileClass> {
             } else {
                 "MP3"
             },
-            open_label: "Play",
+            open_label: "Open",
             is_craft_project: false,
         }),
         "srt" | "lrc" | "txt" | "md" => Some(FileClass {
             group: "audio_words",
-            group_label: "Audio & Lyrics",
+            group_label: "Audio & Timed Lyrics",
             group_order: 5,
             craft_priority: 2,
             badge: if ext == "srt" || ext == "lrc" { "SRT" } else { "TXT" },
             open_label: "Open",
             is_craft_project: false,
         }),
-        "json" if matches!(name.as_str(), "words.json" | "transcript.json" | "official_lyrics.json") => Some(FileClass {
+        "json" if matches!(name.as_str(), "words.json" | "transcript.json" | "official_lyrics.json" | "timing-reference.json") => Some(FileClass {
             group: "audio_words",
-            group_label: "Audio & Lyrics",
+            group_label: "Audio & Timed Lyrics",
             group_order: 5,
             craft_priority: 3,
             badge: "JSON",
@@ -238,7 +251,7 @@ fn classify_file(path: &Path) -> Option<FileClass> {
         }),
         _ => Some(FileClass {
             group: "project_files",
-            group_label: "Project & supporting files",
+            group_label: "Project & Supporting Files",
             group_order: 6,
             craft_priority: 4,
             badge: match ext.as_str() {
@@ -265,7 +278,18 @@ fn first_png_in_dir(dir: &Path) -> Option<PathBuf> {
     files.into_iter().next()
 }
 
-fn resolve_craft_preview(project_dir: &Path, path: &Path, badge: &str, modified_ms: u64) -> Option<PathBuf> {
+fn resolve_craft_preview(
+    project_dir: &Path,
+    path: &Path,
+    badge: &str,
+    modified_ms: u64,
+    linked_comp: Option<&LinkedCompRecord>,
+) -> Option<PathBuf> {
+    if let Some(lc) = linked_comp
+        && lc.preview_png.is_file()
+    {
+        return Some(lc.preview_png.clone());
+    }
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or_default().to_ascii_lowercase();
     if matches!(ext.as_str(), "png" | "jpg" | "jpeg" | "webp" | "svg") {
         return Some(path.to_path_buf());
@@ -291,7 +315,8 @@ fn resolve_craft_preview(project_dir: &Path, path: &Path, badge: &str, modified_
             } else if fname == "actions.ecproj" {
                 first_png_in_dir(&project_dir.join("motion/.preview"))
             } else {
-                path.parent().and_then(|p| first_png_in_dir(&p.join("frames")))
+                path.parent()
+                    .and_then(|p| first_png_in_dir(&p.join("frames")).or_else(|| first_png_in_dir(p)))
             }
         }
         _ => None,
@@ -329,7 +354,7 @@ fn words_line_count(dir: &Path) -> Option<usize> {
 fn inspect_detail(path: &Path, dir: &Path, badge: &str, size: u64, duration_sec: Option<f64>) -> String {
     let mut parts: Vec<String> = Vec::new();
     match badge {
-        "PC" | "VC" | "EC" => {
+        "PC" | "PCRAFT" | "VC" | "VCRAFT" | "EC" => {
             if badge == "EC"
                 && path.file_name().and_then(|n| n.to_str()) == Some("lyrics.ecproj")
                 && let Some(lines) = words_line_count(dir)
@@ -404,7 +429,7 @@ fn walk_project_files(root: &Path, current: &Path, visited: &mut BTreeSet<PathBu
         if entry
             .file_name()
             .and_then(|n| n.to_str())
-            .is_some_and(|n| n == ".git" || (n == ".preview" && current == root))
+            .is_some_and(|n| n == ".git" || n == ".history" || (n == ".preview" && current == root))
         {
             continue;
         }
@@ -431,7 +456,14 @@ pub fn cmd_project_trunk(s: &mut Session, _params: &Value) -> Result<Value> {
     let canon_dir = dir.canonicalize().unwrap_or_else(|_| dir.clone());
     let duration_sec = song_seconds(&dir);
     let timeline = crate::cmd::film::film_path(s).ok().and_then(|p| p.canonicalize().ok());
-    let mut assets_by_path = std::collections::BTreeMap::<PathBuf, Vec<ProjectAsset>>::new();
+    let linked_comps = inspect_linked_comps(&canon_dir);
+    let mut linked_by_path: BTreeMap<PathBuf, LinkedCompRecord> = BTreeMap::new();
+    for lc in &linked_comps {
+        let canon = lc.ecproj_path.canonicalize().unwrap_or_else(|_| lc.ecproj_path.clone());
+        linked_by_path.insert(canon, lc.clone());
+    }
+
+    let mut assets_by_path = BTreeMap::<PathBuf, Vec<ProjectAsset>>::new();
     let mut external_assets = Vec::new();
     let mut missing_assets = Vec::new();
     for asset in &s.project_assets {
@@ -470,17 +502,29 @@ pub fn cmd_project_trunk(s: &mut Session, _params: &Value) -> Result<Value> {
             .unwrap_or_else(|| "linked/".to_string());
         let canonical = path.canonicalize().unwrap_or_else(|_| path.clone());
         let assets = assets_by_path.get(&canonical).cloned().unwrap_or_default();
+        let linked_comp = linked_by_path.get(&canonical).cloned();
         let current_timeline = timeline.as_ref() == Some(&canonical);
         let can_animate = !rel_dir.starts_with("motion/")
             && !rel_dir.starts_with("lettering/")
-            && (matches!(cls.badge, "PC" | "EC")
+            && (matches!(cls.badge, "PC" | "PCRAFT" | "VC" | "VCRAFT" | "EC")
                 || assets.first().is_some_and(|asset| {
                     matches!(asset.kind.as_str(), "image" | "model_3d" | "character" | "cutout_rig" | "poses" | "turnaround" | "anim_3d")
                 }));
-        let preview_path = resolve_craft_preview(&canon_dir, &path, cls.badge, modified_ms);
+        let can_link_filmcraft = path.extension().is_some_and(|e| e.eq_ignore_ascii_case("ecproj"));
+        let preview_path = resolve_craft_preview(&canon_dir, &path, cls.badge, modified_ms, linked_comp.as_ref());
         let mut detail = inspect_detail(&path, &canon_dir, cls.badge, size, duration_sec);
         if current_timeline {
             detail = format!("Current timeline · {detail}");
+        }
+        if let Some(ref lc) = linked_comp {
+            let sync_tag = if lc.status == "offline" {
+                format!("Offline ({})", lc.reason.as_deref().unwrap_or("missing"))
+            } else if lc.dirty {
+                format!("Linked {} · Out of sync", lc.track)
+            } else {
+                format!("Linked {}", lc.track)
+            };
+            detail = format!("{sync_tag} · {detail}");
         }
         rows.push(ProjectFile {
             name,
@@ -498,6 +542,8 @@ pub fn cmd_project_trunk(s: &mut Session, _params: &Value) -> Result<Value> {
             is_craft_project: cls.is_craft_project,
             current_timeline,
             can_animate,
+            can_link_filmcraft,
+            linked_comp,
             assets,
             size_bytes: size,
             modified_ms,
@@ -518,6 +564,7 @@ pub fn cmd_project_trunk(s: &mut Session, _params: &Value) -> Result<Value> {
         project_dir: canon_dir,
         count: rows.len(),
         registered_asset_count: s.project_assets.len(),
+        linked_comp_count: linked_comps.len(),
         files: rows,
         external_assets,
         missing_assets,
@@ -528,7 +575,7 @@ pub fn cmd_project_trunk(s: &mut Session, _params: &Value) -> Result<Value> {
 fn target_subfolder_for_ext(ext: &str) -> &'static str {
     match ext {
         "designcraft" | "idml" | "pdf" => "storyboard",
-        "ecproj" => "lettering",
+        "ecproj" => "animations",
         "fcproj" | "mp4" | "mov" | "webm" | "mkv" => "film",
         "pcraft" | "psd" => "assets/backgrounds",
         "vectorcraft" | "vcraft" | "drawcraft" | "svg" => "assets/vectors",

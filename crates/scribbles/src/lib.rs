@@ -1,6 +1,9 @@
-//! Scribbles (`craft-scribbles`): Google Flow (Moppet Maker) app-window launcher, handoff asset
-//! ingestor (`handoff.json`, `character.png`, `parts-sheet.png`, `pose-sheet.png`), sprite-sheet
-//! cell geometry, and video clip bridge for Magic Studio. Decoupled from Storyboard.
+//! Scribbles sprite-sheet geometry and validated local character-bundle reader (`craft-scribbles`, Layer 4).
+//!
+//! Pure data and local image validation only: zero browser launches, zero `~/Downloads` scraping,
+//! zero external CLI subprocesses, and zero network or LLM calls. All AI generation runs through
+//! `storytold/craft-ai-integrations` in `magic-engine`, and all raster/vector cutout or rig builds
+//! run through `PhotoCraft`, `VectorCraft`, and `EffectCraft`.
 
 #![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable))]
 
@@ -9,21 +12,14 @@ pub use sheet::{ExtractedPart, PLUSH9_Z_ORDER, plush9_part_slots, sprite_cell_re
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-
-pub const DEFAULT_MOPPET_MAKER_URL: &str =
-    "https://flow.google.com/project/a16c9456-67b1-41f8-a995-79f4918d6737/tool/c4919fed-dcbe-498c-9839-2073ce1c8609?fromViewSource=tools";
-pub const DEFAULT_FLOW_PROJECT_URL: &str = "https://flow.google.com/project/a16c9456-67b1-41f8-a995-79f4918d6737";
 
 #[derive(Debug, thiserror::Error)]
 pub enum ScribblesError {
     #[error("{0}")]
     Invalid(String),
-    #[error("external tool `{0}` failed: {1}")]
-    Tool(String, String),
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
 }
@@ -31,7 +27,7 @@ pub enum ScribblesError {
 pub type Result<T> = std::result::Result<T, ScribblesError>;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct IngestedMoppetBundle {
+pub struct IngestedCharacterBundle {
     pub character_id: String,
     pub character_name: String,
     pub view: String,
@@ -44,101 +40,7 @@ pub struct IngestedMoppetBundle {
     pub character_png: Option<PathBuf>,
     pub parts_sheet_png: Option<PathBuf>,
     pub pose_sheet_png: Option<PathBuf>,
-    pub animated_svg: Option<PathBuf>,
     pub metadata: Value,
-}
-
-pub fn find_binary(name: &str) -> Option<PathBuf> {
-    if let Some(paths) = std::env::var_os("PATH") {
-        for dir in std::env::split_paths(&paths) {
-            let candidate = dir.join(name);
-            if candidate.is_file() {
-                return Some(candidate);
-            }
-        }
-    }
-    if let Some(home) = std::env::var_os("HOME") {
-        let local_bin = PathBuf::from(home).join(".local/bin").join(name);
-        if local_bin.is_file() {
-            return Some(local_bin);
-        }
-    }
-    None
-}
-
-pub fn find_chrome_binary() -> Option<PathBuf> {
-    for candidate in ["google-chrome-stable", "google-chrome", "chromium", "chromium-browser", "brave-browser"] {
-        if let Some(path) = find_binary(candidate) {
-            return Some(path);
-        }
-    }
-    None
-}
-
-pub fn open_moppet_maker_window(custom_url: Option<&str>) -> Result<Value> {
-    let url = custom_url.map(str::trim).filter(|s| !s.is_empty()).unwrap_or(DEFAULT_MOPPET_MAKER_URL);
-    if !url.starts_with("https://flow.google.com/") && !url.starts_with("https://labs.google/") {
-        return Err(ScribblesError::Invalid(format!("Scribbles app window only opens Google Flow URLs (`https://flow.google.com/...`), got `{url}`")));
-    }
-
-    if let Some(hyprctl) = find_binary("hyprctl")
-        && let Ok(out) = Command::new(&hyprctl).args(["clients", "-j"]).output()
-        && out.status.success()
-        && let Ok(clients) = serde_json::from_slice::<Value>(&out.stdout)
-        && let Some(arr) = clients.as_array()
-    {
-        for client in arr {
-            let class = client["class"].as_str().unwrap_or_default();
-            let title = client["title"].as_str().unwrap_or_default();
-            if class.contains("flow.google.com__project_") || title.contains("Moppet") {
-                let addr = client["address"].as_str().unwrap_or_default();
-                if !addr.is_empty() {
-                    let _ = Command::new(&hyprctl).args(["dispatch", "focuswindow", &format!("address:{addr}")]).output();
-                    return Ok(json!({
-                        "ok": true,
-                        "launched": false,
-                        "focused": true,
-                        "window_open": true,
-                        "address": addr,
-                        "class": class,
-                        "url": url,
-                        "project_url": DEFAULT_FLOW_PROJECT_URL,
-                    }));
-                }
-            }
-        }
-    }
-
-    if let Some(chrome) = find_chrome_binary() {
-        Command::new(&chrome)
-            .arg(format!("--app={url}"))
-            .stdin(std::process::Stdio::null())
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .spawn()
-            .map_err(|e| ScribblesError::Tool(chrome.display().to_string(), e.to_string()))?;
-        return Ok(json!({
-            "ok": true,
-            "launched": true,
-            "mode": "chrome-app-window",
-            "browser": chrome,
-            "url": url,
-            "project_url": DEFAULT_FLOW_PROJECT_URL,
-        }));
-    }
-
-    if let Some(xdg) = find_binary("xdg-open") {
-        Command::new(&xdg)
-            .arg(url)
-            .stdin(std::process::Stdio::null())
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .spawn()
-            .map_err(|e| ScribblesError::Tool("xdg-open".into(), e.to_string()))?;
-        return Ok(json!({"ok": true, "launched": true, "mode": "xdg-open", "browser": xdg, "url": url}));
-    }
-
-    Err(ScribblesError::Tool("chrome".into(), "No Chrome/Chromium or xdg-open binary found on PATH".into()))
 }
 
 pub fn ensure_valid_png(src: &Path, dst: &Path) -> Result<(u32, u32)> {
@@ -146,7 +48,8 @@ pub fn ensure_valid_png(src: &Path, dst: &Path) -> Result<(u32, u32)> {
     if bytes.len() < 8 {
         return Err(ScribblesError::Invalid(format!("Image file {} is empty or truncated", src.display())));
     }
-    let img = image::load_from_memory(&bytes).map_err(|e| ScribblesError::Invalid(format!("Could not decode image {}: {e}", src.display())))?;
+    let img = image::load_from_memory(&bytes)
+        .map_err(|e| ScribblesError::Invalid(format!("Could not decode image {}: {e}", src.display())))?;
     let (width, height) = (img.width(), img.height());
     if let Some(parent) = dst.parent() {
         fs::create_dir_all(parent)?;
@@ -156,7 +59,8 @@ pub fn ensure_valid_png(src: &Path, dst: &Path) -> Result<(u32, u32)> {
             fs::copy(src, dst)?;
         }
     } else {
-        img.save_with_format(dst, image::ImageFormat::Png).map_err(|e| ScribblesError::Invalid(format!("Failed to write PNG {}: {e}", dst.display())))?;
+        img.save_with_format(dst, image::ImageFormat::Png)
+            .map_err(|e| ScribblesError::Invalid(format!("Failed to write PNG {}: {e}", dst.display())))?;
     }
     Ok((width, height))
 }
@@ -172,7 +76,10 @@ fn newest_matching_file(dir: &Path, prefixes: &[&str], ext: &str) -> Option<Path
         let Some(name) = path.file_name().and_then(|n| n.to_str()) else { continue };
         let lower = name.to_ascii_lowercase();
         if lower.ends_with(ext) && prefixes.iter().any(|p| lower.starts_with(p)) {
-            let mtime = entry.metadata().and_then(|m| m.modified()).unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+            let mtime = entry
+                .metadata()
+                .and_then(|m| m.modified())
+                .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
             if best.as_ref().is_none_or(|(t, _)| mtime > *t) {
                 best = Some((mtime, path));
             }
@@ -196,16 +103,21 @@ pub fn sanitize_id(raw: &str) -> String {
     out.trim_matches('_').to_string()
 }
 
-pub fn ingest_moppet_downloads(project_root: &Path, source_dir: Option<&Path>, requested_character_id: Option<&str>) -> Result<IngestedMoppetBundle> {
-    let downloads = match source_dir {
-        Some(d) => d.to_path_buf(),
-        None => PathBuf::from(std::env::var_os("HOME").ok_or_else(|| ScribblesError::Invalid("HOME is unset".into()))?).join("Downloads"),
-    };
-    if !downloads.is_dir() {
-        return Err(ScribblesError::Invalid(format!("Downloads directory {} does not exist", downloads.display())));
+/// Ingests an explicitly specified character bundle directory (`character.png`, `parts-sheet.png`,
+/// `pose-sheet.png`, optional `handoff.json` / `parts.json`) into `<project>/assets/characters/<id>/`.
+pub fn ingest_bundle_dir(
+    project_root: &Path,
+    source_dir: &Path,
+    requested_character_id: Option<&str>,
+) -> Result<IngestedCharacterBundle> {
+    if !source_dir.is_dir() {
+        return Err(ScribblesError::Invalid(format!(
+            "Character bundle directory {} does not exist",
+            source_dir.display()
+        )));
     }
 
-    let handoff_src = newest_matching_file(&downloads, &["handoff", "moppet-handoff"], ".json");
+    let handoff_src = newest_matching_file(source_dir, &["handoff", "bundle"], ".json");
     let mut meta = Value::Object(Default::default());
     if let Some(ref h_path) = handoff_src
         && let Ok(raw) = fs::read_to_string(h_path)
@@ -218,11 +130,10 @@ pub fn ingest_moppet_downloads(project_root: &Path, source_dir: Option<&Path>, r
         .filter(|s| !s.trim().is_empty())
         .or_else(|| meta["characterName"].as_str())
         .or_else(|| meta["name"].as_str())
-        .or_else(|| meta["recipe"]["animal"].as_str())
-        .unwrap_or("moppet");
+        .unwrap_or("character");
     let char_id = {
         let clean = sanitize_id(inferred_name);
-        if clean.is_empty() { "moppet".to_string() } else { clean }
+        if clean.is_empty() { "character".to_string() } else { clean }
     };
 
     let dest_dir = project_root.join("assets/characters").join(&char_id);
@@ -246,21 +157,20 @@ pub fn ingest_moppet_downloads(project_root: &Path, source_dir: Option<&Path>, r
 
     let action = meta["action"]
         .as_str()
-        .or_else(|| meta["spriteAction"].as_str())
         .map(sanitize_id)
         .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| if view == "side" { "walk_right".into() } else { "walk_down".into() });
+        .unwrap_or_else(|| if view == "side" { "walk_right".into() } else { "idle".into() });
 
     let cols = meta["columns"].as_u64().or_else(|| meta["grid"][0].as_u64()).unwrap_or(2) as u32;
     let rows = meta["rows"].as_u64().or_else(|| meta["grid"][1].as_u64()).unwrap_or(2) as u32;
 
-    let mut bundle = IngestedMoppetBundle {
+    let mut bundle = IngestedCharacterBundle {
         character_id: char_id.clone(),
         character_name: inferred_name.to_string(),
         view: view.clone(),
-        action: action.clone(),
+        action,
         grid: (cols.max(1), rows.max(1)),
-        source_dir: downloads.clone(),
+        source_dir: source_dir.to_path_buf(),
         dest_dir: dest_dir.clone(),
         metadata: meta.clone(),
         ..Default::default()
@@ -276,7 +186,7 @@ pub fn ingest_moppet_downloads(project_root: &Path, source_dir: Option<&Path>, r
 
     let view_dir = dest_dir.join(&view);
     fs::create_dir_all(&view_dir)?;
-    if let Some(src) = newest_matching_file(&downloads, &["parts", "moppet-parts-rig"], ".json") {
+    if let Some(src) = newest_matching_file(source_dir, &["parts"], ".json") {
         let dst = view_dir.join("parts.json");
         if src != dst {
             let _ = fs::copy(&src, &dst);
@@ -289,7 +199,7 @@ pub fn ingest_moppet_downloads(project_root: &Path, source_dir: Option<&Path>, r
             "view": view,
             "size": meta.get("size").cloned().unwrap_or_else(|| json!([1024, 1024])),
             "skeleton": meta.get("skeleton").and_then(Value::as_str).unwrap_or("plush-9"),
-            "status": "ingested from Flow Moppet Maker; ready for character.cut and character.rig",
+            "status": "ingested bundle; ready for character.cut and character.rig",
             "parts": meta["parts"],
         });
         if let Ok(bytes) = serde_json::to_vec_pretty(&parts_doc) {
@@ -298,86 +208,27 @@ pub fn ingest_moppet_downloads(project_root: &Path, source_dir: Option<&Path>, r
         }
     }
 
-    if let Some(src) = newest_matching_file(&downloads, &["character", "moppet-character"], ".png") {
-        let dst = dest_dir.join("flow-original.png");
+    if let Some(src) = newest_matching_file(source_dir, &["character"], ".png") {
+        let dst = dest_dir.join("character.png");
         if ensure_valid_png(&src, &dst).is_ok() {
             let _ = fs::copy(&dst, view_dir.join(format!("{char_id}-{view}-drawing.png")));
             bundle.character_png = Some(dst);
         }
     }
 
-    if let Some(src) = newest_matching_file(&downloads, &["parts-sheet", "parts_sheet", "moppet-parts"], ".png") {
+    if let Some(src) = newest_matching_file(source_dir, &["parts-sheet", "parts_sheet"], ".png") {
         let dst = dest_dir.join("parts-sheet.png");
         if ensure_valid_png(&src, &dst).is_ok() {
             bundle.parts_sheet_png = Some(dst);
         }
     }
 
-    if let Some(src) = newest_matching_file(&downloads, &["pose-sheet", "pose_sheet", "sprite-sheet", "moppet-poses"], ".png") {
+    if let Some(src) = newest_matching_file(source_dir, &["pose-sheet", "pose_sheet", "sprite-sheet"], ".png") {
         let dst = dest_dir.join("pose-sheet.png");
         if ensure_valid_png(&src, &dst).is_ok() {
-            bundle.pose_sheet_png = Some(dst.clone());
-            let svg_out = dest_dir.join("sprites").join(&action).join(format!("{char_id}-{action}.svg"));
-            if let Ok(svg_path) = build_animated_svg(&dst, &svg_out, 6) {
-                bundle.animated_svg = Some(svg_path);
-            }
+            bundle.pose_sheet_png = Some(dst);
         }
     }
 
     Ok(bundle)
-}
-
-pub fn build_animated_svg(sheet_png: &Path, out_svg: &Path, fps: u64) -> Result<PathBuf> {
-    if !sheet_png.is_file() {
-        return Err(ScribblesError::Invalid(format!("Pose sheet {} does not exist", sheet_png.display())));
-    }
-    if let Some(parent) = out_svg.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    let cli = find_binary("flow-clip").ok_or_else(|| ScribblesError::Tool("flow-clip".into(), "flow-clip not found on PATH".into()))?;
-    let output = Command::new(&cli)
-        .args(["--mode", "svg", "--sheet"])
-        .arg(sheet_png)
-        .args(["--fps", &fps.to_string(), "--out"])
-        .arg(out_svg)
-        .output()
-        .map_err(|e| ScribblesError::Tool("flow-clip".into(), e.to_string()))?;
-    if !output.status.success() {
-        return Err(ScribblesError::Tool(
-            "flow-clip".into(),
-            format!("{}{}", String::from_utf8_lossy(&output.stderr), String::from_utf8_lossy(&output.stdout)),
-        ));
-    }
-    Ok(out_svg.to_path_buf())
-}
-
-pub struct VideoClipRequest<'a> {
-    pub prompt: &'a str,
-    pub out_mp4: &'a Path,
-    pub model: Option<&'a str>,
-    pub aspect: Option<&'a str>,
-    pub duration: Option<&'a str>,
-    pub resolution: Option<&'a str>,
-    pub ingredient: Option<&'a str>,
-}
-
-pub fn generate_video_clip(req: &VideoClipRequest<'_>) -> Result<PathBuf> {
-    if let Some(parent) = req.out_mp4.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    let cli = find_binary("flow-clip").ok_or_else(|| ScribblesError::Tool("flow-clip".into(), "flow-clip not found on PATH".into()))?;
-    let mut cmd = Command::new(&cli);
-    cmd.args(["--mode", "video", "--prompt", req.prompt, "--out"]).arg(req.out_mp4);
-    for (flag, val) in
-        [("--model", req.model), ("--aspect", req.aspect), ("--duration", req.duration), ("--resolution", req.resolution), ("--ingredient", req.ingredient)]
-    {
-        if let Some(v) = val.filter(|v| !v.trim().is_empty()) {
-            cmd.args([flag, v]);
-        }
-    }
-    let output = cmd.output().map_err(|e| ScribblesError::Tool("flow-clip".into(), e.to_string()))?;
-    if !output.status.success() {
-        return Err(ScribblesError::Tool("flow-clip".into(), format!("exit {:?}: {}", output.status.code(), String::from_utf8_lossy(&output.stderr))));
-    }
-    Ok(req.out_mp4.to_path_buf())
 }

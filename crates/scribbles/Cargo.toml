@@ -1,6 +1,6 @@
 [package]
 name = "craft-scribbles"
-description = "Scribbles — Google Flow (Moppet Maker) app-window launcher, handoff asset ingestor, animated SVG builder, and video clip bridge for Magic Studio"
+description = "Sprite-sheet cell geometry, plush-9 part slots, and validated local character-bundle ingestion for Magic Studio"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

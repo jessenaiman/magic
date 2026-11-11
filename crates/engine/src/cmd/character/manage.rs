@@ -1,12 +1,14 @@
-//! Character listing, style classification, frame/clip rendering, keyframing, and Craft app handoff.
+//! Character listing, style classification, multi-action `.ecproj` clip discovery (`animations/`
+//! and `animation-map.json`), frame/clip rendering, keyframing, and Craft app handoff.
 
 use std::path::{Path, PathBuf};
 
 use serde_json::{Value, json};
 
 use super::{
-    View, bad, character_folder, check_ecproj_head, effectcraft, effectcraft_frame, effectcraft_render, find_dir_anicraft_doc, find_dir_ecproj,
-    find_dir_pcraft, find_dir_photo_doc, find_dir_psd, find_dir_vector_doc, find_initial_cutout, model3d, point, sprite, step,
+    View, bad, character_folder, check_ecproj_head, discover_character_folders, ecproj_first_comp_name, effectcraft, effectcraft_frame, effectcraft_render,
+    find_dir_anicraft_doc, find_dir_ecproj, find_dir_pcraft, find_dir_photo_doc, find_dir_psd, find_dir_vector_doc, find_initial_cutout, model3d, point,
+    sprite, step,
 };
 use crate::{Result, Session};
 
@@ -26,6 +28,88 @@ fn collect_view_frames(dir: &Path) -> Vec<PathBuf> {
         out.extend(rendered_pngs(&sub).unwrap_or_default());
     }
     out
+}
+
+fn read_animation_map(project_dir: &Path) -> Value {
+    for rel in ["assets/animations/animation-map.json", "animations/animation-map.json", "animation-map.json"] {
+        let p = project_dir.join(rel);
+        if let Ok(raw) = std::fs::read_to_string(&p)
+            && let Ok(parsed) = serde_json::from_str::<Value>(&raw)
+        {
+            return parsed;
+        }
+    }
+    Value::Null
+}
+
+fn collect_ecprojs_in_dir(dir: &Path, max_depth: usize, out: &mut Vec<PathBuf>) {
+    if !dir.is_dir() {
+        return;
+    }
+    let mut entries: Vec<PathBuf> = std::fs::read_dir(dir).into_iter().flatten().flatten().map(|e| e.path()).collect();
+    entries.sort();
+    for entry in entries {
+        if entry.is_file() && entry.extension().is_some_and(|e| e.eq_ignore_ascii_case("ecproj")) {
+            let stem = entry.file_stem().and_then(|s| s.to_str()).unwrap_or_default();
+            if !stem.contains("before-") && !out.contains(&entry) {
+                out.push(entry);
+            }
+        } else if entry.is_dir() && max_depth > 0 {
+            collect_ecprojs_in_dir(&entry, max_depth - 1, out);
+        }
+    }
+}
+
+/// Discover all `.ecproj` action variants (`miss-hayley-waving.ecproj`, `miss-hayley-running.ecproj`,
+/// `oilcan-badger-rig.ecproj`, `layered_motion.ecproj`, etc.) belonging to a character across both
+/// `assets/characters/**/<char>` and `animations/**/<char>`.
+fn discover_character_action_ecprojs(project_dir: &Path, folder: &Path, raw_id: &str, canonical_id: &str) -> Vec<Value> {
+    let mut ecprojs = Vec::new();
+    collect_ecprojs_in_dir(folder, 2, &mut ecprojs);
+
+    let proj_slug = project_dir
+        .file_name()
+        .and_then(|n| n.to_str())
+        .map(crate::workspace::sanitize_asset_id)
+        .unwrap_or_default();
+    let mut anim_roots = vec![
+        project_dir.join("animations"),
+        project_dir.join("assets/animations"),
+    ];
+    if let Some(parent) = project_dir.parent() {
+        anim_roots.push(parent.join("animations"));
+    }
+    for aroot in anim_roots {
+        for sub in [
+            aroot.join(raw_id),
+            aroot.join(canonical_id),
+            aroot.join("characters").join(raw_id),
+            aroot.join("characters").join(canonical_id),
+            aroot.join(proj_slug.replace('_', "-")).join(raw_id),
+            aroot.join(&proj_slug).join(raw_id),
+        ] {
+            collect_ecprojs_in_dir(&sub, 2, &mut ecprojs);
+        }
+    }
+
+    ecprojs
+        .into_iter()
+        .map(|path| {
+            let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("rig");
+            let action = stem
+                .strip_prefix(&format!("{raw_id}-"))
+                .or_else(|| stem.strip_prefix(&format!("{canonical_id}-")))
+                .or_else(|| stem.strip_prefix(&format!("{raw_id}_")))
+                .unwrap_or(stem);
+            let comp = ecproj_first_comp_name(&path).unwrap_or_else(|| stem.to_owned());
+            json!({
+                "action": action,
+                "name": stem,
+                "comp": comp,
+                "path": path,
+            })
+        })
+        .collect()
 }
 
 fn extract_parts_rig_meta(parts_path: &Path) -> (Vec<Value>, Vec<Value>, Option<(f64, f64)>) {
@@ -128,9 +212,10 @@ fn build_view_summary(dir: &Path, canonical_id: &str, raw_id: &str, view_name: &
     }))
 }
 
-/// List characters and which Craft app files each view has.
+/// List characters (including nested cast folders & `animations/` action `.ecproj` clips) and their Craft files.
 pub fn cmd_character_list(s: &mut Session, _: &Value) -> Result<Value> {
     let project_dir = crate::workshop::project_dir(s)?;
+    let animation_map = read_animation_map(&project_dir);
     let cast: Vec<String> = s
         .project_path
         .as_ref()
@@ -141,47 +226,75 @@ pub fn cmd_character_list(s: &mut Session, _: &Value) -> Result<Value> {
         .iter()
         .filter_map(|v| v.as_str().map(str::to_owned))
         .collect();
-    let root = project_dir.join("assets/characters");
-    let skip_names = ["approved-crops", "lineup", "expressions", "contact-parts-v1", "cast"];
-    let mut ids: Vec<String> = std::fs::read_dir(&root)
-        .into_iter()
-        .flatten()
-        .flatten()
-        .map(|e| e.file_name().to_string_lossy().into_owned())
-        .filter(|name| !skip_names.iter().any(|skip| name.eq_ignore_ascii_case(skip)))
-        .collect();
-    ids.sort();
+
+    let mut discovered = discover_character_folders(&project_dir);
     for asset in s.project_assets.iter().filter(|a| a.kind == "model_3d") {
         let id = asset.id.replace('_', "-");
-        if !ids.contains(&id) {
-            ids.push(id);
+        if !discovered.iter().any(|(raw, _, _)| crate::workspace::sanitize_asset_id(raw) == crate::workspace::sanitize_asset_id(&id)) {
+            discovered.push((id.clone(), None, project_dir.join("assets/characters").join(&id)));
         }
     }
+
     let mut out = Vec::new();
-    for id in ids {
-        if !cast.is_empty() && !cast.contains(&id) {
+    for (raw_name, group, folder) in discovered {
+        let canonical_id = crate::workspace::sanitize_asset_id(&raw_name);
+        if !cast.is_empty() && !cast.contains(&raw_name) && !cast.contains(&canonical_id) {
             continue;
         }
-        let folder = root.join(&id);
-        let canonical_id = crate::workspace::sanitize_asset_id(&id);
         let mut views: Vec<Value> = ["front", "side", "back"]
             .iter()
             .filter(|v| folder.join(v).is_dir())
-            .filter_map(|v| build_view_summary(&folder.join(v), &canonical_id, &id, v, false))
+            .filter_map(|v| build_view_summary(&folder.join(v), &canonical_id, &raw_name, v, false))
             .collect();
         if views.is_empty()
-            && let Some(flat_view) = build_view_summary(&folder, &canonical_id, &id, "front", true)
+            && let Some(flat_view) = build_view_summary(&folder, &canonical_id, &raw_name, "front", true)
         {
             views.push(flat_view);
         }
+        let action_ecprojs = discover_character_action_ecprojs(&project_dir, &folder, &raw_name, &canonical_id);
+        if views.is_empty()
+            && let Some(first_ec) = action_ecprojs.first()
+        {
+            views.push(json!({
+                "view": "front",
+                "parts": false,
+                "drawing": find_initial_cutout(&folder),
+                "latest_frame": find_initial_cutout(&folder),
+                "rendered_frames": [],
+                "psd": false,
+                "pcraft": false,
+                "ecproj": true,
+                "ecproj_path": first_ec["path"],
+                "joints": [],
+                "pins": [],
+            }));
+        }
+        let char_magic = folder.join("character.magic");
         let info_3d = model3d::inspect_character_3d(s, &project_dir, &canonical_id);
-        let sprites = sprite_summaries(&folder);
-        if !views.is_empty() || !sprites.is_empty() || info_3d["available"].as_bool() == Some(true) {
+        let mut sprites = sprite_summaries(&folder);
+        for act in &action_ecprojs {
+            let act_name = act["action"].as_str().unwrap_or("rig");
+            if !sprites.iter().any(|sp| sp["name"].as_str() == Some(act_name)) {
+                sprites.push(json!({
+                    "name": act_name,
+                    "animation_style": "cutout_2_5d",
+                    "ecproj": act["path"],
+                    "comp": act["comp"],
+                    "frames": [],
+                    "fps": 24,
+                    "duration": 2.0,
+                }));
+            }
+        }
+        if !views.is_empty() || !sprites.is_empty() || !action_ecprojs.is_empty() || info_3d["available"].as_bool() == Some(true) {
             let (animation_style, animation_styles) = classify_animation_style(&views, &sprites, &info_3d);
             out.push(json!({
                 "id": canonical_id,
-                "name": id,
+                "name": raw_name,
+                "group": group,
                 "folder": folder,
+                "character_magic": char_magic.is_file().then_some(char_magic),
+                "action_ecprojs": action_ecprojs,
                 "animation_style": animation_style,
                 "animation_styles": animation_styles,
                 "views": views,
@@ -190,7 +303,11 @@ pub fn cmd_character_list(s: &mut Session, _: &Value) -> Result<Value> {
             }));
         }
     }
-    Ok(json!({"ok": true, "characters": out}))
+    Ok(json!({
+        "ok": true,
+        "characters": out,
+        "animation_map": animation_map,
+    }))
 }
 
 pub fn classify_animation_style(views: &[Value], sprites: &[Value], info_3d: &Value) -> (&'static str, Vec<&'static str>) {
@@ -241,13 +358,18 @@ pub fn classify_animation_style(views: &[Value], sprites: &[Value], info_3d: &Va
 /// Render one frame of the rigged character with EffectCraft.
 pub fn cmd_character_frame(s: &mut Session, p: &Value) -> Result<Value> {
     let view = View::from_params(s, p)?;
-    let project = view.require("ecproj", "character.rig")?;
+    let project = if let Some(raw_ec) = p["ecproj"].as_str().filter(|v| !v.is_empty()) {
+        crate::workspace::resolve_workspace_path(s, raw_ec)
+    } else {
+        view.require("ecproj", "character.rig")?
+    };
+    let comp = ecproj_first_comp_name(&project).unwrap_or_else(|| view.comp());
     let time = p["time"].as_f64().unwrap_or(0.0).max(0.0);
     let side = p["max_side"].as_u64().unwrap_or(900).clamp(64, 4096);
     let frames = view.dir.join("frames");
     std::fs::create_dir_all(&frames)?;
     let out = frames.join(format!("{}-{}-{:07.3}.png", view.id, view.view, time));
-    effectcraft_frame(&project, &view.comp(), time, side as u32, &out)?;
+    effectcraft_frame(&project, &comp, time, side as u32, &out)?;
     Ok(json!({"ok": true, "frame": out, "time": time, "project": project}))
 }
 
@@ -414,14 +536,14 @@ pub fn sprite_summaries(folder: &Path) -> Vec<Value> {
 
 fn animation_documents(s: &Session) -> Result<Vec<Value>> {
     let root = crate::workshop::project_dir(s)?;
-    let mut paths: Vec<PathBuf> = ["motion", "lettering"]
+    let mut paths = Vec::new();
+    for folder in ["motion", "lettering", "animations", "assets/animations"] {
+        collect_ecprojs_in_dir(&root.join(folder), 3, &mut paths);
+    }
+    Ok(paths
         .iter()
-        .flat_map(|folder| std::fs::read_dir(root.join(folder)).into_iter().flatten().flatten())
-        .map(|entry| entry.path())
-        .filter(|path| path.extension().is_some_and(|ext| ext == "ecproj"))
-        .collect();
-    paths.sort();
-    Ok(paths.iter().map(|path| json!({"name": path.file_stem().map(|n| n.to_string_lossy().into_owned()), "path": path})).collect())
+        .map(|path| json!({"name": path.file_stem().map(|n| n.to_string_lossy().into_owned()), "path": path}))
+        .collect())
 }
 
 pub fn cmd_animation_view(s: &mut Session, p: &Value) -> Result<Value> {
@@ -430,7 +552,16 @@ pub fn cmd_animation_view(s: &mut Session, p: &Value) -> Result<Value> {
     let views_of = |c: &Value| c["views"].as_array().into_iter().flatten().filter_map(|v| v["view"].as_str().map(str::to_owned)).collect::<Vec<_>>();
     let characters: Vec<Value> = all
         .iter()
-        .map(|c| json!({"id": c["id"], "animation_style": c["animation_style"], "animation_styles": c["animation_styles"], "views": views_of(c)}))
+        .map(|c| {
+            json!({
+                "id": c["id"],
+                "group": c["group"],
+                "animation_style": c["animation_style"],
+                "animation_styles": c["animation_styles"],
+                "action_ecprojs": c["action_ecprojs"],
+                "views": views_of(c),
+            })
+        })
         .collect();
     let documents = animation_documents(s)?;
     let chosen = p["character"]
@@ -466,6 +597,7 @@ pub fn cmd_animation_view(s: &mut Session, p: &Value) -> Result<Value> {
             "view": view,
             "animation_style": character["animation_style"],
             "animation_styles": character["animation_styles"],
+            "action_ecprojs": character["action_ecprojs"],
             "time": time,
             "frame": frame,
             "clip": clip,
@@ -507,22 +639,29 @@ pub fn cmd_character_import(s: &mut Session, p: &Value) -> Result<Value> {
         }
         let head = (ext == "ecproj").then(|| check_ecproj_head(&source)).transpose()?;
         let stem = source.file_stem().and_then(|n| n.to_str()).unwrap_or("character");
-        let clean_stem = stem.trim_end_matches("-rig").trim_end_matches("-front").trim_end_matches("-parts").trim_end_matches("-editable");
+        let clean_stem = stem
+            .trim_end_matches("-rig")
+            .trim_end_matches("-front")
+            .trim_end_matches("-parts")
+            .trim_end_matches("-editable")
+            .trim_end_matches("-waving")
+            .trim_end_matches("-running");
         let char_id = p["character"]
             .as_str()
             .map(crate::workspace::sanitize_asset_id)
             .filter(|id| !id.is_empty())
             .unwrap_or_else(|| crate::workspace::sanitize_asset_id(clean_stem));
         let project_dir = crate::workshop::project_dir(s)?;
-        let char_dir = project_dir.join("assets/characters").join(&char_id);
+        let char_dir = character_folder(&project_dir, &char_id);
         std::fs::create_dir_all(&char_dir)?;
         let file_name = source.file_name().ok_or_else(|| bad("invalid Craft document filename"))?;
-        let dest = if source.starts_with(project_dir.join("assets/characters")) {
+        let dest = if source.starts_with(project_dir.join("assets/characters")) || source.starts_with(project_dir.join("animations")) {
             source.clone()
         } else {
             let d = char_dir.join(file_name);
             if source != d {
-                std::fs::copy(&source, &d)?;
+                let bytes = std::fs::read(&source)?;
+                craft_atomic::atomic_write(&d, &bytes)?;
             }
             d
         };
@@ -601,8 +740,6 @@ pub fn cmd_character_set(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"ok": true, "project": project, "part": part, "prop": prop, "time": time}))
 }
 
-/// Open a character's live Craft document in `EffectCraft` (`.ecproj`), `PhotoCraft` (`.pcraft`/`.psd`),
-/// or `VectorCraft` (`.vectorcraft`/`.svg`). `AniCraft` GUI remains disabled for safety while in early alpha.
 pub fn cmd_character_open(s: &mut Session, p: &Value) -> Result<Value> {
     let view = View::from_params(s, p)?;
     let (app, target, file) = match p["app"].as_str().unwrap_or("effectcraft") {
@@ -612,12 +749,17 @@ pub fn cmd_character_open(s: &mut Session, p: &Value) -> Result<Value> {
                 ec
             } else {
                 let project_dir = crate::workshop::project_dir(s)?;
-                let info_3d = model3d::inspect_character_3d(s, &project_dir, &view.id);
-                info_3d["clips"]
-                    .as_array()
-                    .and_then(|clips| clips.iter().find_map(|c| c["ecproj_3d"].as_str().map(PathBuf::from)))
-                    .filter(|p| p.is_file())
-                    .ok_or_else(|| bad("no EffectCraft .ecproj found; run character.rig or character.model3d.animate first"))?
+                let action_ecs = discover_character_action_ecprojs(&project_dir, &view.dir, &view.folder_name, &view.id);
+                if let Some(first_ec) = action_ecs.first().and_then(|v| v["path"].as_str()).map(PathBuf::from).filter(|p| p.is_file()) {
+                    first_ec
+                } else {
+                    let info_3d = model3d::inspect_character_3d(s, &project_dir, &view.id);
+                    info_3d["clips"]
+                        .as_array()
+                        .and_then(|clips| clips.iter().find_map(|c| c["ecproj_3d"].as_str().map(PathBuf::from)))
+                        .filter(|p| p.is_file())
+                        .ok_or_else(|| bad("no EffectCraft .ecproj found; run character.rig or character.model3d.animate first"))?
+                }
             };
             ("effectcraft", crate::CraftTarget::Effect, chosen)
         }

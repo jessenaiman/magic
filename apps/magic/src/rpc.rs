@@ -1,10 +1,14 @@
-//! UI-thread `--control` RPC dispatch (`ui.*`, `engine.*`, `window.snap`, `perf.stats`, `app.*`).
+//! UI-thread `--control` RPC dispatch (`ui.*`, `engine.*`, `render.frame`, `window.snap`,
+//! `perf.stats`, `app.*`), matching `FilmCraft` (`:9876`) and `EffectCraft` (`:9877`)
+//! `docs/control-protocol.md` contracts including `--control-input-only`, stage/timeline
+//! coordinate locators, and Sheet 08 inspector/workspace controls.
 
 use std::sync::mpsc;
 
 use craft_keymap::CommandRef;
 use egui::{Event, ViewportCommand};
-use magic_ui_egui::{ThemeMode, UiAction, ViewMode};
+use magic::time::TICKS_PER_SECOND;
+use magic_ui_egui::{AccentChoice, InterfaceStyle, ThemeMode, UiAction, ViewMode};
 use serde_json::{Value, json};
 
 use crate::{MagicDesktopApp, capture, input, keymap, lifecycle, only_keys, studio};
@@ -137,6 +141,15 @@ impl MagicDesktopApp {
     }
 
     fn dispatch_immediate_control(&mut self, ctx: &egui::Context, id: &str, params: Value) -> Result<Value, String> {
+        if self.control_input_only
+            && !id.starts_with("ui.")
+            && !matches!(id, "engine.commands" | "perf.stats" | "app.quit" | "app.restart" | "app.hide" | "window.snap")
+            && !magic::commands::is_read_only_command(id, &params)
+        {
+            return Err("session started with --control-input-only: mutating engine commands are disabled; drive controls via ui.*".into());
+        }
+        let ws_dir = self.session.project_path.clone();
+        let ws_parent = ws_dir.as_deref().and_then(std::path::Path::parent);
         match id {
             "engine.execute" => {
                 let cmd = params["command"]
@@ -150,6 +163,9 @@ impl MagicDesktopApp {
                 self.dispatch_immediate_control(ctx, cmd, inner)
             }
             "ui.menu.invoke" => {
+                if self.control_input_only {
+                    return Err("ui.menu.invoke is disabled under --control-input-only".into());
+                }
                 let cmd_id = params["id"]
                     .as_str()
                     .or_else(|| params["command"].as_str())
@@ -204,6 +220,11 @@ impl MagicDesktopApp {
                 let prefix = params.get("prefix").and_then(Value::as_str);
                 Ok(json!({"elements": self.registry.list(prefix)}))
             }
+            "ui.viewer.locate" => self.control_viewer_locate(&params),
+            "ui.viewer.hit" => self.control_viewer_hit(&params),
+            "ui.timeline.locate" => self.control_timeline_locate(&params),
+            "ui.timeline.hit" => self.control_timeline_hit(&params),
+            "render.frame" => self.control_render_frame(ctx, &params),
             "ui.set" | "ui.set_view" => self.control_ui_set(ctx, &params),
             "ui.playback" => self.control_playback(&params),
             "ui.focus" => self.control_focus(ctx, &params),
@@ -232,9 +253,9 @@ impl MagicDesktopApp {
                     None => Ok(json!({"handled": false})),
                 }
             }
-            "ui.filmcraft" => studio::control(&params),
-            "ui.effectcraft" => studio::control_effect(&params),
-            "ui.craft" => studio::control_any(&params),
+            "ui.filmcraft" => studio::control(&params, ws_parent),
+            "ui.effectcraft" => studio::control_effect(&params, ws_parent),
+            "ui.craft" => studio::control_any(&params, ws_parent),
             "perf.stats" => {
                 only_keys(&params, id, &[])?;
                 let fps = if self.last_render_ms > 0.01 { 1000.0 / self.last_render_ms } else { 60.0 };
@@ -244,10 +265,10 @@ impl MagicDesktopApp {
                     "fps": fps,
                     "lastRenderMs": self.last_render_ms,
                     "pixelsPerPoint": ctx.pixels_per_point(),
+                    "ticksPerSecond": TICKS_PER_SECOND,
                 }))
             }
             "app.hide" => {
-                only_keys(&params, id, &[])?;
                 ctx.send_viewport_cmd(ViewportCommand::Visible(false));
                 Ok(json!({"ok": true, "hidden": true}))
             }
@@ -264,6 +285,140 @@ impl MagicDesktopApp {
             }
             other if other.starts_with("ui.") => Err(format!("unsupported UI control method `{other}`")),
             engine_cmd => self.execute_engine(ctx, engine_cmd, params),
+        }
+    }
+
+    fn active_stage_element_id(&self, override_stage: Option<&str>) -> &'static str {
+        match override_stage.and_then(ViewMode::parse).unwrap_or_else(|| self.ui_state.effective_view()) {
+            ViewMode::Storyboard => "storyboard-spread-canvas",
+            ViewMode::Animation => "animation-stage-canvas",
+            ViewMode::Design => "lyrics-stage-canvas",
+            ViewMode::Motion => "motion-canvas",
+            ViewMode::Studio => "film-preview",
+            ViewMode::Project => "view-project",
+            ViewMode::Home => "view-home",
+        }
+    }
+
+    fn control_viewer_locate(&self, params: &Value) -> Result<Value, String> {
+        only_keys(params, "ui.viewer.locate", &["x", "y", "width", "height", "stage"])?;
+        let comp_x = params.get("x").and_then(Value::as_f64).ok_or("ui.viewer.locate requires numeric `x`")?;
+        let comp_y = params.get("y").and_then(Value::as_f64).ok_or("ui.viewer.locate requires numeric `y`")?;
+        let comp_w = params.get("width").and_then(Value::as_f64).unwrap_or(1920.0).max(1.0);
+        let comp_h = params.get("height").and_then(Value::as_f64).unwrap_or(1080.0).max(1.0);
+        let stage_id = self.active_stage_element_id(params.get("stage").and_then(Value::as_str));
+        let elem = self
+            .registry
+            .get(stage_id)
+            .ok_or_else(|| format!("ui.viewer.locate: stage `{stage_id}` is not visible on screen"))?;
+        let wx = f64::from(elem.rect.min.x) + (comp_x / comp_w).clamp(0.0, 1.0) * f64::from(elem.rect.width());
+        let wy = f64::from(elem.rect.min.y) + (comp_y / comp_h).clamp(0.0, 1.0) * f64::from(elem.rect.height());
+        Ok(json!({
+            "ok": true,
+            "stage": stage_id,
+            "x": wx,
+            "y": wy,
+            "rect": [elem.rect.min.x, elem.rect.min.y, elem.rect.width(), elem.rect.height()],
+        }))
+    }
+
+    fn control_viewer_hit(&self, params: &Value) -> Result<Value, String> {
+        only_keys(params, "ui.viewer.hit", &["id", "x", "y", "width", "height", "stage"])?;
+        let comp_w = params.get("width").and_then(Value::as_f64).unwrap_or(1920.0).max(1.0);
+        let comp_h = params.get("height").and_then(Value::as_f64).unwrap_or(1080.0).max(1.0);
+        let stage_id = params
+            .get("id")
+            .and_then(Value::as_str)
+            .unwrap_or_else(|| self.active_stage_element_id(params.get("stage").and_then(Value::as_str)));
+        let elem = self
+            .registry
+            .get(stage_id)
+            .ok_or_else(|| format!("ui.viewer.hit: stage `{stage_id}` is not visible on screen"))?;
+        let wx = params.get("x").and_then(Value::as_f64).unwrap_or_else(|| f64::from(elem.rect.center().x));
+        let wy = params.get("y").and_then(Value::as_f64).unwrap_or_else(|| f64::from(elem.rect.center().y));
+        let fx = ((wx - f64::from(elem.rect.min.x)) / f64::from(elem.rect.width().max(1.0))).clamp(0.0, 1.0);
+        let fy = ((wy - f64::from(elem.rect.min.y)) / f64::from(elem.rect.height().max(1.0))).clamp(0.0, 1.0);
+        Ok(json!({
+            "ok": true,
+            "stage": stage_id,
+            "x": fx * comp_w,
+            "y": fy * comp_h,
+            "fx": fx,
+            "fy": fy,
+            "inside": elem.rect.contains(egui::pos2(wx as f32, wy as f32)),
+        }))
+    }
+
+    fn timeline_widget_id(&self) -> &'static str {
+        match self.ui_state.effective_view() {
+            ViewMode::Design => "lyrics-timeline",
+            ViewMode::Motion => "motion-timeline",
+            ViewMode::Animation => "animation-theatre-dock",
+            _ => "studio-timeline",
+        }
+    }
+
+    fn control_timeline_locate(&self, params: &Value) -> Result<Value, String> {
+        only_keys(params, "ui.timeline.locate", &["time", "track", "id"])?;
+        let time = params.get("time").and_then(Value::as_f64).unwrap_or(self.ui_state.audio_time_sec).max(0.0);
+        let tl_id = params.get("id").and_then(Value::as_str).unwrap_or_else(|| self.timeline_widget_id());
+        let elem = self
+            .registry
+            .get(tl_id)
+            .ok_or_else(|| format!("ui.timeline.locate: timeline `{tl_id}` is not visible on screen"))?;
+        let dur = self.ui_state.audio_duration_sec.max(10.0);
+        let gutter = 88.0_f64.min(f64::from(elem.rect.width()) * 0.2);
+        let span_w = (f64::from(elem.rect.width()) - gutter).max(1.0);
+        let x = f64::from(elem.rect.min.x) + gutter + (time / dur).clamp(0.0, 1.0) * span_w;
+        let y = f64::from(elem.rect.center().y);
+        Ok(json!({
+            "ok": true,
+            "timeline": tl_id,
+            "time": time,
+            "ticks": (time * (TICKS_PER_SECOND as f64)).round() as i64,
+            "x": x,
+            "y": y,
+        }))
+    }
+
+    fn control_timeline_hit(&self, params: &Value) -> Result<Value, String> {
+        only_keys(params, "ui.timeline.hit", &["x", "y", "id"])?;
+        let wx = params.get("x").and_then(Value::as_f64).ok_or("ui.timeline.hit requires numeric `x`")?;
+        let wy = params.get("y").and_then(Value::as_f64).ok_or("ui.timeline.hit requires numeric `y`")?;
+        let tl_id = params.get("id").and_then(Value::as_str).unwrap_or_else(|| self.timeline_widget_id());
+        let elem = self
+            .registry
+            .get(tl_id)
+            .ok_or_else(|| format!("ui.timeline.hit: timeline `{tl_id}` is not visible on screen"))?;
+        let dur = self.ui_state.audio_duration_sec.max(10.0);
+        let gutter = 88.0_f64.min(f64::from(elem.rect.width()) * 0.2);
+        let span_w = (f64::from(elem.rect.width()) - gutter).max(1.0);
+        let frac = ((wx - (f64::from(elem.rect.min.x) + gutter)) / span_w).clamp(0.0, 1.0);
+        let time = frac * dur;
+        let region = if wy < f64::from(elem.rect.min.y) + 22.0 { "ruler" } else { "lane" };
+        Ok(json!({
+            "ok": true,
+            "timeline": tl_id,
+            "region": region,
+            "time": time,
+            "ticks": (time * (TICKS_PER_SECOND as f64)).round() as i64,
+            "inside": elem.rect.contains(egui::pos2(wx as f32, wy as f32)),
+        }))
+    }
+
+    fn control_render_frame(&mut self, ctx: &egui::Context, params: &Value) -> Result<Value, String> {
+        only_keys(params, "render.frame", &["stage", "time", "page", "path", "max_side"])?;
+        let sec = params.get("time").and_then(Value::as_f64).unwrap_or(self.ui_state.audio_time_sec).max(0.0);
+        let stage = params
+            .get("stage")
+            .and_then(Value::as_str)
+            .unwrap_or_else(|| self.ui_state.effective_view().as_id());
+        match stage {
+            "storyboard" => self.execute_engine(ctx, "storyboard.thumbnail", json!({"page": params["page"].as_u64().unwrap_or(0), "scale": 1.0})),
+            "lyrics" | "design" => self.execute_engine(ctx, "words.preview_frame", json!({"time": sec})),
+            "motion" => self.execute_engine(ctx, "motion.preview_frame", json!({"time": sec})),
+            "animation" | "animations" => self.execute_engine(ctx, "character.frame", json!({"time": sec})),
+            _ => self.execute_engine(ctx, "video.frame", json!({"seconds": sec, "path": params.get("path")})),
         }
     }
 
@@ -288,9 +443,32 @@ impl MagicDesktopApp {
             "view": self.ui_state.effective_view().as_id(),
             "requestedView": self.ui_state.view.as_id(),
             "theme": self.ui_state.theme_mode.as_str(),
+            "interfaceStyle": self.ui_state.interface_style.as_str(),
+            "accent": self.ui_state.accent_choice.as_str(),
+            "highContrast": self.ui_state.high_contrast,
+            "uiScalePct": self.ui_state.ui_scale_pct,
+            "aiEnabled": self.ui_state.ai.enabled,
             "project": self.ui_state.project_path,
+            "dirtyTracks": self.ui_state.dirty_tracks,
             "busy": self.ui_state.busy,
             "status": self.ui_state.toast_message,
+            "input": {
+                "mode": if self.control_input_only { "controlInputOnly" } else { "normal" },
+                "nativeWindowFocused": win_focused,
+                "effectiveWindowFocused": win_focused,
+            },
+            "panels": {
+                "studioWorkspace": self.ui_state.studio.inspector_tab,
+                "studioScopes": self.ui_state.studio.scopes_visible,
+                "animTab": self.ui_state.animation.inspector_tab,
+                "theatreTab": self.ui_state.animation.dock_tab,
+                "lyricsTab": self.ui_state.lyrics.inspector_tab,
+                "motionTab": self.ui_state.motion.inspector_tab,
+                "ribbonCollapsed": self.ui_state.ribbon_collapsed,
+                "assetsOpen": self.ui_state.assets_drawer_open,
+                "fidgetOpen": self.ui_state.fidget_open,
+            },
+            "bridges": self.ui_state.cache.bridge_status,
             "viewport": {
                 "width": screen.width(),
                 "height": screen.height(),
@@ -330,19 +508,35 @@ impl MagicDesktopApp {
             ctx.request_repaint();
             return Ok(json!({"ok": true, "id": id, "value": val_str}));
         }
-        only_keys(params, "ui.set", &["view", "time", "theme", "focused"])?;
-        if let Some(raw_theme) = params.get("theme").and_then(Value::as_str) {
-            let mode = ThemeMode::parse(raw_theme).ok_or_else(|| format!("unknown theme `{raw_theme}`"))?;
-            self.ui_state.theme_mode = mode;
-        }
-        if let Some(focused) = params.get("focused").and_then(Value::as_str) {
-            self.ui_state.focused_panel = focused.to_owned();
-        }
+        only_keys(
+            params,
+            "ui.set",
+            &[
+                "view",
+                "time",
+                "theme",
+                "style",
+                "accent",
+                "highContrast",
+                "uiScalePct",
+                "focused",
+                "studioWorkspace",
+                "studioScopes",
+                "animTab",
+                "theatreTab",
+                "lyricsTab",
+                "motionTab",
+                "ribbonCollapsed",
+                "assetsOpen",
+                "fidgetOpen",
+            ],
+        )?;
+        self.apply_shell_ui_fields(params)?;
         if let Some(raw_view) = params.get("view").and_then(Value::as_str) {
             let view = ViewMode::parse(raw_view).ok_or_else(|| format!("unknown view `{raw_view}`"))?;
             if let Some(sec) = params.get("time").and_then(Value::as_f64) {
-                if !sec.is_finite() || sec < 0.0 || !matches!(view, ViewMode::Design | ViewMode::Motion) {
-                    return Err("Authoring time requires Lyrics (`design`) or Motion and nonnegative seconds".into());
+                if !sec.is_finite() || sec < 0.0 || !matches!(view, ViewMode::Design | ViewMode::Motion | ViewMode::Animation) {
+                    return Err("Authoring time requires Animations, Lyrics (`design`), or Motion and nonnegative seconds".into());
                 }
                 if self.ui_state.project_path.is_none() {
                     return Err("Open a project before selecting an authoring moment".into());
@@ -356,8 +550,63 @@ impl MagicDesktopApp {
         Ok(json!({
             "ok": true,
             "requestedView": self.ui_state.view.as_id(),
+            "studioWorkspace": self.ui_state.studio.inspector_tab,
             "theme": self.ui_state.theme_mode.as_str(),
+            "interfaceStyle": self.ui_state.interface_style.as_str(),
+            "accent": self.ui_state.accent_choice.as_str(),
         }))
+    }
+
+    fn apply_shell_ui_fields(&mut self, params: &Value) -> Result<(), String> {
+        if let Some(raw_theme) = params.get("theme").and_then(Value::as_str) {
+            self.ui_state.theme_mode = ThemeMode::parse(raw_theme).ok_or_else(|| format!("unknown theme `{raw_theme}`"))?;
+        }
+        if let Some(raw_style) = params.get("style").and_then(Value::as_str) {
+            self.ui_state.interface_style = InterfaceStyle::parse(raw_style).ok_or_else(|| format!("unknown style `{raw_style}`"))?;
+        }
+        if let Some(raw_accent) = params.get("accent").and_then(Value::as_str) {
+            self.ui_state.accent_choice = AccentChoice::parse(raw_accent).ok_or_else(|| format!("unknown accent `{raw_accent}`"))?;
+        }
+        if let Some(hc) = params.get("highContrast").and_then(Value::as_bool) {
+            self.ui_state.high_contrast = hc;
+        }
+        if let Some(scale) = params.get("uiScalePct").and_then(Value::as_u64) {
+            self.ui_state.ui_scale_pct = u16::try_from(scale.clamp(80, 200)).unwrap_or(100);
+        }
+        if let Some(focused) = params.get("focused").and_then(Value::as_str) {
+            self.ui_state.focused_panel = focused.to_owned();
+        }
+        if let Some(ws) = params.get("studioWorkspace").and_then(Value::as_str) {
+            if !matches!(ws, "matrix" | "edit" | "color" | "fx" | "audio" | "titles" | "export") {
+                return Err(format!("unknown studioWorkspace `{ws}`"));
+            }
+            self.ui_state.studio.inspector_tab = ws.to_owned();
+        }
+        if let Some(sc) = params.get("studioScopes").and_then(Value::as_bool) {
+            self.ui_state.studio.scopes_visible = sc;
+        }
+        if let Some(at) = params.get("animTab").and_then(Value::as_str) {
+            self.ui_state.animation.inspector_tab = at.to_owned();
+        }
+        if let Some(tt) = params.get("theatreTab").and_then(Value::as_str) {
+            self.ui_state.animation.dock_tab = tt.to_owned();
+        }
+        if let Some(lt) = params.get("lyricsTab").and_then(Value::as_str) {
+            self.ui_state.lyrics.inspector_tab = lt.to_owned();
+        }
+        if let Some(mt) = params.get("motionTab").and_then(Value::as_str) {
+            self.ui_state.motion.inspector_tab = mt.to_owned();
+        }
+        if let Some(rc) = params.get("ribbonCollapsed").and_then(Value::as_bool) {
+            self.ui_state.ribbon_collapsed = rc;
+        }
+        if let Some(ao) = params.get("assetsOpen").and_then(Value::as_bool) {
+            self.ui_state.assets_drawer_open = ao;
+        }
+        if let Some(fo) = params.get("fidgetOpen").and_then(Value::as_bool) {
+            self.ui_state.fidget_open = fo;
+        }
+        Ok(())
     }
 
     fn control_playback(&mut self, params: &Value) -> Result<Value, String> {

@@ -3,8 +3,7 @@
 //! `advanced3D` composition (`layer.newModel` -> `.ecproj`).
 //!
 //! Works alongside the 2D/2.5D `character.*` (`Scribbles` -> `PhotoCraft` -> `EffectCraft`) workflow
-//! inside `<project>/assets/characters/<id>/3d/` (writing `model3d.json` with read fallback from
-//! legacy `model3d.json`). External Blender GUI handoffs have been removed; 3D models are inspected via
+//! inside `<project>/assets/characters/<id>/3d/` (persisted in `model3d.json`). External Blender GUI handoffs have been removed; 3D models are inspected via
 //! `TextureCraft` (`texturecraft-cli info`) and staged/rendered inside `EffectCraft` (`advanced3D`).
 
 use std::path::{Path, PathBuf};
@@ -103,10 +102,10 @@ fn write_json_pretty(path: &Path, value: &Value) -> Result<()> {
 }
 
 fn anim_clip_entry(path: &Path, doc: &Value) -> Value {
-    let fallback = path.file_name().and_then(|n| n.to_str()).unwrap_or("clip").trim_end_matches(".anim.json");
+    let default_stem = path.file_name().and_then(|n| n.to_str()).unwrap_or("clip").trim_end_matches(".anim.json");
     json!({
-        "id": doc["id"].as_str().unwrap_or(fallback),
-        "name": doc["name"].as_str().unwrap_or(fallback),
+        "id": doc["id"].as_str().unwrap_or(default_stem),
+        "name": doc["name"].as_str().unwrap_or(default_stem),
         "source": doc["source"],
         "category": doc["category"],
         "duration": doc["duration"],
@@ -284,8 +283,8 @@ fn build_breakout_record(kind: &str, p: &Value, reference: &Option<PathBuf>, bre
         return Err(bad("completion_mode must be quick_cap or ai_completion"));
     }
     let provider = p["provider"].as_str().unwrap_or("magic");
-    if !["magic", "tripo", "google_flow", "codex_luna"].contains(&provider) {
-        return Err(bad("provider must be magic, tripo, google_flow, or codex_luna"));
+    if !["magic", "tripo", "craft_ai"].contains(&provider) {
+        return Err(bad("provider must be magic, tripo, or craft_ai"));
     }
     if let Some(tpl) = matched_tpl {
         // TODO: Wire headless T-pose / turnaround image-to-3D-mesh generation provider once selected;
@@ -413,7 +412,7 @@ fn build_precheck_value(p: &Value, current: &Value, tc_report: &Value, topology:
         .ok_or_else(|| bad("Cannot check polygon limit without a mesh or a face count"))?;
     let observed_vertices = tc_report["vertices"].as_u64();
     let within_limit = observed_faces <= max_faces;
-    let fallback = if !within_limit {
+    let default_stem = if !within_limit {
         Some("retopologize")
     } else if !t_pose_ready {
         Some("generate_t_pose")
@@ -433,7 +432,7 @@ fn build_precheck_value(p: &Value, current: &Value, tc_report: &Value, topology:
             "t_pose_ready": t_pose_ready,
             "riggable": riggable,
             "texturecraft_info": tc_report,
-            "recommended_fallback": fallback,
+            "recommended_adjustment": alt_budget,
         }),
     ))
 }
@@ -681,12 +680,12 @@ fn build_effectcraft_3d_comp(clips_dir: &Path, id: &str, clip_id: &str, duration
     (json!(ec_path), rendered)
 }
 
-fn first_or_param_path(s: &Session, project_dir: &Path, p: &Value, key: &str, fallback: &Value) -> Option<PathBuf> {
+fn first_or_param_path(s: &Session, project_dir: &Path, p: &Value, key: &str, default_val: &Value) -> Option<PathBuf> {
     p[key]
         .as_str()
         .filter(|v| !v.is_empty())
         .map(|v| resolve_project_path(s, project_dir, v))
-        .or_else(|| fallback.as_str().or_else(|| fallback.as_array()?.first()?.as_str()).map(PathBuf::from))
+        .or_else(|| default_val.as_str().or_else(|| default_val.as_array()?.first()?.as_str()).map(PathBuf::from))
 }
 
 fn clip_specific_glb(clips_dir: &Path, id: &str, clip_id: &str, rig_type: &str) -> Option<PathBuf> {

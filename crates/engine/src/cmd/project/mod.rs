@@ -1,11 +1,8 @@
 //! Project lifecycle: `.magic` create/open/save/close (`project.*` and ArtCraft `file.*` suite aliases)
 //! and sub-module re-exports.
 //!
-//! `project.new` / `file.new` (and `magic-cli new`) implements the canonical Magic workflow:
-//! 1. Require a song audio track (`audio=<file>`), link it into a `FilmCraft` `.fcproj` with a
-//!    synced lyric track, and emit `timing-reference.json` + `transcript.json` + `transcript.srt`.
-//! 2. Initialize `storyboard.designcraft` from the DesignCraft master template and apply optional
-//!    wizard answers for the Main Section Title Pages (`A-Cover`, `B-World`, `C-Character`, `D-Motion`).
+//! Includes atomic writes (`craft_atomic::atomic_write`), rolling `.history/<stem>.magic.bak.{1..3}`
+//! backups (`storytold/filmcraft/docs/project-files.md`), and crash-recovery `.autosave` journals.
 
 pub mod assets;
 pub mod catalog;
@@ -117,6 +114,40 @@ pub fn project_is_dirty(s: &Session, saved: &Value) -> bool {
     ["assets", "workshop", "mode", "song"].iter().any(|key| saved[*key] != current[*key])
 }
 
+fn history_dir(project: &Path) -> PathBuf {
+    project.parent().unwrap_or(Path::new(".")).join(".history")
+}
+
+fn autosave_journal_path(project: &Path) -> PathBuf {
+    let fname = project.file_name().and_then(|n| n.to_str()).unwrap_or("project.magic");
+    history_dir(project).join(format!("{fname}.autosave"))
+}
+
+/// Rotate up to 3 rolling `.magic.bak.{1..3}` snapshots inside `<project_dir>/.history/` using `craft_atomic`.
+fn rotate_project_backups(project: &Path) {
+    if !project.is_file() {
+        return;
+    }
+    let Ok(existing_bytes) = std::fs::read(project) else {
+        return;
+    };
+    let hdir = history_dir(project);
+    if std::fs::create_dir_all(&hdir).is_err() {
+        return;
+    }
+    let fname = project.file_name().and_then(|n| n.to_str()).unwrap_or("project.magic");
+    let bak1 = hdir.join(format!("{fname}.bak.1"));
+    let bak2 = hdir.join(format!("{fname}.bak.2"));
+    let bak3 = hdir.join(format!("{fname}.bak.3"));
+    if let Ok(b2) = std::fs::read(&bak2) {
+        let _ = craft_atomic::atomic_write(&bak3, &b2);
+    }
+    if let Ok(b1) = std::fs::read(&bak1) {
+        let _ = craft_atomic::atomic_write(&bak2, &b1);
+    }
+    let _ = craft_atomic::atomic_write(&bak1, &existing_bytes);
+}
+
 pub fn write_project_file(s: &Session) -> Result<()> {
     let Some(path) = &s.project_path else {
         return Ok(());
@@ -127,9 +158,14 @@ pub fn write_project_file(s: &Session) -> Result<()> {
     if s.project_stamp.get().is_some() {
         crate::link_watch::save_guard(path, s.project_stamp.get())?;
     }
+    rotate_project_backups(path);
     let doc = merged_document(s, path);
     let (stamp, written) = crate::doc_state::write_json(path, &doc)?;
     s.project_stamp.set(stamp);
+    let journal = autosave_journal_path(path);
+    if journal.is_file() {
+        let _ = std::fs::remove_file(&journal);
+    }
     if s.record_user_state {
         crate::change_marker::invalidate();
     }
@@ -138,6 +174,21 @@ pub fn write_project_file(s: &Session) -> Result<()> {
         crate::activity::stored(path, written);
     }
     Ok(())
+}
+
+/// Write crash-recovery `.autosave` journal (~1s debounce from UI) without overwriting the user's primary `.magic` file.
+pub fn cmd_project_autosave(s: &mut Session, _: &Value) -> Result<Value> {
+    let Some(path) = &s.project_path else {
+        return Ok(json!({"ok": false, "reason": "no_project"}));
+    };
+    let journal = autosave_journal_path(path);
+    let doc = merged_document(s, path);
+    let (_, bytes) = crate::doc_state::write_json(&journal, &doc)?;
+    Ok(json!({
+        "ok": true,
+        "journal": journal,
+        "bytes": bytes,
+    }))
 }
 
 fn project_slug(name: &str) -> String {
@@ -184,7 +235,6 @@ fn reset_for_project(s: &mut Session, path: PathBuf, assets: Vec<crate::ProjectA
     *s = Session {
         cwd: s.cwd.clone(),
         record_user_state: s.record_user_state,
-        agent_selection: s.agent_selection.clone(),
         control_address: s.control_address,
         automation_roots: s.automation_roots.clone(),
         project_assets: assets,
@@ -212,10 +262,6 @@ fn recent_warning(s: &Session, path: &Path, requested: bool) -> Vec<Value> {
     }
 }
 
-/// Bootstrap `project.new`:
-/// 1. Link song audio, transcribe timestamps (`timing-reference.json` + `transcript.srt` + `transcript.json`),
-///    and initialize `film/<song>.fcproj` with a synced lyric track.
-/// 2. Initialize `storyboard.designcraft` and apply optional wizard fields to the Main Section Title Pages.
 fn bootstrap_new_project_workshop(s: &mut Session, path: &Path, params: &Value) -> Vec<Value> {
     let mut steps = Vec::new();
     let project_title =
@@ -379,7 +425,13 @@ pub fn cmd_project_open(s: &mut Session, params: &Value) -> Result<Value> {
     {
         let _ = craft_util::media::sweep_orphan_craft_tmp(project_dir);
     }
-    let doc = read_project_document(&path)?;
+    let journal = autosave_journal_path(&path);
+    let use_journal = params["recover_autosave"] == true && journal.is_file();
+    let doc = if use_journal {
+        read_project_document(&journal)?
+    } else {
+        read_project_document(&path)?
+    };
     if doc.get("format").and_then(Value::as_str) != Some(PROJECT_FORMAT) {
         return Err(EngineError::InvalidParams(format!("{} is not a Magic Studio project", path.display())));
     }
@@ -393,7 +445,14 @@ pub fn cmd_project_open(s: &mut Session, params: &Value) -> Result<Value> {
     {
         let _ = write_project_file(s);
     }
-    let warnings = recent_warning(s, &path, params["record_recent"] != false);
+    let mut warnings = recent_warning(s, &path, params["record_recent"] != false);
+    if journal.is_file() && !use_journal {
+        warnings.push(json!({
+            "code": "autosave_journal_available",
+            "journal": journal,
+            "hint": "Pass recover_autosave=true to restore crash-recovery journal",
+        }));
+    }
     let workshop = crate::cmd::project::workshop::workshop_status(s)?;
     Ok(json!({
         "ok": true,
@@ -519,7 +578,6 @@ pub fn cmd_project_close(s: &mut Session, _: &Value) -> Result<Value> {
     *s = Session {
         cwd: s.cwd.clone(),
         record_user_state: s.record_user_state,
-        agent_selection: s.agent_selection.clone(),
         control_address: s.control_address,
         automation_roots: s.automation_roots.clone(),
         ..Session::default()

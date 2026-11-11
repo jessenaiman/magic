@@ -28,21 +28,39 @@ use control::LiveOutcome;
 pub struct CraftHub;
 
 impl CraftHub {
+    fn prefer_live_bridge() -> bool {
+        let stored = crate::project_settings::stored_settings();
+        stored
+            .pointer("/craft/prefer_live_bridge")
+            .or_else(|| stored.get("craft.prefer_live_bridge"))
+            .and_then(Value::as_bool)
+            .unwrap_or(true)
+    }
+
     pub fn execute(target: CraftTarget, doc: Option<&Path>, command: &str, params: &Value) -> Result<Value> {
-        match control::route_single(target, doc, command, params, false) {
-            LiveOutcome::Connected(res) => res,
-            LiveOutcome::Unreachable | LiveOutcome::DifferentDocumentOpen => cli::exec_single(target, doc, command, params, false),
+        if Self::prefer_live_bridge() {
+            match control::route_single(target, doc, command, params, false) {
+                LiveOutcome::Connected(res) => return res,
+                LiveOutcome::Unreachable | LiveOutcome::DifferentDocumentOpen => {}
+            }
         }
+        cli::exec_single(target, doc, command, params, false)
     }
 
     pub fn execute_and_save(target: CraftTarget, doc: &Path, command: &str, params: &Value) -> Result<Value> {
-        match control::route_single(target, Some(doc), command, params, true) {
-            LiveOutcome::Connected(res) => res,
-            LiveOutcome::Unreachable | LiveOutcome::DifferentDocumentOpen => cli::exec_single(target, Some(doc), command, params, true),
+        if Self::prefer_live_bridge() {
+            match control::route_single(target, Some(doc), command, params, true) {
+                LiveOutcome::Connected(res) => return res,
+                LiveOutcome::Unreachable | LiveOutcome::DifferentDocumentOpen => {}
+            }
         }
+        cli::exec_single(target, Some(doc), command, params, true)
     }
 
     pub fn try_live(target: CraftTarget, doc: &Path, command: &str, params: &Value, save: bool) -> Option<Result<Value>> {
+        if !Self::prefer_live_bridge() {
+            return None;
+        }
         match control::route_single(target, Some(doc), command, params, save) {
             LiveOutcome::Connected(res) => Some(res),
             LiveOutcome::Unreachable | LiveOutcome::DifferentDocumentOpen => None,
@@ -55,7 +73,8 @@ impl CraftHub {
             (Some(_), None) => true,
             _ => false,
         };
-        if in_place
+        if Self::prefer_live_bridge()
+            && in_place
             && let Some(doc) = input.filter(|p| p.is_file())
             && let Some(live_res) = control::try_live_batch(target, doc, steps, output.is_some())
         {
@@ -93,26 +112,32 @@ impl CraftHub {
             live_steps.push(("comp.open", json!({"comp": c})));
         }
         live_steps.push(("comp.saveFrameAs", json!({"path": output, "time": seconds.max(0.0), "scale": scale, "transparent": true})));
-        if let Some(live_res) = control::try_live_batch(CraftTarget::Effect, project, &live_steps, false) {
+        if Self::prefer_live_bridge()
+            && let Some(live_res) = control::try_live_batch(CraftTarget::Effect, project, &live_steps, false)
+        {
             live_res?;
             return Ok(());
         }
         cli::render_effect_frame(project, comp, seconds, max_side, output)
     }
 
-    /// Queue and render an EffectCraft composition via native `renderQueue.add` + `renderQueue.render`
-    /// over live `--control` when open, or `effectcraft-cli render` headless.
     pub(crate) fn render_effect_clip(project: &Path, params: &Value) -> Result<Value> {
         let output_str = params["output"].as_str().ok_or_else(|| EngineError::InvalidParams("output path is required".into()))?;
         if let Some(parent) = Path::new(output_str).parent() {
             std::fs::create_dir_all(parent)?;
         }
         let live_steps = [("renderQueue.add", params.clone()), ("renderQueue.render", json!({"wait": true}))];
-        if let Some(live_res) = control::try_live_batch(CraftTarget::Effect, project, &live_steps, false) {
+        if Self::prefer_live_bridge()
+            && let Some(live_res) = control::try_live_batch(CraftTarget::Effect, project, &live_steps, false)
+        {
             let list = live_res?;
             return Ok(list.into_iter().last().unwrap_or_else(|| json!({"ok": true, "output": output_str})));
         }
         cli::render_effect_clip(project, params)
+    }
+
+    pub fn render_effect_template(template: &Path, values: Option<&Value>, output: &Path, frame_time: Option<f64>) -> Result<Value> {
+        cli::render_effect_template(template, values, output, frame_time)
     }
 
     pub(crate) fn render_film_frame(project: &Path, tick: crate::time::Tick, scale: f32, output: &Path) -> Result<()> {
@@ -127,12 +152,10 @@ impl CraftHub {
         cli::render_film_frame(project, tick, scale, output)
     }
 
-    /// Headless `anicraft-cli render <doc> --frame <frame> --out <output>` (never launches AniCraft GUI).
     pub(crate) fn anicraft_render_frame(doc: &Path, frame: u32, output: &Path) -> Result<()> {
         cli::render_anicraft_frame(doc, frame, output)
     }
 
-    /// Headless `anicraft-cli render-seq <doc> --out-dir <out_dir>` exporting PNG frames for EffectCraft.
     pub(crate) fn anicraft_render_seq(doc: &Path, start: u32, end: Option<u32>, out_dir: &Path) -> Result<Vec<PathBuf>> {
         cli::render_anicraft_sequence(doc, start, end, out_dir)
     }
@@ -147,6 +170,10 @@ impl CraftHub {
 
     pub fn launch_with_control(target: CraftTarget, file: Option<&Path>, port: Option<u16>, workspace_dir: Option<&Path>) -> Result<Value> {
         launch::open_or_focus(target, file, port, workspace_dir)
+    }
+
+    pub fn close_opened_apps() -> Result<Value> {
+        launch::close_opened_apps()
     }
 
     pub fn control_addr(target: CraftTarget) -> Result<SocketAddr> {

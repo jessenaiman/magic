@@ -1,11 +1,12 @@
 //! Single-responsibility `<product>-cli` subprocess runner for headless and `--bridge` operations.
 //!
 //! Uses exact upstream `<product>-cli` syntax verified from `storytold/*` repositories:
-//! - `filmcraft-cli`: `--project <p.fcproj> [--save] exec|run|probe`, `--bridge 127.0.0.1:<port>`
+//! - `filmcraft-cli`: `--project <p.fcproj> [--save] exec|run|probe|export`, `--bridge 127.0.0.1:<port>`
 //! - `effectcraft-cli`: `exec <cmd> '<json>' [<p.ecproj>] [--save|--empty --save-as <out>] --json`,
+//!   `--bridge <port> --json exec <cmd> '<json>'`,
 //!   `run [<p.ecproj>] --commands - [--save|--empty --save-as <out>] --json`,
-//!   `render-frame <p.ecproj> --comp <comp> --time <sec> --max-side <px> --out <f.png> --json`,
-//!   `render <p.ecproj> --comp <comp> --out <out> [--format ...]`
+//!   `render-frame <p.ecproj|--template tpl.ectemplate> [--values v.json] --time <sec> --max-side <px> --out <f.png> --json`,
+//!   `render <p.ecproj|--template tpl.ectemplate> [--values v.json] [--comp <comp>] --out <out> [--format ...] --json`
 //! - `designcraft-cli` / `deckcraft-cli`: `script - --in <doc> [--save <doc>]`, `run --in <doc>`
 //! - `photocraft-cli`: `run <doc|--new '{}'> --cmd <id> --params '<json>' [--out <doc> --in-place]`
 //! - `vectorcraft-cli`: `run [--in <doc>] --commands - [--export <doc>]`
@@ -83,6 +84,15 @@ pub fn exec_film_bridge(addr: SocketAddr, command: &str, params: &Value) -> Resu
     cmd.arg("--bridge").arg(addr.to_string()).arg("exec").arg(command).arg(&params_str);
     let out = cmd.output().map_err(|e| EngineError::ExternalTool("filmcraft-cli".into(), e.to_string()))?;
     parse_cli_value(CraftTarget::Film, command, &out)
+}
+
+pub fn exec_effect_bridge(addr: SocketAddr, command: &str, params: &Value) -> Result<Value> {
+    let _slot = crate::workspace::acquire_tool_slot();
+    let params_str = serde_json::to_string(params).map_err(|e| EngineError::InvalidParams(e.to_string()))?;
+    let mut cmd = cli_command(CraftTarget::Effect, Some(addr.port()))?;
+    cmd.arg("--bridge").arg(addr.port().to_string()).arg("--json").arg("exec").arg(command).arg(&params_str);
+    let out = cmd.output().map_err(|e| EngineError::ExternalTool("effectcraft-cli".into(), e.to_string()))?;
+    parse_cli_value(CraftTarget::Effect, command, &out)
 }
 
 pub fn exec_single(target: CraftTarget, doc: Option<&Path>, command: &str, params: &Value, save: bool) -> Result<Value> {
@@ -293,9 +303,6 @@ pub fn exec_batch(target: CraftTarget, input: Option<&Path>, output: Option<&Pat
             stdin_bytes = Some(serde_json::to_vec(&payload).map_err(|e| EngineError::InvalidParams(e.to_string()))?);
         }
         CraftTarget::Ani => {
-            // Headless `anicraft-cli serve` JSONL pipe (`{"id": 1, "cmd": "...", "params": {...}}`).
-            // TODO: Verify `anicraft-cli serve` save command ID (`file.save` vs `document.save`)
-            // against the installed pre-alpha `anicraft-cli commands` list on the host.
             cmd.arg("serve");
             if let Some(src) = input.filter(|p| p.is_file()) {
                 cmd.arg(src);
@@ -437,6 +444,30 @@ pub fn render_effect_clip(project: &Path, params: &Value) -> Result<Value> {
     parse_cli_value(CraftTarget::Effect, "render", &out)
 }
 
+/// Render an `.ectemplate` directly via `effectcraft-cli render|render-frame --template <tpl> [--values <v.json>] --out <out> --json` (`T06`).
+pub fn render_effect_template(template: &Path, values: Option<&Value>, output: &Path, frame_time: Option<f64>) -> Result<Value> {
+    let _slot = crate::workspace::acquire_tool_slot();
+    if let Some(parent) = output.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let tmp = ScopedTempDir::new("magic-ectpl")?;
+    let mut cmd = cli_command(CraftTarget::Effect, None)?;
+    let subcmd = if frame_time.is_some() { "render-frame" } else { "render" };
+    cmd.arg(subcmd).arg("--template").arg(template);
+    if let Some(vals) = values.filter(|v| v.is_object() && !v.as_object().is_none_or(serde_json::Map::is_empty)) {
+        let vals_path = tmp.path().join("values.json");
+        let raw = serde_json::to_vec_pretty(vals).map_err(|e| EngineError::InvalidParams(e.to_string()))?;
+        craft_atomic::atomic_write(&vals_path, &raw)?;
+        cmd.arg("--values").arg(&vals_path);
+    }
+    if let Some(sec) = frame_time {
+        cmd.arg("--time").arg(sec.max(0.0).to_string());
+    }
+    cmd.arg("--out").arg(output).arg("--json");
+    let out = cmd.output().map_err(|e| EngineError::ExternalTool("effectcraft-cli".into(), e.to_string()))?;
+    parse_cli_value(CraftTarget::Effect, subcmd, &out)
+}
+
 pub fn render_film_frame(project: &Path, tick: Tick, scale: f32, output: &Path) -> Result<()> {
     let params = json!({
         "path": output,
@@ -464,11 +495,8 @@ pub fn render_anicraft_frame(doc: &Path, frame: u32, output: &Path) -> Result<()
     Ok(())
 }
 
-/// Render a PNG sequence from an `.anicraft` document via headless `anicraft-cli render-seq`
-/// so `EffectCraft` can import, puppet-pin, and composite the frames safely.
+/// Render a PNG sequence from an `.anicraft` document via headless `anicraft-cli render-seq`.
 pub fn render_anicraft_sequence(doc: &Path, start: u32, end: Option<u32>, out_dir: &Path) -> Result<Vec<PathBuf>> {
-    // TODO: Verify exact `anicraft-cli render-seq` flag names (`--out-dir` vs `--out` and `--start`/`--end`)
-    // against `anicraft-cli render-seq --help` on the installed pre-alpha binary.
     let _slot = crate::workspace::acquire_tool_slot();
     std::fs::create_dir_all(out_dir)?;
     let mut cmd = cli_command(CraftTarget::Ani, None)?;

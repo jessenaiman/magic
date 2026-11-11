@@ -1,7 +1,8 @@
-//! Synced Timeline Markers, Cue Points, Track Label Groups & Timeline Interchange
-//! across FilmCraft (`film/*.fcproj`) and EffectCraft (`lettering/lyrics.ecproj`).
+//! Synced Timeline Markers, Cue Points, 64-Swatch Custom Palette, Marker CSV Export, &
+//! Bidirectional Timeline Interchange (`T03`, `T35`) across FilmCraft (`film/*.fcproj`) and
+//! EffectCraft (`lettering/lyrics.ecproj`, `motion/actions.ecproj`, or custom `.ecproj`).
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde_json::{Value, json};
 
@@ -56,6 +57,8 @@ pub(crate) fn extract_synced_markers(dir: &Path, seq: Option<&Value>) -> Vec<Val
                 "index": idx,
                 "name": if name.is_empty() { comment } else { name },
                 "comment": comment,
+                "author": m.get("author").cloned().unwrap_or(Value::Null),
+                "url": m.get("url").cloned().unwrap_or(Value::Null),
                 "kind": kind,
                 "color": color,
                 "start_tick": start_tick,
@@ -122,48 +125,50 @@ fn markers_add(f: &super::Film, ecproj: &Path, p: &Value) -> Result<Value> {
     let duration_sec = duration_tick.seconds();
     let name = p["name"].as_str().or_else(|| p["comment"].as_str()).unwrap_or("Cue").trim();
     let comment = p["comment"].as_str().unwrap_or(name).trim();
+    let author = p["author"].as_str().map(str::trim).filter(|s| !s.is_empty());
+    let url = p["url"].as_str().map(str::trim).filter(|s| !s.is_empty());
     let color = p["color"].as_str().unwrap_or("Iris");
     let ec_label = p["label"].as_str().unwrap_or_else(|| map_fc_color_to_ec_label(color));
-    let kind = p["kind"].as_str().unwrap_or(if duration_tick.0 > 0 { "range" } else { "flashCue" });
+    let kind = p["kind"].as_str().unwrap_or(if duration_tick.0 > 0 { "range" } else { "comment" });
 
     let mut fc_marker_id = Value::Null;
     if f.project.is_file() {
-        let fc_step = if duration_tick.0 > 0 || kind.eq_ignore_ascii_case("range") {
-            json!({
-                "id": "markers.addRange",
-                "params": {
-                    "time": start_tick.0,
-                    "duration": duration_tick.0,
-                    "name": name,
-                    "comment": comment,
-                    "color": color,
-                }
-            })
+        let mut fc_params = json!({
+            "time": start_tick.0,
+            "name": name,
+            "comment": comment,
+            "color": color,
+        });
+        if let Some(a) = author {
+            fc_params["author"] = json!(a);
+        }
+        if let Some(u) = url {
+            fc_params["url"] = json!(u);
+        }
+        let cmd_name = if duration_tick.0 > 0 || kind.eq_ignore_ascii_case("range") {
+            fc_params["duration"] = json!(duration_tick.0);
+            "markers.addRange"
         } else if kind.eq_ignore_ascii_case("chapter") {
-            json!({
-                "id": "markers.addChapter",
-                "params": {
-                    "time": start_tick.0,
-                    "name": name,
-                    "comment": comment,
-                    "color": color,
-                }
-            })
+            "markers.addChapter"
+        } else if kind.eq_ignore_ascii_case("flashcue") {
+            "markers.addFlashCue"
         } else {
-            json!({
-                "id": "markers.addFlashCue",
-                "params": {
-                    "time": start_tick.0,
-                    "name": name,
-                    "comment": comment,
-                    "color": color,
-                }
-            })
+            "markers.add"
         };
+        let fc_step = json!({"id": cmd_name, "params": fc_params});
         if let Ok(res) = run_steps(Some(&f.project), false, true, &[fc_step])
             && let Some(first) = res.first()
         {
             fc_marker_id = first.get("marker").cloned().unwrap_or(Value::Null);
+            if matches!(kind, "segmentation" | "webLink")
+                && let Some(mid) = fc_marker_id.as_u64()
+            {
+                let mut edit_p = json!({"marker": mid, "kind": kind});
+                if let Some(u) = url {
+                    edit_p["url"] = json!(u);
+                }
+                let _ = run_steps(Some(&f.project), false, true, &[json!({"id": "markers.edit", "params": edit_p})]);
+            }
         }
     }
 
@@ -174,6 +179,7 @@ fn markers_add(f: &super::Film, ecproj: &Path, p: &Value) -> Result<Value> {
             "duration": duration_sec,
             "comment": comment,
             "chapter": if kind.eq_ignore_ascii_case("chapter") { name } else { "" },
+            "url": url.unwrap_or(""),
             "label": ec_label,
             "cuePoint": {
                 "name": name,
@@ -193,9 +199,53 @@ fn markers_add(f: &super::Film, ecproj: &Path, p: &Value) -> Result<Value> {
         "ok": true,
         "marker_id": fc_marker_id,
         "name": name,
+        "kind": kind,
         "time_sec": time_sec,
         "duration_sec": duration_sec,
         "markers": markers,
+    }))
+}
+
+fn markers_edit_or_palette(f: &super::Film, action: &str, p: &Value) -> Result<Value> {
+    let project = f.require()?.to_path_buf();
+    let swatch = p["custom_swatch"]
+        .as_str()
+        .or_else(|| (action == "palette").then(|| p["color"].as_str()).flatten())
+        .filter(|s| !s.trim().is_empty());
+    if let Some(sw) = swatch {
+        let res = CraftHub::execute_and_save(CraftTarget::Film, &project, "colors.addCustom", &json!({"color": sw.trim()}))?;
+        return Ok(json!({"ok": true, "swatch": sw.trim(), "result": res}));
+    }
+    let marker_id = p["id"].as_u64().or_else(|| p["marker"].as_u64()).ok_or_else(|| bad("marker id is required for markers.edit"))?;
+    let mut edit_params = json!({"marker": marker_id});
+    for key in ["name", "comment", "author", "color", "kind", "url"] {
+        if let Some(val) = p.get(key) {
+            edit_params[key] = val.clone();
+        }
+    }
+    let res = CraftHub::execute_and_save(CraftTarget::Film, &project, "markers.edit", &edit_params)?;
+    Ok(json!({"ok": true, "marker": marker_id, "result": res}))
+}
+
+fn markers_export_csv(f: &super::Film, p: &Value) -> Result<Value> {
+    let project = f.require()?.to_path_buf();
+    let out = p["path"]
+        .as_str()
+        .filter(|s| !s.trim().is_empty())
+        .map(|raw| {
+            let pb = PathBuf::from(raw);
+            if pb.is_absolute() { pb } else { f.dir.join(pb) }
+        })
+        .unwrap_or_else(|| f.dir.join("exports").join(format!("{}-markers.csv", f.name)));
+    if let Some(parent) = out.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let result = CraftHub::execute(CraftTarget::Film, Some(&project), "markers.exportCsv", &json!({"path": out}))?;
+    Ok(json!({
+        "ok": true,
+        "csv_path": out,
+        "timeline": project,
+        "result": result,
     }))
 }
 
@@ -366,49 +416,81 @@ fn markers_delete(f: &super::Film, ecproj: &Path, action: &str, p: &Value) -> Re
     }
     let seq = if f.project.is_file() { execute(&f.project, "sequence.inspect", json!({})).ok() } else { None };
     let markers = extract_synced_markers(&f.dir, seq.as_ref());
-    Ok(json!({
-        "ok": true,
-        "markers": markers,
-    }))
+    Ok(json!({"ok": true, "markers": markers}))
 }
 
-fn markers_interchange(f: &super::Film, ecproj: &Path, p: &Value) -> Result<Value> {
-    let format = p["format"].as_str().unwrap_or("xml");
-    let direction = p["direction"].as_str().unwrap_or("film_to_effect");
+fn markers_interchange(f: &super::Film, default_ecproj: &Path, p: &Value) -> Result<Value> {
+    let format = p["format"].as_str().unwrap_or("otio");
+    let raw_dir = p["direction"].as_str().unwrap_or("film_to_effect");
+    let direction = match raw_dir {
+        "import" | "effect_to_film" => "effect_to_film",
+        _ => "film_to_effect",
+    };
+    let prerender = p["prerender"]
+        .as_str()
+        .unwrap_or_else(|| if p["prerender"].as_bool() == Some(false) { "none" } else { "unsupported" });
     let ext = match format {
         "fcpxml" => "fcpxml",
         "otio" => "otio",
         "edl" => "edl",
         "aaf" => "aaf",
+        "omf" => "omf",
+        "ale" => "ale",
         _ => "xml",
     };
-    let interchange_path = f.dir.join("film").join(format!("{}-interchange.{ext}", f.name));
+    let ecproj = p["ecproj"]
+        .as_str()
+        .filter(|s| !s.trim().is_empty())
+        .map(|raw| {
+            let pb = PathBuf::from(raw);
+            if pb.is_absolute() { pb } else { f.dir.join(pb) }
+        })
+        .unwrap_or_else(|| default_ecproj.to_path_buf());
+    let interchange_path = p["path"]
+        .as_str()
+        .filter(|s| !s.trim().is_empty())
+        .map(|raw| {
+            let pb = PathBuf::from(raw);
+            if pb.is_absolute() { pb } else { f.dir.join(pb) }
+        })
+        .unwrap_or_else(|| f.dir.join("film/interchange").join(format!("{}-interchange.{ext}", f.name)));
     if let Some(parent) = interchange_path.parent() {
         std::fs::create_dir_all(parent)?;
     }
+
     if direction == "effect_to_film" {
         if !ecproj.is_file() {
-            return Err(bad("No lettering/lyrics.ecproj found to export timeline from"));
+            return Err(bad(format!("No EffectCraft project found at {}", ecproj.display())));
         }
-        let exported = CraftHub::run_effect_steps(
-            Some(ecproj),
-            false,
-            &[(
-                "file.exportTimeline".to_string(),
-                json!({
-                    "path": interchange_path,
-                    "format": format,
-                    "precomps": "nest",
-                    "prerender": "none"
-                }),
-            )],
-        )?;
+        let mut export_p = json!({
+            "path": interchange_path,
+            "format": format,
+            "prerender": prerender,
+        });
+        if let Some(comp) = p["comp"].as_str().filter(|s| !s.trim().is_empty()) {
+            export_p["comp"] = json!(comp);
+        }
+        let exported = CraftHub::run_effect_steps(Some(&ecproj), false, &[("file.exportTimeline".to_string(), export_p)])?;
+        let mut imported_into_filmcraft = Value::Null;
+        if f.project.is_file()
+            && p["import_target"].as_bool().unwrap_or(true)
+            && let Ok(res) = CraftHub::execute_and_save(
+                CraftTarget::Film,
+                &f.project,
+                "file.import",
+                &json!({"paths": [interchange_path]}),
+            )
+        {
+            imported_into_filmcraft = res;
+        }
         Ok(json!({
             "ok": true,
             "direction": direction,
             "format": format,
+            "prerender": prerender,
             "path": interchange_path,
             "exported": exported.first(),
+            "imported_into_filmcraft": imported_into_filmcraft,
         }))
     } else {
         let project = f.require()?.to_path_buf();
@@ -416,23 +498,16 @@ fn markers_interchange(f: &super::Film, ecproj: &Path, p: &Value) -> Result<Valu
             CraftTarget::Film,
             Some(&project),
             "file.exportInterchange",
-            &json!({
-                "format": format,
-                "path": interchange_path,
-            }),
+            &json!({"format": format, "path": interchange_path}),
         )?;
         let mut imported = Value::Null;
         if ecproj.is_file()
+            && format != "ale"
+            && p["import_target"].as_bool().unwrap_or(true)
             && let Ok(res) = CraftHub::run_effect_steps(
-                Some(ecproj),
+                Some(&ecproj),
                 true,
-                &[(
-                    "file.importTimeline".to_string(),
-                    json!({
-                        "path": interchange_path,
-                        "format": format,
-                    }),
-                )],
+                &[("file.importTimeline".to_string(), json!({"path": interchange_path, "format": format}))],
             )
         {
             imported = res.into_iter().next().unwrap_or(Value::Null);
@@ -463,13 +538,17 @@ pub fn cmd_video_markers(s: &mut Session, p: &Value) -> Result<Value> {
                 "timeline": f.project,
                 "ecproj": ecproj,
                 "markers": markers,
-                "interchange_formats": ["xml", "fcpxml", "otio", "edl", "aaf"],
+                "interchange_formats": ["otio", "fcpxml", "xml", "edl", "aaf", "omf", "ale"],
             }))
         }
         "add" | "set" => markers_add(&f, &ecproj, p),
+        "edit" | "palette" => markers_edit_or_palette(&f, action, p),
+        "export_csv" | "csv" => markers_export_csv(&f, p),
         "seed" | "seed_from_lyrics" => markers_seed(&f, &ecproj, p),
         "delete" | "clear" => markers_delete(&f, &ecproj, action, p),
         "interchange" => markers_interchange(&f, &ecproj, p),
-        other => Err(EngineError::InvalidParams(format!("unknown video.markers action `{other}`; expected list, add, seed, delete, clear, or interchange"))),
+        other => Err(EngineError::InvalidParams(format!(
+            "unknown video.markers action `{other}`; expected list, add, edit, palette, export_csv, seed, delete, clear, or interchange"
+        ))),
     }
 }

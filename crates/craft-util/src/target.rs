@@ -2,14 +2,14 @@
 //! and MCP contracts.
 //!
 //! Upstream references:
-//! - FilmCraft: <https://github.com/storytold/filmcraft/blob/main/docs/control-protocol.md>
-//! - DesignCraft: <https://github.com/storytold/designcraft/blob/main/docs/control-protocol.md>
-//! - EffectCraft: <https://github.com/storytold/effectcraft/blob/main/docs/agents.md>
-//! - PhotoCraft: <https://github.com/storytold/photocraft/blob/main/docs/control-protocol.md>
-//! - VectorCraft: <https://github.com/storytold/vectorcraft/blob/main/docs/control-protocol.md>
+//! - FilmCraft (`:9876`, `FILMCRAFT_CONTROL_TOKEN`): <https://github.com/storytold/filmcraft/blob/main/docs/control-protocol.md>
+//! - EffectCraft (`:9877`, `mcp --autosave`): <https://github.com/storytold/effectcraft/blob/main/docs/control-protocol.md>
+//! - DesignCraft (`:7979`): <https://github.com/storytold/designcraft/blob/main/docs/control-protocol.md>
+//! - PhotoCraft (`:9879`): <https://github.com/storytold/photocraft/blob/main/docs/control-protocol.md>
+//! - VectorCraft (`:9880`): <https://github.com/storytold/vectorcraft/blob/main/docs/control-protocol.md>
 //! - AniCraft (early alpha, CLI-only in Magic): <https://github.com/storytold/AniCraft>
-//! - TextureCraft: <https://github.com/storytold/texturecraft/blob/main/AGENTS.md>
-//! - DeckCraft: <https://github.com/storytold/deckcraft>
+//! - TextureCraft (`:9882`): <https://github.com/storytold/texturecraft/blob/main/AGENTS.md>
+//! - DeckCraft (`:7990`): <https://github.com/storytold/deckcraft>
 
 use std::path::Path;
 
@@ -112,9 +112,9 @@ impl CraftTarget {
         }
         let ext = path.extension()?.to_str()?.to_ascii_lowercase();
         match ext.as_str() {
-            "fcproj" => Some(Self::Film),
+            "fcproj" | "fcgt" => Some(Self::Film),
             "pcraft" | "psd" => Some(Self::Photo),
-            "ecproj" => Some(Self::Effect),
+            "ecproj" | "ectemplate" => Some(Self::Effect),
             "vectorcraft" | "vcraft" | "drawcraft" | "svg" => Some(Self::Vector),
             "designcraft" | "idml" => Some(Self::Design),
             "deckcraft" | "pptx" => Some(Self::Deck),
@@ -124,16 +124,18 @@ impl CraftTarget {
         }
     }
 
+    /// Canonical upstream `--control` ports (`FilmCraft` `:9876`, `EffectCraft` `:9877`,
+    /// `DesignCraft` `:7979`, `DeckCraft` `:7990`; `Magic` itself defaults to `:9875`).
     pub const fn default_port(self) -> u16 {
         match self {
-            Self::Film => 9875,
-            Self::Design => 9877,
-            Self::Effect => 9878,
+            Self::Film => 9876,
+            Self::Effect => 9877,
+            Self::Design => 7979,
             Self::Photo => 9879,
             Self::Vector => 9880,
             Self::Ani => 9881,
             Self::Texture => 9882,
-            Self::Deck => 9883,
+            Self::Deck => 7990,
         }
     }
 
@@ -198,7 +200,10 @@ impl CraftTarget {
         if self.wire() == ControlWire::CmdParams {
             return (command.to_string(), params.clone());
         }
-        if command.starts_with("ui.") || command.starts_with("app.") || command == "session.inspect" {
+        if command.starts_with("ui.")
+            || command.starts_with("app.")
+            || matches!(command, "session.inspect" | "render.frame" | "perf.stats")
+        {
             return (command.to_string(), params.clone());
         }
         match self {
@@ -251,14 +256,27 @@ impl CraftTarget {
 
     pub fn mcp_bridge_hint(self, port: u16) -> String {
         match self {
+            Self::Film => format!("filmcraft-cli mcp --bridge 127.0.0.1:{port}"),
+            Self::Effect => format!("effectcraft-cli mcp --bridge {port}"),
             Self::Design => format!("designcraft-cli mcp --connect 127.0.0.1:{port}"),
             Self::Deck => format!("deckcraft-cli mcp --connect 127.0.0.1:{port}"),
             Self::Vector => format!("vectorcraft-cli mcp --connect 127.0.0.1:{port}"),
-            Self::Effect => format!("effectcraft-cli mcp --bridge {port}"),
             Self::Photo => format!("photocraft-cli mcp --bridge 127.0.0.1:{port}"),
             Self::Texture => format!("texturecraft-cli mcp --bridge 127.0.0.1:{port}"),
-            Self::Film => format!("filmcraft --control {port}"),
             Self::Ani => "anicraft-cli mcp".to_string(),
+        }
+    }
+
+    pub const fn mcp_headless_hint(self) -> &'static str {
+        match self {
+            Self::Film => "filmcraft-cli mcp",
+            Self::Effect => "effectcraft-cli mcp --autosave",
+            Self::Design => "designcraft-cli mcp",
+            Self::Deck => "deckcraft-cli mcp",
+            Self::Vector => "vectorcraft-cli mcp",
+            Self::Photo => "photocraft-cli mcp",
+            Self::Texture => "texturecraft-cli mcp",
+            Self::Ani => "anicraft-cli mcp",
         }
     }
 }

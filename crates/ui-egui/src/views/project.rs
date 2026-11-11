@@ -1,22 +1,32 @@
-//! `Project` overview & Craft file trunk (`#view-project`): left `Song & Stages` readiness column
-//! (`● Song`, `● Lyrics & notes`, `● Transcript`, stage jump buttons) and right `Project Craft Files
-//! & Rendered Assets` grouped by `FilmCraft (.fcproj)`, `DesignCraft (.designcraft)`,
-//! `EffectCraft (.ecproj)`, and `PhotoCraft & VectorCraft (.pcraft / .svg)` with real `file://` thumbnails.
+//! `Project` overview & Craft file trunk (`#view-project`): precision match for
+//! `02-project-craft-files.jpg` (`166374e1.jpeg`) plus `Sheet 08` Zone A `FilmCraft` × `EffectCraft`
+//! bridge drawers (`project_bridge.rs`: `T01`–`T05`, `T08`, `T10`).
 
 use craft_ui::layout::{SplitAxis, SplitSize, split_rect};
 use egui::{
-    Align, Align2, CornerRadius, FontId, Layout, Pos2, RichText, ScrollArea, Sense, Stroke,
-    StrokeKind, Ui, Vec2,
+    Align, Align2, Color32, CornerRadius, FontId, Layout, Pos2, Rect, RichText, ScrollArea, Sense,
+    Stroke, StrokeKind, Ui, Vec2,
 };
 use serde_json::{Value, json};
 
-use crate::controls::{badge_accent_color, child_pane, fill_card, paint_local_image, pill_toggle};
+use crate::controls::{
+    child_pane, fill_card, paint_craft_badge, paint_local_image, paint_readiness_light,
+};
+use crate::icons::icon_image;
 use crate::state::{PickerTarget, UiAction, ViewCtx, ViewMode};
+use crate::views::project_bridge::{
+    draw_offline_and_source_guard_card, draw_trunk_bridge_buttons, draw_trunk_bridge_drawers,
+};
 use crate::widgets::{BtnSpec, action_button, text_input};
 
 pub fn show(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     let body = ui.available_rect_before_wrap();
-    if let Some(split) = split_rect(body, SplitAxis::Horizontal, SplitSize::FixedFirst(304.0), 10.0, 240.0) {
+    if let Some(split) = split_rect(body, SplitAxis::Horizontal, SplitSize::FixedFirst(296.0), 14.0, 320.0) {
+        let div_x = split.first.max.x + 7.0;
+        ui.painter().line_segment(
+            [Pos2::new(div_x, body.min.y), Pos2::new(div_x, body.max.y)],
+            Stroke::new(1.0, ctx.pal.border_subtle),
+        );
         let mut left_ui = child_pane(ui, split.first, "project_left");
         draw_stage_stack(&mut left_ui, ctx);
         let mut right_ui = child_pane(ui, split.second, "project_right");
@@ -61,22 +71,109 @@ fn collect_lyric_lines(ctx: &ViewCtx<'_>) -> Vec<String> {
 
 fn draw_stage_stack(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     ScrollArea::vertical().id_salt("project_stage_scroll").show(ui, |ui| {
-        ui.horizontal(|ui| {
-            ui.label(RichText::new("◫").size(12.5).color(ctx.pal.text_muted));
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                ui.label(RichText::new("Song & Stages").size(11.5).color(ctx.pal.text_muted));
+        ui.vertical(|ui| {
+            ui.horizontal(|ui| {
+                let (ir, _) = ui.allocate_exact_size(Vec2::splat(16.0), Sense::hover());
+                icon_image("sidebar", 15.0, ctx.pal.text_secondary).paint_at(ui, ir);
+                ui.label(RichText::new("Song & Stages").size(13.0).strong().color(ctx.pal.text_primary));
             });
+            ui.add_space(6.0);
+            draw_song_and_lyrics_card(ui, ctx);
+            ui.add_space(8.0);
+            draw_offline_and_source_guard_card(ui, ctx);
+            ui.add_space(8.0);
+            draw_pipeline_jumps(ui, ctx);
         });
-        ui.add_space(4.0);
-        draw_song_and_lyrics_cards(ui, ctx);
-        ui.add_space(8.0);
-        draw_pipeline_jumps(ui, ctx);
     });
 }
 
-fn draw_song_and_lyrics_cards(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
+fn draw_song_waveform(ui: &mut Ui, ctx: &mut ViewCtx<'_>, song_file: &str, has_song: bool) {
+    let w = ui.available_width().max(160.0);
+    let (rect, resp) = ui.allocate_exact_size(Vec2::new(w, 28.0), Sense::click());
+    let base_y = rect.max.y - 4.0;
+    ui.painter().line_segment(
+        [Pos2::new(rect.min.x, base_y), Pos2::new(rect.max.x, base_y)],
+        Stroke::new(1.0, ctx.pal.border),
+    );
+    if has_song {
+        let mut seed: u32 = 0x5A17_9C21;
+        for b in song_file.bytes() {
+            seed = seed.wrapping_mul(31).wrapping_add(u32::from(b));
+        }
+        let bars = ((w / 3.0) as usize).clamp(24, 96);
+        let dur = ctx.state.audio_duration_sec.max(1.0);
+        let play_frac = (ctx.state.audio_time_sec / dur).clamp(0.0, 1.0) as f32;
+        for i in 0..bars {
+            seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
+            let frac = (i as f32) / (bars as f32);
+            let env = (frac * std::f32::consts::PI).sin().powf(0.55);
+            let amp = (0.18 + ((seed >> 16) as f32 / 65535.0) * 0.82) * env;
+            let bh = (amp * 19.0).max(2.0);
+            let x = rect.min.x + frac * rect.width();
+            let col = if frac >= play_frac {
+                ctx.pal.accent_emerald.gamma_multiply(0.82)
+            } else {
+                ctx.pal.accent_emerald.gamma_multiply(0.36)
+            };
+            ui.painter().line_segment(
+                [Pos2::new(x, base_y - bh), Pos2::new(x, base_y)],
+                Stroke::new(1.8, col),
+            );
+        }
+        let px = rect.min.x + play_frac * rect.width();
+        ui.painter().line_segment(
+            [Pos2::new(px, rect.min.y + 2.0), Pos2::new(px, base_y + 2.0)],
+            Stroke::new(1.6, Color32::WHITE),
+        );
+        if resp.clicked()
+            && let Some(pos) = resp.interact_pointer_pos()
+        {
+            let next_f = ((pos.x - rect.min.x) / rect.width()).clamp(0.0, 1.0) as f64;
+            ctx.state.audio_time_sec = next_f * dur;
+        }
+    }
+}
+
+fn recessed_action_button(
+    ui: &mut Ui,
+    ctx: &mut ViewCtx<'_>,
+    id: &str,
+    label: &str,
+    centered: bool,
+    tooltip: &str,
+) -> bool {
+    let w = ui.available_width().max(100.0);
+    let (rect, resp) = ui.allocate_exact_size(Vec2::new(w, 28.0), Sense::click());
+    let fill = if resp.hovered() { ctx.pal.bg_hover } else { ctx.pal.bg_input };
+    let border = if resp.hovered() { ctx.pal.accent_emerald } else { ctx.pal.border };
+    ui.painter()
+        .rect(rect, CornerRadius::same(6), fill, Stroke::new(1.0, border), StrokeKind::Inside);
+    if centered {
+        ui.painter().text(
+            rect.center(),
+            Align2::CENTER_CENTER,
+            label,
+            FontId::proportional(11.5),
+            ctx.pal.text_primary,
+        );
+    } else {
+        ui.painter().text(
+            Pos2::new(rect.min.x + 10.0, rect.center().y),
+            Align2::LEFT_CENTER,
+            label,
+            FontId::proportional(11.5),
+            ctx.pal.text_muted,
+        );
+    }
+    let resp = resp.on_hover_text(tooltip);
+    ctx.reg.record(id, label, &resp, None);
+    resp.clicked()
+}
+
+fn draw_song_and_lyrics_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     let song_path = ctx.state.song_audio_path().unwrap_or_default();
-    let song_file = song_path.rsplit('/').next().unwrap_or("No audio linked");
+    let has_song = !song_path.is_empty();
+    let song_file = song_path.rsplit('/').next().filter(|s| !s.is_empty()).unwrap_or("No audio linked");
     let lyric_lines = collect_lyric_lines(ctx);
     let timed_words = ctx
         .state
@@ -86,122 +183,278 @@ fn draw_song_and_lyrics_cards(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         .and_then(Value::as_u64)
         .unwrap_or(0);
 
-    let card = fill_card(ui, ctx.pal, false, |ui| {
-        ui.horizontal(|ui| {
-            let col = if song_path.is_empty() { ctx.pal.accent_amber } else { ctx.pal.accent_emerald };
-            let (drect, _) = ui.allocate_exact_size(Vec2::new(10.0, 16.0), Sense::hover());
-            ui.painter().circle_filled(drect.center(), 3.6, col);
-            ui.label(RichText::new("Song").size(12.0).strong().color(col));
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                ui.label(RichText::new(song_file).monospace().size(10.5).color(ctx.pal.text_muted));
-            });
-        });
-        ui.label(RichText::new(ctx.state.project_name()).size(12.5).strong().color(ctx.pal.text_primary));
-        ui.horizontal_wrapped(|ui| {
-            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("song-upload", "Change audio…", "Select song audio file")).clicked() {
-                ctx.push(UiAction::PickFile {
-                    target: PickerTarget::SetSongAudio,
-                    title: "Select Song Audio".into(),
-                    extensions: vec!["wav".into(), "flac".into(), "mp3".into(), "m4a".into(), "ogg".into()],
-                    directory: false,
-                    save: false,
+    let card = egui::Frame::new()
+        .fill(ctx.pal.bg_panel)
+        .corner_radius(CornerRadius::same(10))
+        .inner_margin(egui::Margin::same(12))
+        .stroke(Stroke::new(1.3, ctx.pal.accent_emerald.gamma_multiply(0.76)))
+        .show(ui, |ui| {
+            ui.set_min_width((ui.available_width() - 4.0).max(200.0));
+            ui.vertical(|ui| {
+                ui.horizontal(|ui| {
+                    let col = if has_song { ctx.pal.accent_emerald } else { ctx.pal.accent_amber };
+                    let (drect, _) = ui.allocate_exact_size(Vec2::new(14.0, 16.0), Sense::hover());
+                    paint_readiness_light(ui, drect.center(), col);
+                    ui.label(RichText::new("Song").size(12.5).strong().color(ctx.pal.accent_emerald));
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        ui.label(RichText::new(song_file).size(11.0).color(ctx.pal.text_muted));
+                    });
                 });
-            }
-            if action_button(
-                ui,
-                ctx.reg,
-                ctx.pal,
-                BtnSpec::new("song-transcribe", "sparkles", "Transcribe", "Run FilmCraft speech alignment & write timing-reference.json")
-                    .primary()
-                    .enabled(!song_path.is_empty()),
-            )
-            .clicked()
-            {
-                ctx.exec("audio.analyze", json!({}), Some("Transcribed song audio"));
-            }
-        });
+                draw_song_waveform(ui, ctx, song_file, has_song);
+                ui.add_space(2.0);
+                ui.horizontal(|ui| {
+                    let pick_w = (ui.available_width() - 88.0).max(110.0);
+                    ui.allocate_ui_with_layout(Vec2::new(pick_w, 28.0), Layout::top_down(Align::Min), |ui| {
+                        if recessed_action_button(ui, ctx, "song-upload", "Change audio…", false, "Select song audio file") {
+                            ctx.push(UiAction::PickFile {
+                                target: PickerTarget::SetSongAudio,
+                                title: "Select Song Audio".into(),
+                                extensions: vec!["wav".into(), "flac".into(), "mp3".into(), "m4a".into(), "ogg".into()],
+                                directory: false,
+                                save: false,
+                            });
+                        }
+                    });
+                    if action_button(
+                        ui,
+                        ctx.reg,
+                        ctx.pal,
+                        BtnSpec::new("song-transcribe", "sparkles", "Align", "Run FilmCraft speech alignment & write timing-reference.json")
+                            .enabled(has_song),
+                    )
+                    .clicked()
+                    {
+                        ctx.exec("audio.analyze", json!({}), Some("Transcribed song audio"));
+                    }
+                });
 
-        ui.add_space(6.0);
-        ui.separator();
+                ui.add_space(8.0);
+                ui.horizontal(|ui| {
+                    let lcol = if lyric_lines.is_empty() { ctx.pal.accent_amber } else { ctx.pal.accent_emerald };
+                    let (drect, _) = ui.allocate_exact_size(Vec2::new(14.0, 16.0), Sense::hover());
+                    paint_readiness_light(ui, drect.center(), lcol);
+                    ui.label(RichText::new("Lyrics & notes").size(12.5).strong().color(ctx.pal.accent_amber));
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        ui.label(RichText::new(format!("{} lines", lyric_lines.len())).size(11.0).color(ctx.pal.text_muted));
+                    });
+                });
+                ctx.pal.inset_frame().show(ui, |ui| {
+                    ui.set_min_width(ui.available_width());
+                    ScrollArea::vertical().id_salt("proj_lyrics_box").max_height(104.0).show(ui, |ui| {
+                        let preview_text = if lyric_lines.is_empty() {
+                            "No lyrics loaded yet — align song audio or import timed lyrics.".to_owned()
+                        } else {
+                            lyric_lines.iter().take(8).cloned().collect::<Vec<_>>().join("\n")
+                        };
+                        ui.label(RichText::new(preview_text).monospace().size(10.5).color(ctx.pal.text_secondary));
+                    });
+                });
+                ui.add_space(2.0);
+                if recessed_action_button(
+                    ui,
+                    ctx,
+                    "song-open-lyrics",
+                    "Open Lyrics & Motion →",
+                    true,
+                    "Open Kinetic Lyrics workspace",
+                ) {
+                    ctx.push(UiAction::SwitchView(ViewMode::Design));
+                }
 
-        ui.horizontal(|ui| {
-            let lcol = if lyric_lines.is_empty() { ctx.pal.accent_amber } else { ctx.pal.accent_emerald };
-            let (drect, _) = ui.allocate_exact_size(Vec2::new(10.0, 16.0), Sense::hover());
-            ui.painter().circle_filled(drect.center(), 3.6, lcol);
-            ui.label(RichText::new("Lyrics & notes").size(12.0).strong().color(ctx.pal.accent_amber));
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                ui.label(RichText::new(format!("{} lines", lyric_lines.len())).size(10.5).color(ctx.pal.text_muted));
+                ui.add_space(8.0);
+                ui.horizontal(|ui| {
+                    let tcol = if timed_words > 0 { ctx.pal.accent_emerald } else { ctx.pal.accent_amber };
+                    let (drect, _) = ui.allocate_exact_size(Vec2::new(14.0, 16.0), Sense::hover());
+                    paint_readiness_light(ui, drect.center(), tcol);
+                    ui.label(RichText::new("Transcript").size(12.5).strong().color(ctx.pal.accent_sky));
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        ui.label(RichText::new(format!("{timed_words} timed words")).size(11.0).color(ctx.pal.text_muted));
+                    });
+                });
+                if recessed_action_button(
+                    ui,
+                    ctx,
+                    "song-import-transcript",
+                    "Import timed lyrics…",
+                    false,
+                    "Import timed transcript JSON, SRT, or VTT",
+                ) {
+                    ctx.push(UiAction::PickFile {
+                        target: PickerTarget::ImportTranscript,
+                        title: "Import Timed Transcript".into(),
+                        extensions: vec!["json".into(), "srt".into(), "vtt".into()],
+                        directory: false,
+                        save: false,
+                    });
+                }
             });
         });
-        ctx.pal.inset_frame().show(ui, |ui| {
-            ui.set_min_width(ui.available_width());
-            let preview_text = if lyric_lines.is_empty() {
-                "No lyrics loaded yet — transcribe song audio or import timed lyrics.".to_owned()
-            } else {
-                lyric_lines.iter().take(7).cloned().collect::<Vec<_>>().join("\n")
-            };
-            ui.label(RichText::new(preview_text).monospace().size(10.5).color(ctx.pal.text_secondary));
-        });
-        if action_button(
-            ui,
-            ctx.reg,
-            ctx.pal,
-            BtnSpec::label_only("song-open-lyrics", "Open Lyrics & Motion →", "Open Kinetic Lyrics workspace"),
-        )
-        .clicked()
-        {
-            ctx.push(UiAction::SwitchView(ViewMode::Design));
-        }
-
-        ui.add_space(6.0);
-        ui.separator();
-
-        ui.horizontal(|ui| {
-            let tcol = if timed_words > 0 { ctx.pal.accent_emerald } else { ctx.pal.accent_amber };
-            let (drect, _) = ui.allocate_exact_size(Vec2::new(10.0, 16.0), Sense::hover());
-            ui.painter().circle_filled(drect.center(), 3.6, tcol);
-            ui.label(RichText::new("Transcript").size(12.0).strong().color(tcol));
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                ui.label(RichText::new(format!("{timed_words} timed words")).size(10.5).color(ctx.pal.text_muted));
-            });
-        });
-        if action_button(
-            ui,
-            ctx.reg,
-            ctx.pal,
-            BtnSpec::label_only("song-import-transcript", "Import timed lyrics…", "Import timed transcript JSON or SRT"),
-        )
-        .clicked()
-        {
-            ctx.push(UiAction::PickFile {
-                target: PickerTarget::ImportTranscript,
-                title: "Import Timed Transcript".into(),
-                extensions: vec!["json".into(), "srt".into(), "vtt".into()],
-                directory: false,
-                save: false,
-            });
-        }
-    });
     ctx.reg.record("block-song", "Song Block", &card.response, None);
 }
 
+fn stage_jump_tile(
+    ui: &mut Ui,
+    ctx: &mut ViewCtx<'_>,
+    width: f32,
+    id: &str,
+    label: &str,
+    centered: bool,
+    desc: &str,
+) -> bool {
+    let (rect, resp) = ui.allocate_exact_size(Vec2::new(width, 32.0), Sense::click());
+    let fill = if resp.hovered() { ctx.pal.bg_hover } else { ctx.pal.bg_panel };
+    let border = if resp.hovered() { ctx.pal.accent_emerald } else { ctx.pal.border };
+    ui.painter()
+        .rect(rect, CornerRadius::same(7), fill, Stroke::new(1.0, border), StrokeKind::Inside);
+    if centered {
+        ui.painter().text(
+            rect.center(),
+            Align2::CENTER_CENTER,
+            label,
+            FontId::proportional(12.5),
+            ctx.pal.text_primary,
+        );
+    } else {
+        ui.painter().text(
+            Pos2::new(rect.min.x + 12.0, rect.center().y),
+            Align2::LEFT_CENTER,
+            label,
+            FontId::proportional(12.5),
+            ctx.pal.text_primary,
+        );
+    }
+    let resp = resp.on_hover_text(desc);
+    ctx.reg.record(id, label, &resp, None);
+    resp.clicked()
+}
+
 fn draw_pipeline_jumps(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
-    let card = fill_card(ui, ctx.pal, false, |ui| {
-        ui.horizontal_wrapped(|ui| {
-            for (btn_id, label, desc, target_view) in [
+    let grid_resp = ui.vertical(|ui| {
+        let full_w = ui.available_width().max(200.0);
+        let half_w = ((full_w - 8.0) * 0.5).max(96.0);
+
+        for pair in [
+            [
                 ("project-jump-storyboard", "Storyboard →", "Edit DesignCraft spreads & check readiness", ViewMode::Storyboard),
                 ("project-jump-animation", "Animation →", "Rig PhotoCraft (.pcraft) & EffectCraft (.ecproj) puppets", ViewMode::Animation),
+            ],
+            [
                 ("project-jump-lyrics", "Lyrics →", "Author EffectCraft (lettering/lyrics.ecproj) kinetic lyrics", ViewMode::Design),
                 ("project-jump-motion", "Motion →", "Author VectorCraft (.svg) & EffectCraft (actions.ecproj) cues", ViewMode::Motion),
-                ("project-jump-studio", "Studio →", "Assemble and export FilmCraft (.fcproj) sequence", ViewMode::Studio),
-            ] {
-                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(btn_id, label, desc)).clicked() {
-                    ctx.push(UiAction::SwitchView(target_view));
+            ],
+        ] {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 8.0;
+                for (btn_id, label, desc, target_view) in pair {
+                    if stage_jump_tile(ui, ctx, half_w, btn_id, label, false, desc) {
+                        ctx.push(UiAction::SwitchView(target_view));
+                    }
                 }
-            }
-        });
+            });
+            ui.add_space(6.0);
+        }
+
+        if stage_jump_tile(
+            ui,
+            ctx,
+            full_w,
+            "project-jump-studio",
+            "Studio →",
+            false,
+            "Assemble and export FilmCraft (.fcproj) sequence",
+        ) {
+            ctx.push(UiAction::SwitchView(ViewMode::Studio));
+        }
+        ui.add_space(8.0);
+        if stage_jump_tile(
+            ui,
+            ctx,
+            full_w,
+            "project-close-opened-apps",
+            "Close apps",
+            true,
+            "Gracefully close sibling ArtCraft windows opened by Magic",
+        ) {
+            ctx.exec("workspace.close_opened", json!({}), Some("Closed sibling Craft apps opened by Magic"));
+        }
     });
-    ctx.reg.record("blocks", "Production Stages", &card.response, None);
+    ctx.reg.record("blocks", "Production Stages", &grid_resp.response, None);
+}
+
+fn cycle_type_filter(cur: &str) -> &'static str {
+    match cur {
+        "all" => "craft",
+        "craft" => "image",
+        _ => "all",
+    }
+}
+
+fn draw_group_by_domain_button(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
+    let active = ctx.state.project.group_by_folder;
+    let label = "Group by Craft Domain";
+    let galley = ui
+        .painter()
+        .layout_no_wrap(label.to_owned(), FontId::proportional(11.5), ctx.pal.text_primary);
+    let (rect, resp) = ui.allocate_exact_size(Vec2::new(galley.size().x + 48.0, 28.0), Sense::click());
+    let fill = if resp.hovered() { ctx.pal.bg_hover } else { ctx.pal.bg_input };
+    ui.painter()
+        .rect(rect, CornerRadius::same(6), fill, Stroke::new(1.0, ctx.pal.border), StrokeKind::Inside);
+
+    let chk = Rect::from_min_size(Pos2::new(rect.min.x + 8.0, rect.center().y - 7.0), Vec2::splat(14.0));
+    if active {
+        ui.painter().rect_filled(chk, CornerRadius::same(4), ctx.pal.accent_emerald);
+        ui.painter().text(
+            chk.center(),
+            Align2::CENTER_CENTER,
+            "✓",
+            FontId::proportional(10.5),
+            Color32::from_rgb(0x06, 0x16, 0x12),
+        );
+    } else {
+        ui.painter()
+            .rect(chk, CornerRadius::same(4), ctx.pal.bg_stage, Stroke::new(1.0, ctx.pal.border), StrokeKind::Inside);
+    }
+    ui.painter().text(
+        Pos2::new(chk.max.x + 7.0, rect.center().y),
+        Align2::LEFT_CENTER,
+        label,
+        FontId::proportional(11.5),
+        ctx.pal.text_primary,
+    );
+    ui.painter().text(
+        Pos2::new(rect.max.x - 10.0, rect.center().y),
+        Align2::CENTER_CENTER,
+        "▾",
+        FontId::proportional(11.0),
+        ctx.pal.text_muted,
+    );
+    if resp.clicked() {
+        ctx.state.project.group_by_folder = !ctx.state.project.group_by_folder;
+    }
+    ctx.reg.record("pf-group-toggle", label, &resp, Some(active.to_string()));
+}
+
+fn mint_outline_button(ui: &mut Ui, ctx: &mut ViewCtx<'_>, id: &str, label: &str, tooltip: &str) -> bool {
+    let font = FontId::proportional(12.0);
+    let galley = ui.painter().layout_no_wrap(label.to_owned(), font.clone(), ctx.pal.accent_emerald);
+    let (rect, resp) = ui.allocate_exact_size(Vec2::new(galley.size().x + 22.0, 28.0), Sense::click());
+    let fill = if resp.hovered() {
+        ctx.pal.accent_emerald.gamma_multiply(0.28)
+    } else {
+        ctx.pal.accent_emerald_bg
+    };
+    ui.painter().rect(
+        rect,
+        CornerRadius::same(6),
+        fill,
+        Stroke::new(1.2, ctx.pal.accent_emerald),
+        StrokeKind::Inside,
+    );
+    ui.painter()
+        .text(rect.center(), Align2::CENTER_CENTER, label, font, ctx.pal.accent_mint);
+    let resp = resp.on_hover_text(tooltip);
+    ctx.reg.record(id, label, &resp, None);
+    resp.clicked()
 }
 
 fn draw_files_trunk(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
@@ -211,41 +464,54 @@ fn draw_files_trunk(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     let reg_count = trunk["registered_asset_count"].as_u64().unwrap_or(0);
 
     let panel = fill_card(ui, ctx.pal, true, |ui| {
-        ui.horizontal(|ui| {
-            ui.label(RichText::new("Project Craft Files & Rendered Assets").size(14.5).strong().color(ctx.pal.text_primary));
+        ui.horizontal_wrapped(|ui| {
             ui.label(
-                RichText::new(format!("{total_count} files · {reg_count} registered assets"))
-                    .size(11.5)
+                RichText::new("Project Craft Files & Rendered Assets")
+                    .size(15.5)
+                    .strong()
+                    .color(ctx.pal.text_primary),
+            );
+            ui.label(
+                RichText::new(format!("{total_count} Files · {reg_count} registered assets"))
+                    .size(12.0)
                     .color(ctx.pal.text_muted),
             );
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                draw_trunk_bridge_buttons(ui, ctx);
+            });
         });
-        ui.add_space(4.0);
-        ui.horizontal_wrapped(|ui| {
-            for (fid, lbl) in [
-                ("all", format!("Type: All Files ({total_count})")),
-                ("craft", "Craft Projects (.fcproj/.designcraft/.ecproj/.pcraft/.svg)".into()),
-                ("image", "Rendered Frames & PNGs".into()),
-            ] {
-                let active = ctx.state.project.type_filter == fid;
-                let btn_id = format!("pf-filter-{fid}");
-                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&btn_id, &lbl, "Filter project files").selected(active)).clicked() {
-                    ctx.state.project.type_filter = fid.into();
-                }
-            }
-            pill_toggle(
+        ui.add_space(5.0);
+
+        ui.horizontal(|ui| {
+            let type_lbl = match ctx.state.project.type_filter.as_str() {
+                "craft" => "Type: Craft Projects  ▾",
+                "image" => "Type: Rendered Assets  ▾",
+                _ => "Type: All Craft Files  ▾",
+            };
+            if action_button(
                 ui,
                 ctx.reg,
                 ctx.pal,
-                "pf-group-toggle",
-                "Group by Craft Domain",
-                &mut ctx.state.project.group_by_folder,
-                ctx.pal.accent_emerald,
-            );
-            let search_w = (ui.available_width() - 280.0).clamp(140.0, 320.0);
+                BtnSpec::label_only("pf-filter-cycle", type_lbl, "Cycle Craft file type filter"),
+            )
+            .clicked()
+            {
+                ctx.state.project.type_filter = cycle_type_filter(&ctx.state.project.type_filter).into();
+            }
+
+            draw_group_by_domain_button(ui, ctx);
+
+            let search_w = (ui.available_width() - 252.0).clamp(120.0, 420.0);
             text_input(ui, ctx.reg, "pf-search", "Filter files", &mut ctx.state.project.search, "Filter by name…", search_w);
 
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("pf-import", "plus", "Import Craft File", "Import Craft document into project")).clicked() {
+                if mint_outline_button(
+                    ui,
+                    ctx,
+                    "pf-import",
+                    "+ Import Craft File",
+                    "Import .fcproj, .designcraft, .ecproj, .pcraft, .vectorcraft, or .svg into project",
+                ) {
                     ctx.push(UiAction::PickFile {
                         target: PickerTarget::ImportTrunkFile,
                         title: "Import Craft Project or Media File".into(),
@@ -266,7 +532,7 @@ fn draw_files_trunk(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                         save: false,
                     });
                 }
-                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("pf-add-asset", "plus", "Add Asset", "Add Craft or image asset").primary()).clicked() {
+                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("pf-add-asset", "plus", "Add Asset", "Add Craft or image asset")).clicked() {
                     ctx.push(UiAction::PickFile {
                         target: PickerTarget::AddProjectAsset,
                         title: "Add Craft Document or Artwork Asset".into(),
@@ -286,17 +552,15 @@ fn draw_files_trunk(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                         save: false,
                     });
                 }
-                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("pf-paste", "Paste artwork", "Import image from clipboard")).clicked()
-                    && let Some(proj) = ctx.state.project_path.as_ref().and_then(|p| p.to_str()).map(str::to_owned)
-                {
-                    ctx.exec("clipboard.import_image", json!({"expected_project": proj}), Some("Imported clipboard artwork"));
-                }
             });
         });
+
+        draw_trunk_bridge_drawers(ui, ctx);
+        ui.add_space(4.0);
         ui.separator();
         draw_trunk_file_list(ui, ctx, &trunk_files);
     });
-    ctx.reg.record("project-files-panel", "Project Files", &panel.response, None);
+    ctx.reg.record("project-files-panel", "Project Craft Files", &panel.response, None);
 }
 
 fn is_craft_doc_path(path: &str) -> bool {
@@ -304,6 +568,16 @@ fn is_craft_doc_path(path: &str) -> bool {
     [".fcproj", ".designcraft", ".ecproj", ".pcraft", ".psd", ".vectorcraft", ".svg", ".anicraft"]
         .iter()
         .any(|ext| lower.ends_with(ext))
+}
+
+fn normalize_domain_heading(raw: &str) -> &str {
+    match raw {
+        "FilmCraft" => "FilmCraft (.fcproj)",
+        "DesignCraft & PDF" => "DesignCraft (.designcraft)",
+        "EffectCraft & Linked Comps" => "EffectCraft (.ecproj)",
+        "Photo & Vector" => "PhotoCraft & VectorCraft (.pcraft / .svg)",
+        other => other,
+    }
 }
 
 fn draw_trunk_file_list(ui: &mut Ui, ctx: &mut ViewCtx<'_>, trunk_files: &[Value]) {
@@ -329,35 +603,37 @@ fn draw_trunk_file_list(ui: &mut Ui, ctx: &mut ViewCtx<'_>, trunk_files: &[Value
         .collect();
 
     let list_out = ScrollArea::vertical().id_salt("pf_list_scroll").auto_shrink([false, false]).show(ui, |ui| {
-        if filtered.is_empty() {
-            ui.label(
-                RichText::new("No matching Craft or asset files in project trunk — click + Add Asset or + Import Craft File.")
-                    .color(ctx.pal.text_muted),
-            );
-            return;
-        }
-        let mut last_group = String::new();
-        for (idx, file) in filtered.iter().enumerate() {
-            let grp_lbl = file["group_label"].as_str().unwrap_or("Project Files");
-            if grouped && grp_lbl != last_group {
-                let grp_cnt = filtered
-                    .iter()
-                    .filter(|x| x["group_label"].as_str().unwrap_or("Project Files") == grp_lbl)
-                    .count();
-                if idx > 0 {
-                    ui.add_space(6.0);
-                }
+        ui.vertical(|ui| {
+            if filtered.is_empty() {
                 ui.label(
-                    RichText::new(format!("▾ {grp_lbl} ({grp_cnt})"))
-                        .size(11.0)
-                        .strong()
+                    RichText::new("No matching Craft or asset files in project trunk — click + Add Asset or + Import Craft File.")
                         .color(ctx.pal.text_muted),
                 );
-                ui.add_space(2.0);
-                last_group = grp_lbl.to_owned();
+                return;
             }
-            draw_single_trunk_row(ui, ctx, idx, file);
-        }
+            let mut last_group = String::new();
+            for (idx, file) in filtered.iter().enumerate() {
+                let raw_grp = file["group_label"].as_str().unwrap_or("Project Files");
+                let grp_lbl = normalize_domain_heading(raw_grp);
+                if grouped && grp_lbl != last_group {
+                    if idx > 0 {
+                        ui.add_space(8.0);
+                    }
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new(format!("▾ {grp_lbl}")).size(11.5).strong().color(ctx.pal.text_secondary));
+                        let rem = ui.available_width().max(24.0);
+                        let (lrect, _) = ui.allocate_exact_size(Vec2::new(rem, 12.0), Sense::hover());
+                        ui.painter().line_segment(
+                            [Pos2::new(lrect.min.x + 6.0, lrect.center().y), Pos2::new(lrect.max.x, lrect.center().y)],
+                            Stroke::new(1.0, ctx.pal.border_subtle),
+                        );
+                    });
+                    ui.add_space(3.0);
+                    last_group = grp_lbl.to_owned();
+                }
+                draw_single_trunk_row(ui, ctx, idx, file);
+            }
+        });
     });
     let list_resp = ui.interact(list_out.inner_rect, ui.scope_id().with("pf_list"), Sense::hover());
     ctx.reg.record("pf-list", "Asset List", &list_resp, None);
@@ -367,86 +643,177 @@ fn draw_single_trunk_row(ui: &mut Ui, ctx: &mut ViewCtx<'_>, idx: usize, file: &
     let name = file["name"].as_str().unwrap_or("file");
     let path = file["path"].as_str().unwrap_or_default();
     let rel_dir = file["rel_dir"].as_str().unwrap_or("./");
-    let badge = file["badge"].as_str().unwrap_or("FILE");
+    let raw_badge = file["badge"].as_str().unwrap_or("FILE");
+    let badge = match raw_badge {
+        "PC" => "PCRAFT",
+        "VC" => "VCRAFT",
+        other => other,
+    };
     let detail = file["detail"].as_str().unwrap_or("");
     let open_lbl = file["open_label"].as_str().unwrap_or("Open");
     let is_image = file["is_image"].as_bool() == Some(true) || path.to_ascii_lowercase().ends_with(".svg");
     let can_animate = file["can_animate"].as_bool() == Some(true)
         || path.to_ascii_lowercase().ends_with(".pcraft")
-        || path.to_ascii_lowercase().ends_with(".ecproj");
-    let bcol = badge_accent_color(ctx.pal, badge);
+        || path.to_ascii_lowercase().ends_with(".vectorcraft");
+    let can_link_fc = file["can_link_filmcraft"].as_bool() == Some(true) || path.to_ascii_lowercase().ends_with(".ecproj");
+    let has_registered_asset = file["assets"].as_array().is_some_and(|a| !a.is_empty());
 
-    egui::Frame::new()
-        .fill(ctx.pal.bg_input)
-        .corner_radius(CornerRadius::same(7))
-        .inner_margin(egui::Margin::symmetric(8, 5))
-        .stroke(Stroke::new(1.0, ctx.pal.border_subtle))
-        .show(ui, |ui| {
-            ui.horizontal(|ui| {
-                let preview_src = file["preview_path"].as_str().or_else(|| is_image.then_some(path));
-                let (thumb_rect, _) = ui.allocate_exact_size(Vec2::new(36.0, 28.0), Sense::hover());
-                if !paint_local_image(ui, thumb_rect, preview_src, ctx.pal.bg_stage, 5) {
-                    ui.painter().rect(
-                        thumb_rect,
-                        CornerRadius::same(5),
-                        bcol.gamma_multiply(0.16),
-                        Stroke::new(1.0, bcol.gamma_multiply(0.55)),
-                        StrokeKind::Inside,
-                    );
-                    ui.painter()
-                        .text(thumb_rect.center(), Align2::CENTER_CENTER, badge, FontId::monospace(9.5), bcol);
-                }
+    let primary_title = if matches!(badge, "FC" | "DC" | "EC") && rel_dir != "./" {
+        format!("{rel_dir}{name}")
+    } else {
+        name.to_owned()
+    };
+    let subtitle = if has_registered_asset {
+        let asset_rel = file
+            .pointer("/assets/0/path")
+            .and_then(Value::as_str)
+            .unwrap_or(name);
+        format!("▪ {asset_rel}")
+    } else if detail.is_empty() {
+        rel_dir.to_owned()
+    } else if rel_dir == "./" {
+        format!("./ · {detail}")
+    } else {
+        format!("{rel_dir}{name} · {detail}")
+    };
 
-                ui.vertical(|ui| {
-                    ui.spacing_mut().item_spacing.y = 1.0;
-                    ui.label(RichText::new(name).size(12.0).strong().color(ctx.pal.text_primary));
-                    ui.label(RichText::new(format!("{rel_dir}{name}")).size(10.0).color(ctx.pal.text_muted));
-                });
+    let row_w = ui.available_width().max(320.0);
+    let (row_rect, _) = ui.allocate_exact_size(Vec2::new(row_w, 48.0), Sense::hover());
+    ui.painter().rect(
+        row_rect,
+        CornerRadius::same(7),
+        ctx.pal.bg_input,
+        Stroke::new(1.0, ctx.pal.border_subtle),
+        StrokeKind::Inside,
+    );
 
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    let open_id = format!("pf-open-{idx}");
-                    let open_txt = if open_lbl.contains("Craft") {
-                        format!("{open_lbl} ↗")
-                    } else {
-                        open_lbl.to_owned()
-                    };
-                    if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&open_id, &open_txt, "Open in sibling Craft app")).clicked() {
-                        let app = craft_app_for_path(path);
-                        ctx.exec("workspace.open", json!({"app": app, "path": path}), Some("Opened in Craft editor"));
-                    }
-                    if can_animate {
-                        let anim_id = format!("pf-animate-{idx}");
-                        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&anim_id, "Animate →", "Rig asset in Animations")).clicked() {
-                            let stem = name.split('.').next().unwrap_or(name);
-                            let asset_id = file
-                                .pointer("/assets/0/id")
-                                .and_then(Value::as_str)
-                                .unwrap_or(stem)
-                                .to_owned();
-                            ctx.push(UiAction::SelectCharacter {
-                                id: asset_id,
-                                jump_animation: true,
-                            });
-                        }
-                    }
-                    if !detail.is_empty() {
-                        ui.label(RichText::new(detail).monospace().size(10.0).color(ctx.pal.text_muted));
-                    }
-                    let chip_w = (badge.len() as f32 * 6.8 + 12.0).max(34.0);
-                    let (bchip, _) = ui.allocate_exact_size(Vec2::new(chip_w, 18.0), Sense::hover());
-                    ui.painter()
-                        .rect_filled(bchip, CornerRadius::same(4), bcol.gamma_multiply(0.18));
-                    ui.painter().text(
-                        Pos2::new(bchip.center().x, bchip.center().y),
-                        Align2::CENTER_CENTER,
-                        badge,
-                        FontId::monospace(9.5),
-                        bcol,
-                    );
-                });
+    let badge_col_x = row_rect.min.x + (row_w * 0.56).clamp(220.0, row_w - 240.0);
+    let thumb_rect = Rect::from_min_size(Pos2::new(row_rect.min.x + 8.0, row_rect.center().y - 17.0), Vec2::splat(34.0));
+    let show_art = matches!(badge, "PCRAFT" | "VCRAFT" | "PNG" | "JPG" | "WEBP" | "SVG") || has_registered_asset;
+    let preview_src = file["preview_path"].as_str().or_else(|| is_image.then_some(path));
+    if !(show_art && paint_local_image(ui, thumb_rect, preview_src, ctx.pal.bg_stage, 6)) {
+        let (tile_bg, tile_fg) = if badge == "FC" {
+            (ctx.pal.accent_emerald_bg, ctx.pal.accent_emerald)
+        } else {
+            (Color32::from_rgba_unmultiplied(0x52, 0x3f, 0x1c, 130), ctx.pal.accent_amber)
+        };
+        ui.painter().rect(
+            thumb_rect,
+            CornerRadius::same(6),
+            tile_bg,
+            Stroke::new(1.0, tile_fg.gamma_multiply(0.45)),
+            StrokeKind::Inside,
+        );
+        let short_glyph = match badge {
+            "PCRAFT" => "PC",
+            "VCRAFT" => "VC",
+            other => other,
+        };
+        let inner_box = thumb_rect.shrink(7.0);
+        ui.painter()
+            .rect_stroke(inner_box, CornerRadius::same(3), Stroke::new(1.0, tile_fg.gamma_multiply(0.75)), StrokeKind::Inside);
+        ui.painter()
+            .text(inner_box.center(), Align2::CENTER_CENTER, short_glyph, FontId::monospace(8.5), tile_fg);
+    }
+
+    let text_x = thumb_rect.max.x + 10.0;
+    ui.painter().text(
+        Pos2::new(text_x, row_rect.min.y + 16.0),
+        Align2::LEFT_CENTER,
+        &primary_title,
+        FontId::proportional(12.5),
+        ctx.pal.text_primary,
+    );
+    let sub_col = if has_registered_asset { ctx.pal.accent_sky } else { ctx.pal.text_muted };
+    ui.painter().text(
+        Pos2::new(text_x, row_rect.min.y + 33.0),
+        Align2::LEFT_CENTER,
+        &subtitle,
+        FontId::proportional(10.5),
+        sub_col,
+    );
+
+    let badge_rect = Rect::from_min_max(
+        Pos2::new(badge_col_x, row_rect.min.y),
+        Pos2::new((badge_col_x + 140.0).min(row_rect.max.x - 160.0), row_rect.max.y),
+    );
+    let mut badge_ui = ui.new_child(
+        egui::UiBuilder::new()
+            .max_rect(badge_rect)
+            .layout(Layout::left_to_right(Align::Center))
+            .scope_id(ui.scope_id().with(("pf_badge", idx))),
+    );
+    badge_ui.spacing_mut().item_spacing.x = 5.0;
+    paint_craft_badge(&mut badge_ui, ctx.pal, badge, false);
+    if badge == "VCRAFT" {
+        paint_craft_badge(&mut badge_ui, ctx.pal, "SVG", false);
+    }
+
+    let act_rect = Rect::from_min_max(
+        Pos2::new(badge_rect.max.x + 4.0, row_rect.min.y),
+        Pos2::new(row_rect.max.x - 8.0, row_rect.max.y),
+    );
+    let mut act_ui = ui.new_child(
+        egui::UiBuilder::new()
+            .max_rect(act_rect)
+            .layout(Layout::right_to_left(Align::Center))
+            .scope_id(ui.scope_id().with(("pf_act", idx))),
+    );
+    act_ui.spacing_mut().item_spacing.x = 6.0;
+
+    if can_animate {
+        let anim_id = format!("pf-animate-{idx}");
+        if action_button(&mut act_ui, ctx.reg, ctx.pal, BtnSpec::label_only(&anim_id, "Animate →", "Rig asset in Animations")).clicked() {
+            let stem = name.split('.').next().unwrap_or(name);
+            let asset_id = file
+                .pointer("/assets/0/character")
+                .or_else(|| file.pointer("/assets/0/id"))
+                .and_then(Value::as_str)
+                .unwrap_or(stem)
+                .to_owned();
+            ctx.push(UiAction::SelectCharacter {
+                id: asset_id,
+                jump_animation: true,
             });
-        });
-    ui.add_space(3.0);
+        }
+    }
+
+    let open_id = format!("pf-open-{idx}");
+    let open_txt = if open_lbl.contains("Craft") {
+        format!("{open_lbl} ↗")
+    } else {
+        open_lbl.to_owned()
+    };
+    if action_button(&mut act_ui, ctx.reg, ctx.pal, BtnSpec::label_only(&open_id, &open_txt, "Open in sibling Craft app")).clicked() {
+        let app = craft_app_for_path(path);
+        ctx.exec("workspace.open", json!({"app": app, "path": path}), Some("Opened in Craft editor"));
+    }
+
+    if can_link_fc {
+        let link_id = format!("pf-link-fc-{idx}");
+        let track_guess = if rel_dir.starts_with("lettering/") {
+            "V3"
+        } else if rel_dir.starts_with("motion/") {
+            "V4"
+        } else {
+            "V2"
+        };
+        let sel = ctx.state.project.link_popup_path.as_deref() == Some(path);
+        if action_button(
+            &mut act_ui,
+            ctx.reg,
+            ctx.pal,
+            BtnSpec::icon_only(&link_id, "link", "Configure EC Dynamic-Link Comp, Alpha Codec & Rational FPS (T01/T02/T10)")
+                .selected(sel),
+        )
+        .clicked()
+        {
+            ctx.state.project.link_popup_path = Some(path.to_owned());
+            ctx.state.project.link_track = track_guess.into();
+            ctx.exec("video.list_ec_comps", json!({"project": path}), None);
+        }
+    }
+    ui.add_space(4.0);
 }
 
 fn craft_app_for_path(path: &str) -> &'static str {

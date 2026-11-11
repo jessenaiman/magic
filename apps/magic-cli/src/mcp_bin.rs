@@ -2,8 +2,8 @@
 //! (`magic-cli mcp` and `magic-mcp` both speak newline-delimited JSON-RPC 2.0 over stdio).
 //!
 //! Modes:
-//! - `magic-mcp` (tries `127.0.0.1:9876` once, falls back to headless)
-//! - `magic-mcp --connect 127.0.0.1:9876` (requires live `magic --control 9876`)
+//! - `magic-mcp` (tries `127.0.0.1:9875` / `MAGIC_CONTROL_PORT` once, falls back to headless)
+//! - `magic-mcp --connect 127.0.0.1:9875` (requires live `magic --control 9875`)
 //! - `magic-mcp --headless`
 
 #![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable))]
@@ -18,8 +18,8 @@ use clap::Parser;
     about = "Magic Studio Model Context Protocol server (stdio JSON-RPC 2.0; binary entrypoint for `magic-cli mcp`)"
 )]
 struct McpCli {
-    /// Connect to a running `magic --control <PORT>` window (`127.0.0.1:9876` or `9876`)
-    #[arg(long, visible_alias = "bridge")]
+    /// Connect to a running `magic --control <PORT>` window (`127.0.0.1:9875` or `9875`)
+    #[arg(long, visible_aliases = ["bridge", "control"])]
     connect: Option<String>,
     /// Run an in-process headless engine session without probing `--control`
     #[arg(long)]

@@ -365,9 +365,9 @@ pub fn set(s: &mut Session, p: &Value) -> Result<Value> {
         };
         steps.push(step("prop.set", json!({"layer": layer_id, "path": path, "value": value})));
     }
-    let scalar = |value: &Value, fallback: f64| number(value).unwrap_or(fallback);
-    let pair = |values: &[Value], fallback: (f64, f64)| {
-        (number(values.first().unwrap_or(&Value::Null)).unwrap_or(fallback.0), number(values.get(1).unwrap_or(&Value::Null)).unwrap_or(fallback.1))
+    let scalar = |value: &Value, default_val: f64| number(value).unwrap_or(default_val);
+    let pair = |values: &[Value], default_pair: (f64, f64)| {
+        (number(values.first().unwrap_or(&Value::Null)).unwrap_or(default_pair.0), number(values.get(1).unwrap_or(&Value::Null)).unwrap_or(default_pair.1))
     };
     for key in keys.as_array().into_iter().flatten() {
         let row = key.as_array().cloned().unwrap_or_default();

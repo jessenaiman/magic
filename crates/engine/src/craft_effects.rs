@@ -1,9 +1,6 @@
-//! Distinct, CLI-mapped Craft design effect catalogs for Kinetic Lyrics (`words.effects`, V3)
-//! and Song-Action Motion (`motion.effects`, V4).
-//!
-//! Instead of sharing an arbitrary hand-written animation list, Lyrics and Motion expose separate
-//! real effect registries mapped directly onto installed `EffectCraft`, `VectorCraft`, and
-//! `PhotoCraft` commands, enriched at runtime by probing `<craft>-cli` via [`CraftHub`].
+//! Distinct, CLI-mapped Craft design effect catalogs for Kinetic Lyrics (`words.effects`, V3),
+//! Song-Action Motion (`motion.effects`, V4), EffectCraft's 19-category 308-effect catalog
+//! (`T29`), and FilmCraft's 16-category 90+ Video Effects & 35+ Audio DSP catalogs (`T38`, `T40`).
 
 use std::sync::OnceLock;
 
@@ -22,6 +19,49 @@ pub struct MappedEffect {
     pub summary: &'static str,
     pub default_params: fn() -> Value,
 }
+
+/// All 19 EffectCraft effect categories (`T29`).
+pub const EFFECTCRAFT_19_CATEGORIES: &[(&str, &str)] = &[
+    ("blur_sharpen", "Blur & Sharpen"),
+    ("channel", "Channel"),
+    ("color_correction", "Color Correction"),
+    ("distort", "Distort"),
+    ("expression_controls", "Expression Controls"),
+    ("generate", "Generate"),
+    ("immersive", "Immersive Video"),
+    ("keying", "Keying"),
+    ("matte", "Matte"),
+    ("noise_grain", "Noise & Grain"),
+    ("perspective", "Perspective"),
+    ("simulation", "Simulation"),
+    ("stylize", "Stylize"),
+    ("text", "Text"),
+    ("time", "Time"),
+    ("transition", "Transition"),
+    ("utility", "Utility & OCIO"),
+    ("audio", "Audio DSP"),
+    ("wasm_plugin", "WASM Plug-ins"),
+];
+
+/// All 38 EffectCraft layer blend modes (`T29`).
+pub const EFFECTCRAFT_38_BLEND_MODES: &[&str] = &[
+    "normal", "dissolve", "dancingDissolve",
+    "darken", "multiply", "colorBurn", "classicColorBurn", "linearBurn", "darkerColor",
+    "add", "lighten", "screen", "colorDodge", "classicColorDodge", "linearDodge", "lighterColor",
+    "overlay", "softLight", "hardLight", "linearLight", "vividLight", "pinLight", "hardMix",
+    "difference", "classicDifference", "exclusion", "subtract", "divide",
+    "hue", "saturation", "color", "luminosity",
+    "stencilAlpha", "stencilLuma", "silhouetteAlpha", "silhouetteLuma", "alphaAdd", "luminescentPremul",
+];
+
+/// All 27 FilmCraft GPU linear-light blend modes (`T38`).
+pub const FILMCRAFT_27_BLEND_MODES: &[&str] = &[
+    "Normal", "Dissolve", "Darken", "Multiply", "Color Burn", "Linear Burn", "Darker Color",
+    "Lighten", "Screen", "Color Dodge", "Linear Dodge (Add)", "Lighter Color",
+    "Overlay", "Soft Light", "Hard Light", "Vivid Light", "Linear Light", "Pin Light", "Hard Mix",
+    "Difference", "Exclusion", "Subtract", "Divide",
+    "Hue", "Saturation", "Color", "Luminosity",
+];
 
 pub const LYRICS_EFFECTS: &[MappedEffect] = &[
     MappedEffect {
@@ -374,11 +414,18 @@ pub fn query_motion_effects(params: &Value) -> Value {
     let category = params.get("category").and_then(Value::as_str);
     let filter = params.get("filter").and_then(Value::as_str);
     let effects = serialize_table(MOTION_EFFECTS, app, category, filter);
+    let categories_19: Vec<Value> = EFFECTCRAFT_19_CATEGORIES
+        .iter()
+        .map(|(id, lbl)| json!({"id": id, "label": lbl}))
+        .collect();
     json!({
         "ok": true,
         "domain": "motion",
         "track": "V4 (Action Motion)",
         "sources": ["vectorcraft", "effectcraft", "photocraft"],
+        "effectcraft_categories": categories_19,
+        "blend_modes": EFFECTCRAFT_38_BLEND_MODES,
+        "filmcraft_blend_modes": FILMCRAFT_27_BLEND_MODES,
         "installed": installed_apps_status().clone(),
         "count": effects.len(),
         "effects": effects,

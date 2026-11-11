@@ -1,5 +1,5 @@
-//! Settings schema copied from FilmCraft `engine/src/settings/schema.rs`, refactored for Magic.
-//! One schema drives UI, CLI, MCP and --control: fields() is the single list.
+//! Settings schema for Magic Studio (`prefs.schema`, `prefs.get`, `prefs.set`).
+//! One schema drives the Options UI, CLI (`magic-cli`), MCP (`magic-mcp`), and `--control`.
 
 #[derive(Clone, Copy, Debug)]
 pub enum Kind {
@@ -26,12 +26,13 @@ pub struct Category {
 }
 
 pub const CATEGORIES: &[Category] = &[
+    Category { id: "ai", title: "AI & LLM (craft-ai-integrations)" },
+    Category { id: "appearance", title: "Appearance & Interface Style" },
+    Category { id: "bridge", title: "Craft Bridge & --control (:9876 / :9877)" },
     Category { id: "general", title: "General" },
     Category { id: "project", title: "Project" },
-    Category { id: "image", title: "Image / Scribbles" },
-    Category { id: "lyrics", title: "Lyrics" },
+    Category { id: "lyrics", title: "Lyrics & Fonts" },
     Category { id: "animation", title: "Animation" },
-    Category { id: "appearance", title: "Appearance" },
     Category { id: "autosave", title: "AutoSave" },
     Category { id: "mediaCache", title: "Media Cache" },
     Category { id: "playback", title: "Playback" },
@@ -43,6 +44,211 @@ pub const CATEGORIES: &[Category] = &[
 
 pub fn fields_with_cat() -> Vec<(&'static str, Field)> {
     vec![
+        (
+            "ai",
+            Field {
+                key: "ai.enabled",
+                label: "Enable AI Integrations (storytold/craft-ai-integrations)",
+                kind: Kind::Bool,
+                wired: true,
+                enabled_by: None,
+            },
+        ),
+        (
+            "ai",
+            Field {
+                key: "fidget.enabled",
+                label: "Enable Fidget Structured Prompt Stager (text.complete)",
+                kind: Kind::Bool,
+                wired: true,
+                enabled_by: Some("ai.enabled"),
+            },
+        ),
+        (
+            "ai",
+            Field {
+                key: "fidget.seamless",
+                label: "Seamless Fidget -> Scribbles Handoff (skip manual staging review)",
+                kind: Kind::Bool,
+                wired: true,
+                enabled_by: Some("fidget.enabled"),
+            },
+        ),
+        (
+            "ai",
+            Field {
+                key: "fidget.connection",
+                label: "Fidget SharedStore Connection ID",
+                kind: Kind::Text,
+                wired: true,
+                enabled_by: Some("fidget.enabled"),
+            },
+        ),
+        (
+            "ai",
+            Field {
+                key: "fidget.model",
+                label: "Fidget Model ID",
+                kind: Kind::Text,
+                wired: true,
+                enabled_by: Some("fidget.enabled"),
+            },
+        ),
+        (
+            "ai",
+            Field {
+                key: "scribbles.enabled",
+                label: "Enable Scribbles Image Generation (image.generate)",
+                kind: Kind::Bool,
+                wired: true,
+                enabled_by: Some("ai.enabled"),
+            },
+        ),
+        (
+            "ai",
+            Field {
+                key: "scribbles.connection",
+                label: "Scribbles SharedStore Connection ID",
+                kind: Kind::Text,
+                wired: true,
+                enabled_by: Some("scribbles.enabled"),
+            },
+        ),
+        (
+            "ai",
+            Field {
+                key: "scribbles.model",
+                label: "Scribbles Model ID",
+                kind: Kind::Text,
+                wired: true,
+                enabled_by: Some("scribbles.enabled"),
+            },
+        ),
+        (
+            "ai",
+            Field {
+                key: "scribbles.endpoint",
+                label: "Local Subscription / OpenAI-Compatible Endpoint URL",
+                kind: Kind::Text,
+                wired: true,
+                enabled_by: Some("scribbles.enabled"),
+            },
+        ),
+        (
+            "ai",
+            Field {
+                key: "scribbles.template",
+                label: "Default Scribbles Drawing Template",
+                kind: Kind::Text,
+                wired: true,
+                enabled_by: None,
+            },
+        ),
+        (
+            "appearance",
+            Field {
+                key: "appearance.interface_style",
+                label: "Interface Style",
+                kind: Kind::Choice(&[
+                    ("aurora", "Aurora"),
+                    ("modern", "Modern"),
+                    ("classic", "Classic"),
+                    ("minimal", "Minimal"),
+                    ("ocean", "Ocean"),
+                    ("forest", "Forest"),
+                    ("plum", "Plum"),
+                    ("sand", "Sand"),
+                ]),
+                wired: true,
+                enabled_by: None,
+            },
+        ),
+        (
+            "appearance",
+            Field {
+                key: "appearance.theme",
+                label: "Colour mode",
+                kind: Kind::Choice(&[("system", "System"), ("dark", "Dark"), ("light", "Light")]),
+                wired: true,
+                enabled_by: None,
+            },
+        ),
+        (
+            "appearance",
+            Field {
+                key: "appearance.accessible_contrast",
+                label: "High contrast",
+                kind: Kind::Bool,
+                wired: true,
+                enabled_by: None,
+            },
+        ),
+        (
+            "appearance",
+            Field {
+                key: "appearance.accent",
+                label: "Accent",
+                kind: Kind::Choice(&[
+                    ("teal", "Teal (Mint)"),
+                    ("blue", "Blue"),
+                    ("violet", "Violet"),
+                    ("amber", "Amber"),
+                    ("graphite", "Graphite"),
+                ]),
+                wired: true,
+                enabled_by: None,
+            },
+        ),
+        (
+            "appearance",
+            Field {
+                key: "appearance.ui_scale",
+                label: "Interface size",
+                kind: Kind::Float { min: 0.8, max: 2.0, decimals: 2, unit: "x" },
+                wired: true,
+                enabled_by: None,
+            },
+        ),
+        (
+            "bridge",
+            Field {
+                key: "craft.filmcraft_port",
+                label: "FilmCraft --control Loopback Port (FILMCRAFT_CONTROL_PORT)",
+                kind: Kind::Int { min: 1024.0, max: 65535.0, unit: "" },
+                wired: true,
+                enabled_by: None,
+            },
+        ),
+        (
+            "bridge",
+            Field {
+                key: "craft.effectcraft_port",
+                label: "EffectCraft --control Loopback Port (EFFECTCRAFT_CONTROL_PORT)",
+                kind: Kind::Int { min: 1024.0, max: 65535.0, unit: "" },
+                wired: true,
+                enabled_by: None,
+            },
+        ),
+        (
+            "bridge",
+            Field {
+                key: "craft.prefer_live_bridge",
+                label: "Route Engine Commands Through Live --control Window When Open",
+                kind: Kind::Bool,
+                wired: true,
+                enabled_by: None,
+            },
+        ),
+        (
+            "bridge",
+            Field {
+                key: "craft.effectcraft_mcp_autosave",
+                label: "Enable Headless EffectCraft MCP Checkpoints (effectcraft-cli mcp --autosave)",
+                kind: Kind::Bool,
+                wired: true,
+                enabled_by: None,
+            },
+        ),
         ("project", Field { key: "project.root", label: "Production project root", kind: Kind::Path, wired: true, enabled_by: None }),
         ("project", Field { key: "project.characters_root", label: "Characters root", kind: Kind::Path, wired: true, enabled_by: None }),
         (
@@ -67,28 +273,6 @@ pub fn fields_with_cat() -> Vec<(&'static str, Field)> {
         ),
         ("project", Field { key: "project.storyboard_locked", label: "Lock canonical storyboard template", kind: Kind::Bool, wired: true, enabled_by: None }),
         (
-            "image",
-            Field {
-                key: "image.provider",
-                label: "Image provider",
-                kind: Kind::Choice(&[("codex", "Codex (GPT-6 Luna)"), ("agy", "AGY (Gemini 3.8 Flash)"), ("flow", "Google Flow (Browser-Agent)")]),
-                wired: true,
-                enabled_by: None,
-            },
-        ),
-        ("image", Field { key: "scribbles.template", label: "Scribbles template", kind: Kind::Text, wired: true, enabled_by: None }),
-        (
-            "image",
-            Field {
-                key: "scribbles.provider",
-                label: "Scribbles provider",
-                kind: Kind::Choice(&[("codex", "Codex (GPT-6 Luna)"), ("agy", "AGY (Gemini 3.8 Flash)"), ("flow", "Google Flow (Browser-Agent)")]),
-                wired: true,
-                enabled_by: None,
-            },
-        ),
-        ("image", Field { key: "scribbles.model", label: "Scribbles model", kind: Kind::Text, wired: true, enabled_by: None }),
-        (
             "lyrics",
             Field {
                 key: "lyrics.default_size",
@@ -99,6 +283,7 @@ pub fn fields_with_cat() -> Vec<(&'static str, Field)> {
             },
         ),
         ("lyrics", Field { key: "lyrics.outline", label: "Lyric outline", kind: Kind::Bool, wired: true, enabled_by: None }),
+        ("lyrics", Field { key: "lyrics.font_dirs", label: "Extra Font Folders (EFFECTCRAFT_FONT_DIRS)", kind: Kind::Text, wired: true, enabled_by: None }),
         ("animation", Field { key: "animation.loop_preview", label: "Loop preview", kind: Kind::Bool, wired: true, enabled_by: None }),
         (
             "animation",
@@ -107,16 +292,6 @@ pub fn fields_with_cat() -> Vec<(&'static str, Field)> {
                 label: "Default clip duration",
                 kind: Kind::Float { min: 0.1, max: 30.0, decimals: 1, unit: "s" },
                 wired: true,
-                enabled_by: None,
-            },
-        ),
-        (
-            "appearance",
-            Field {
-                key: "appearance.theme",
-                label: "Theme",
-                kind: Kind::Choice(&[("system", "System"), ("dark", "Dark"), ("light", "Light")]),
-                wired: false,
                 enabled_by: None,
             },
         ),
@@ -198,19 +373,8 @@ pub fn fields_with_cat() -> Vec<(&'static str, Field)> {
                 enabled_by: None,
             },
         ),
-        ("audio", Field { key: "audio.edit_location", label: "Edit in Audition Location", kind: Kind::Path, wired: false, enabled_by: None }),
+        ("audio", Field { key: "audio.edit_location", label: "Edit in SoundCraft Location", kind: Kind::Path, wired: false, enabled_by: None }),
         ("audio", Field { key: "audio.output_device", label: "Audio Output Device", kind: Kind::Text, wired: false, enabled_by: None }),
-        ("appearance", Field { key: "appearance.accessible_contrast", label: "Accessible Contrast", kind: Kind::Bool, wired: true, enabled_by: None }),
-        (
-            "appearance",
-            Field {
-                key: "appearance.ui_scale",
-                label: "UI Scale",
-                kind: Kind::Float { min: 0.5, max: 2.0, decimals: 2, unit: "x" },
-                wired: true,
-                enabled_by: None,
-            },
-        ),
         ("labels", Field { key: "labels.preset", label: "Label Preset", kind: Kind::Text, wired: true, enabled_by: None }),
         ("media", Field { key: "media.analyze_on_import", label: "Analyze Imported Media", kind: Kind::Bool, wired: true, enabled_by: None }),
         ("general", Field { key: "general.recent_projects", label: "Recent Projects", kind: Kind::Text, wired: false, enabled_by: None }),

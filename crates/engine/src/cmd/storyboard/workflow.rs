@@ -383,13 +383,7 @@ pub fn cmd_storyboard_bulk_generate(s: &mut Session, p: &Value) -> Result<Value>
                 "transparent_background": job["archetype"] == "char",
                 "name": format!("sb-p{:02}-{}", job["page"].as_u64().unwrap_or(0), job["slot"].as_str().unwrap_or("image")),
             });
-            if let Some(prov) = p.get("provider") {
-                gen_req["provider"] = prov.clone();
-            }
-            if let Some(model) = p.get("model") {
-                gen_req["model"] = model.clone();
-            }
-            if let Ok(res) = crate::image_generation::generate(s, &gen_req)
+            if let Ok(res) = crate::craft_ai::cmd_image_generate(s, &gen_req)
                 && let Some(img) = res["image"].as_str()
             {
                 let slot_name = job["slot"].as_str().unwrap_or("hero_image");

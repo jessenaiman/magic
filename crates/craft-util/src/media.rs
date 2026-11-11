@@ -1,17 +1,27 @@
-//! Fast zero-subprocess document, `.ecproj`, `.pcraft`, `.vectorcraft`, image, container, and
-//! audio inspection built on `storytold/craft-libs` (`craft-doc`, `craft-ecproj-format`,
-//! `craft-pcraft-format`, `craft-vectorcraft-format`, `craft-audio`, `craft-media`,
-//! `craft-atomic`) and header-only `image::image_dimensions`.
+//! Fast zero-subprocess document, `.ecproj`, `.pcraft` (both ZIP and unpacked directory bundles),
+//! `.vectorcraft` (v1–v4 + `VCBLOBS`), image, container, and audio inspection built on
+//! `storytold/craft-libs` (`craft-doc`, `craft-ecproj-format`, `craft-pcraft-format`,
+//! `craft-vectorcraft-format`, `craft-audio`, `craft-media`, `craft-atomic`).
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use craft_doc::{Limits, RenditionKind};
 use craft_media::isobmff::{TrackKind as IsoTrackKind, open as open_isobmff};
+use craft_pcraft_format::{
+    COMPOSITE, FORMAT_VERSION as PCRAFT_VERSION, FULL_COMPOSITE, Limits as PcraftLimits, MANIFEST,
+    SAVE_LOCK, Step as PcraftStep, THUMB, read_manifest,
+};
+use craft_vectorcraft_format::{
+    Contents as VectorContents, is_compressed as vc_is_compressed, sniff as vc_sniff, split_tail,
+};
+use serde::de::IgnoredAny;
 use serde_json::{Value, json};
 
 use crate::time::Tick;
 use crate::{Result, UtilError};
+
+const PCRAFT_STEPS: &[PcraftStep] = &[];
 
 /// Metadata read from an `.ecproj` header, tolerating `ReadError::TooNew` so files saved by a
 /// newer ArtCraft Launcher `effectcraft` release continue to work via `effectcraft-cli`.
@@ -41,9 +51,63 @@ pub fn inspect_ecproj_head(path: &Path) -> Result<EcprojHeaderInfo> {
     }
 }
 
-/// Inspect any Craft document envelope (`.ecproj`, `.pcraft`, `.vectorcraft`, or `craft-doc` outline)
-/// in-process without launching a desktop or CLI subprocess.
+/// Inspect an unpacked directory `.pcraft` bundle via `craft-pcraft-format`, honoring `save.lock`.
+fn inspect_pcraft_dir_bundle(dir: &Path) -> Option<Value> {
+    if dir.join(SAVE_LOCK).exists() {
+        return Some(json!({
+            "kind": "pcraft",
+            "bundle": "directory",
+            "locked": true,
+            "supported": true,
+        }));
+    }
+    let manifest_bytes = std::fs::read(dir.join(MANIFEST)).ok()?;
+    let manifest_str = std::str::from_utf8(&manifest_bytes).ok()?;
+    match read_manifest::<IgnoredAny>(manifest_str, &PcraftLimits::default(), PCRAFT_STEPS, PCRAFT_VERSION) {
+        Ok(m) => Some(json!({
+            "kind": "pcraft",
+            "bundle": "directory",
+            "version": m.format_version,
+            "generator": m.generator,
+            "has_thumbnail": m.thumbnail.is_some(),
+            "has_composite": m.composite.is_some() || m.full_composite.is_some(),
+            "supported": true,
+        })),
+        Err(craft_pcraft_format::Error::TooNew { found, generator, .. }) => Some(json!({
+            "kind": "pcraft",
+            "bundle": "directory",
+            "version": found,
+            "generator": generator,
+            "supported": false,
+        })),
+        Err(_) => None,
+    }
+}
+
+/// Inspect plain `.vectorcraft` / `drawcraft` bytes via `craft-vectorcraft-format` (`Contents::read_with_pdf_preference`).
+fn inspect_vectorcraft_plain(bytes: &[u8]) -> Option<Value> {
+    if vc_is_compressed(bytes) || !vc_sniff(bytes) {
+        return None;
+    }
+    let (json_part, _after) = split_tail(bytes);
+    let (contents, pdf_compatible) = VectorContents::<IgnoredAny>::read_with_pdf_preference(json_part).ok()?;
+    Some(json!({
+        "kind": "vectorcraft",
+        "format": contents.format,
+        "version": contents.version,
+        "pdf_compatible": pdf_compatible,
+        "embedded_images": contents.images.len(),
+        "icc_profiles": contents.profiles.len(),
+        "supported": true,
+    }))
+}
+
+/// Inspect any Craft document envelope (`.ecproj`, `.pcraft` ZIP or directory bundle, `.vectorcraft`,
+/// or `craft-doc` outline) in-process without launching a desktop or CLI subprocess.
 pub fn inspect_craft_envelope(path: &Path) -> Option<Value> {
+    if path.is_dir() && path.extension().is_some_and(|e| e.eq_ignore_ascii_case("pcraft")) {
+        return inspect_pcraft_dir_bundle(path);
+    }
     if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("ecproj"))
         && let Ok(head) = inspect_ecproj_head(path)
     {
@@ -55,6 +119,9 @@ pub fn inspect_craft_envelope(path: &Path) -> Option<Value> {
         }));
     }
     let bytes = std::fs::read(path).ok()?;
+    if let Some(vc) = inspect_vectorcraft_plain(&bytes) {
+        return Some(vc);
+    }
     let info = craft_doc::info(&bytes, &Limits::default()).ok()?;
     Some(json!({
         "kind": info.kind.extension(),
@@ -64,10 +131,31 @@ pub fn inspect_craft_envelope(path: &Path) -> Option<Value> {
     }))
 }
 
-/// Extract the embedded composite or thumbnail PNG rendition from a `.pcraft` or `.vectorcraft`
-/// document directly via `craft-doc` and write it atomically via `craft-atomic` without spawning
-/// `photocraft-cli` or `vectorcraft-cli`.
+/// Extract the embedded composite or thumbnail PNG rendition from a `.pcraft` (directory bundle or
+/// ZIP) or `.vectorcraft` document directly via `craft-pcraft-format` / `craft-doc` and write it
+/// atomically via `craft-atomic` without spawning `photocraft-cli` or `vectorcraft-cli`.
 pub fn extract_craft_preview(path: &Path, out_png: &Path) -> Result<bool> {
+    if path.is_dir() && path.extension().is_some_and(|e| e.eq_ignore_ascii_case("pcraft")) {
+        if path.join(SAVE_LOCK).exists() {
+            return Ok(false);
+        }
+        for rel in [COMPOSITE, FULL_COMPOSITE, THUMB] {
+            let candidate = path.join(rel);
+            if candidate.is_file() {
+                let png = std::fs::read(&candidate)
+                    .map_err(|e| UtilError::Invalid(format!("{}: {e}", candidate.display())))?;
+                if let Some(parent) = out_png.parent() {
+                    std::fs::create_dir_all(parent)
+                        .map_err(|e| UtilError::Invalid(format!("{}: {e}", parent.display())))?;
+                }
+                craft_atomic::atomic_write(out_png, &png)
+                    .map_err(|e| UtilError::Invalid(format!("{}: {e}", out_png.display())))?;
+                return Ok(true);
+            }
+        }
+        return Ok(false);
+    }
+
     let bytes = std::fs::read(path).map_err(|e| UtilError::Invalid(format!("{}: {e}", path.display())))?;
     if craft_doc::sniff(&bytes).is_none() {
         return Ok(false);

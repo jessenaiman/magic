@@ -1,0 +1,2263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Magic Studio — Supplementary Controls System (FilmCraft × EffectCraft · Sheet 08)</title>
+  <style>
+    :root {
+      --bg-canvas: #141c28;
+      --bg-chrome: #0f1621;
+      --bg-panel: #1c2433;
+      --bg-panel-hi: #222c3f;
+      --bg-inset: #111722;
+      --border: #2b364a;
+      --border-subtle: #212b3c;
+      --mint: #35e1c0;
+      --mint-dim: rgba(53, 225, 192, 0.14);
+      --mint-glow: rgba(53, 225, 192, 0.36);
+      --amber: #eabb62;
+      --amber-dim: rgba(234, 187, 98, 0.15);
+      --sky: #56b4f5;
+      --sky-dim: rgba(86, 180, 245, 0.15);
+      --violet: #a78bfa;
+      --violet-dim: rgba(167, 139, 250, 0.16);
+      --rose: #f05b6e;
+      --rose-dim: rgba(240, 91, 110, 0.16);
+      --text: #eef3fb;
+      --text-sec: #a6b4cb;
+      --text-muted: #6f7f99;
+      --font-sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      background: var(--bg-canvas);
+      color: var(--text);
+      font-family: var(--font-sans);
+      font-size: 13px;
+      line-height: 1.42;
+      overflow-x: hidden;
+      min-height: 100vh;
+    }
+
+    button, input, select {
+      font-family: inherit;
+      color: inherit;
+    }
+
+    /* Figma + Craft App Chrome */
+    .figma-topbar {
+      background: var(--bg-chrome);
+      border-bottom: 1px solid var(--border);
+      padding: 8px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      position: sticky;
+      top: 0;
+      z-index: 40;
+    }
+
+    .brand-cluster {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .traffic-dots {
+      display: flex;
+      gap: 6px;
+      margin-right: 4px;
+    }
+    .traffic-dots span {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .dot-r { background: #ff5f57; }
+    .dot-y { background: #febc2e; }
+    .dot-g { background: #28c840; }
+
+    .sheet-pill {
+      background: var(--mint-dim);
+      border: 1px solid var(--mint);
+      color: var(--mint);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 9px;
+      border-radius: 999px;
+      letter-spacing: 0.02em;
+    }
+
+    .topbar-title {
+      font-weight: 600;
+      font-size: 13.5px;
+      color: var(--text);
+    }
+    .topbar-sub {
+      color: var(--text-muted);
+      font-size: 11.5px;
+      font-family: var(--font-mono);
+    }
+
+    .bridge-lights {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .bridge-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .bridge-chip:hover { border-color: var(--mint); background: var(--bg-panel-hi); }
+
+    .led {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--mint);
+      box-shadow: 0 0 8px var(--mint);
+    }
+    .led.amber { background: var(--amber); box-shadow: 0 0 8px var(--amber); }
+    .led.rose { background: var(--rose); box-shadow: 0 0 8px var(--rose); }
+
+    /* Mode Capsule Bar */
+    .nav-bar {
+      background: rgba(17, 23, 34, 0.9);
+      border-bottom: 1px solid var(--border);
+      padding: 8px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .mode-capsule {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--bg-inset);
+      border: 1px solid var(--border);
+      padding: 3px;
+      border-radius: 999px;
+      flex-wrap: wrap;
+    }
+
+    .mode-tab {
+      background: transparent;
+      border: 1px solid transparent;
+      padding: 5px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-sec);
+      cursor: pointer;
+      transition: all 0.14s ease;
+      white-space: nowrap;
+    }
+    .mode-tab:hover { color: var(--text); background: rgba(255, 255, 255, 0.04); }
+    .mode-tab.active {
+      background: var(--mint);
+      color: #081518;
+      font-weight: 700;
+      box-shadow: 0 0 14px var(--mint-glow);
+    }
+
+    .tick-readout {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--amber);
+      background: var(--amber-dim);
+      border: 1px solid rgba(234, 187, 98, 0.35);
+      padding: 4px 10px;
+      border-radius: 6px;
+    }
+
+    /* Main Workspace + Live Command Dock */
+    .workspace-shell {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 338px;
+      gap: 12px;
+      padding: 12px 14px 20px;
+      align-items: start;
+    }
+    @media (max-width: 1180px) {
+      .workspace-shell {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
+
+    .sheet-grid {
+      display: grid;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      gap: 11px;
+    }
+    .col-12 { grid-column: span 12; }
+    .col-8 { grid-column: span 8; }
+    .col-7 { grid-column: span 7; }
+    .col-6 { grid-column: span 6; }
+    .col-5 { grid-column: span 5; }
+    .col-4 { grid-column: span 4; }
+    @media (max-width: 960px) {
+      .col-8, .col-7, .col-6, .col-5, .col-4 { grid-column: span 12; }
+    }
+
+    .craft-card {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+    }
+    .craft-card.mint-frame {
+      border-color: rgba(53, 225, 192, 0.62);
+      box-shadow: inset 0 0 0 1px rgba(53, 225, 192, 0.12);
+    }
+
+    .sec-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      border-bottom: 1px solid var(--border-subtle);
+      padding-bottom: 7px;
+    }
+    .sec-title {
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+    .where-pill {
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: var(--sky-dim);
+      color: var(--sky);
+      border: 1px solid rgba(86, 180, 245, 0.38);
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .where-pill:hover { border-color: var(--mint); color: var(--mint); }
+
+    /* Craft File & App Badges */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 1px 7px;
+      border-radius: 999px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 700;
+      border: 1px solid transparent;
+    }
+    .badge.fc { background: rgba(86, 180, 245, 0.16); color: var(--sky); border-color: rgba(86, 180, 245, 0.45); }
+    .badge.ec { background: rgba(167, 139, 250, 0.16); color: var(--violet); border-color: rgba(167, 139, 250, 0.45); }
+    .badge.bridge { background: var(--mint-dim); color: var(--mint); border-color: rgba(53, 225, 192, 0.45); }
+    .badge.amber { background: var(--amber-dim); color: var(--amber); border-color: rgba(234, 187, 98, 0.45); }
+    .badge.rose { background: var(--rose-dim); color: var(--rose); border-color: rgba(240, 91, 110, 0.45); }
+
+    /* Pill Buttons, Segmented Rows & Sliders */
+    .pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      align-items: center;
+    }
+
+    .ctrl-btn {
+      background: var(--bg-inset);
+      border: 1px solid var(--border);
+      color: var(--text-sec);
+      padding: 4px 9px;
+      border-radius: 6px;
+      font-size: 11.5px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.12s;
+    }
+    .ctrl-btn:hover {
+      border-color: var(--sky);
+      color: var(--text);
+      background: var(--bg-panel-hi);
+    }
+    .ctrl-btn.active {
+      background: var(--mint-dim);
+      border-color: var(--mint);
+      color: var(--mint);
+      font-weight: 600;
+    }
+    .ctrl-btn.amber-active {
+      background: var(--amber-dim);
+      border-color: var(--amber);
+      color: var(--amber);
+      font-weight: 600;
+    }
+    .ctrl-btn kbd {
+      font-family: var(--font-mono);
+      font-size: 9.5px;
+      color: var(--text-muted);
+      background: rgba(255, 255, 255, 0.05);
+      padding: 0 4px;
+      border-radius: 3px;
+    }
+
+    /* Craft Ring Sliders */
+    .slider-group {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .slider-meta {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--text-sec);
+    }
+    .slider-val {
+      font-family: var(--font-mono);
+      color: var(--amber);
+      font-weight: 600;
+    }
+    input[type="range"].craft-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 5px;
+      border-radius: 999px;
+      background: #273347;
+      outline: none;
+      cursor: pointer;
+    }
+    input[type="range"].craft-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--bg-inset);
+      border: 2.5px solid var(--mint);
+      box-shadow: 0 0 6px var(--mint-glow);
+      cursor: grab;
+    }
+
+    /* Stadium Pill Toggle */
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 3px 0;
+      cursor: pointer;
+      user-select: none;
+    }
+    .toggle-lbl {
+      font-size: 11.5px;
+      color: var(--text-sec);
+    }
+    .pill-switch {
+      width: 36px;
+      height: 19px;
+      border-radius: 999px;
+      background: var(--bg-inset);
+      border: 1px solid var(--border);
+      position: relative;
+      transition: all 0.15s;
+      flex-shrink: 0;
+    }
+    .pill-switch::after {
+      content: "";
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 13px;
+      height: 13px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      transition: all 0.15s;
+    }
+    .pill-switch.on {
+      background: var(--mint);
+      border-color: var(--mint);
+    }
+    .pill-switch.on::after {
+      left: 19px;
+      background: #0a161a;
+    }
+
+    /* 35mm Sprocket Strip */
+    .sprocket-frame {
+      background: #0b1018;
+      border: 1.5px solid var(--mint);
+      border-radius: 7px;
+      padding: 6px 8px;
+      position: relative;
+    }
+    .sprocket-holes {
+      display: flex;
+      justify-content: space-between;
+      gap: 5px;
+      padding: 2px 0;
+    }
+    .sprocket-holes span {
+      width: 9px;
+      height: 5px;
+      border-radius: 1.5px;
+      background: var(--mint);
+      opacity: 0.85;
+    }
+
+    .inset-box {
+      background: var(--bg-inset);
+      border: 1px solid var(--border-subtle);
+      border-radius: 7px;
+      padding: 8px;
+    }
+
+    .sub-label {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 3px;
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .three-col {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    canvas.interactive-canvas {
+      width: 100%;
+      display: block;
+      background: #0d131d;
+      border: 1px solid var(--border-subtle);
+      border-radius: 7px;
+      cursor: crosshair;
+    }
+
+    /* Live Command Inspector Sidebar */
+    .inspector-dock {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      position: sticky;
+      top: 56px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .code-pre {
+      background: #0b1018;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 9px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--mint);
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 230px;
+    }
+
+    .kv-grid {
+      display: grid;
+      grid-template-columns: 88px minmax(0, 1fr);
+      gap: 5px 8px;
+      font-size: 11.5px;
+    }
+    .kv-key { color: var(--text-muted); font-family: var(--font-mono); font-size: 10.5px; }
+    .kv-val { color: var(--text); font-family: var(--font-mono); font-size: 11px; word-break: break-all; }
+
+    /* Workstation Placement Blueprint Mockup */
+    .blueprint-frame {
+      background: #0f1622;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .bp-zone {
+      background: var(--bg-panel);
+      border: 1px dashed var(--border);
+      border-radius: 8px;
+      padding: 10px;
+      transition: all 0.15s;
+      cursor: pointer;
+    }
+    .bp-zone.existing {
+      opacity: 0.85;
+    }
+    .bp-zone.new-slot {
+      background: rgba(53, 225, 192, 0.06);
+      border: 1.5px solid var(--mint);
+      box-shadow: 0 0 14px rgba(53, 225, 192, 0.09);
+    }
+    .bp-zone.new-slot.amber-slot {
+      background: rgba(234, 187, 98, 0.06);
+      border-color: var(--amber);
+    }
+    .bp-zone:hover {
+      transform: translateY(-1px);
+      border-color: var(--sky);
+    }
+
+    /* Task Table */
+    .task-filter-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .text-field {
+      background: var(--bg-inset);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 5px 9px;
+      color: var(--text);
+      font-size: 12px;
+      outline: none;
+    }
+    .text-field:focus { border-color: var(--mint); }
+
+    .task-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    .task-table th {
+      text-align: left;
+      padding: 8px;
+      background: var(--bg-inset);
+      color: var(--text-sec);
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      border-bottom: 1px solid var(--border);
+    }
+    .task-table td {
+      padding: 8px;
+      border-bottom: 1px solid var(--border-subtle);
+      vertical-align: top;
+    }
+    .task-table tr:hover td {
+      background: rgba(255, 255, 255, 0.025);
+    }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 16px;
+      right: 16px;
+      background: #102428;
+      border: 1px solid var(--mint);
+      color: var(--mint);
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(8px);
+      transition: all 0.18s ease;
+      z-index: 90;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <!-- Figma + Craft System Top Bar -->
+  <header class="figma-topbar">
+    <div class="brand-cluster">
+      <div class="traffic-dots"><span class="dot-r"></span><span class="dot-y"></span><span class="dot-g"></span></div>
+      <span class="sheet-pill">SHEET 08 · SUPPLEMENTARY UI</span>
+      <div>
+        <div class="topbar-title">Magic Studio — FilmCraft × EffectCraft Supplementary Controls &amp; View Placement</div>
+        <div class="topbar-sub">Continues Sheet 00 (Sec 1–5 → Sec 6–12) · Ahead-of-Build Visual Spec · Pure Rust Codecs (Zero FFmpeg)</div>
+      </div>
+    </div>
+    <div class="bridge-lights">
+      <button type="button" class="bridge-chip" id="btn-bridge-fc" title="Inspect FilmCraft live control channel">
+        <span class="led"></span>
+        <span>FilmCraft --control 127.0.0.1:9876 (TOKEN)</span>
+      </button>
+      <button type="button" class="bridge-chip" id="btn-bridge-ec" title="Inspect EffectCraft live control & MCP bridge">
+        <span class="led"></span>
+        <span>EffectCraft --control 9877 (--autosave)</span>
+      </button>
+      <span class="tick-readout">1s = 254,016,000,000 ticks</span>
+    </div>
+  </header>
+
+  <!-- Navigation Capsule Switching Between Sheet 08, Per-View Placement Maps, and Full Task List -->
+  <nav class="nav-bar" aria-label="Supplementary UI Views">
+    <div class="mode-capsule" id="top-view-tabs">
+      <button type="button" class="mode-tab active" data-tab="sheet08">Sheet 08 · Controls System (Sec 6–12)</button>
+      <button type="button" class="mode-tab" data-tab="view02">02 · Project &amp; Bridge</button>
+      <button type="button" class="mode-tab" data-tab="view04">04 · Animations (V2 .ecproj)</button>
+      <button type="button" class="mode-tab" data-tab="view05">05 · Lyrics (V3 ↔ C1)</button>
+      <button type="button" class="mode-tab" data-tab="view06">06 · Motion (V4 + Lottie)</button>
+      <button type="button" class="mode-tab" data-tab="view07">07 · Studio (.fcproj Deck)</button>
+      <button type="button" class="mode-tab" data-tab="tasks">Comprehensive Task List (42)</button>
+    </div>
+    <div class="pill-row">
+      <span class="badge fc">.fcproj</span>
+      <span class="badge ec">.ecproj</span>
+      <span class="badge bridge">Dynamic Link</span>
+      <span class="badge amber">.lottie / .fcgt / .ectemplate</span>
+    </div>
+  </nav>
+
+  <main class="workspace-shell">
+    <!-- LEFT / MAIN CONTENT STAGE -->
+    <section id="main-stage">
+      <!-- ==================== TAB 1: SHEET 08 CONTROLS SYSTEM ==================== -->
+      <div id="panel-sheet08" class="sheet-grid">
+        <!-- SECTION 6: Cross-App Dynamic Link, Interchange & Lottie Bridge -->
+        <article class="craft-card mint-frame col-12">
+          <div class="sec-head">
+            <div class="sec-title">
+              <span class="badge bridge">6</span>
+              <span>FilmCraft ↔ EffectCraft Dynamic Link, Timeline Interchange &amp; Lottie Bridge</span>
+            </div>
+            <button type="button" class="where-pill" data-jump="view02">Belongs in: 02 Project + Studio Header →</button>
+          </div>
+          <div class="three-col">
+            <div class="inset-box">
+              <div class="sub-label">Dynamic Link Alpha Cache (V2 / V3 / V4)</div>
+              <div class="pill-row" id="link-codec-pills">
+                <button type="button" class="ctrl-btn active" data-cmd="video.link_effectcraft" data-app="magic → filmcraft + effectcraft" data-file="film/linked-compositions.json" data-rust="crates/engine/src/cmd/film/linked_comp.rs" data-params='{"project":"motion/actions.ecproj","comp":"Main","track":"V4","format":"prores","proresProfile":"4444","channels":"rgba","fps":24}'>ProRes 4444 RGBA</button>
+                <button type="button" class="ctrl-btn" data-cmd="video.link_effectcraft" data-app="magic → effectcraft-vp9enc" data-file="film/.linked-cache/actions.webm" data-rust="crates/engine/src/cmd/film/linked_comp.rs" data-params='{"project":"motion/actions.ecproj","comp":"Main","track":"V4","format":"webm","codec":"vp9","channels":"rgba","opusAudio":true}'>WebM VP9 + Alpha</button>
+                <button type="button" class="ctrl-btn" data-cmd="video.link_effectcraft" data-app="magic → openexr-32f" data-file="film/.linked-cache/actions_####.exr" data-rust="crates/engine/src/cmd/film/linked_comp.rs" data-params='{"project":"motion/actions.ecproj","comp":"Main","track":"V4","format":"exr","depth":"32f","channels":"rgba","preserveRgb":true}'>32-bit EXR Seq</button>
+              </div>
+              <div class="pill-row" style="margin-top:6px;">
+                <button type="button" class="ctrl-btn" data-cmd="video.sync_links" data-app="filmcraft" data-file="film/Pterodactyl Song.fcproj" data-rust="crates/engine/src/cmd/film/linked_comp.rs" data-params='{"render":true,"preserveTrims":true,"command":"media.replaceFootage"}'>↻ Sync Dirty Comps</button>
+                <button type="button" class="ctrl-btn" data-cmd="video.bake_link" data-app="filmcraft" data-file="film/baked/actions-main.mov" data-rust="crates/engine/src/cmd/film/linked_comp.rs" data-params='{"link_id":"actions-main"}'>Bake Link (.mov)</button>
+                <button type="button" class="ctrl-btn" data-cmd="footage.check" data-app="effectcraft + filmcraft" data-file="project-wide" data-rust="crates/engine/src/cmd/project/trunk.rs" data-params='{"wait":true,"alsoFilmCraft":"media.status"}'>Check Offline</button>
+              </div>
+            </div>
+
+            <div class="inset-box">
+              <div class="sub-label">Sequence ↔ Composition Interchange</div>
+              <div class="pill-row" id="interchange-pills">
+                <button type="button" class="ctrl-btn active" data-cmd="file.exportTimeline" data-app="effectcraft ↔ filmcraft-interchange" data-file="interchange/Pterodactyl.otio" data-rust="crates/engine/src/cmd/film/markers.rs" data-params='{"comp":"Main","path":"interchange/Pterodactyl.otio","format":"otio","prerender":"unsupported"}'>OTIO (.otio)</button>
+                <button type="button" class="ctrl-btn" data-cmd="file.exportTimeline" data-app="effectcraft ↔ filmcraft" data-file="interchange/Pterodactyl.fcpxml" data-rust="crates/engine/src/cmd/film/markers.rs" data-params='{"comp":"Main","path":"interchange/Pterodactyl.fcpxml","format":"fcpxml"}'>FCPXML 1.10</button>
+                <button type="button" class="ctrl-btn" data-cmd="file.exportTimeline" data-app="effectcraft ↔ filmcraft" data-file="interchange/Pterodactyl.xml" data-rust="crates/engine/src/cmd/film/markers.rs" data-params='{"comp":"Main","path":"interchange/Pterodactyl.xml","format":"xmeml"}'>FCP7 XML</button>
+                <button type="button" class="ctrl-btn" data-cmd="file.exportTimeline" data-app="filmcraft-interchange" data-file="interchange/Pterodactyl.aaf" data-rust="crates/engine/src/cmd/film/markers.rs" data-params='{"path":"interchange/Pterodactyl.aaf","format":"aaf","essence":"consolidated"}'>AAF / OMF 2.0</button>
+                <button type="button" class="ctrl-btn" data-cmd="file.exportTimeline" data-app="filmcraft-interchange" data-file="interchange/Pterodactyl.edl" data-rust="crates/engine/src/cmd/film/markers.rs" data-params='{"path":"interchange/Pterodactyl.edl","format":"edl"}'>CMX 3600 EDL</button>
+              </div>
+              <div style="margin-top:6px; font-size:11px; color:var(--text-muted);">
+                OTIO preserves 64-swatch custom palettes &amp; WebLink marker URLs across round-trips.
+              </div>
+            </div>
+
+            <div class="inset-box">
+              <div class="sub-label">Two-Way Lottie, AEP &amp; Clean-Room Templates</div>
+              <div class="pill-row">
+                <button type="button" class="ctrl-btn amber-active" data-cmd="file.exportLottie" data-app="effectcraft" data-file="exports/motion-cue.lottie" data-rust="crates/ui-egui/src/views/motion.rs" data-params='{"comp":"Main","path":"exports/motion-cue.lottie","includeExpressions":true}'>Export .lottie / .json</button>
+                <button type="button" class="ctrl-btn" data-cmd="file.importLottie" data-app="effectcraft" data-file="motion/actions.ecproj" data-rust="crates/ui-egui/src/views/project.rs" data-params='{"path":"assets/web-sticker.json"}'>Import Lottie</button>
+                <button type="button" class="ctrl-btn" data-cmd="file.importAep" data-app="effectcraft-aep" data-file="imported.ecproj" data-rust="crates/ui-egui/src/views/project.rs" data-params='{"path":"legacy_rig.aep","dryRun":true,"allowLosses":false}'>Import .aep (Dry-Run)</button>
+              </div>
+              <div class="pill-row" style="margin-top:6px;">
+                <span class="badge amber" title="EffectCraft Essential Graphics template">.ectemplate (V3/V4)</span>
+                <span class="badge fc" title="FilmCraft Graphics Template">.fcgt (Studio Titles)</span>
+                <span class="badge rose" title="EffectCraft warns on cameras, lights & unsupported effects in Lottie">⚠ 2 Lottie Warnings</span>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <!-- SECTION 7: FilmCraft Three-Point Edit, Trim Algebra & Marker CSV -->
+        <article class="craft-card col-6">
+          <div class="sec-head">
+            <div class="sec-title">
+              <span class="badge fc">7</span>
+              <span>Three-Point Edit, Dynamic Trim &amp; Marker CSV</span>
+            </div>
+            <button type="button" class="where-pill" data-jump="view07">Belongs in: 07 Studio → Edit Tab</button>
+          </div>
+
+          <div class="sprocket-frame">
+            <div class="sprocket-holes"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 2px; flex-wrap:wrap; gap:6px;">
+              <div class="pill-row">
+                <button type="button" class="ctrl-btn" data-cmd="source.markIn" data-app="filmcraft" data-file="film/Pterodactyl Song.fcproj" data-rust="crates/ui-egui/src/views/studio_finishing.rs" data-params='{"seconds":4.0}'>Mark In <kbd>I</kbd></button>
+                <button type="button" class="ctrl-btn" data-cmd="source.markOut" data-app="filmcraft" data-file="film/Pterodactyl Song.fcproj" data-rust="crates/ui-egui/src/views/studio_finishing.rs" data-params='{"seconds":8.5}'>Mark Out <kbd>O</kbd></button>
+                <button type="button" class="ctrl-btn active" data-cmd="timeline.insert" data-app="filmcraft" data-file="film/Pterodactyl Song.fcproj" data-rust="crates/ui-egui/src/views/studio_finishing.rs" data-params='{"track":"V1","audioTrack":"A1"}'>Insert <kbd>,</kbd></button>
+                <button type="button" class="ctrl-btn" data-cmd="timeline.overwrite" data-app="filmcraft" data-file="film/Pterodactyl Song.fcproj" data-rust="crates/ui-egui/src/views/studio_finishing.rs" data-params='{"track":"V1","audioTrack":"A1"}'>Overwrite <kbd>.</kbd></button>
+                <button type="button" class="ctrl-btn" data-cmd="sequence.lift" data-app="filmcraft" data-file="film/Pterodactyl Song.fcproj" data-rust="crates/ui-egui/src/views/studio_finishing.rs" data-params='{}'>Lift <kbd>;</kbd></button>
+                <button type="button" class="ctrl-btn" data-cmd="sequence.extract" data-app="filmcraft" data-file="film/Pterodactyl Song.fcproj" data-rust="crates/ui-egui/src/views/studio_finishing.rs" data-params='{"ripple":true}'>Extract <kbd>'</kbd></button>
+              </div>
+            </div>
+            <div class="sprocket-holes"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+          </div>
+
+          <div>
+            <div class="sub-label">Trim Mode, Dynamic J/K/L Shuttle &amp; Exact Rational FPS</div>
+            <div class="pill-row" id="trim-tool-pills">
+              <button type="button" class="ctrl-btn active" data-cmd="trim.selectEditPoint" data-app="filmcraft" data-file="film/Pterodactyl Song.fcproj" data-rust="crates/ui-egui/src/views/studio_finishing.rs" data-params='{"kind":"ripple","linked":true}'>Ripple</button>
+              <button type="button" class="ctrl-btn" data-cmd="trim.selectEditPoint" data-app="filmcraft" data-file="film/Pterodactyl Song.fcproj" data-rust="crates/ui-egui/src/views/studio_finishing.rs" data-params='{"kind":"roll","linked":true}'>Roll</button>
+              <button type="button" class="ctrl-btn" data-cmd="tool.slip" data-app="filmcraft" data-file="film/Pterodactyl Song.fcproj" data-rust="crates/ui-egui/src/views/studio_finishing.rs" data-params='{"tool":"slip"}'>Slip</button>
+              <button type="button" class="ctrl-btn" data-cmd="tool.slide" data-app="filmcraft" data-file="film/Pterodactyl Song.fcproj" data-rust="crates/ui-egui/src/views/studio_finishing.rs" data-params='{"tool":"slide"}'>Slide</button>
+              <button type="button" class="ctrl-btn" data-cmd="tool.rateStretch" data-app="filmcraft" data-file="film/Pterodactyl Song.fcproj" data-rust="crates/ui-egui/src/views/studio_finishing.rs" data-params='{"maintainPitch":true,"algorithm":"wsola"}'>Rate Stretch</button>
+              <button type="button" class="ctrl-btn" data-cmd="sequence.addEdit" data-app="filmcraft" data-file="film/Pterodactyl Song.fcproj" data-rust="crates/ui-egui/src/views/studio_finishing.rs" data-params='{"allTracks":false}'>Add Edit <kbd>⌘K</kbd></button>
+              <button type="button" class="ctrl-btn" data-cmd="trim.shuttle" data-app="filmcraft" data-file="film/Pterodactyl Song.fcproj" data-rust="crates/ui-egui/src/views/studio_finishing.rs" data-params='{"direction":1,"clock":12.4}'>Dynamic <kbd>J K L</kbd></button>
+            </div>
+          </div>
+
+          <div class="two-col">
+            <div class="inset-box">
+              <div class="sub-label">Sequence Rate (Integer Ticks)</div>
+              <div class="pill-row" id="fps-pills">
+                <button type="button" class="ctrl-btn" data-cmd="sequence.settings" data-app="filmcraft" data-file="film/Pterodactyl Song.fcproj" data-rust="crates/ui-egui/src/views/studio_finishing.rs" data-params='{"fps":[24000,1001],"dropFrame":false}'>23.976</button>
+                <button type="button" class="ctrl-btn active" data-cmd="sequence.settings" data-app="filmcraft" data-file="film/Pterodactyl Song.fcproj" data-rust="crates/ui-egui/src/views/studio_finishing.rs" data-params='{"fps":[24,1],"dropFrame":false}'>24</button>
+                <button type="button" class="ctrl-btn" data-cmd="sequence.settings" data-app="filmcraft" data-file="film/Pterodactyl Song.fcproj" data-rust="crates/ui-egui/src/views/studio_finishing.rs" data-params='{"fps":[30000,1001],"dropFrame":true}'>29.97 DF</button>
+                <button type="button" class="ctrl-btn" data-cmd="sequence.settings" data-app="filmcraft" data-file="film/Pterodactyl Song.fcproj" data-rust="crates/ui-egui/src/views/studio_finishing.rs" data-params='{"fps":[60000,1001],"dropFrame":true}'>59.94</button>
+              </div>
+            </div>
+            <div class="inset-box">
+              <div class="sub-label">Markers &amp; Review Notes</div>
+              <div class="pill-row">
+                <button type="button" class="ctrl-btn" data-cmd="markers.edit" data-app="filmcraft" data-file="film/Pterodactyl Song.fcproj" data-rust="crates/engine/src/cmd/film/markers.rs" data-params='{"kind":"chapter","color":"#35E1C0","name":"Chorus Lift","author":"Magic"}'>+ Chapter</button>
+                <button type="button" class="ctrl-btn amber-active" data-cmd="markers.exportCsv" data-app="filmcraft" data-file="exports/review-markers.csv" data-rust="crates/engine/src/cmd/film/markers.rs" data-params='{"path":"exports/review-markers.csv"}'>Export CSV</button>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <!-- SECTION 8: 32-Bit Linear-Light Color Grading & Live Scopes -->
+        <article class="craft-card col-6">
+          <div class="sec-head">
+            <div class="sec-title">
+              <span class="badge fc">8</span>
+              <span>32-Bit Linear-Light Color Wheels, Monotone Curves &amp; Scopes</span>
+            </div>
+            <button type="button" class="where-pill" data-jump="view07">Belongs in: 07 Studio → Color Tab</button>
+          </div>
+
+          <div class="pill-row">
+            <button type="button" class="ctrl-btn active" data-cmd="sequence.colorSettings" data-app="filmcraft-color" data-file="film/Pterodactyl Song.fcproj" data-rust="crates/ui-egui/src/views/studio_finishing.rs" data-params='{"workingSpace":"rec709","wideGamut":false,"autoToneMap":true}'>Rec.709 (BT.2390 ToneMap)</button>
+            <button type="button" class="ctrl-btn" data-cmd="sequence.colorSettings" data-app="filmcraft-color" data-file="film/Pterodactyl Song.fcproj" data-rust="crates/ui-egui/src/views/studio_finishing.rs" data-params='{"workingSpace":"rec2100-pq","wideGamut":true,"hdrWhiteNits":203}'>Rec.2100 PQ (203 cd/m²)</button>
+            <button type="button" class="ctrl-btn" data-cmd="lumetri.setLook" data-app="filmcraft-color" data-file="film/Pterodactyl Song.fcproj" data-rust="crates/ui-egui/src/views/studio_finishing.rs" data-params='{"lut":"builtin:warm_storybook","intensity":78}'>8 Code Looks ▾</button>
+            <button type="button" class="ctrl-btn amber-active" id="btn-toggle-scope-mode">Scope: Waveform / Vectorscope</button>
+          </div>
+
+          <div class="two-col">
+            <div>
+              <div class="sub-label">3-Way Color Wheels (Drag Pucks)</div>
+              <canvas id="canvas-wheels" class="interactive-canvas" width="290" height="126"></canvas>
+            </div>
+            <div>
+              <div class="sub-label" id="curve-scope-label">Monotone-Cubic RGB Curve (Click to Shape)</div>
+              <canvas id="canvas-curves" class="interactive-canvas" width="290" height="126"></canvas>
+            </div>
+          </div>
+
+          <div class="two-col">
+            <div class="slider-group">
+              <div class="slider-meta"><span>Temperature (Linear)</span><span class="slider-val" id="val-temp">+8 K</span></div>
+              <input type="range" class="craft-slider" id="sl-temp" min="-100" max="100" value="8" />
+            </div>
+            <div class="slider-group">
+              <div class="slider-meta"><span>Exposure (f-stops)</span><span class="slider-val" id="val-exp">+0.35 EV</span></div>
+              <input type="range" class="craft-slider" id="sl-exp" min="-400" max="400" value="35" />
+            </div>
+          </div>
+        </article>
+
+        <!-- SECTION 9: Keyframe Value/Velocity Graph, Blend Modes & JS Expressions -->
+        <article class="craft-card col-6">
+          <div class="sec-head">
+            <div class="sec-title">
+              <span class="badge ec">9</span>
+              <span>Value/Velocity Bezier Graph, Navigator &amp; JS Pick-Whip</span>
+            </div>
+            <button type="button" class="where-pill" data-jump="view04">Belongs in: 04/05/06 Theatre + 07 FX</button>
+          </div>
+
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; flex-wrap:wrap;">
+            <div class="pill-row" id="interp-pills">
+              <button type="button" class="ctrl-btn" data-interp="linear">Linear</button>
+              <button type="button" class="ctrl-btn active" data-interp="easyEase">Easy Ease <kbd>F9</kbd></button>
+              <button type="button" class="ctrl-btn" data-interp="bezier">Continuous Bezier</button>
+              <button type="button" class="ctrl-btn" data-interp="hold">Hold</button>
+              <button type="button" class="ctrl-btn" data-interp="roving">Roving</button>
+            </div>
+            <div class="pill-row">
+              <button type="button" class="ctrl-btn" id="kf-prev" title="Step to previous keyframe">◀</button>
+              <button type="button" class="ctrl-btn active" id="kf-toggle" title="Add/remove keyframe at playhead">◆</button>
+              <button type="button" class="ctrl-btn" id="kf-next" title="Step to next keyframe">▶</button>
+            </div>
+          </div>
+
+          <canvas id="canvas-bezier" class="interactive-canvas" width="560" height="128"></canvas>
+
+          <div class="inset-box" style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+            <span class="badge ec">JS Expr</span>
+            <input type="text" class="text-field" id="expr-input" value='wiggle(2.5, 18) + thisComp.layer("Audio Amplitude").effect("Both Channels")(1)' style="flex:1; min-width:180px; font-family:var(--font-mono); font-size:11px;" />
+            <button type="button" class="ctrl-btn amber-active" id="btn-pickwhip" title="Link property with EffectCraft prop.pickWhip">@ Pick-Whip</button>
+            <button type="button" class="ctrl-btn active" id="btn-apply-expr">Apply</button>
+          </div>
+        </article>
+
+        <!-- SECTION 10: Puppet 5-Pin Mesh, 3D Camera/IBL & SAM 2 Roto/Track -->
+        <article class="craft-card col-6">
+          <div class="sec-head">
+            <div class="sec-title">
+              <span class="badge ec">10</span>
+              <span>5-Pin Puppet Mesh, Advanced 3D PBR &amp; SAM 2 Roto/Track</span>
+            </div>
+            <button type="button" class="where-pill" data-jump="view04">Belongs in: 04 Animations + 06 Motion</button>
+          </div>
+
+          <div class="two-col">
+            <div>
+              <div class="sub-label">Puppet Pin Kind (Click Canvas to Add Pin)</div>
+              <div class="pill-row" id="pin-kind-pills" style="margin-bottom:6px;">
+                <button type="button" class="ctrl-btn active" data-pin="Position">Position</button>
+                <button type="button" class="ctrl-btn" data-pin="Advanced">Advanced</button>
+                <button type="button" class="ctrl-btn" data-pin="Bend">Bend</button>
+                <button type="button" class="ctrl-btn" data-pin="Starch">Starch</button>
+                <button type="button" class="ctrl-btn" data-pin="Overlap">Overlap</button>
+              </div>
+              <canvas id="canvas-puppet" class="interactive-canvas" width="275" height="120"></canvas>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:6px;">
+              <div class="inset-box">
+                <div class="sub-label">Rigging, 3D Camera &amp; Environment IBL</div>
+                <div class="pill-row">
+                  <button type="button" class="ctrl-btn" data-cmd="paths.pointsFollowNulls" data-app="effectcraft" data-file="rig.ecproj" data-rust="crates/engine/src/cmd/character/puppet.rs" data-params='{"layer":"#1"}'>Pins → Nulls</button>
+                  <button type="button" class="ctrl-btn" data-cmd="puppet.follow" data-app="effectcraft" data-file="rig.ecproj" data-rust="crates/engine/src/cmd/character/puppet.rs" data-params='{"leader":"Puppet Pin 1","delay":0.08,"amount":100,"cascade":true}'>Cloth Follow</button>
+                  <button type="button" class="ctrl-btn" data-cmd="layer.newCamera" data-app="effectcraft" data-file="rig.ecproj" data-rust="crates/ui-egui/src/views/animation.rs" data-params='{"name":"Stage Cam","twoNode":true,"depthOfField":true}'>+ 3D DoF Cam</button>
+                  <button type="button" class="ctrl-btn" data-cmd="layer.newLight" data-app="effectcraft" data-file="rig.ecproj" data-rust="crates/ui-egui/src/views/animation.rs" data-params='{"kind":"Environment","castsShadows":true}'>+ Env IBL Light</button>
+                </div>
+              </div>
+
+              <div class="inset-box">
+                <div class="sub-label">Roto Brush 3.0 (SAM 2) &amp; 3D Camera Solve</div>
+                <div class="pill-row">
+                  <button type="button" class="ctrl-btn active" data-cmd="roto.model.select" data-app="effectcraft-sam2" data-file="rig.ecproj" data-rust="crates/ui-egui/src/views/animation.rs" data-params='{"id":"sam2.1-hiera-small","wait":true}'>SAM 2.1 Matte</button>
+                  <button type="button" class="ctrl-btn" data-cmd="objectMatte.apply" data-app="effectcraft" data-file="rig.ecproj" data-rust="crates/ui-egui/src/views/animation.rs" data-params='{"layer":"#1","box":[240,110,680,820]}'>Object Matte</button>
+                  <button type="button" class="ctrl-btn" data-cmd="track.camera" data-app="effectcraft" data-file="motion/actions.ecproj" data-rust="crates/ui-egui/src/views/motion.rs" data-params='{"layer":"#1","solveMethod":"auto","lensDistortion":true,"wait":true}'>3D Cam Solve</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <!-- SECTION 11: Broadcast Loudness (BS.1770 / EBU R128), DSP & Console Mixer -->
+        <article class="craft-card col-6">
+          <div class="sec-head">
+            <div class="sec-title">
+              <span class="badge fc">11</span>
+              <span>ITU-R BS.1770 / EBU R128 Loudness, 35+ DSP &amp; Console Mixer</span>
+            </div>
+            <button type="button" class="where-pill" data-jump="view07">Belongs in: 07 Studio → Audio Tab</button>
+          </div>
+
+          <div class="two-col">
+            <div>
+              <div class="sub-label">Live R128 / True-Peak Meter (Click Target)</div>
+              <canvas id="canvas-loudness" class="interactive-canvas" width="275" height="114"></canvas>
+              <div class="pill-row" style="margin-top:5px;" id="lufs-pills">
+                <button type="button" class="ctrl-btn active" data-lufs="-14">-14 LUFS (Stream)</button>
+                <button type="button" class="ctrl-btn" data-lufs="-23">-23 LUFS (EBU R128)</button>
+                <button type="button" class="ctrl-btn" data-lufs="-24">-24 LKFS (ATSC)</button>
+              </div>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:6px;">
+              <div class="inset-box">
+                <div class="sub-label">Pure-Rust Audio DSP &amp; Auto-Ducking</div>
+                <div class="pill-row">
+                  <button type="button" class="ctrl-btn active" data-cmd="mixer.addInsert" data-app="filmcraft-audio-dsp" data-file="film/Pterodactyl Song.fcproj" data-rust="crates/ui-egui/src/views/studio_finishing.rs" data-params='{"strip":"A1","slot":0,"effect":"parametric_eq_full"}'>8-Band EQ</button>
+                  <button type="button" class="ctrl-btn" data-cmd="mixer.addInsert" data-app="filmcraft-audio-dsp" data-file="film/Pterodactyl Song.fcproj" data-rust="crates/ui-egui/src/views/studio_finishing.rs" data-params='{"strip":"Mix","slot":1,"effect":"limiter","ceilingDb":-1.0}'>5ms TP Limiter</button>
+                  <button type="button" class="ctrl-btn" data-cmd="essentialSound.set" data-app="filmcraft-audio-dsp" data-file="film/Pterodactyl Song.fcproj" data-rust="crates/ui-egui/src/views/studio_finishing.rs" data-params='{"values":{"repair.noise.on":true,"clarity.enhanceTone":true}}'>Speech Enhance</button>
+                  <button type="button" class="ctrl-btn amber-active" data-cmd="essentialSound.generateDucking" data-app="filmcraft-audio-dsp" data-file="film/Pterodactyl Song.fcproj" data-rust="crates/ui-egui/src/views/studio_finishing.rs" data-params='{"against":"dialogue","reduceDb":-9.5,"fadeS":0.35}'>Auto-Ducking</button>
+                </div>
+              </div>
+
+              <div class="inset-box">
+                <div class="sub-label">Console Automation Mode (A1 / S1 / Mix)</div>
+                <div class="pill-row" id="auto-mode-pills">
+                  <button type="button" class="ctrl-btn active" data-auto="Read">Read</button>
+                  <button type="button" class="ctrl-btn" data-auto="Latch">Latch</button>
+                  <button type="button" class="ctrl-btn" data-auto="Touch">Touch</button>
+                  <button type="button" class="ctrl-btn" data-auto="Write">Write</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <!-- SECTION 12: OpenType Titles, V3↔C1 Captions & Pure-Rust Codec Render Queue -->
+        <article class="craft-card col-6">
+          <div class="sec-head">
+            <div class="sec-title">
+              <span class="badge bridge">12</span>
+              <span>OpenType Graphics, V3 ↔ C1 Captions &amp; Pure-Rust Render Queue</span>
+            </div>
+            <button type="button" class="where-pill" data-jump="view05">Belongs in: 05 Lyrics + 07 Titles/Export</button>
+          </div>
+
+          <div class="two-col">
+            <div class="inset-box">
+              <div class="sub-label">V3 Lyrics ↔ C1 Caption Tracks</div>
+              <div class="pill-row">
+                <button type="button" class="ctrl-btn active" data-cmd="captions.newTrack" data-app="filmcraft-captions" data-file="film/Pterodactyl Song.fcproj" data-rust="crates/ui-egui/src/views/studio_finishing.rs" data-params='{"format":"Subtitle","name":"C1 Lyrics","language":"en"}'>Subtitle (SRT/VTT)</button>
+                <button type="button" class="ctrl-btn" data-cmd="captions.newTrack" data-app="filmcraft-captions" data-file="film/Pterodactyl Song.fcproj" data-rust="crates/ui-egui/src/views/studio_finishing.rs" data-params='{"format":"CEA-608","name":"CC1 Broadcast","language":"en"}'>CEA-608 (.scc)</button>
+                <button type="button" class="ctrl-btn" data-cmd="captions.newTrack" data-app="filmcraft-captions" data-file="film/Pterodactyl Song.fcproj" data-rust="crates/ui-egui/src/views/studio_finishing.rs" data-params='{"format":"CEA-708","name":"Service 1","language":"en"}'>CEA-708 / Teletext</button>
+                <button type="button" class="ctrl-btn amber-active" data-cmd="graphics.upgradeCaption" data-app="filmcraft-text" data-file="film/Pterodactyl Song.fcproj" data-rust="crates/ui-egui/src/views/lyrics.rs" data-params='{"track":"C1"}'>Upgrade C1 → Graphic</button>
+              </div>
+            </div>
+
+            <div class="inset-box">
+              <div class="sub-label">Pure-Rust Master Codec Matrix</div>
+              <div class="pill-row" id="codec-matrix-pills">
+                <button type="button" class="ctrl-btn active" data-codec="h264">H.264 Fast-Start</button>
+                <button type="button" class="ctrl-btn" data-codec="hevc">HEVC Main10</button>
+                <button type="button" class="ctrl-btn" data-codec="prores">ProRes 4444 XQ</button>
+                <button type="button" class="ctrl-btn" data-codec="av1">AV1 / WebM Opus</button>
+                <button type="button" class="ctrl-btn" data-codec="dnxhr">DNxHR / APV / MXF</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="two-col">
+            <div class="toggle-row" id="tog-burn-captions">
+              <span class="toggle-lbl">Burn Captions Into Video (Linear Light)</span>
+              <span class="pill-switch on"></span>
+            </div>
+            <div class="toggle-row" id="tog-source-guard">
+              <span class="toggle-lbl">Offline &amp; Render-Source Protection</span>
+              <span class="pill-switch on"></span>
+            </div>
+          </div>
+        </article>
+      </div>
+
+      <!-- ==================== TABS 2–6: PER-VIEW PLACEMENT BLUEPRINTS ==================== -->
+      <div id="panel-blueprint" class="hidden"></div>
+
+      <!-- ==================== TAB 7: COMPREHENSIVE 42-ITEM TASK LIST ==================== -->
+      <div id="panel-tasks" class="craft-card hidden">
+        <div class="sec-head">
+          <div class="sec-title">
+            <span class="badge bridge">ROADMAP</span>
+            <span>Comprehensive FilmCraft × EffectCraft Integration &amp; UI Placement Task List (42 Actionable Items)</span>
+          </div>
+          <span class="badge amber" id="task-counter-pill">42 / 42 Completed (UI + CLI + --control :9875/:9876/:9877)</span>
+        </div>
+
+        <div class="task-filter-bar">
+          <input type="text" class="text-field" id="task-search" placeholder="Filter by feature, command ID, codec, or Rust file…" style="min-width:260px; flex:1;" />
+          <div class="pill-row" id="task-view-filter">
+            <button type="button" class="ctrl-btn active" data-vf="ALL">All Views</button>
+            <button type="button" class="ctrl-btn" data-vf="02 Project">02 Project</button>
+            <button type="button" class="ctrl-btn" data-vf="04 Animations">04 Animations</button>
+            <button type="button" class="ctrl-btn" data-vf="05 Lyrics">05 Lyrics</button>
+            <button type="button" class="ctrl-btn" data-vf="06 Motion">06 Motion</button>
+            <button type="button" class="ctrl-btn" data-vf="07 Studio">07 Studio</button>
+          </div>
+        </div>
+
+        <div style="overflow-x:auto;">
+          <table class="task-table">
+            <thead>
+              <tr>
+                <th style="width:34px;">Done</th>
+                <th style="width:92px;">Craft App</th>
+                <th style="width:128px;">Visual Home</th>
+                <th>Integration Feature &amp; UI Control</th>
+                <th>Verified Command(s) &amp; Rust Target</th>
+              </tr>
+            </thead>
+            <tbody id="task-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT SIDEBAR: LIVE COMMAND & PLACEMENT INSPECTOR -->
+    <aside class="inspector-dock" aria-label="Live Command & Placement Inspector">
+      <div class="sec-head">
+        <div class="sec-title">
+          <span class="led"></span>
+          <span>Live Control &amp; Placement Inspector</span>
+        </div>
+        <button type="button" class="ctrl-btn" id="btn-copy-json">Copy JSON</button>
+      </div>
+
+      <div style="font-size:11.5px; color:var(--text-sec);">
+        Click any supplementary widget, canvas, or view slot on the left to inspect its exact Craft CLI/MCP command, JSON payload, and target Rust module ahead of building.
+      </div>
+
+      <div class="kv-grid">
+        <div class="kv-key">Command ID</div>
+        <div class="kv-val" id="insp-cmd" style="color:var(--mint); font-weight:700;">video.link_effectcraft</div>
+        <div class="kv-key">Craft Engine</div>
+        <div class="kv-val" id="insp-app">magic → filmcraft + effectcraft</div>
+        <div class="kv-key">Transport</div>
+        <div class="kv-val" id="insp-transport">--control :9876 / :9877 + CLI</div>
+        <div class="kv-key">Craft File</div>
+        <div class="kv-val" id="insp-file">film/linked-compositions.json</div>
+        <div class="kv-key">Rust Module</div>
+        <div class="kv-val" id="insp-rust" style="color:var(--amber);">crates/engine/src/cmd/film/linked_comp.rs</div>
+      </div>
+
+      <div>
+        <div class="sub-label">Exact Dispatched JSON Payload</div>
+        <pre class="code-pre" id="insp-json">{
+  "project": "motion/actions.ecproj",
+  "comp": "Main",
+  "track": "V4",
+  "format": "prores",
+  "proresProfile": "4444",
+  "channels": "rgba",
+  "fps": 24
+}</pre>
+      </div>
+
+      <div class="inset-box">
+        <div class="sub-label">Visual Anti-Clutter Placement Rule</div>
+        <div id="insp-rule" style="font-size:11.5px; color:var(--text-sec);">
+          Default workstation screens (02–07) stay 100% faithful to the approved Figma mockups. Every supplementary control docks inside a segmented inspector tab (Matrix | Edit | Color | FX | Audio | Titles | Export in 07 Studio; Puppet | 3D | Roto in 04 Animations) or compact top-bar popover.
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <div class="toast" id="toast-msg" role="status" aria-live="polite">Copied payload</div>
+
+  <script>
+    (function () {
+      var state = {
+        activeTab: "sheet08",
+        scopeMode: false,
+        burnCaptions: true,
+        sourceGuard: true,
+        lufsTarget: -14,
+        autoMode: "Read",
+        pinKind: "Position",
+        interp: "easyEase",
+        taskFilterView: "ALL",
+        taskSearch: "",
+        checkedTasks: {},
+        wheels: [
+          { name: "Shadows", dx: -0.14, dy: 0.12, luma: -4 },
+          { name: "Midtones", dx: 0.16, dy: -0.1, luma: 6 },
+          { name: "Highlights", dx: 0.1, dy: -0.18, luma: 10 }
+        ],
+        curvePts: [
+          { x: 0.0, y: 0.0 },
+          { x: 0.26, y: 0.21 },
+          { x: 0.68, y: 0.77 },
+          { x: 1.0, y: 1.0 }
+        ],
+        bezierHandle1: { x: 0.34, y: 0.08 },
+        bezierHandle2: { x: 0.64, y: 0.94 },
+        pins: [
+          { x: 78, y: 58, kind: "Position", label: "Head" },
+          { x: 138, y: 62, kind: "Bend", label: "Torso" },
+          { x: 196, y: 34, kind: "Advanced", label: "WingR" },
+          { x: 96, y: 92, kind: "Starch", label: "Rib" },
+          { x: 224, y: 78, kind: "Overlap", label: "Tail" }
+        ]
+      };
+
+      try {
+        var saved = localStorage.getItem("magic_sheet08_checked");
+        if (saved) state.checkedTasks = JSON.parse(saved) || {};
+      } catch (e) {}
+
+      var BLUEPRINTS = {
+        view02: {
+          title: "02 · Project Overview & Cross-App Craft Bridge (views/project.rs)",
+          keep: "Preserves left glowing #35E1C0 Song / Lyrics / Transcript card + 2×2 stage buttons + right 3-column grouped Craft domain rows (FilmCraft, DesignCraft, EffectCraft, PhotoCraft & VectorCraft).",
+          leftTitle: "Left Rail (272px · Existing Preserved + 1 Bridge Footer)",
+          leftExisting: [
+            "Song card + interactive waveform + Change audio…",
+            "Lyrics & notes + Open Lyrics & Motion →",
+            "Transcript timed words + Storyboard / Animation / Lyrics / Motion / Studio →"
+          ],
+          leftNew: {
+            title: "NEW · Live Bridge & Recovery Strip (Bottom of Left Rail)",
+            cmd: "footage.check",
+            app: "effectcraft + filmcraft",
+            file: "project.magic + .fcproj + .ecproj",
+            rust: "crates/ui-egui/src/views/project.rs",
+            items: [
+              "Live TCP status pills: FC :9876 (TOKEN) + EC :9877 (--autosave)",
+              "Branching History Jump popover (edit.history.list / edit.history.goto)",
+              "Offline Media & Render-Source Protection preflight (media.status + footage.check + file.checkOutput)"
+            ],
+            params: { wait: true, checkFilmCraft: "media.status", checkEffectCraft: "footage.check" }
+          },
+          centerTitle: "Right Workspace Header & Domain Rows (project.rs · New Action Menus)",
+          centerNewTop: {
+            title: "NEW · Top Action Bar Additions (Beside + Add Asset & + Import Craft File)",
+            cmd: "file.exportTimeline",
+            app: "filmcraft-interchange ↔ effectcraft",
+            file: "interchange/Pterodactyl.otio",
+            rust: "crates/engine/src/cmd/project/trunk.rs",
+            items: [
+              "Interchange ▾ custom popup: Export/Import OTIO (.otio), FCPXML 1.10, FCP7 XML, CMX 3600 EDL, AAF, OMF 2.0",
+              "Import .lottie / .json (file.importLottie) & Import .aep / .aepx with Dry-Run Loss Report (file.importAep {dryRun: true})"
+            ],
+            params: { format: "otio", path: "interchange/Pterodactyl.otio", prerender: "unsupported" }
+          },
+          rightTitle: "Per-Row EffectCraft (.ecproj) Dynamic Link Controls",
+          rightNew: {
+            title: "NEW · Inline Dynamic-Link Comp & Alpha Codec Popover on EC Rows",
+            cmd: "video.link_effectcraft",
+            app: "magic → filmcraft + effectcraft",
+            file: "film/linked-compositions.json",
+            rust: "crates/engine/src/cmd/film/linked_comp.rs",
+            items: [
+              "Multi-composition picker (get_comp list instead of first-comp-only)",
+              "Alpha cache codec pill: ProRes 4444 RGBA (.mov) | WebM VP9+Alpha (.webm) | 32-bit EXR sequence",
+              "Used-In counter badge (project.usedIn) + 1-click Relink / Bake (.mov)"
+            ],
+            params: { project: "lettering/lyrics.ecproj", comp: "Chorus_Hero", track: "V3", format: "prores", proresProfile: "4444" }
+          }
+        },
+        view04: {
+          title: "04 · Animations Workstation — Track V2 Character Rig (views/animation.rs)",
+          keep: "Preserves Top Character Roster, Left Action + XY Path & Depth column, Center 35mm Filmbar Stage, and Bottom Theatre Dock while upgrading the Right 298px Inspector into 3 clean tabs.",
+          leftTitle: "Left Column (272px · Existing Action/XY + Collapsible Time Card)",
+          leftExisting: [
+            "Animation Style (2D Sprite | 2.5D Rig | 3D Anim)",
+            "Action Cycles (Idle, Fly, Sing, Rest) + XY Path & Depth Pad"
+          ],
+          leftNew: {
+            title: "NEW · EffectCraft Layer Time & Stagger Accordion",
+            cmd: "layer.timing",
+            app: "effectcraft",
+            file: "assets/characters/parent-pterodactyl/rig.ecproj",
+            rust: "crates/ui-egui/src/views/animation.rs",
+            items: [
+              "Time Remapping toggle, Time Stretch %, Time-Reverse, Freeze Frame",
+              "Work Area In/Out bar + Quick Offset subframe stagger (layer.quickOffset / keys.quickOffset)"
+            ],
+            params: { layers: ["#1"], stretch: 100, timeRemap: true, quickOffsetDelta: 0.12 }
+          },
+          centerTitle: "Bottom Theatre Dock (136px → Tabbed: [Keys] [Value/Speed Graph] [JS Expr])",
+          centerNewTop: {
+            title: "NEW · Graph Editor, Keyframe Velocity & Property Shortcut Strip",
+            cmd: "keys.velocity",
+            app: "effectcraft",
+            file: "assets/characters/parent-pterodactyl/rig.ecproj",
+            rust: "crates/engine/src/cmd/character/keys.rs",
+            items: [
+              "Property reveal pills: A P S R T M E U + double-tap AA PP RR EE UU",
+              "Easy Ease (F9), Hold, Continuous/Auto Bezier, Roving Keys + Draggable Velocity Influence handles",
+              "Inline JS Expression bar + @ Pick-Whip (prop.pickWhip) & Link V2 alpha sync badge"
+            ],
+            params: { layer: "#1", path: "transform/position", interpolation: "easyEase", outInfluence: 66.0, timeBase: "comp" }
+          },
+          rightTitle: "Right Inspector (298px · 3-Way Segmented Switcher)",
+          rightNew: {
+            title: "NEW · [Puppet 5-Pin] | [3D & DoF Cam] | [SAM 2 Roto/Matte]",
+            cmd: "puppet.recordPin",
+            app: "effectcraft + effectcraft-sam2",
+            file: "assets/characters/parent-pterodactyl/rig.ecproj",
+            rust: "crates/engine/src/cmd/character/puppet.rs",
+            items: [
+              "Tab 1 (Puppet): Position / Advanced (rotate+scale ring) / Bend / Starch / Overlap pins, real-time puppet.recordPin, Pins↔Nulls (paths.pointsFollowNulls), hair/wing puppet.follow",
+              "Tab 2 (3D & Cam): Classic vs Advanced 3D PBR (glTF/OBJ/FBX/STL), 1/2-node DoF Camera, Orbit/Pan/Dolly, Parallel/Spot/Point/Ambient + Equirectangular Environment IBL Light",
+              "Tab 3 (Roto): Roto Brush 3.0 (SAM 2.1 / MobileSAM) + Object Matte box prompt + Propagate & Freeze"
+            ],
+            params: { layer: "#1", pin: "Puppet Pin 1", smoothing: 18, showMesh: true }
+          }
+        },
+        view05: {
+          title: "05 · Lyrics Workstation — Track V3 Kinetic Type ↔ C1 Captions (views/lyrics.rs)",
+          keep: "Preserves Left Lyric Moments rail, Center 35mm Stage + 4-lane CUES/AUDIO/LYRICS/WORDS timeline, and upgrades Right 316px Inspector into 3 focused typography & caption-bridge tabs.",
+          leftTitle: "Left Rail (252px · Lyric Moments + Font Library Scan)",
+          leftExisting: [
+            "Searchable timed Lyric Moments cards (lettering/lyrics.ecproj)",
+            "Active moment thumbnail + anchor timecode"
+          ],
+          leftNew: {
+            title: "NEW · Font Library & Variable-Axis Rescan Header",
+            cmd: "text.fonts",
+            app: "effectcraft-text",
+            file: "lettering/lyrics.ecproj",
+            rust: "crates/engine/src/cmd/words/lettering.rs",
+            items: [
+              "Bundled + System + EFFECTCRAFT_FONT_DIRS picker with Variable Font filter",
+              "OpenType feature badges (kerning: metrics/optical, ligatures, RTL/BiDi shaping)"
+            ],
+            params: { variable: true, rescan: true }
+          },
+          centerTitle: "Stage Toolbar Addition — Bidirectional V3 (.ecproj) ↔ C1 (.fcproj) Sync",
+          centerNewTop: {
+            title: "NEW · Lyrics ↔ FilmCraft Caption Track & Essential Template Bar",
+            cmd: "captions.import",
+            app: "filmcraft-captions ↔ effectcraft",
+            file: "film/Pterodactyl Song.fcproj",
+            rust: "crates/engine/src/cmd/words/mod.rs",
+            items: [
+              "Push Timed Lyrics → FilmCraft C1 Caption Track (Subtitle, CEA-608 .scc, CEA-708 .mcc, Teletext, SRT, WebVTT, TTML)",
+              "Upgrade C1 Caption → FilmCraft OpenType Graphic Clip (graphics.upgradeCaption)",
+              "Export Lyric Rig as .ectemplate (essential.exportTemplate) for batch CLI override rendering"
+            ],
+            params: { path: "lettering/lyrics.vtt", format: "Subtitle", language: "en", syncLock: true }
+          },
+          rightTitle: "Right Inspector (316px · [Animators] | [9 Layer Styles] | [3D Extrude])",
+          rightNew: {
+            title: "NEW · Range-Selector Text Animators, 9 Layer Styles & 3D Bevel",
+            cmd: "text.addAnimator",
+            app: "effectcraft",
+            file: "lettering/lyrics.ecproj",
+            rust: "crates/ui-egui/src/views/lyrics.rs",
+            items: [
+              "Range Selector controls: Start %, End %, Offset %, Based On (Chars / Words / Lines), Ease High/Low",
+              "All 9 Layer Styles: Drop/Inner Shadow, Outer/Inner Glow, Bevel & Emboss, Satin, Color/Gradient Overlay, Stroke + Global Light",
+              "Advanced 3D Glyph Extrusion Depth & Angular/Concave/Convex Bevels + SourceText JS style expressions"
+            ],
+            params: { basedOn: "words", start: 0, end: 100, perCharacter3d: true, extrusionDepth: 18.0 }
+          }
+        },
+        view06: {
+          title: "06 · Motion Workstation — Track V4 Vector/VFX, Tracking & Lottie (views/motion.rs)",
+          keep: "Preserves Top V4 Toolbar, Left Motion Cues + Sung-Word Anchor rail, and Center Stage + BEAT/CUE/MOTION/TRIM timeline while adding Lottie + 3-tab Right Inspector.",
+          leftTitle: "Left Rail (252px · Motion Cues + Mask/Matte Layers)",
+          leftExisting: [
+            "Authored Motion Cues (.svg + actions.ecproj preview)",
+            "Anchor to Sung Word quick-assign chips"
+          ],
+          leftNew: {
+            title: "NEW · Layer Stack Switches (38 Blend Modes, Track Mattes & Adjustment)",
+            cmd: "layer.setTrackMatte",
+            app: "effectcraft",
+            file: "motion/actions.ecproj",
+            rust: "crates/ui-egui/src/views/motion.rs",
+            items: [
+              "38 Blend Modes custom popup + Motion Blur shutter toggle + Adjustment Layer switch",
+              "Parent & Track Matte (Alpha / Alpha Inverted / Luma / Luma Inverted) pick-whip"
+            ],
+            params: { layers: ["#2"], matte: "#1", kind: "alpha" }
+          },
+          centerTitle: "Top Toolbar Addition — Two-Way Lottie (.json / .lottie) & Render Queue",
+          centerNewTop: {
+            title: "NEW · Native Lottie Import/Export + Render Queue Alpha Module",
+            cmd: "file.exportLottie",
+            app: "effectcraft-lottie + renderQueue",
+            file: "exports/flight-arc.lottie",
+            rust: "crates/ui-egui/src/views/motion.rs",
+            items: [
+              "Export .json / .lottie with inline compatibility warnings popover (flags effects/3D Lottie cannot express)",
+              "Import Lottie as editable EffectCraft composition (file.importLottie)",
+              "Queue Alpha Render: ProRes 4444 XQ, WebM VP9+Alpha (Opus), AV1 MP4, 32-bit EXR (Cryptomatte)"
+            ],
+            params: { comp: "Main", path: "exports/flight-arc.lottie", includeExpressions: true }
+          },
+          rightTitle: "Right Inspector (316px · [Shape Ops & Masks] | [308 FX] | [Track & Solve])",
+          rightNew: {
+            title: "NEW · 9 Shape Operators, Searchable 308-FX Browser & 3D Camera Tracker",
+            cmd: "layer.addShapeItem",
+            app: "effectcraft",
+            file: "motion/actions.ecproj",
+            rust: "crates/ui-egui/src/views/motion.rs",
+            items: [
+              "Shape Ops: Trim Paths, Repeater, Round Corners, Offset, Zig Zag, Twist, Wiggle, Merge Paths, Gradient Stroke + Pen Masks (mask.interpolate)",
+              "Searchable 308-Effect & WASM Plug-in Browser (Simulation: Particle World/Shatter/Rainfall; Generate: Audio Spectrum/Beam; Time: Timewarp/Echo)",
+              "2D Point Motion Tracker, Subspace Warp Stabilizer, Face Landmark Mask Tracker (mediapipe-face) & 3D Camera Tracker (+ Blender .py export)"
+            ],
+            params: { layer: "#1", kind: "repeater", copies: 5 }
+          }
+        },
+        view07: {
+          title: "07 · FilmCraft Studio Master NLE (views/studio.rs + studio_finishing.rs)",
+          keep: "Opens 100% identically to 07-studio-filmcraft-assembly.jpg (Film/Scenes | Program Monitor + At this moment | Elements Matrix + Review range), adding a 7-tab Workspace Switcher at the top of the Right 360px column.",
+          leftTitle: "Left Rail (236px · Film / Scenes + Bins & Markers)",
+          leftExisting: [
+            "Vertical 35mm Filmbar Scene cards synced to playhead",
+            "DesignCraft / Program frame thumbnails"
+          ],
+          leftNew: {
+            title: "NEW · Bin / Proxy / Offline Badge & Marker CSV Quick Bar",
+            cmd: "markers.exportCsv",
+            app: "filmcraft",
+            file: "film/Pterodactyl Song.fcproj",
+            rust: "crates/ui-egui/src/views/studio.rs",
+            items: [
+              "Proxy toggle (media.toggleProxies) + Offline media count pill (media.findMissing)",
+              "Coloured Range/Chapter/WebLink marker list + 1-click Export Markers CSV"
+            ],
+            params: { path: "exports/sequence-markers.csv" }
+          },
+          centerTitle: "Center Program Monitor + Bottom Multi-Track Timeline (V1–V4, C1, A1–A2)",
+          centerNewTop: {
+            title: "NEW · Source/Program Three-Point Bar, Scopes Overlay & C1/A1 Track Headers",
+            cmd: "ui.set",
+            app: "filmcraft",
+            file: "film/Pterodactyl Song.fcproj",
+            rust: "crates/ui-egui/src/views/studio.rs",
+            items: [
+              "Compact Three-Point & Trim strip under Program Monitor: In (I), Out (O), Insert (,), Overwrite (.), Lift (;), Extract ('), Add Edit (⌘K), J/K/L Trim",
+              "Optional ganged Waveform / RGB Parade / YUV+HLS Vectorscope split beside Program Monitor",
+              "Track header Patch, Target, Mute, Solo, Sync-Lock & Dirty Linked-Comp relink badges on V1–V4, C1 Captions, A1–A2 Audio"
+            ],
+            params: { panels: { scopes: { shown: ["waveform", "vectorscopeYuv"], colorSpace: "rec709" } } }
+          },
+          rightTitle: "Right Column (360px · 7-Mode FilmCraft Finishing Deck)",
+          rightNew: {
+            title: "NEW · [Matrix (Default 07)] [Edit] [Color] [FX] [Audio] [Titles] [Export]",
+            cmd: "file.exportMedia",
+            app: "filmcraft + filmcraft-audio-dsp + filmcraft-color",
+            file: "exports/Pterodactyl Song.mp4",
+            rust: "crates/ui-egui/src/views/studio_finishing.rs",
+            items: [
+              "Matrix: Default 07 V2/V3/V4 grid + Sync/Bake dynamic-link pills",
+              "Edit: Ripple/Roll/Slip/Slide/Rate-Stretch, Nesting, 23.976..60 rational FPS, Shortcuts (⌥⌘K), FCPXML/OTIO/EDL/AAF interchange",
+              "Color: 32-bit linear Basic, 8 Code Looks + .cube/.3dl LUTs, Monotone RGB/HSL Curves, 3-Way Wheels, HSL Secondary matte, Vignette",
+              "FX: 90+ Video Effects (16 categories), ~30 Transitions (Cross/Film Dissolve, Dip, Wipe, Iris, Page Peel, Cube Spin), 27 GPU Blend Modes, Keyframe Value/Velocity graphs",
+              "Audio: BS.1770/EBU R128 Loudness (-14/-23/-24 LUFS + True Peak), 35+ DSP effects, 5-insert Track/Clip Mixer, Read/Latch/Touch/Write automation, Auto-Ducking, Audio Gain/Crossfades",
+              "Titles: Linear-light OpenType Graphic Clips, Responsive Pin/Intro-Outro, Roll/Crawl, .fcgt Templates, C1 CEA-608/708/SRT/WebVTT/SCC Captions",
+              "Export: Full pure-Rust codec matrix (H.264 fast-start, HEVC, ProRes 422/4444+Alpha, DNxHR, APV, AV1/WebM, MXF, DPX/EXR/PNG/GIF-alpha, WAV/AIFF/MP3/AAC/FLAC), CRF/VBR/CBR, GPU Linear-Light, HW Encode, Export Queue + ETA"
+            ],
+            params: { format: "h264", loudnessLufs: -14.0, burnCaptions: true, gpuRendering: true, hardwareEncoding: false, wait: true }
+          }
+        }
+      };
+
+      var TASKS = [
+        { id: "T01", app: "BRIDGE", view: "02 Project", title: "Multi-Comp & Multi-Codec Dynamic Link Selector (ProRes 4444 / WebM VP9+Alpha / 32f EXR)", cmd: "video.link_effectcraft · get_comp · media.replaceFootage (linked_comp.rs)" },
+        { id: "T02", app: "BRIDGE", view: "02 Project", title: "Trim-Preserving Live Dirty-Track Auto-Sync & 1-Click Bake/Unbake (.mov)", cmd: "video.sync_links · video.bake_link (linked_comp.rs + studio.rs)" },
+        { id: "T03", app: "BRIDGE", view: "02 Project", title: "Bidirectional Sequence ↔ Composition Interchange (OTIO, FCPXML, FCP7 XML, EDL, AAF, OMF)", cmd: "file.exportTimeline · file.importTimeline (film/markers.rs + project.rs)" },
+        { id: "T04", app: "EC", view: "06 Motion", title: "Two-Way Lottie (.json / .lottie) Export & Import with Incompatibility Warnings Drawer", cmd: "file.exportLottie · file.importLottie (views/motion.rs + project.rs)" },
+        { id: "T05", app: "EC", view: "02 Project", title: "After Effects (.aep / .aepx) Clean-Room Import with Dry-Run Loss Report Modal", cmd: "file.importAep {dryRun, allowLosses} (views/project.rs)" },
+        { id: "T06", app: "BRIDGE", view: "05 Lyrics", title: "Clean-Room Template Dual-Bridge (.ectemplate Essential Controls ↔ FilmCraft .fcgt)", cmd: "essential.set · essential.exportTemplate · graphics.template.apply (lyrics.rs + studio_finishing.rs)" },
+        { id: "T07", app: "BRIDGE", view: "02 Project", title: "Dual Live Control & MCP Bridge Status Bar (FC :9876 Token + EC :9877 --autosave)", cmd: "engine.execute · mcp --bridge 9876/9877 (craft_hub/control.rs + shell.rs)" },
+        { id: "T08", app: "BRIDGE", view: "02 Project", title: "Offline Media Preflight & Render-Source Overwrite Protection Check", cmd: "media.status · footage.check · file.checkOutput (cmd/film/mod.rs)" },
+        { id: "T09", app: "EC", view: "02 Project", title: "Branching Undo History Tree & Checkpoint Recovery Browser", cmd: "edit.history.list · edit.history.goto · open_project (options_modal.rs)" },
+        { id: "T10", app: "BRIDGE", view: "07 Studio", title: "Shared Exact Integer-Tick Rational Frame-Rate Sync (254,016,000,000 ticks/s)", cmd: "sequence.settings · comp.settings (23.976 / 24 / 25 / 29.97 DF / 30 / 59.94 / 60)" },
+        { id: "T11", app: "EC", view: "04 Animations", title: "5-Pin Puppet Mesh Suite (Position, Advanced Rotate/Scale, Bend, Starch, Overlap)", cmd: "puppet.addPin · puppet.setPin · puppet.selectPins (character/puppet.rs)" },
+        { id: "T12", app: "EC", view: "04 Animations", title: "Real-Time Puppet Pin Drag Recording & Mesh Smoothing Controls", cmd: "puppet.recordPin · puppet.recordOptions (views/animation.rs)" },
+        { id: "T13", app: "EC", view: "04 Animations", title: "Null Limb Rigging (Pins Follow Nulls & Nulls Follow Pins) + Cloth/Hair Follow-Through", cmd: "paths.pointsFollowNulls · paths.nullsFollowPoints · puppet.follow (puppet.rs)" },
+        { id: "T14", app: "EC", view: "04 Animations", title: "Classic 3D & Advanced 3D PBR Renderer Switch (glTF 2.0, OBJ, FBX 7.x, STL)", cmd: "comp.renderer · layer.new3dPrimitive · file.import (character/model3d.rs)" },
+        { id: "T15", app: "EC", view: "04 Animations", title: "1-Node & 2-Node Depth-of-Field 3D Cameras + Orbit/Pan/Dolly & 4-View Switcher", cmd: "layer.newCamera · layer.settings (views/animation.rs)" },
+        { id: "T16", app: "EC", view: "04 Animations", title: "Ray-Traced Parallel/Spot/Point/Ambient + Equirectangular Environment IBL Lights", cmd: "layer.newLight {kind:'Environment', castsShadows:true} (views/animation.rs)" },
+        { id: "T17", app: "EC", view: "04 Animations", title: "Roto Brush 3.0 (SAM 2.1 / MobileSAM) & Object Matte Box-Prompt Segmentation", cmd: "roto.model.select · roto.stroke · roto.propagate · objectMatte.apply (animation.rs)" },
+        { id: "T18", app: "EC", view: "04 Animations", title: "Layer Time Remapping, Stretch %, Time-Reverse, Freeze Frame & Subframe Quick Offset", cmd: "layer.timing · layer.quickOffset · keys.quickOffset (views/animation.rs)" },
+        { id: "T19", app: "EC", view: "04 Animations", title: "Value & Speed Graph Editor with Easy Ease (F9), Roving, Hold & Velocity Influence", cmd: "add_keyframe · keys.velocity · keys.toggleTransform (timeline.rs + animation.rs)" },
+        { id: "T20", app: "EC", view: "04 Animations", title: "Timeline Property Reveal Bar (A/P/S/R/T/M/F/E/L/U + AA/PP/RR/EE/LL/UU)", cmd: "ui.menu.invoke · get_layer · prop.separateDimensions (views/animation.rs)" },
+        { id: "T21", app: "EC", view: "05 Lyrics", title: "Bundled, System & Variable Font Picker with Axis Sliders & EFFECTCRAFT_FONT_DIRS", cmd: "text.fonts {variable, rescan} · text.fontFeatures · layer.setText (lyrics.rs)" },
+        { id: "T22", app: "EC", view: "05 Lyrics", title: "Point vs Paragraph Text Box Shaping, Metrics/Optical Kerning & RTL/BiDi Support", cmd: "layer.newText · layer.setText {range, justify, direction} (words/lettering.rs)" },
+        { id: "T23", app: "EC", view: "05 Lyrics", title: "Range-Selector Text Animators (Chars/Words/Lines, Start/End/Offset, Per-Char 3D)", cmd: "text.addAnimator · prop.addKey (crates/engine/src/craft_effects.rs)" },
+        { id: "T24", app: "EC", view: "05 Lyrics", title: "All 9 Layer Styles (Drop/Inner Shadow, Glows, Bevel/Emboss, Satin, Overlays, Stroke)", cmd: "layer.layerStyle · Global Light (views/lyrics.rs)" },
+        { id: "T25", app: "EC", view: "05 Lyrics", title: "JavaScript Expressions Editor (wiggle, loopOut, sourceRectAtTime) & @ Pick-Whip", cmd: "set_property {expression} · prop.pickWhip (lyrics.rs + animation.rs)" },
+        { id: "T26", app: "BRIDGE", view: "05 Lyrics", title: "Bidirectional V3 Timed Lyrics ↔ FilmCraft C1 Caption Track Sync & Graphic Upgrade", cmd: "captions.import · captions.export · graphics.upgradeCaption (words/mod.rs + studio_finishing.rs)" },
+        { id: "T27", app: "EC", view: "06 Motion", title: "Complete 9 Shape Path Operators (Trim, Repeater, Round, Offset, ZigZag, Twist, Wiggle, Merge, Gradient)", cmd: "layer.newShape · layer.addShapeItem (views/motion.rs)" },
+        { id: "T28", app: "EC", view: "06 Motion", title: "Pen Masks with Modes, Feather/Expansion, Mask Interpolation & Face Landmark Tracking", cmd: "layer.addMask · mask.interpolate · track.mask {method:'faceDetailed'} (motion.rs)" },
+        { id: "T29", app: "EC", view: "06 Motion", title: "Searchable 308-Effect & WASM Plug-in Browser + 38 Blend Modes, Track Mattes & Motion Blur", cmd: "list_effects · add_effect · effect.plugins.load · layer.setSwitch (motion.rs)" },
+        { id: "T30", app: "EC", view: "06 Motion", title: "2D Point Motion Tracker, Subspace Warp Stabilizer & 3D Camera Tracker (+ Blender .py)", cmd: "track.motion · track.warpStabilizer · track.camera · camera.exportBlender (motion.rs)" },
+        { id: "T31", app: "EC", view: "06 Motion", title: "Multi-Layer OpenEXR & Cryptomatte Object Picker + OCIO Color Transforms", cmd: "layer.channels · effect.pickCryptomatte · file.interpretFootage {preserveRgb} (motion.rs)" },
+        { id: "T32", app: "FC", view: "07 Studio", title: "7-Tab Non-Cluttering Studio Finishing Deck (Preserving Default 07 Matrix View)", cmd: "StudioInspectorTab {Matrix, Edit, Color, Fx, Audio, Titles, Export} (studio.rs + studio_finishing.rs)" },
+        { id: "T33", app: "FC", view: "07 Studio", title: "Source/Program Three-Point Editing (In/Out, Insert, Overwrite, Lift, Extract) & Nesting", cmd: "source.markIn/Out · timeline.insert/overwrite · sequence.lift/extract/nest (studio_finishing.rs)" },
+        { id: "T34", app: "FC", view: "07 Studio", title: "Trim Mode Algebra (Ripple, Roll, Slip, Slide, Rate-Stretch, ⌘K, Q/W) & Dynamic J/K/L Shuttle", cmd: "trim.selectEditPoint · trim.shuttle · trim.shuttleStop · sequence.addEdit (studio_finishing.rs)" },
+        { id: "T35", app: "FC", view: "07 Studio", title: "Coloured Comment/Chapter/Segmentation/WebLink Markers, 64-Swatch Palette & CSV Export", cmd: "markers.add · markers.edit · colors.addCustom · markers.exportCsv (film/markers.rs)" },
+        { id: "T36", app: "FC", view: "07 Studio", title: "32-Bit Linear-Light Color Science (Rec.709 / Rec.2100 PQ & HLG, BT.2390, 9 Camera Log Curves)", cmd: "sequence.colorSettings · clip.interpretFootage (S-Log3, LogC3/4, V-Log, C-Log2/3, Apple Log, F-Log2)" },
+        { id: "T37", app: "FC", view: "07 Studio", title: "Complete Lumetri Grading Panel (Basic, 8 Code Looks + .cube/.3dl LUTs, Curves, Wheels, HSL, Vignette) & Scopes", cmd: "lumetri.setSection · lumetri.setLook · lut.import · ui.set {panels:{scopes}} (studio_finishing.rs)" },
+        { id: "T38", app: "FC", view: "07 Studio", title: "FilmCraft 90+ Video Effects, ~30 Transitions, Clip Motion/Anti-Flicker, 27 GPU Blend Modes & Keyframe Graphs", cmd: "effects.apply · effects.setParam · effects.addKeyframe · clip.motion (studio_finishing.rs)" },
+        { id: "T39", app: "FC", view: "07 Studio", title: "Broadcast Loudness Metering (ITU-R BS.1770-4 / EBU R128 + 4× Kaiser-Sinc True Peak) & Normalize", cmd: "clip.audioGain {mode:'normalizeAll'} · file.exportMedia {loudnessLufs} (studio_finishing.rs)" },
+        { id: "T40", app: "FC", view: "07 Studio", title: "35+ Pure-Rust Audio DSP Effects, Essential Sound Auto-Ducking, GCC-PHAT Sync & WSOLA Stretch", cmd: "essentialSound.set · essentialSound.generateDucking · mixer.addInsert (studio_finishing.rs)" },
+        { id: "T41", app: "FC", view: "07 Studio", title: "Audio Track & Clip Mixer (5 Pre/Post Inserts, Sends, Submixes, Read/Latch/Touch/Write Automation, Audio-Clock)", cmd: "mixer.setStrip · mixer.writeAutomation · clipMixer.set (studio_finishing.rs)" },
+        { id: "T42", app: "BRIDGE", view: "07 Studio", title: "OpenType Graphic Clips (.fcgt, Roll/Crawl, Responsive Pin/Time), CEA-608/708/SRT/VTT/SCC Captions & Full Pure-Rust Render Queue", cmd: "graphics.newText · captions.export · file.exportMedia · export.queue.add · renderQueue.add" }
+      ];
+
+      function showToast(text) {
+        var el = document.getElementById("toast-msg");
+        el.textContent = text;
+        el.classList.add("show");
+        clearTimeout(showToast._t);
+        showToast._t = setTimeout(function () {
+          el.classList.remove("show");
+        }, 1900);
+      }
+
+      function setInspector(spec) {
+        document.getElementById("insp-cmd").textContent = spec.cmd || "engine.execute";
+        document.getElementById("insp-app").textContent = spec.app || "filmcraft + effectcraft";
+        document.getElementById("insp-transport").textContent = spec.transport || "--control :9876 / :9877 + CLI / MCP";
+        document.getElementById("insp-file").textContent = spec.file || "film/Pterodactyl Song.fcproj";
+        document.getElementById("insp-rust").textContent = spec.rust || "crates/ui-egui/src/views/studio_finishing.rs";
+        document.getElementById("insp-json").textContent = JSON.stringify(spec.params || {}, null, 2);
+        if (spec.rule) {
+          document.getElementById("insp-rule").textContent = spec.rule;
+        }
+      }
+
+      function switchTab(tabId) {
+        state.activeTab = tabId;
+        var tabs = document.querySelectorAll("#top-view-tabs .mode-tab");
+        for (var i = 0; i < tabs.length; i++) {
+          tabs[i].classList.toggle("active", tabs[i].getAttribute("data-tab") === tabId);
+        }
+        var pSheet = document.getElementById("panel-sheet08");
+        var pBlue = document.getElementById("panel-blueprint");
+        var pTasks = document.getElementById("panel-tasks");
+        pSheet.classList.toggle("hidden", tabId !== "sheet08");
+        pTasks.classList.toggle("hidden", tabId !== "tasks");
+        var isBp = BLUEPRINTS.hasOwnProperty(tabId);
+        pBlue.classList.toggle("hidden", !isBp);
+        if (isBp) {
+          renderBlueprint(tabId);
+        } else if (tabId === "tasks") {
+          renderTasks();
+        } else {
+          drawAllCanvases();
+        }
+      }
+
+      function renderBlueprint(viewKey) {
+        var bp = BLUEPRINTS[viewKey];
+        var container = document.getElementById("panel-blueprint");
+        var html = '<div class="blueprint-frame">';
+        html += '<div class="sec-head"><div class="sec-title"><span class="badge bridge">VISUAL PLACEMENT MAP</span><span>' + escapeHtml(bp.title) + '</span></div>';
+        html += '<button type="button" class="ctrl-btn" id="bp-back-sheet">← Back to Sheet 08</button></div>';
+        html += '<div class="inset-box" style="color:var(--text-sec); font-size:12px;"><strong style="color:var(--mint);">Anti-Clutter Guarantee:</strong> ' + escapeHtml(bp.keep) + '</div>';
+        html += '<div class="three-col" style="align-items:stretch;">';
+
+        // Left Column
+        html += '<div style="display:flex; flex-direction:column; gap:8px;">';
+        html += '<div class="bp-zone existing"><div class="sub-label">' + escapeHtml(bp.leftTitle) + '</div><ul style="padding-left:16px; color:var(--text-sec); font-size:11.5px;">';
+        for (var i = 0; i < bp.leftExisting.length; i++) {
+          html += '<li>' + escapeHtml(bp.leftExisting[i]) + '</li>';
+        }
+        html += '</ul></div>';
+        html += buildSlotCard(bp.leftNew, "left", false);
+        html += '</div>';
+
+        // Center Column
+        html += '<div style="display:flex; flex-direction:column; gap:8px;">';
+        html += '<div class="bp-zone existing"><div class="sub-label">' + escapeHtml(bp.centerTitle) + '</div><div style="font-size:11.5px; color:var(--text-sec);">35mm Filmbar Stage / Monitor &amp; Shared Craft Timeline preserved at full 16:9 clarity.</div></div>';
+        html += buildSlotCard(bp.centerNewTop, "center", true);
+        html += '</div>';
+
+        // Right Column
+        html += '<div style="display:flex; flex-direction:column; gap:8px;">';
+        html += '<div class="bp-zone existing"><div class="sub-label">' + escapeHtml(bp.rightTitle) + '</div><div style="font-size:11.5px; color:var(--text-sec);">Segmented top pills switch clean sub-inspectors without widening the column.</div></div>';
+        html += buildSlotCard(bp.rightNew, "right", false);
+        html += '</div>';
+
+        html += '</div></div>';
+        container.innerHTML = html;
+
+        var backBtn = document.getElementById("bp-back-sheet");
+        if (backBtn) {
+          backBtn.addEventListener("click", function () { switchTab("sheet08"); });
+        }
+        var slots = container.querySelectorAll(".bp-slot-trigger");
+        for (var s = 0; s < slots.length; s++) {
+          slots[s].addEventListener("click", function () {
+            var part = this.getAttribute("data-part");
+            var src = part === "left" ? bp.leftNew : (part === "center" ? bp.centerNewTop : bp.rightNew);
+            setInspector({
+              cmd: src.cmd,
+              app: src.app,
+              file: src.file,
+              rust: src.rust,
+              params: src.params,
+              rule: bp.keep
+            });
+            showToast("Inspected placement: " + src.cmd);
+          });
+        }
+        setInspector({
+          cmd: bp.rightNew.cmd,
+          app: bp.rightNew.app,
+          file: bp.rightNew.file,
+          rust: bp.rightNew.rust,
+          params: bp.rightNew.params,
+          rule: bp.keep
+        });
+      }
+
+      function buildSlotCard(slot, partName, amber) {
+        var cls = amber ? "bp-zone new-slot amber-slot bp-slot-trigger" : "bp-zone new-slot bp-slot-trigger";
+        var h = '<div class="' + cls + '" data-part="' + partName + '">';
+        h += '<div style="display:flex; justify-content:space-between; gap:6px; align-items:center; margin-bottom:5px;">';
+        h += '<strong style="color:' + (amber ? 'var(--amber)' : 'var(--mint)') + '; font-size:12px;">' + escapeHtml(slot.title) + '</strong>';
+        h += '<span class="badge ' + (amber ? 'amber' : 'bridge') + '">' + escapeHtml(slot.cmd) + '</span></div>';
+        h += '<ul style="padding-left:16px; display:flex; flex-direction:column; gap:4px; font-size:11.5px; color:var(--text);">';
+        for (var i = 0; i < slot.items.length; i++) {
+          h += '<li>' + escapeHtml(slot.items[i]) + '</li>';
+        }
+        h += '</ul>';
+        h += '<div style="margin-top:6px; font-family:var(--font-mono); font-size:10px; color:var(--text-muted);">Target: ' + escapeHtml(slot.rust) + ' (Click to inspect JSON)</div>';
+        h += '</div>';
+        return h;
+      }
+
+      function escapeHtml(s) {
+        return String(s)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      function renderTasks() {
+        var tbody = document.getElementById("task-tbody");
+        var q = state.taskSearch.trim().toLowerCase();
+        var html = "";
+        var checkedTotal = 0;
+        for (var i = 0; i < TASKS.length; i++) {
+          if (state.checkedTasks[TASKS[i].id]) checkedTotal++;
+        }
+        document.getElementById("task-counter-pill").textContent = checkedTotal + " / " + TASKS.length + " Checked";
+
+        for (var j = 0; j < TASKS.length; j++) {
+          var t = TASKS[j];
+          if (state.taskFilterView !== "ALL" && t.view !== state.taskFilterView) continue;
+          if (q && (t.title.toLowerCase().indexOf(q) === -1 && t.cmd.toLowerCase().indexOf(q) === -1 && t.view.toLowerCase().indexOf(q) === -1)) continue;
+          var badgeCls = t.app === "FC" ? "fc" : (t.app === "EC" ? "ec" : "bridge");
+          var isDone = !!state.checkedTasks[t.id];
+          html += '<tr class="task-row" data-tid="' + t.id + '" style="cursor:pointer;">';
+          html += '<td><input type="checkbox" class="task-chk" data-tid="' + t.id + '" ' + (isDone ? "checked" : "") + ' /></td>';
+          html += '<td><span class="badge ' + badgeCls + '">' + escapeHtml(t.id + " · " + t.app) + '</span></td>';
+          html += '<td><span class="badge amber">' + escapeHtml(t.view) + '</span></td>';
+          html += '<td style="font-weight:500; color:' + (isDone ? 'var(--text-muted)' : 'var(--text)') + ';">' + escapeHtml(t.title) + '</td>';
+          html += '<td style="font-family:var(--font-mono); font-size:11px; color:var(--mint);">' + escapeHtml(t.cmd) + '</td>';
+          html += '</tr>';
+        }
+        tbody.innerHTML = html;
+
+        var chks = tbody.querySelectorAll(".task-chk");
+        for (var c = 0; c < chks.length; c++) {
+          chks[c].addEventListener("change", function (ev) {
+            ev.stopPropagation();
+            var id = this.getAttribute("data-tid");
+            state.checkedTasks[id] = this.checked;
+            try { localStorage.setItem("magic_sheet08_checked", JSON.stringify(state.checkedTasks)); } catch (e) {}
+            renderTasks();
+          });
+        }
+
+        var rows = tbody.querySelectorAll(".task-row");
+        for (var r = 0; r < rows.length; r++) {
+          rows[r].addEventListener("click", function (ev) {
+            if (ev.target && ev.target.tagName === "INPUT") return;
+            var id = this.getAttribute("data-tid");
+            for (var k = 0; k < TASKS.length; k++) {
+              if (TASKS[k].id === id) {
+                setInspector({
+                  cmd: TASKS[k].cmd.split("·")[0].trim(),
+                  app: TASKS[k].app === "FC" ? "filmcraft" : (TASKS[k].app === "EC" ? "effectcraft" : "filmcraft ↔ effectcraft"),
+                  file: TASKS[k].view + " Craft Document",
+                  rust: TASKS[k].cmd,
+                  params: { taskId: TASKS[k].id, visualHome: TASKS[k].view, feature: TASKS[k].title }
+                });
+                break;
+              }
+            }
+          });
+        }
+      }
+
+      /* ---------------- Interactive Canvas Renderers ---------------- */
+      function drawWheels() {
+        var cv = document.getElementById("canvas-wheels");
+        if (!cv) return;
+        var ctx = cv.getContext("2d");
+        ctx.clearRect(0, 0, cv.width, cv.height);
+        for (var i = 0; i < 3; i++) {
+          var cx = 48 + i * 96;
+          var cy = 58;
+          var r = 36;
+          var grad = ctx.createRadialGradient(cx, cy, 4, cx, cy, r);
+          grad.addColorStop(0, "#232d3f");
+          grad.addColorStop(1, i === 0 ? "#1b2e4b" : (i === 1 ? "#3a2d24" : "#1d3b38"));
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.arc(cx, cy, r, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = "#364660";
+          ctx.lineWidth = 1.4;
+          ctx.stroke();
+
+          ctx.strokeStyle = "rgba(255,255,255,0.12)";
+          ctx.beginPath();
+          ctx.moveTo(cx - r, cy); ctx.lineTo(cx + r, cy);
+          ctx.moveTo(cx, cy - r); ctx.lineTo(cx, cy + r);
+          ctx.stroke();
+
+          var px = cx + state.wheels[i].dx * r;
+          var py = cy + state.wheels[i].dy * r;
+          ctx.fillStyle = "#111722";
+          ctx.beginPath();
+          ctx.arc(px, py, 5.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = i === 1 ? "#eabb62" : "#35e1c0";
+          ctx.lineWidth = 2;
+          ctx.stroke();
+
+          ctx.fillStyle = "#a6b4cb";
+          ctx.font = "10px sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText(state.wheels[i].name, cx, 111);
+          ctx.fillStyle = "#eabb62";
+          ctx.font = "10px monospace";
+          ctx.fillText((state.wheels[i].luma >= 0 ? "+" : "") + state.wheels[i].luma, cx, 14);
+        }
+      }
+
+      function drawCurvesOrScopes() {
+        var cv = document.getElementById("canvas-curves");
+        if (!cv) return;
+        var ctx = cv.getContext("2d");
+        var w = cv.width, h = cv.height;
+        ctx.clearRect(0, 0, w, h);
+
+        if (state.scopeMode) {
+          // Waveform + Vectorscope split
+          ctx.strokeStyle = "#243246";
+          for (var g = 1; g < 4; g++) {
+            ctx.beginPath();
+            ctx.moveTo(0, (h * g) / 4);
+            ctx.lineTo(w * 0.56, (h * g) / 4);
+            ctx.stroke();
+          }
+          for (var x = 6; x < w * 0.54; x += 3) {
+            var waveY = h * 0.52 + Math.sin(x * 0.09) * 24 + Math.cos(x * 0.21) * 11;
+            ctx.fillStyle = "rgba(53, 225, 192, 0.55)";
+            ctx.fillRect(x, waveY - 14, 2, 28);
+            ctx.fillStyle = "rgba(86, 180, 245, 0.45)";
+            ctx.fillRect(x, waveY - 6, 2, 14);
+          }
+          var vcx = w * 0.78, vcy = h * 0.52, vr = 44;
+          ctx.strokeStyle = "#33435c";
+          ctx.beginPath();
+          ctx.arc(vcx, vcy, vr, 0, Math.PI * 2);
+          ctx.stroke();
+          for (var a = 0; a < 42; a++) {
+            var ang = a * 0.45;
+            var rad = (a % 7) * 4.2 + 5;
+            ctx.fillStyle = "rgba(234, 187, 98, 0.65)";
+            ctx.fillRect(vcx + Math.cos(ang) * rad, vcy + Math.sin(ang) * rad, 2, 2);
+          }
+          ctx.fillStyle = "#35e1c0";
+          ctx.font = "9.5px monospace";
+          ctx.fillText("IRE Waveform (32f)", 8, 13);
+          ctx.fillText("YUV Vectorscope", w * 0.61, 13);
+          return;
+        }
+
+        ctx.strokeStyle = "#223044";
+        ctx.lineWidth = 1;
+        for (var k = 1; k < 4; k++) {
+          ctx.beginPath();
+          ctx.moveTo((w * k) / 4, 0); ctx.lineTo((w * k) / 4, h);
+          ctx.moveTo(0, (h * k) / 4); ctx.lineTo(w, (h * k) / 4);
+          ctx.stroke();
+        }
+        ctx.strokeStyle = "rgba(255,255,255,0.14)";
+        ctx.beginPath();
+        ctx.moveTo(10, h - 10);
+        ctx.lineTo(w - 10, 10);
+        ctx.stroke();
+
+        ctx.strokeStyle = "#35e1c0";
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        var pts = state.curvePts;
+        for (var p = 0; p < pts.length; p++) {
+          var sx = 10 + pts[p].x * (w - 20);
+          var sy = h - 10 - pts[p].y * (h - 20);
+          if (p === 0) ctx.moveTo(sx, sy);
+          else ctx.lineTo(sx, sy);
+        }
+        ctx.stroke();
+
+        for (var m = 0; m < pts.length; m++) {
+          var px = 10 + pts[m].x * (w - 20);
+          var py = h - 10 - pts[m].y * (h - 20);
+          ctx.fillStyle = "#111722";
+          ctx.beginPath();
+          ctx.arc(px, py, 4.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = "#eabb62";
+          ctx.lineWidth = 1.8;
+          ctx.stroke();
+        }
+      }
+
+      function drawBezierGraph() {
+        var cv = document.getElementById("canvas-bezier");
+        if (!cv) return;
+        var ctx = cv.getContext("2d");
+        var w = cv.width, h = cv.height;
+        ctx.clearRect(0, 0, w, h);
+
+        ctx.strokeStyle = "#202c3f";
+        for (var i = 1; i < 5; i++) {
+          ctx.beginPath();
+          ctx.moveTo((w * i) / 5, 0); ctx.lineTo((w * i) / 5, h);
+          ctx.stroke();
+        }
+
+        var x0 = 36, y0 = h - 22;
+        var x3 = w - 36, y3 = 22;
+        var x1 = x0 + state.bezierHandle1.x * (x3 - x0);
+        var y1 = h - 16 - state.bezierHandle1.y * (h - 32);
+        var x2 = x0 + state.bezierHandle2.x * (x3 - x0);
+        var y2 = h - 16 - state.bezierHandle2.y * (h - 32);
+
+        // Handle tangent arms
+        ctx.strokeStyle = "#eabb62";
+        ctx.lineWidth = 1.3;
+        ctx.beginPath();
+        ctx.moveTo(x0, y0); ctx.lineTo(x1, y1);
+        ctx.moveTo(x3, y3); ctx.lineTo(x2, y2);
+        ctx.stroke();
+
+        // Main value curve
+        ctx.strokeStyle = "#35e1c0";
+        ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        ctx.moveTo(x0, y0);
+        if (state.interp === "linear") {
+          ctx.lineTo(x3, y3);
+        } else if (state.interp === "hold") {
+          ctx.lineTo(x3, y0);
+          ctx.lineTo(x3, y3);
+        } else {
+          ctx.bezierCurveTo(x1, y1, x2, y2, x3, y3);
+        }
+        ctx.stroke();
+
+        // Subtle speed bell curve
+        ctx.strokeStyle = "rgba(86, 180, 245, 0.48)";
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        ctx.moveTo(x0, h - 14);
+        ctx.quadraticCurveTo(w * 0.5, 24, x3, h - 14);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Endpoints + influence handles
+        var handles = [[x1, y1], [x2, y2]];
+        for (var j = 0; j < handles.length; j++) {
+          ctx.fillStyle = "#eabb62";
+          ctx.beginPath();
+          ctx.arc(handles[j][0], handles[j][1], 5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.fillStyle = "#35e1c0";
+        ctx.fillRect(x0 - 4, y0 - 4, 8, 8);
+        ctx.fillRect(x3 - 4, y3 - 4, 8, 8);
+
+        ctx.fillStyle = "#a6b4cb";
+        ctx.font = "10px monospace";
+        ctx.fillText("Value Graph (Green) + Speed Graph (Dashed Sky) · Drag Amber Influence Handles", 12, 14);
+      }
+
+      function drawPuppetMesh() {
+        var cv = document.getElementById("canvas-puppet");
+        if (!cv) return;
+        var ctx = cv.getContext("2d");
+        var w = cv.width, h = cv.height;
+        ctx.clearRect(0, 0, w, h);
+
+        // Stylized pterodactyl wing/body silhouette + deformable triangles
+        ctx.strokeStyle = "rgba(86, 180, 245, 0.25)";
+        ctx.fillStyle = "rgba(53, 225, 192, 0.08)";
+        ctx.beginPath();
+        ctx.moveTo(42, 62);
+        ctx.lineTo(95, 36);
+        ctx.lineTo(148, 48);
+        ctx.lineTo(216, 20);
+        ctx.lineTo(244, 78);
+        ctx.lineTo(154, 96);
+        ctx.lineTo(86, 94);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Internal mesh edges between pins
+        ctx.strokeStyle = "rgba(234, 187, 98, 0.28)";
+        for (var i = 0; i < state.pins.length - 1; i++) {
+          ctx.beginPath();
+          ctx.moveTo(state.pins[i].x, state.pins[i].y);
+          ctx.lineTo(state.pins[i + 1].x, state.pins[i + 1].y);
+          ctx.stroke();
+        }
+
+        var colors = {
+          Position: "#eabb62",
+          Advanced: "#35e1c0",
+          Bend: "#56b4f5",
+          Starch: "#f05b6e",
+          Overlap: "#a78bfa"
+        };
+        for (var p = 0; p < state.pins.length; p++) {
+          var pin = state.pins[p];
+          var col = colors[pin.kind] || "#35e1c0";
+          if (pin.kind === "Advanced" || pin.kind === "Bend") {
+            ctx.strokeStyle = col;
+            ctx.beginPath();
+            ctx.arc(pin.x, pin.y, 10, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+          ctx.fillStyle = "#111722";
+          ctx.beginPath();
+          ctx.arc(pin.x, pin.y, 4.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = col;
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          ctx.fillStyle = "#eef3fb";
+          ctx.font = "9px monospace";
+          ctx.fillText(pin.label, pin.x + 7, pin.y - 5);
+        }
+      }
+
+      function drawLoudness() {
+        var cv = document.getElementById("canvas-loudness");
+        if (!cv) return;
+        var ctx = cv.getContext("2d");
+        var w = cv.width, h = cv.height;
+        ctx.clearRect(0, 0, w, h);
+
+        var bars = [
+          { lbl: "M", val: state.lufsTarget + 0.8, col: "#35e1c0" },
+          { lbl: "S", val: state.lufsTarget + 0.3, col: "#35e1c0" },
+          { lbl: "I", val: state.lufsTarget, col: "#eabb62" },
+          { lbl: "TP", val: -1.1, col: "#56b4f5" }
+        ];
+        for (var i = 0; i < bars.length; i++) {
+          var y = 16 + i * 24;
+          ctx.fillStyle = "#182231";
+          ctx.fillRect(36, y, w - 102, 13);
+          var norm = Math.max(0.08, Math.min(1.0, (bars[i].val + 36) / 36));
+          ctx.fillStyle = bars[i].col;
+          ctx.fillRect(36, y, (w - 102) * norm, 13);
+
+          ctx.fillStyle = "#a6b4cb";
+          ctx.font = "10px monospace";
+          ctx.fillText(bars[i].lbl, 12, y + 10);
+          ctx.fillStyle = "#eef3fb";
+          var unit = bars[i].lbl === "TP" ? " dBTP" : " LUFS";
+          ctx.fillText(bars[i].val.toFixed(1) + unit, w - 60, y + 10);
+        }
+      }
+
+      function drawAllCanvases() {
+        drawWheels();
+        drawCurvesOrScopes();
+        drawBezierGraph();
+        drawPuppetMesh();
+        drawLoudness();
+      }
+
+      /* ---------------- Event Wiring ---------------- */
+      var navBtns = document.querySelectorAll("#top-view-tabs .mode-tab");
+      for (var n = 0; n < navBtns.length; n++) {
+        navBtns[n].addEventListener("click", function () {
+          switchTab(this.getAttribute("data-tab"));
+        });
+      }
+
+      var jumpBtns = document.querySelectorAll("[data-jump]");
+      for (var j = 0; j < jumpBtns.length; j++) {
+        jumpBtns[j].addEventListener("click", function () {
+          switchTab(this.getAttribute("data-jump"));
+        });
+      }
+
+      // Generic command buttons
+      var cmdBtns = document.querySelectorAll("[data-cmd]");
+      for (var b = 0; b < cmdBtns.length; b++) {
+        cmdBtns[b].addEventListener("click", function () {
+          var parent = this.parentElement;
+          if (parent && parent.classList.contains("pill-row")) {
+            var sibs = parent.querySelectorAll(".ctrl-btn");
+            for (var s = 0; s < sibs.length; s++) sibs[s].classList.remove("active");
+            this.classList.add("active");
+          }
+          var parsed = {};
+          try { parsed = JSON.parse(this.getAttribute("data-params") || "{}"); } catch (e) {}
+          setInspector({
+            cmd: this.getAttribute("data-cmd"),
+            app: this.getAttribute("data-app"),
+            file: this.getAttribute("data-file"),
+            rust: this.getAttribute("data-rust"),
+            params: parsed
+          });
+        });
+      }
+
+      // Bridge chips
+      document.getElementById("btn-bridge-fc").addEventListener("click", function () {
+        setInspector({
+          cmd: "engine.execute",
+          app: "filmcraft (--control 127.0.0.1:9876)",
+          transport: "JSON-lines TCP + FILMCRAFT_CONTROL_TOKEN",
+          file: "film/Pterodactyl Song.fcproj",
+          rust: "crates/engine/src/craft_hub/control.rs",
+          params: { id: 1, token: "<FILMCRAFT_CONTROL_TOKEN>", method: "engine.execute", params: { command: "sequence.inspect", params: {} } }
+        });
+        showToast("Inspected FilmCraft :9876 control channel");
+      });
+
+      document.getElementById("btn-bridge-ec").addEventListener("click", function () {
+        setInspector({
+          cmd: "execute_command",
+          app: "effectcraft (--control 9877 + mcp --autosave)",
+          transport: "MCP stdio / --bridge 9877",
+          file: "lettering/lyrics.ecproj",
+          rust: "crates/engine/src/craft_hub/control.rs",
+          params: { command: "get_state", autosave: true, bridgePort: 9877 }
+        });
+        showToast("Inspected EffectCraft :9877 bridge");
+      });
+
+      // Scope toggle
+      document.getElementById("btn-toggle-scope-mode").addEventListener("click", function () {
+        state.scopeMode = !state.scopeMode;
+        document.getElementById("curve-scope-label").textContent = state.scopeMode
+          ? "Live Graded Linear-Light Waveform & YUV Vectorscope"
+          : "Monotone-Cubic RGB Curve (Click to Shape)";
+        drawCurvesOrScopes();
+        setInspector({
+          cmd: "ui.set",
+          app: "filmcraft-scopes",
+          file: "film/Pterodactyl Song.fcproj",
+          rust: "crates/ui-egui/src/views/studio_finishing.rs",
+          params: { panels: { scopes: { shown: state.scopeMode ? ["waveform", "vectorscopeYuv"] : [], colorSpace: "rec709" } } }
+        });
+      });
+
+      // Interactive Color Wheels click/drag
+      document.getElementById("canvas-wheels").addEventListener("click", function (ev) {
+        var rect = this.getBoundingClientRect();
+        var x = (ev.clientX - rect.left) * (this.width / rect.width);
+        var y = (ev.clientY - rect.top) * (this.height / rect.height);
+        var idx = Math.min(2, Math.max(0, Math.floor(x / 96)));
+        var cx = 48 + idx * 96, cy = 58, r = 36;
+        state.wheels[idx].dx = Math.max(-0.85, Math.min(0.85, (x - cx) / r));
+        state.wheels[idx].dy = Math.max(-0.85, Math.min(0.85, (y - cy) / r));
+        drawWheels();
+        setInspector({
+          cmd: "effects.setParam",
+          app: "filmcraft-color (32-bit float linear)",
+          file: "film/Pterodactyl Song.fcproj",
+          rust: "crates/ui-egui/src/views/studio_finishing.rs",
+          params: { effect: "lumetri", section: "colorWheels", wheel: state.wheels[idx].name.toLowerCase(), x: Number(state.wheels[idx].dx.toFixed(3)), y: Number(state.wheels[idx].dy.toFixed(3)) }
+        });
+      });
+
+      // Interactive Curves click
+      document.getElementById("canvas-curves").addEventListener("click", function (ev) {
+        if (state.scopeMode) return;
+        var rect = this.getBoundingClientRect();
+        var nx = ((ev.clientX - rect.left) / rect.width);
+        var ny = 1.0 - ((ev.clientY - rect.top) / rect.height);
+        var target = nx < 0.5 ? 1 : 2;
+        state.curvePts[target].x = Math.max(0.12, Math.min(0.88, nx));
+        state.curvePts[target].y = Math.max(0.05, Math.min(0.95, ny));
+        state.curvePts.sort(function (a, b) { return a.x - b.x; });
+        drawCurvesOrScopes();
+        setInspector({
+          cmd: "effects.setParam",
+          app: "filmcraft-color",
+          file: "film/Pterodactyl Song.fcproj",
+          rust: "crates/ui-egui/src/views/studio_finishing.rs",
+          params: { effect: "lumetri", section: "curves", channel: "rgb", interpolation: "monotoneCubic", points: state.curvePts }
+        });
+      });
+
+      // Color Sliders
+      document.getElementById("sl-temp").addEventListener("input", function () {
+        var v = Number(this.value);
+        document.getElementById("val-temp").textContent = (v >= 0 ? "+" : "") + v + " K";
+        setInspector({
+          cmd: "effects.setParam",
+          app: "filmcraft-color",
+          file: "film/Pterodactyl Song.fcproj",
+          rust: "crates/ui-egui/src/views/studio_finishing.rs",
+          params: { effect: "lumetri", param: "temperature", value: v }
+        });
+      });
+
+      document.getElementById("sl-exp").addEventListener("input", function () {
+        var v = Number(this.value) / 100.0;
+        document.getElementById("val-exp").textContent = (v >= 0 ? "+" : "") + v.toFixed(2) + " EV";
+        setInspector({
+          cmd: "effects.setParam",
+          app: "filmcraft-color",
+          file: "film/Pterodactyl Song.fcproj",
+          rust: "crates/ui-egui/src/views/studio_finishing.rs",
+          params: { effect: "lumetri", param: "exposure", value: v }
+        });
+      });
+
+      // Interpolation & Bezier Graph
+      var interpBtns = document.querySelectorAll("#interp-pills .ctrl-btn");
+      for (var ip = 0; ip < interpBtns.length; ip++) {
+        interpBtns[ip].addEventListener("click", function () {
+          for (var k = 0; k < interpBtns.length; k++) interpBtns[k].classList.remove("active");
+          this.classList.add("active");
+          state.interp = this.getAttribute("data-interp");
+          drawBezierGraph();
+          setInspector({
+            cmd: "add_keyframe",
+            app: "effectcraft + filmcraft",
+            file: "rig.ecproj / .fcproj",
+            rust: "crates/ui-egui/src/timeline.rs",
+            params: { layer: "#1", path: "transform/position", interpolation: state.interp, timeBase: "comp" }
+          });
+        });
+      }
+
+      document.getElementById("canvas-bezier").addEventListener("click", function (ev) {
+        var rect = this.getBoundingClientRect();
+        var nx = Math.max(0.08, Math.min(0.92, (ev.clientX - rect.left) / rect.width));
+        var ny = Math.max(0.06, Math.min(0.94, 1.0 - (ev.clientY - rect.top) / rect.height));
+        if (nx < 0.5) state.bezierHandle1 = { x: nx, y: ny };
+        else state.bezierHandle2 = { x: nx, y: ny };
+        drawBezierGraph();
+        setInspector({
+          cmd: "keys.velocity",
+          app: "effectcraft",
+          file: "assets/characters/parent-pterodactyl/rig.ecproj",
+          rust: "crates/engine/src/cmd/character/keys.rs",
+          params: { outInfluence: Math.round(state.bezierHandle1.x * 100), inInfluence: Math.round((1 - state.bezierHandle2.x) * 100) }
+        });
+      });
+
+      ["kf-prev", "kf-toggle", "kf-next"].forEach(function (id) {
+        document.getElementById(id).addEventListener("click", function () {
+          var cmd = id === "kf-toggle" ? "effects.addKeyframe" : (id === "kf-prev" ? "time.previousKey" : "time.nextKey");
+          setInspector({
+            cmd: cmd,
+            app: "filmcraft + effectcraft",
+            file: "film/Pterodactyl Song.fcproj",
+            rust: "crates/ui-egui/src/views/studio_finishing.rs",
+            params: { param: "motion.scale", timeSeconds: 4.2 }
+          });
+        });
+      });
+
+      document.getElementById("btn-pickwhip").addEventListener("click", function () {
+        setInspector({
+          cmd: "prop.pickWhip",
+          app: "effectcraft-expr",
+          file: "lettering/lyrics.ecproj",
+          rust: "crates/ui-egui/src/views/lyrics.rs",
+          params: { layer: "#1", prop: "transform/scale", target: { layer: "Audio Amplitude", prop: "effects/#1/slider" }, byIndex: false }
+        });
+        showToast("Linked property via prop.pickWhip");
+      });
+
+      document.getElementById("btn-apply-expr").addEventListener("click", function () {
+        var expr = document.getElementById("expr-input").value;
+        setInspector({
+          cmd: "set_property",
+          app: "effectcraft-expr (boa JS)",
+          file: "lettering/lyrics.ecproj",
+          rust: "crates/ui-egui/src/views/lyrics.rs",
+          params: { layer: "#1", path: "transform/position", expression: expr }
+        });
+        showToast("Applied JS Expression");
+      });
+
+      // Puppet Pins
+      var pinBtns = document.querySelectorAll("#pin-kind-pills .ctrl-btn");
+      for (var pb = 0; pb < pinBtns.length; pb++) {
+        pinBtns[pb].addEventListener("click", function () {
+          for (var k = 0; k < pinBtns.length; k++) pinBtns[k].classList.remove("active");
+          this.classList.add("active");
+          state.pinKind = this.getAttribute("data-pin");
+        });
+      }
+
+      document.getElementById("canvas-puppet").addEventListener("click", function (ev) {
+        var rect = this.getBoundingClientRect();
+        var x = Math.round((ev.clientX - rect.left) * (this.width / rect.width));
+        var y = Math.round((ev.clientY - rect.top) * (this.height / rect.height));
+        var label = "Pin" + (state.pins.length + 1);
+        if (state.pins.length >= 8) state.pins.shift();
+        state.pins.push({ x: x, y: y, kind: state.pinKind, label: label });
+        drawPuppetMesh();
+        setInspector({
+          cmd: "puppet.addPin",
+          app: "effectcraft",
+          file: "assets/characters/parent-pterodactyl/rig.ecproj",
+          rust: "crates/engine/src/cmd/character/puppet.rs",
+          params: { layer: "#1", kind: state.pinKind.toLowerCase(), position: [x, y], name: label }
+        });
+      });
+
+      // Loudness & Automation
+      var lufsBtns = document.querySelectorAll("#lufs-pills .ctrl-btn");
+      for (var lb = 0; lb < lufsBtns.length; lb++) {
+        lufsBtns[lb].addEventListener("click", function () {
+          for (var k = 0; k < lufsBtns.length; k++) lufsBtns[k].classList.remove("active");
+          this.classList.add("active");
+          state.lufsTarget = Number(this.getAttribute("data-lufs"));
+          drawLoudness();
+          setInspector({
+            cmd: "clip.audioGain",
+            app: "filmcraft-audio-dsp (BS.1770-4 / EBU R128)",
+            file: "film/Pterodactyl Song.fcproj",
+            rust: "crates/ui-egui/src/views/studio_finishing.rs",
+            params: { mode: "normalizeAll", targetLufs: state.lufsTarget, truePeakLimitDbtp: -1.0 }
+          });
+        });
+      }
+
+      document.getElementById("canvas-loudness").addEventListener("click", function () {
+        setInspector({
+          cmd: "mixer.inspect",
+          app: "filmcraft-audio-dsp",
+          file: "film/Pterodactyl Song.fcproj",
+          rust: "crates/ui-egui/src/views/studio_finishing.rs",
+          params: { standard: "EBU_R128", integratedLufs: state.lufsTarget, truePeakOversample: "4x_kaiser_sinc" }
+        });
+      });
+
+      var autoBtns = document.querySelectorAll("#auto-mode-pills .ctrl-btn");
+      for (var ab = 0; ab < autoBtns.length; ab++) {
+        autoBtns[ab].addEventListener("click", function () {
+          for (var k = 0; k < autoBtns.length; k++) autoBtns[k].classList.remove("active");
+          this.classList.add("active");
+          state.autoMode = this.getAttribute("data-auto");
+          setInspector({
+            cmd: "mixer.setStrip",
+            app: "filmcraft",
+            file: "film/Pterodactyl Song.fcproj",
+            rust: "crates/ui-egui/src/views/studio_finishing.rs",
+            params: { strip: "A1", mode: state.autoMode, inserts: 5, audioClockMaster: true }
+          });
+        });
+      }
+
+      // Codec Matrix & Toggles
+      var codecBtns = document.querySelectorAll("#codec-matrix-pills .ctrl-btn");
+      for (var cb = 0; cb < codecBtns.length; cb++) {
+        codecBtns[cb].addEventListener("click", function () {
+          for (var k = 0; k < codecBtns.length; k++) codecBtns[k].classList.remove("active");
+          this.classList.add("active");
+          var codec = this.getAttribute("data-codec");
+          setInspector({
+            cmd: codec === "av1" ? "renderQueue.add" : "file.exportMedia",
+            app: codec === "av1" ? "effectcraft-av1enc + opusenc" : "filmcraft-export (pure Rust)",
+            file: "exports/Pterodactyl Song." + (codec === "prores" || codec === "dnxhr" ? "mov" : (codec === "av1" ? "webm" : "mp4")),
+            rust: "crates/engine/src/cmd/film/mod.rs",
+            params: { format: codec, burnCaptions: state.burnCaptions, allowOffline: !state.sourceGuard, fastStartMoov: true, loudnessLufs: state.lufsTarget }
+          });
+        });
+      }
+
+      document.getElementById("tog-burn-captions").addEventListener("click", function () {
+        state.burnCaptions = !state.burnCaptions;
+        this.querySelector(".pill-switch").classList.toggle("on", state.burnCaptions);
+        setInspector({
+          cmd: "file.exportMedia",
+          app: "filmcraft-export",
+          file: "exports/Pterodactyl Song.mp4",
+          rust: "crates/engine/src/cmd/film/mod.rs",
+          params: { burnCaptions: state.burnCaptions, captionSidecar: "vtt" }
+        });
+      });
+
+      document.getElementById("tog-source-guard").addEventListener("click", function () {
+        state.sourceGuard = !state.sourceGuard;
+        this.querySelector(".pill-switch").classList.toggle("on", state.sourceGuard);
+        setInspector({
+          cmd: "file.checkOutput",
+          app: "effectcraft + filmcraft",
+          file: "exports/Pterodactyl Song.mp4",
+          rust: "crates/engine/src/cmd/film/mod.rs",
+          params: { enforceRenderSourceProtection: state.sourceGuard, blockOfflineMedia: state.sourceGuard }
+        });
+      });
+
+      // Task Filters
+      document.getElementById("task-search").addEventListener("input", function () {
+        state.taskSearch = this.value;
+        renderTasks();
+      });
+
+      var vfBtns = document.querySelectorAll("#task-view-filter .ctrl-btn");
+      for (var vf = 0; vf < vfBtns.length; vf++) {
+        vfBtns[vf].addEventListener("click", function () {
+          for (var k = 0; k < vfBtns.length; k++) vfBtns[k].classList.remove("active");
+          this.classList.add("active");
+          state.taskFilterView = this.getAttribute("data-vf");
+          renderTasks();
+        });
+      }
+
+      // Copy JSON
+      document.getElementById("btn-copy-json").addEventListener("click", function () {
+        var txt = document.getElementById("insp-json").textContent;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(txt).then(function () {
+            showToast("Copied JSON payload");
+          }).catch(function () { fallbackCopy(txt); });
+        } else {
+          fallbackCopy(txt);
+        }
+      });
+
+      function fallbackCopy(txt) {
+        var ta = document.createElement("textarea");
+        ta.value = txt;
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand("copy"); } catch (e) {}
+        document.body.removeChild(ta);
+        showToast("Copied JSON payload");
+      }
+
+      drawAllCanvases();
+    })();
+  </script>
+</body>
+</html>

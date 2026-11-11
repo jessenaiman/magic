@@ -763,67 +763,10 @@
       "command": "scribbles.new | scribbles.image | image.generate",
       "purpose": "Low-cost draft starting character images and turnaround/pose sheets"
     },
-    "google_flow": {
-      "id": "google_ultra_flow",
-      "url": "https://flow.google.com/",
-      "tier": "ULTRA",
-      "relay_endpoint": "http://127.0.0.1:9224",
-      "image_models": [
-        {
-          "id": "nano_banana_2_1",
-          "label": "Nano Banana 2.1",
-          "credits": 0,
-          "ratios": [
-            "16:9",
-            "4:3",
-            "1:1",
-            "3:4",
-            "9:16"
-          ],
-          "batch_counts": [
-            1,
-            2,
-            3,
-            4
-          ]
-        }
-      ],
-      "video_models": [
-        {
-          "id": "omni_1_1_flash",
-          "label": "Omni 1.1 Flash",
-          "credits": 24
-        },
-        {
-          "id": "veo_3_1_lite",
-          "label": "Veo 3.1 - Lite",
-          "credits": 20
-        },
-        {
-          "id": "veo_3_1_fast",
-          "label": "Veo 3.1 - Fast",
-          "credits": 20
-        },
-        {
-          "id": "veo_3_1_quality",
-          "label": "Veo 3.1 - Quality",
-          "credits": 100
-        }
-      ],
-      "video_modes": [
-        "Frames",
-        "Ingredients"
-      ],
-      "video_resolutions": [
-        "360p",
-        "720p"
-      ],
-      "video_durations_seconds": [
-        4,
-        6,
-        8,
-        10
-      ]
+    "craft_ai": {
+      "id": "craft_ai",
+      "label": "storytold/craft-ai-integrations (Configured Scribbles Role)",
+      "command": "scribbles.new | scribbles.image | image.generate"
     }
   },
   "schema": "magic.model3d.catalog.v1",

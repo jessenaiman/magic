@@ -3,30 +3,19 @@
 //! The pure-Rust `eframe` + `egui` desktop shell (`magic`), `magic-cli`, and `magic-cli mcp` share
 //! the same command registry and [`Session::execute`] entry point. Magic coordinates installed
 //! ArtCraft applications (`DesignCraft`, `PhotoCraft`, `VectorCraft`, `EffectCraft`, `FilmCraft`,
-//! and headless `anicraft-cli`) via [`CraftHub`] rather than reimplementing media/compositor
-//! servers in-process.
-//!
-//! # Start here
-//!
-//! - [`Session`] holds the selected `.magic` project, connected assets, and `AutomationRoots`.
-//! - [`command_specs`] and [`CommandSpec`] expose stable command IDs, parameter
-//!   descriptions, enablement, journaling, and long-running metadata.
-//! - [`find_command`] locates a command; [`Session::execute`] checks parameters
-//!   and enablement before dispatching its handler and recording applicable edits.
-//! - [`EngineError`] describes dispatch, validation, I/O, and external-tool failures.
+//! and headless `anicraft-cli`) via [`CraftHub`] and delegates AI/LLM capabilities strictly to
+//! [`storytold/craft-ai-integrations`](https://github.com/storytold/craft-ai-integrations) via [`craft_ai`].
 
 #![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable))]
 
 pub mod activity;
-pub mod agent;
-mod agent_run;
 pub mod animation_model;
 pub mod change_marker;
 pub mod cmd;
 pub mod command_sets;
 pub mod commands;
 pub mod confinement;
-pub mod craft_ai_codex;
+pub mod craft_ai;
 pub mod craft_effects;
 pub mod craft_hub;
 pub mod doc_state;
@@ -34,7 +23,6 @@ pub mod doctor;
 pub mod error;
 pub mod guard;
 pub mod history;
-pub mod image_generation;
 pub mod link_watch;
 pub mod project_lock;
 pub(crate) mod read_only_file;
@@ -60,9 +48,6 @@ pub use session::{Asset, ProjectAsset, Session};
 
 use serde_json::Value;
 
-/// Rejects a parameter whose JSON type differs from the example value in the command's `params`
-/// description (e.g. `"auto_cut": "true"` where the description says `false`). Every caller (CLI,
-/// MCP, desktop shell) goes through `Session::execute`, so a mistyped value fails consistently.
 pub fn check_param_types(description: &str, params: &Value) -> Result<()> {
     let (Ok(Value::Object(expected)), Some(given)) = (serde_json::from_str::<Value>(description), params.as_object()) else {
         return Ok(());

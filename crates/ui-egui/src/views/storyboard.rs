@@ -1,19 +1,22 @@
-//! `Storyboard` view (`#view-storyboard`): 3-pane `DesignCraft` (`storyboard.designcraft`) studio:
-//! 1. Left (`Sections & 2-Up Spreads`, 276px): 2-page spread pairs rendered directly from `storyboard.designcraft` (`preview_png` & slot renders).
-//! 2. Center (`Single Page Canvas`): vertical scroll sheet showing `storyboard.designcraft` spreads, flat slot renders (`storyboard/renders/p{page:02}-{slot}.png`), and linked Craft project files (`.pcraft`, `.ecproj`, `.vectorcraft`, `.svg`, `.fcproj`).
-//! 3. Right (`Requirements & Readiness`, 314px): red/green traffic-light checklist for all required spreads & slots + Slot Inspector.
+//! `Storyboard` view (`#view-storyboard`): 3-pane `DesignCraft` (`storyboard.designcraft`) studio
+//! matching `03-storyboard-3pane-designcraft.jpg`:
+//! 1. Left (`Page Sections (2-up)`, 284px): portrait 2-page spread pairs framed in vertical 35mm filmbars.
+//! 2. Center (`Active Storyboard Spread — storyboard.designcraft`): scrollable DesignCraft page card
+//!    with lyric lines, linked `.pcraft`/`.vectorcraft` image slot, and bottom action bar
+//!    (`[Render Spread] [Sync References] [Open in DesignCraft] [Export PDF]`).
+//! 3. Right (`Requirements & Readiness`, 316px): 3-ring glowing green/red requirement rows with Craft file badges.
 
 use craft_ui::layout::{SplitAxis, SplitSize, split_rect};
 use egui::{
-    Align, Align2, Color32, CornerRadius, FontId, Layout, Pos2, Rect, RichText, ScrollArea, Sense,
-    Stroke, StrokeKind, Ui, Vec2,
+    Align, Align2, CornerRadius, FontId, Layout, Pos2, Rect, RichText, ScrollArea, Sense, Stroke,
+    StrokeKind, Ui, Vec2,
 };
 use serde_json::{Value, json};
 
 use crate::controls::{
     FilmbarOrientation, FilmbarStyle, RequirementRow, ScalarSpec, badge_accent_color, child_pane,
-    fill_card, paint_craft_doc_card, paint_filmbar_frame, paint_local_image, requirement_light_row,
-    ring_slider_h,
+    fill_card, paint_craft_badge, paint_craft_doc_card, paint_filmbar_frame, paint_local_image,
+    requirement_light_row, ring_slider_h,
 };
 use crate::state::{UiAction, ViewCtx, ViewMode};
 use crate::widgets::{BtnSpec, action_button, status_pill, text_input};
@@ -43,22 +46,29 @@ pub fn show(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         draw_missing_designcraft_state(ui, ctx);
         return;
     }
-    if let Some(left_split) = split_rect(body, SplitAxis::Horizontal, SplitSize::FixedFirst(276.0), 8.0, 200.0) {
+
+    let after_left = if ctx.state.show_nav_rail
+        && let Some(left_split) = split_rect(body, SplitAxis::Horizontal, SplitSize::FixedFirst(284.0), 8.0, 220.0)
+    {
         let mut left = child_pane(ui, left_split.first, "sb_left_2up");
         draw_two_up_rail(&mut left, ctx, &spreads);
-        if let Some(right_split) = split_rect(left_split.second, SplitAxis::Horizontal, SplitSize::FixedSecond(314.0), 8.0, 220.0) {
-            let mut center = child_pane(ui, right_split.first, "sb_center_scroll");
-            draw_single_page_scroll(&mut center, ctx, &spreads);
-            let mut right = child_pane(ui, right_split.second, "sb_right_reqs");
-            draw_requirements_panel(&mut right, ctx, &spreads);
-        } else {
-            let mut center = child_pane(ui, left_split.second, "sb_center_scroll");
-            draw_single_page_scroll(&mut center, ctx, &spreads);
-        }
-        let _ = ui.allocate_rect(body, Sense::hover());
+        left_split.second
     } else {
-        draw_single_page_scroll(ui, ctx, &spreads);
+        body
+    };
+
+    if ctx.state.show_right_inspector
+        && let Some(right_split) = split_rect(after_left, SplitAxis::Horizontal, SplitSize::FixedSecond(316.0), 8.0, 220.0)
+    {
+        let mut center = child_pane(ui, right_split.first, "sb_center_scroll");
+        draw_single_page_scroll(&mut center, ctx, &spreads);
+        let mut right = child_pane(ui, right_split.second, "sb_right_reqs");
+        draw_requirements_panel(&mut right, ctx, &spreads);
+    } else {
+        let mut center = child_pane(ui, after_left, "sb_center_scroll");
+        draw_single_page_scroll(&mut center, ctx, &spreads);
     }
+    let _ = ui.allocate_rect(body, Sense::hover());
 }
 
 fn draw_missing_designcraft_state(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
@@ -282,41 +292,43 @@ fn draw_toolbar(ui: &mut Ui, ctx: &mut ViewCtx<'_>, spreads: &[SpreadSummary]) {
 
 fn draw_wizard_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     ctx.pal.card_frame().show(ui, |ui| {
-        ui.label(RichText::new("Main Section Title Pages (`A-Cover`, `B-World`, `C-Character`, `D-Motion`)").strong());
-        ui.horizontal_wrapped(|ui| {
-            ui.label("Style");
-            text_input(ui, ctx.reg, "sb-wiz-style", "D01 Style", &mut ctx.state.storyboard.style_d01, "Visual style…", 160.0);
-            ui.label("World");
-            text_input(ui, ctx.reg, "sb-wiz-world", "L01 World", &mut ctx.state.storyboard.world_l01, "Master location…", 160.0);
-            ui.label("Character");
-            text_input(ui, ctx.reg, "sb-wiz-char", "C01 Character", &mut ctx.state.storyboard.character_c01, "Lead character…", 160.0);
-            ui.label("Motion");
-            text_input(ui, ctx.reg, "sb-wiz-motion", "M01 Motion", &mut ctx.state.storyboard.motion_m01, "Action motion…", 160.0);
-            if action_button(
-                ui,
-                ctx.reg,
-                ctx.pal,
-                BtnSpec::new("storyboard-wizard-apply", "check", "Apply Wizard", "Write title-page prompts").primary(),
-            )
-            .clicked()
-            {
-                let payload = json!({
-                    "style": ctx.state.storyboard.style_d01,
-                    "world": ctx.state.storyboard.world_l01,
-                    "character": ctx.state.storyboard.character_c01,
-                    "motion": ctx.state.storyboard.motion_m01,
-                });
-                ctx.exec("storyboard.wizard", payload, Some("Updated Storyboard Title Pages"));
-            }
+        ui.vertical(|ui| {
+            ui.label(RichText::new("Main Section Title Pages (`A-Cover`, `B-World`, `C-Character`, `D-Motion`)").strong());
+            ui.horizontal_wrapped(|ui| {
+                ui.label("Style");
+                text_input(ui, ctx.reg, "sb-wiz-style", "D01 Style", &mut ctx.state.storyboard.style_d01, "Visual style…", 160.0);
+                ui.label("World");
+                text_input(ui, ctx.reg, "sb-wiz-world", "L01 World", &mut ctx.state.storyboard.world_l01, "Master location…", 160.0);
+                ui.label("Character");
+                text_input(ui, ctx.reg, "sb-wiz-char", "C01 Character", &mut ctx.state.storyboard.character_c01, "Lead character…", 160.0);
+                ui.label("Motion");
+                text_input(ui, ctx.reg, "sb-wiz-motion", "M01 Motion", &mut ctx.state.storyboard.motion_m01, "Action motion…", 160.0);
+                if action_button(
+                    ui,
+                    ctx.reg,
+                    ctx.pal,
+                    BtnSpec::new("storyboard-wizard-apply", "check", "Apply Wizard", "Write title-page prompts").primary(),
+                )
+                .clicked()
+                {
+                    let payload = json!({
+                        "style": ctx.state.storyboard.style_d01,
+                        "world": ctx.state.storyboard.world_l01,
+                        "character": ctx.state.storyboard.character_c01,
+                        "motion": ctx.state.storyboard.motion_m01,
+                    });
+                    ctx.exec("storyboard.wizard", payload, Some("Updated Storyboard Title Pages"));
+                }
+            });
         });
     });
 }
 
-/// Left Pane: 2-page spread pairs (`[01 A-Cover | 02 B-World]`, `[03 C-Character | 04 D-Motion]`, `[05 Scene 1 | 06 Scene 2]`).
+/// Left Pane: portrait 2-up spread pairs matching `03-storyboard-3pane-designcraft.jpg`.
 fn draw_two_up_rail(ui: &mut Ui, ctx: &mut ViewCtx<'_>, spreads: &[SpreadSummary]) {
     let panel = fill_card(ui, ctx.pal, true, |ui| {
         ui.horizontal(|ui| {
-            ui.label(RichText::new("Page Sections (2-Up)").size(12.5).strong());
+            ui.label(RichText::new("Page Sections (2-up)").size(13.0).strong());
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("storyboard-remove-page", "trash", "Remove current page")).clicked() {
                     let page = ctx.state.storyboard.current_page;
@@ -333,14 +345,8 @@ fn draw_two_up_rail(ui: &mut Ui, ctx: &mut ViewCtx<'_>, spreads: &[SpreadSummary
         ScrollArea::vertical().id_salt("sb_2up_scroll").auto_shrink([false, false]).show(ui, |ui| {
             let mut row_idx = 0usize;
             while row_idx < spreads.len() {
-                if row_idx == 0 {
-                    ui.label(RichText::new("MAIN TITLE PAGES").monospace().size(9.5).color(ctx.pal.text_muted));
-                } else if row_idx == 4 {
-                    ui.add_space(6.0);
-                    ui.label(RichText::new("SONG SCENE SPREADS").monospace().size(9.5).color(ctx.pal.text_muted));
-                }
                 ui.horizontal(|ui| {
-                    let pair_w = ((ui.available_width() - 6.0) * 0.5).max(96.0);
+                    let pair_w = ((ui.available_width() - 6.0) * 0.5).max(104.0);
                     draw_mini_spread_card(ui, ctx, &spreads[row_idx], pair_w);
                     if let Some(second) = spreads.get(row_idx + 1) {
                         draw_mini_spread_card(ui, ctx, second, pair_w);
@@ -348,11 +354,11 @@ fn draw_two_up_rail(ui: &mut Ui, ctx: &mut ViewCtx<'_>, spreads: &[SpreadSummary
                         draw_add_spread_tile(ui, ctx, pair_w);
                     }
                 });
-                ui.add_space(5.0);
+                ui.add_space(6.0);
                 row_idx += 2;
             }
             if spreads.len().is_multiple_of(2) {
-                let pair_w = ((ui.available_width() - 6.0) * 0.5).max(96.0);
+                let pair_w = ((ui.available_width() - 6.0) * 0.5).max(104.0);
                 draw_add_spread_tile(ui, ctx, pair_w);
             }
         });
@@ -362,11 +368,29 @@ fn draw_two_up_rail(ui: &mut Ui, ctx: &mut ViewCtx<'_>, spreads: &[SpreadSummary
 
 fn draw_mini_spread_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>, sp: &SpreadSummary, width: f32) {
     let selected = ctx.state.storyboard.current_page == sp.index;
-    let (rect, resp) = ui.allocate_exact_size(Vec2::new(width, 86.0), Sense::click());
+    let (rect, resp) = ui.allocate_exact_size(Vec2::new(width, 168.0), Sense::click());
     if resp.clicked() {
         ctx.state.storyboard.current_page = sp.index;
     }
-    let thumb_rect = Rect::from_min_size(rect.min, Vec2::new(width, 66.0));
+    let border = if selected {
+        Stroke::new(1.4, ctx.pal.accent_emerald)
+    } else {
+        Stroke::new(1.0, ctx.pal.border_subtle)
+    };
+    ui.painter().rect(rect, CornerRadius::same(7), ctx.pal.bg_input, border, StrokeKind::Inside);
+
+    ui.painter().text(
+        Pos2::new(rect.min.x + 6.0, rect.min.y + 11.0),
+        Align2::LEFT_CENTER,
+        format!("P{:02} · {}", sp.index + 1, sp.title),
+        FontId::proportional(10.0),
+        if selected { ctx.pal.text_primary } else { ctx.pal.text_secondary },
+    );
+
+    let thumb_rect = Rect::from_min_max(
+        Pos2::new(rect.min.x + 4.0, rect.min.y + 21.0),
+        Pos2::new(rect.max.x - 4.0, rect.max.y - 18.0),
+    );
     let inner = paint_filmbar_frame(
         ui,
         thumb_rect,
@@ -382,24 +406,21 @@ fn draw_mini_spread_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>, sp: &SpreadSummary,
         paint_craft_doc_card(ui, inner, ctx.pal, "DC", &sp.title, "");
     }
 
-    let dot_col = if sp.filled { ctx.pal.accent_emerald } else { ctx.pal.danger };
-    let label_y = rect.max.y - 9.0;
     ui.painter().text(
-        Pos2::new(rect.min.x + 2.0, label_y),
+        Pos2::new(rect.min.x + 5.0, rect.max.y - 8.5),
         Align2::LEFT_CENTER,
-        format!("{:02} {}", sp.index + 1, sp.title),
-        FontId::proportional(10.0),
-        if selected { ctx.pal.accent_emerald } else { ctx.pal.text_secondary },
+        "storyboard.designcraft",
+        FontId::monospace(8.2),
+        ctx.pal.text_muted,
     );
-    ui.painter().circle_filled(Pos2::new(rect.max.x - 5.0, label_y), 3.5, dot_col);
     ctx.reg.record(format!("sb-nav-{}", sp.index + 1), &sp.title, &resp, None);
 }
 
 fn draw_add_spread_tile(ui: &mut Ui, ctx: &mut ViewCtx<'_>, width: f32) {
-    let (rect, resp) = ui.allocate_exact_size(Vec2::new(width, 66.0), Sense::click());
+    let (rect, resp) = ui.allocate_exact_size(Vec2::new(width, 168.0), Sense::click());
     let stroke_col = if resp.hovered() { ctx.pal.accent_emerald } else { ctx.pal.border };
     ui.painter()
-        .rect(rect, CornerRadius::same(6), ctx.pal.bg_input, Stroke::new(1.0, stroke_col), StrokeKind::Inside);
+        .rect(rect, CornerRadius::same(7), ctx.pal.bg_input, Stroke::new(1.0, stroke_col), StrokeKind::Inside);
     ui.painter()
         .text(rect.center(), Align2::CENTER_CENTER, "+ Add Spread", FontId::proportional(11.0), ctx.pal.text_muted);
     if resp.clicked() {
@@ -409,7 +430,6 @@ fn draw_add_spread_tile(ui: &mut Ui, ctx: &mut ViewCtx<'_>, width: f32) {
     ctx.reg.record("sb-add-tile", "Add Page", &resp, None);
 }
 
-/// Middle Pane: Single page in the middle scrolling smoothly from top to bottom.
 fn draw_single_page_scroll(ui: &mut Ui, ctx: &mut ViewCtx<'_>, spreads: &[SpreadSummary]) {
     let active_idx = ctx.state.storyboard.current_page.min(spreads.len().saturating_sub(1));
     let active = spreads.get(active_idx);
@@ -417,14 +437,10 @@ fn draw_single_page_scroll(ui: &mut Ui, ctx: &mut ViewCtx<'_>, spreads: &[Spread
         ui.horizontal(|ui| {
             let heading = active.map_or_else(
                 || "Active Storyboard Spread — storyboard.designcraft".to_owned(),
-                |sp| format!("storyboard.designcraft — {:02} · {}", sp.index + 1, sp.title),
+                |sp| format!("Active Storyboard Spread — storyboard.designcraft (P{:02} · {})", sp.index + 1, sp.title),
             );
-            ui.label(RichText::new(heading).size(13.5).strong().color(ctx.pal.accent_amber));
+            ui.label(RichText::new(heading).size(13.0).strong().color(ctx.pal.text_primary));
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                let render_id = format!("sb-render-page-{active_idx}");
-                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new(&render_id, "image", "Render Page PNG", "Render this DesignCraft page")).clicked() {
-                    ctx.exec("storyboard.thumbnail", json!({"page": active_idx, "scale": 1.0}), Some("Rendered DesignCraft page PNG"));
-                }
                 if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("sb-next", "chevronRight", "Next page")).clicked()
                     && ctx.state.storyboard.current_page + 1 < spreads.len()
                 {
@@ -445,15 +461,17 @@ fn draw_single_page_scroll(ui: &mut Ui, ctx: &mut ViewCtx<'_>, spreads: &[Spread
         });
         ui.separator();
 
+        let body_h = (ui.available_height() - 38.0).max(160.0);
         ScrollArea::vertical()
             .id_salt("sb_single_page_scroll")
+            .max_height(body_h)
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 for (offset, sp) in spreads.iter().skip(active_idx).take(3).enumerate() {
                     if offset > 0 {
                         ui.add_space(14.0);
                         ui.label(
-                            RichText::new(format!("↓ Continues to {:02} · {}", sp.index + 1, sp.title))
+                            RichText::new(format!("↓ Continues to P{:02} · {}", sp.index + 1, sp.title))
                                 .monospace()
                                 .size(10.5)
                                 .color(ctx.pal.text_muted),
@@ -463,6 +481,52 @@ fn draw_single_page_scroll(ui: &mut Ui, ctx: &mut ViewCtx<'_>, spreads: &[Spread
                     draw_designcraft_spread_sheet(ui, ctx, sp);
                 }
             });
+
+        // Bottom spread action bar (`[Render Spread] [Sync References] [Open in DesignCraft] [Export PDF]`, `03-storyboard-3pane-designcraft.jpg`)
+        ui.separator();
+        ui.horizontal_wrapped(|ui| {
+            if action_button(
+                ui,
+                ctx.reg,
+                ctx.pal,
+                BtnSpec::new("sb-bottom-render", "sparkles", "Render Spread", "Render DesignCraft spread PNG"),
+            )
+            .clicked()
+            {
+                ctx.exec("storyboard.thumbnail", json!({"page": active_idx, "scale": 1.0}), Some("Rendered spread PNG"));
+            }
+            if action_button(
+                ui,
+                ctx.reg,
+                ctx.pal,
+                BtnSpec::new("sb-bottom-sync", "refresh", "Sync References", "Re-check & refresh DesignCraft references"),
+            )
+            .clicked()
+            {
+                ctx.exec("storyboard.check", json!({}), None);
+                ctx.exec("storyboard.pages", json!({"full": true}), Some("Synchronized storyboard references"));
+            }
+            if action_button(
+                ui,
+                ctx.reg,
+                ctx.pal,
+                BtnSpec::new("sb-bottom-open-dc", "external", "Open in DesignCraft", "Open storyboard.designcraft in DesignCraft"),
+            )
+            .clicked()
+            {
+                ctx.exec("storyboard.open", json!({}), Some("Opened DesignCraft"));
+            }
+            if action_button(
+                ui,
+                ctx.reg,
+                ctx.pal,
+                BtnSpec::new("sb-bottom-export-pdf", "download", "Export PDF", "Export storyboard.pdf via DesignCraft"),
+            )
+            .clicked()
+            {
+                ctx.exec("storyboard.export", json!({}), Some("Exported storyboard.pdf"));
+            }
+        });
     });
     ctx.reg.record("sb-single-page", "Single Page Canvas", &panel.response, None);
 }
@@ -473,50 +537,41 @@ fn draw_designcraft_spread_sheet(ui: &mut Ui, ctx: &mut ViewCtx<'_>, sp: &Spread
         .fill(ctx.pal.bg_input)
         .corner_radius(CornerRadius::same(8))
         .inner_margin(egui::Margin::same((14.0 * zoom_scale).round() as i8))
-        .stroke(Stroke::new(1.5, if sp.filled { ctx.pal.accent_emerald } else { ctx.pal.border }))
+        .stroke(Stroke::new(1.4, if sp.filled { ctx.pal.accent_emerald.gamma_multiply(0.75) } else { ctx.pal.border }))
         .show(ui, |ui| {
             ui.set_min_width(ui.available_width());
-            ui.horizontal(|ui| {
-                ui.label(
-                    RichText::new(format!("{:02} · {}", sp.index + 1, sp.title))
-                        .size(15.5 * zoom_scale)
-                        .strong()
-                        .color(ctx.pal.text_primary),
-                );
-                status_pill(
-                    ui,
-                    ctx.pal,
-                    if sp.filled { "Ready" } else { "Needs Content" },
-                    if sp.filled { ctx.pal.accent_emerald } else { ctx.pal.danger },
-                );
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            ui.vertical(|ui| {
+                ui.horizontal(|ui| {
                     ui.label(
-                        RichText::new(format!("DESIGNCRAFT · {}", sp.archetype.to_ascii_uppercase()))
-                            .monospace()
-                            .size(9.5)
-                            .color(ctx.pal.text_muted),
+                        RichText::new(format!("DesignCraft · P{:02} {}", sp.index + 1, sp.title))
+                            .size(14.0 * zoom_scale)
+                            .strong()
+                            .color(ctx.pal.text_primary),
                     );
+                    status_pill(
+                        ui,
+                        ctx.pal,
+                        if sp.filled { "Ready" } else { "Needs Content" },
+                        if sp.filled { ctx.pal.accent_emerald } else { ctx.pal.danger },
+                    );
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        paint_craft_badge(ui, ctx.pal, ".designcraft", true);
+                    });
                 });
-            });
 
-            if let Some(prev_png) = sp.preview_png.as_deref() {
+                if let Some(prev_png) = sp.preview_png.as_deref() {
+                    ui.add_space(6.0);
+                    let pw = ui.available_width().max(200.0);
+                    let ph = (pw * 9.0 / 16.0).clamp(130.0, 250.0);
+                    let (prect, _) = ui.allocate_exact_size(Vec2::new(pw, ph), Sense::hover());
+                    let _ = paint_local_image(ui, prect, Some(prev_png), ctx.pal.bg_stage, 6);
+                }
                 ui.add_space(6.0);
-                let pw = ui.available_width().max(200.0);
-                let ph = (pw * 9.0 / 16.0).clamp(120.0, 240.0);
-                let (prect, _) = ui.allocate_exact_size(Vec2::new(pw, ph), Sense::hover());
-                let _ = paint_local_image(ui, prect, Some(prev_png), ctx.pal.bg_stage, 6);
-                ui.label(
-                    RichText::new(format!("Rendered spread: {}", prev_png.rsplit('/').next().unwrap_or(prev_png)))
-                        .monospace()
-                        .size(9.5)
-                        .color(ctx.pal.text_muted),
-                );
-            }
-            ui.add_space(6.0);
 
-            for slot in &sp.slots {
-                draw_spread_slot_card(ui, ctx, sp.index, slot);
-            }
+                for slot in &sp.slots {
+                    draw_spread_slot_card(ui, ctx, sp.index, slot);
+                }
+            });
         });
 }
 
@@ -543,65 +598,71 @@ fn draw_spread_slot_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>, page_idx: usize, sl
         .stroke(Stroke::new(1.0, if is_empty { ctx.pal.danger } else { ctx.pal.border_subtle }))
         .show(ui, |ui| {
             ui.set_min_width(ui.available_width());
-            ui.horizontal_wrapped(|ui| {
-                ui.label(RichText::new(format!("{key} · {kind}")).size(11.5).strong().color(ctx.pal.text_primary));
-                if let Some(proj) = src_proj {
-                    let fname = proj.rsplit('/').next().unwrap_or(proj);
-                    let ext = fname.rsplit('.').next().unwrap_or("CRAFT");
-                    status_pill(ui, ctx.pal, fname, badge_accent_color(ctx.pal, ext));
-                }
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    let pick_id = format!("sb-slot-pick-{page_idx}-{key}");
-                    if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new(&pick_id, "pen", "Edit", "Load slot into inspector")).clicked() {
-                        ctx.state.storyboard.current_page = page_idx;
-                        ctx.state.storyboard.selected_slot = key.to_owned();
-                        ctx.state.storyboard.slot_value = src_proj.unwrap_or(val).to_owned();
+            ui.vertical(|ui| {
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(RichText::new(format!("{key} · {kind}")).size(11.5).strong().color(ctx.pal.text_primary));
+                    if let Some(proj) = src_proj {
+                        let fname = proj.rsplit('/').next().unwrap_or(proj);
+                        let ext = fname.rsplit('.').next().unwrap_or("CRAFT");
+                        status_pill(ui, ctx.pal, fname, badge_accent_color(ctx.pal, ext));
                     }
-                    if let (Some(proj), Some(app)) = (src_proj, craft_app) {
-                        let open_id = format!("sb-slot-open-{page_idx}-{key}");
-                        let lbl = format!("Open in {app} ↗");
-                        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&open_id, &lbl, "Open source Craft project")).clicked() {
-                            ctx.exec("workspace.open", json!({"app": app, "path": proj}), Some("Opened linked Craft project"));
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        let pick_id = format!("sb-slot-pick-{page_idx}-{key}");
+                        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new(&pick_id, "pen", "Edit", "Load slot into inspector")).clicked() {
+                            ctx.state.storyboard.current_page = page_idx;
+                            ctx.state.storyboard.selected_slot = key.to_owned();
+                            ctx.state.storyboard.slot_value = src_proj.unwrap_or(val).to_owned();
                         }
-                    }
+                        if let (Some(proj), Some(app)) = (src_proj, craft_app) {
+                            let open_id = format!("sb-slot-open-{page_idx}-{key}");
+                            let lbl = format!("Open in {app} ↗");
+                            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&open_id, &lbl, "Open source Craft project")).clicked() {
+                                ctx.exec("workspace.open", json!({"app": app, "path": proj}), Some("Opened linked Craft project"));
+                            }
+                        }
+                    });
                 });
-            });
-            if kind == "image" {
-                let img_w = ui.available_width().max(180.0);
-                let img_h = (img_w * 9.0 / 16.0).clamp(110.0, 210.0);
-                let (irect, _) = ui.allocate_exact_size(Vec2::new(img_w, img_h), Sense::hover());
-                if !paint_local_image(ui, irect, img_path, ctx.pal.bg_stage, 6) {
-                    let hint_file = src_proj.or(img_path).unwrap_or("Assign .pcraft / .ecproj / .vectorcraft / .svg / .fcproj");
-                    paint_craft_doc_card(ui, irect, ctx.pal, "DC", key, hint_file);
+                if kind == "image" {
+                    let img_w = ui.available_width().max(180.0);
+                    let img_h = (img_w * 9.0 / 16.0).clamp(110.0, 210.0);
+                    let (irect, _) = ui.allocate_exact_size(Vec2::new(img_w, img_h), Sense::hover());
+                    if !paint_local_image(ui, irect, img_path, ctx.pal.bg_stage, 6) {
+                        let hint_file = src_proj.or(img_path).unwrap_or("Assign .pcraft / .ecproj / .vectorcraft / .svg / .fcproj");
+                        paint_craft_doc_card(ui, irect, ctx.pal, "DC", key, hint_file);
+                    }
+                } else {
+                    ui.label(
+                        RichText::new(if is_empty {
+                            "Unfilled DesignCraft story slot — click Edit or run Wizard / Bulk Generate"
+                        } else {
+                            val
+                        })
+                        .size(12.5)
+                        .color(if is_empty { ctx.pal.danger } else { ctx.pal.text_primary }),
+                    );
                 }
-            } else {
-                ui.label(
-                    RichText::new(if is_empty {
-                        "Unfilled DesignCraft story slot — click Edit or run Wizard / Bulk Generate"
-                    } else {
-                        val
-                    })
-                    .size(12.5)
-                    .color(if is_empty { ctx.pal.danger } else { ctx.pal.text_primary }),
-                );
-            }
-            let cli_hint = slot["cli_command"]
-                .as_str()
-                .map(str::to_owned)
-                .unwrap_or_else(|| format!("magic-cli storyboard set page={page_idx} label={key}"));
-            ui.label(RichText::new(format!("🔒 {cli_hint}")).monospace().size(9.5).color(ctx.pal.text_muted));
+            });
         });
     ui.add_space(6.0);
 }
 
-/// Right Pane: Navigation panel for all Storyboard requirements showing a red or green light.
+fn craft_ext_for_archetype(arch: &str) -> &'static str {
+    match arch {
+        "cover" => ".designcraft",
+        "world" => ".svg",
+        "char" => ".pcraft",
+        "motion" => ".ecproj",
+        _ => ".fcproj",
+    }
+}
+
 fn draw_requirements_panel(ui: &mut Ui, ctx: &mut ViewCtx<'_>, spreads: &[SpreadSummary]) {
     let filled_total = spreads.iter().filter(|s| s.filled).count();
     let total = spreads.len().max(1);
     let panel = fill_card(ui, ctx.pal, true, |ui| {
         ui.label(RichText::new("Requirements & Readiness").size(13.0).strong());
         ui.label(
-            RichText::new(format!("{filled_total} / {total} DesignCraft spreads filled"))
+            RichText::new(format!("{filled_total} / {total} scene & asset requirements ready"))
                 .size(10.5)
                 .color(ctx.pal.text_muted),
         );
@@ -625,7 +686,7 @@ fn draw_requirements_panel(ui: &mut Ui, ctx: &mut ViewCtx<'_>, spreads: &[Spread
         ScrollArea::vertical().id_salt("sb_reqs_list").max_height(list_h).show(ui, |ui| {
             for sp in spreads {
                 let req_id = format!("sb-req-page-{}", sp.index);
-                let detail = if sp.filled { "Ready" } else { "Missing" };
+                let detail = craft_ext_for_archetype(&sp.archetype);
                 let selected = ctx.state.storyboard.current_page == sp.index;
                 if requirement_light_row(
                     ui,
@@ -633,7 +694,7 @@ fn draw_requirements_panel(ui: &mut Ui, ctx: &mut ViewCtx<'_>, spreads: &[Spread
                     ctx.pal,
                     RequirementRow {
                         id: &req_id,
-                        title: &format!("{:02} · {}", sp.index + 1, sp.title),
+                        title: &format!("P{:02} · {}", sp.index + 1, sp.title),
                         detail,
                         filled: sp.filled,
                         selected,
@@ -660,7 +721,7 @@ fn draw_requirements_panel(ui: &mut Ui, ctx: &mut ViewCtx<'_>, spreads: &[Spread
             ui,
             ctx.reg,
             ctx.pal,
-            ScalarSpec::new("sb-zoom", "Page Zoom", 60.0..=150.0, "%", ctx.pal.accent_sky),
+            ScalarSpec::new("sb-zoom", "Page Zoom", 60.0..=150.0, "%", ctx.pal.accent_emerald),
             &mut ctx.state.storyboard.zoom,
         );
         ui.horizontal(|ui| {

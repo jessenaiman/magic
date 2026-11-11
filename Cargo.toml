@@ -82,7 +82,12 @@ sha2 = "0.10"
 subtle = "2.6"
 thiserror = "2"
 
-# Unified ArtCraft suite patches (`storytold/egui` 0.37 & `storytold/winit` 0.30.13)
+# Unified ArtCraft suite patches (`storytold/egui` 0.37 & `storytold/winit` 0.30.13, matching
+# `storytold/craft-ai-integrations` & `UCS-Care-Group/mailcraft`).
+# `storytold/egui` Fork E2+E3 (`egui-wgpu` on `wgpu 30.0.1`) clamps oversized swapchain surfaces to
+# `max_texture_dimension_2d` and returns `WgpuError::ConfigureSurface` instead of panicking.
+# When adopting custom shader patches from `storytold/wgpu` (`trunk` rev `b672a540043b7177cdd53858340d7aca7ff8eb68`),
+# add `wgpu`, `wgpu-core`, `wgpu-hal`, `wgpu-types`, and `naga` redirects here and run `cargo update -p wgpu`.
 [patch.crates-io]
 ecolor = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
 eframe = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }

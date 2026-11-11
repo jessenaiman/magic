@@ -1,34 +1,15 @@
-# Magic Studio MCP server
+# Magic Studio MCP Server (`magic-cli mcp` / `magic-mcp`)
 
-`magic-cli mcp` (and the companion `magic-mcp` binary) runs a lightweight [Model Context Protocol](https://modelcontextprotocol.io) server on stdio (newline-delimited JSON-RPC 2.0), modeled directly on [VectorCraft](https://github.com/storytold/vectorcraft/blob/main/README.md) and [DesignCraft MCP](https://github.com/storytold/designcraft/blob/main/docs/mcp.md).
+`magic-cli mcp` (and `magic-mcp`) serves the [Model Context Protocol](https://modelcontextprotocol.io) over stdio (JSON-RPC 2.0), matching [FilmCraft MCP](https://github.com/storytold/filmcraft/blob/main/docs/control-protocol.md) (`filmcraft-cli mcp --bridge 127.0.0.1:9876`) and [EffectCraft MCP](https://github.com/storytold/effectcraft/blob/main/docs/mcp.md) (`effectcraft-cli mcp --autosave` / `--bridge 9877`).
 
-Magic Studio is a **lightweight coordinator shell**, not a server-side compositor or timeline clock: `magic-cli mcp` orchestrates `.magic` project files, [DesignCraft](https://github.com/storytold/designcraft) storyboards, [PhotoCraft](https://github.com/storytold/photocraft) cutouts, [VectorCraft](https://github.com/storytold/vectorcraft) SVG traces, [EffectCraft](https://github.com/storytold/effectcraft) `.ecproj` puppet/lyric/motion compositions, and [FilmCraft](https://github.com/storytold/filmcraft) `.fcproj` timelines by invoking their real `<craft>-cli` binaries (and forwarding live `--control` calls when watching the desktop app). When frame-accurate NLE or compositor timing is needed directly, pair `magic-cli mcp` with [FilmCraft MCP](https://github.com/storytold/filmcraft/blob/main/docs/mcp-server.md) and [EffectCraft MCP](https://github.com/storytold/effectcraft/blob/main/docs/mcp-server.md).
-
-It has two backends:
-
-| Mode | How | What works |
+| Mode | Command | What Works |
 |---|---|---|
-| **Remote** | `magic-cli mcp --connect 127.0.0.1:9876` (the desktop app must run with `magic --control 9876`) | Everything. Tool calls are forwarded over the [control protocol](control-protocol.md), so you watch the Magic Studio app update live (`magic-session-changed` emitted after every mutation). |
-| **Headless** | `magic-cli mcp --headless` | An in-process `magic::Session` driving installed `<craft>-cli` binaries. Everything except the UI-only tools (`inspect_ui`, `ui_elements`, `ui_click`, `ui_drag`, `ui_scroll`, `ui_key`, `ui_type`, `screenshot {window:true}`, `ui_control`). |
+| **Remote (`--connect`)** | `magic-cli mcp --connect 127.0.0.1:9875` (with `magic --control 9875`) | Everything — coordinator commands, `$N.field` / `$last.field` batches, live `egui` inspection/input (`inspect_ui`, `ui_elements`, `ui_click`, `screenshot`, `ui_control`), and `bridge_craft` (`:9876` / `:9877`). |
+| **Headless (`--headless`)** | `magic-cli mcp --headless [--project song.magic]` | Full `magic::Session` driving `filmcraft-cli`, `effectcraft-cli`, `designcraft-cli`, `photocraft-cli`, `vectorcraft-cli`, and `anicraft-cli`, plus `bridge_craft` to running sibling Craft windows. |
 
-With no flag, `magic-cli mcp` tries `127.0.0.1:9876` (`MAGIC_CONTROL_PORT`) once when it starts and falls back cleanly to headless. Logs go to stderr; stdout carries only MCP JSON-RPC protocol messages.
+With neither flag, `magic-cli mcp` probes `MAGIC_CONTROL_PORT` (`127.0.0.1:9875`) once and falls back cleanly to headless mode.
 
-## Install and register
-
-```sh
-./install.sh --from-source
-# or CLI + MCP binaries only:
-cargo install --path apps/magic-cli --locked
-export PATH="$HOME/.local/bin:${CARGO_HOME:-$HOME/.cargo}/bin:$PATH"
-
-magic-cli --help
-claude mcp add magic -- magic-cli mcp
-# or pin a mode explicitly:
-claude mcp add magic-headless -- magic-cli mcp --headless
-claude mcp add magic-app -- magic-cli mcp --connect 127.0.0.1:9876
-```
-
-Other MCP clients use the same command in `.mcp.json`:
+## Multi-Server `.mcp.json` Setup (`Magic` + `FilmCraft :9876` + `EffectCraft :9877`)
 
 ```json
 {
@@ -37,73 +18,27 @@ Other MCP clients use the same command in `.mcp.json`:
       "command": "magic-cli",
       "args": ["mcp"]
     },
-    "magic-app": {
-      "command": "magic-cli",
-      "args": ["mcp", "--connect", "127.0.0.1:9876"]
+    "filmcraft": {
+      "command": "filmcraft-cli",
+      "args": ["mcp", "--bridge", "127.0.0.1:9876"]
+    },
+    "effectcraft": {
+      "command": "effectcraft-cli",
+      "args": ["mcp", "--autosave"]
     }
   }
 }
 ```
-
-### Live session (`--control` watching)
-
-Start the desktop app with `--control` **before** the MCP client starts the server:
-
-```sh
-magic --control 9876
-# or from a source checkout:
-cargo run --release -p magic -- --control 9876
-```
-
-With `--connect`, a server that finds no running app stops immediately and prints:
-
-```text
-magic-cli: cannot connect to 127.0.0.1:9876: Connection refused (os error 111)
-```
-
-## Confining file access
-
-```sh
-magic-cli mcp --automation-read-root /work/project --automation-write-root /work/project/out
-```
-
-```json
-{
-  "mcpServers": {
-    "magic": {
-      "command": "magic-cli",
-      "args": [
-        "mcp",
-        "--automation-read-root", "/work/project",
-        "--automation-write-root", "/work/project/out"
-      ]
-    }
-  }
-}
-```
-
-- Every file read (`open_file`, `file.open`, `audio`, `transcript`, `image`, `source_project`, `references`) must resolve inside an `--automation-read-root`, with symlinks rejected.
-- Every file write (`save_file`, `file.new`, `file.save`, `file.saveAs`, `storyboard.export`, `video.export`, `screenshot {path}`) must resolve inside an `--automation-write-root`.
-- Passing `--automation-read-root` or `--automation-write-root` to `magic-cli mcp` implies `--headless` (pass them to `magic --control 9876` to confine a live window).
 
 ## Tools
 
-`magic-cli mcp` exposes a single clean tool set with zero duplicate legacy aliases:
-
-| Tool | Backend | Description |
+| Tool (and ArtCraft Core Alias) | Backend | Description |
 |---|---|---|
-| `list_commands` | Both | List coordinator command IDs, labels, and parameter schemas (`{filter?, enabled_only?}`). |
-| `run_command` | Both | Run one coordinator command (`{command, params?}`). |
-| `run_batch` | Both | Run multiple coordinator commands sequentially (`{steps: [{command, params?}], stop_on_error?}`). |
-| `inspect_document` | Both | Inspect open `.magic` project, storyboard traffic-light readiness, and FilmCraft timeline (`{target?: "all" \| "project" \| "storyboard" \| "timeline"}`). |
-| `open_file` | Both | Open a `.magic` project (`{path}`). |
-| `save_file` | Both | Save the open `.magic` project (`{path?}`; runs `file.save` or `file.saveAs`). |
-| `inspect_ui` | `--connect` | Inspect live desktop view, focus, preview playback, and state. |
-| `ui_elements` | `--connect` | List visible DOM control IDs, labels, enabled state, and bounds (`{prefix?}`). |
-| `ui_click` | `--connect` | Click an element by `id` or window `{x, y}`. |
-| `ui_drag` | `--connect` | Drag between `{id}` or `{x, y}` endpoints. |
-| `ui_scroll` | `--connect` | Scroll an element or point by `{dx, dy}`. |
-| `ui_key` | `--connect` | Send a key or shortcut chord (`Enter`, `Escape`, `Ctrl+K`). |
-| `ui_type` | `--connect` | Type text into the focused element or `{id}`. |
-| `screenshot` | `--connect` (or `window:false` headless) | Capture the live window to PNG (`{path?}`), or render a DesignCraft storyboard spread headlessly with `screenshot {window: false, page: 0}`. |
-| `ui_control` | `--connect` | Invoke live shell methods (`ui.set_view`, `ui.playback`, `ui.focus`, `ui.effectcraft`, `ui.filmcraft`, `app.quit`). |
+| `list_commands` / `command_list` | Both | List coordinator command IDs, labels, and parameter schemas (`{filter?, enabled_only?, compact?}`). |
+| `run_command` / `command_run` | Both | Run one coordinator command (`{command\|id, params?}`). |
+| `run_batch` / `command_batch` | Both | Run sequential steps with `"$N.field"` and `"$last.field"` result interpolation (`{steps, stop_on_error?}`). |
+| `inspect_document` / `doc_inspect` | Both | Inspect `all`, `project`, `storyboard`, `timeline`, `bridge` (`:9876`/`:9877`), `preflight`, or `history`. |
+| `render_preview` | Both | Render a PNG frame for `studio`, `lyrics`, `motion`, `animation`, or `storyboard`. |
+| `bridge_craft` | Both | Launch, focus, check status, or execute commands/methods on `filmcraft` (`:9876`), `effectcraft` (`:9877`), `designcraft` (`:7979`), `photocraft`, or `vectorcraft`. |
+| `open_file` / `save_file` | Both | Open or save `.magic` projects (`file.open`, `file.save`, `file.saveAs`). |
+| `inspect_ui`, `ui_elements`, `ui_click`, `ui_drag`, `ui_scroll`, `ui_key`, `ui_type`, `screenshot`, `ui_control` | `--connect` | Inspect and operate the live `eframe`/`egui` window (`screenshot {window: false}` also renders storyboard spreads headlessly). |

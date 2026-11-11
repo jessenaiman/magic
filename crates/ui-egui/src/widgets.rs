@@ -1,6 +1,6 @@
-//! Shared `craft-ui` workstation controls, icon/label buttons, solid mint mode-tab capsules,
-//! traffic-light pills, and per-frame widget automation-ID registry for `--control` (`ui.elements`,
-//! `ui.click`, `ui.drag`, `ui.scroll`, `ui.focus`, `ui.type`, `ui.set`, and cropped `ui.screenshot`).
+//! Shared `craft-ui` workstation controls, icon/label buttons, stadium mint mode-tab capsules
+//! (`1. App-Bar & Navigation Tokens` in `00-figma-component-system-sheet.jpg`), glowing project
+//! pill button, traffic-light pills, and per-frame widget automation-ID registry for `--control`.
 
 use std::collections::BTreeMap;
 
@@ -243,6 +243,43 @@ pub fn action_button(ui: &mut Ui, reg: &mut AutomationRegistry, pal: &MagicPalet
     resp
 }
 
+/// Stadium project pill button (`[📖 Pterodactyl Song]` in `02-project-craft-files.jpg` and `00-figma-component-system-sheet.jpg`).
+pub fn project_pill_button(
+    ui: &mut Ui,
+    reg: &mut AutomationRegistry,
+    pal: &MagicPalette,
+    id: &str,
+    label: &str,
+    selected: bool,
+    tooltip: &str,
+) -> Response {
+    let font = FontId::proportional(12.5);
+    let galley = ui.painter().layout_no_wrap(label.to_owned(), font.clone(), pal.text_primary);
+    let (rect, resp) = ui.allocate_exact_size(Vec2::new(galley.size().x + 38.0, 28.0), Sense::click());
+    let fill = if selected {
+        pal.accent_emerald_bg
+    } else if resp.hovered() {
+        pal.bg_hover
+    } else {
+        pal.bg_elevated
+    };
+    let stroke = if selected {
+        Stroke::new(1.4, pal.accent_emerald)
+    } else {
+        Stroke::new(1.0, pal.border)
+    };
+    ui.painter()
+        .rect(rect, CornerRadius::same(14), fill, stroke, StrokeKind::Inside);
+    let icon_rect = Rect::from_min_size(Pos2::new(rect.min.x + 10.0, rect.center().y - 7.0), Vec2::splat(14.0));
+    let fg = if selected { pal.text_primary } else { pal.text_secondary };
+    icon_image("book", 14.0, if selected { pal.accent_emerald } else { fg }).paint_at(ui, icon_rect);
+    ui.painter()
+        .text(Pos2::new(icon_rect.max.x + 6.0, rect.center().y), Align2::LEFT_CENTER, label, font, pal.text_primary);
+    let resp = resp.on_hover_text(tooltip);
+    reg.record(id, label, &resp, None);
+    resp
+}
+
 pub fn companion_button(
     ui: &mut Ui,
     reg: &mut AutomationRegistry,
@@ -268,8 +305,8 @@ pub fn companion_button(
     resp
 }
 
-/// Primary `#app-bar` mode tab (`• Storyboard`, `Animations`, `Lyrics`, `Motion`, `Studio`):
-/// active tab renders as a solid `#35E1C0` mint capsule with crisp dark `#061612` label text.
+/// Primary `#app-bar` mode tab (`1. App-Bar & Navigation Tokens` in `00-figma-component-system-sheet.jpg`):
+/// active tab renders as a full stadium pill (`CornerRadius::same(13)`) in solid `#35E1C0` mint with crisp `#061612` ink.
 pub fn mode_tab(
     ui: &mut Ui,
     reg: &mut AutomationRegistry,
@@ -283,8 +320,8 @@ pub fn mode_tab(
     let galley = ui
         .painter()
         .layout_no_wrap(label.to_owned(), font.clone(), pal.text_primary);
-    let extra = if dot_color.is_some() { 12.0 } else { 0.0 };
-    let (rect, _) = ui.allocate_exact_size(Vec2::new(galley.size().x + 22.0 + extra, 26.0), Sense::hover());
+    let extra = if dot_color.is_some() { 11.0 } else { 0.0 };
+    let (rect, _) = ui.allocate_exact_size(Vec2::new(galley.size().x + 24.0 + extra, 26.0), Sense::hover());
     let tab_id = ui.scope_id().with(id);
     let dark_ink = Color32::from_rgb(0x06, 0x16, 0x12);
     let resp = Tab::new(tab_id, label, selected)
@@ -305,15 +342,15 @@ pub fn mode_tab(
                 Stroke::NONE
             };
             ui.painter()
-                .rect(response.rect, CornerRadius::same(7), fill, stroke, StrokeKind::Inside);
-            let mut x = response.rect.min.x + 11.0;
+                .rect(response.rect, CornerRadius::same(13), fill, stroke, StrokeKind::Inside);
+            let mut x = response.rect.min.x + 12.0;
             if let Some(dot) = dot_color {
                 let center = Pos2::new(x + 3.0, response.rect.center().y);
                 if selected {
                     ui.painter().circle_filled(center, 4.4, dark_ink);
                 }
-                ui.painter().circle_filled(center, 3.3, dot);
-                x += 11.0;
+                ui.painter().circle_filled(center, 3.2, dot);
+                x += 10.5;
             }
             let fg = if selected {
                 if pal.dark { dark_ink } else { Color32::WHITE }

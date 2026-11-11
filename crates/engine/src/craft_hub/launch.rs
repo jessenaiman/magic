@@ -7,14 +7,14 @@
 //!   strictly headless CLI/tools-only (`anicraft-cli`), while all live Studio UI views and
 //!   interactive windows run in `EffectCraft` and `FilmCraft` (plus `DesignCraft`, `PhotoCraft`,
 //!   and `VectorCraft`).
-//! - Supplies `--control-token-file` (`photocraft`), `FILMCRAFT_CONTROL_TOKEN` (`filmcraft`), and
-//!   `--automation-read-root` / `--automation-write-root` (`photocraft`, `vectorcraft`).
-//! - Refuses to overwrite unsaved (`dirty == true`) edits when switching documents in an already
-//!   open Craft window.
+//! - Tracks windows spawned by Magic so `workspace.close_opened` (`Close apps opened by Magic`)
+//!   cleanly closes only non-dirty sibling windows Magic launched.
 
+use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
+use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
 use serde_json::{Value, json};
@@ -23,6 +23,57 @@ use super::control;
 use super::discovery::{control_addr, ensure_control_token, require_executable, same_canonical_path, scrubbed_command};
 use super::target::CraftTarget;
 use crate::{EngineError, Result};
+
+fn opened_apps_registry() -> &'static Mutex<BTreeMap<&'static str, u16>> {
+    static OPENED: OnceLock<Mutex<BTreeMap<&'static str, u16>>> = OnceLock::new();
+    OPENED.get_or_init(|| Mutex::new(BTreeMap::new()))
+}
+
+fn record_opened_app(target: CraftTarget, port: u16) {
+    if let Ok(mut map) = opened_apps_registry().lock() {
+        map.insert(target.name(), port);
+    }
+}
+
+/// Gracefully close sibling ArtCraft windows spawned by Magic during this session unless dirty.
+pub fn close_opened_apps() -> Result<Value> {
+    let entries: Vec<(&'static str, u16)> = opened_apps_registry()
+        .lock()
+        .map_or_else(|_| Vec::new(), |map| map.iter().map(|(&k, &v)| (k, v)).collect());
+    let mut closed = Vec::new();
+    let mut skipped_dirty = Vec::new();
+
+    for (name, port) in entries {
+        let Some(target) = CraftTarget::from_name(name) else {
+            continue;
+        };
+        let addr = SocketAddr::from(([127, 0, 0, 1], port));
+        if !control::is_listening(addr) {
+            if let Ok(mut map) = opened_apps_registry().lock() {
+                map.remove(name);
+            }
+            continue;
+        }
+        let (inspect_method, inspect_params) = target.live_inspect_envelope();
+        if let Ok(reply) = control::live_control(target, Some(port), &inspect_method, &inspect_params) {
+            let body = reply.get("result").cloned().unwrap_or(reply);
+            if control::is_doc_dirty(target, &body) {
+                skipped_dirty.push(name);
+                continue;
+            }
+        }
+        let _ = control::live_control(target, Some(port), "app.quit", &json!({"force": false}));
+        if let Ok(mut map) = opened_apps_registry().lock() {
+            map.remove(name);
+        }
+        closed.push(name);
+    }
+    Ok(json!({
+        "ok": true,
+        "closed": closed,
+        "skipped_dirty": skipped_dirty,
+    }))
+}
 
 fn automation_root_for(file: Option<&Path>, workspace_dir: Option<&Path>) -> Option<PathBuf> {
     if let Some(dir) = workspace_dir.filter(|d| d.is_dir()) {
@@ -79,6 +130,7 @@ pub fn open_or_focus(target: CraftTarget, file: Option<&Path>, port_override: Op
     }
 
     spawn_controlled_app(target, port, file, workspace_dir)?;
+    record_opened_app(target, port);
     let ready = wait_for_listener(addr, Duration::from_secs(6));
     receipt["reused"] = json!(false);
     receipt["listening"] = json!(ready);

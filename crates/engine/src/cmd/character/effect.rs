@@ -1,7 +1,6 @@
-//! EffectCraft-native character commands: puppet pins, expressions, keyframes,
-//! time remapping, masks, 3D layers — each one routes a single EffectCraft
-//! engine command ID through `effectcraft`, exactly as `effect.exec` does.
-//! The full command list is discoverable with `effectcraft-cli commands --json`.
+//! EffectCraft-native character commands: puppet pins (`addPin`, `setPin`, `selectPins`,
+//! `movePin`, `removePin`), null limb rigging (`paths.pointsFollowNulls`, `paths.nullsFollowPoints`),
+//! expressions, keyframes, time remapping, masks, and 3D layers.
 
 use serde_json::{Value, json};
 
@@ -19,7 +18,7 @@ fn effect_one(view: &View, project: &std::path::Path, id: &str, params: Value) -
     Ok(out.into_iter().last().unwrap_or(Value::Null))
 }
 
-/// `character.puppet.addPin` — add a Position/Advanced/Bend/Starch/Overlap pin to a layer mesh.
+/// `character.puppet.addPin` — add a Position/Advanced/Bend/Starch/Overlap pin to a layer mesh (`T11`).
 pub fn cmd_puppet_add_pin(s: &mut Session, p: &Value) -> Result<Value> {
     let view = View::from_params(s, p)?;
     let project = view.require("ecproj", "character.rig")?;
@@ -38,6 +37,47 @@ pub fn cmd_puppet_add_pin(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let result = effect_one(&view, &project, "puppet.addPin", params)?;
     Ok(json!({"ok": true, "layer": layer, "kind": kind, "position": [x, y], "result": result}))
+}
+
+/// `character.puppet.setPin` — configure Advanced/Bend/Starch/Overlap pin rotation, scale, stiffness, or inFront (`T11`).
+pub fn cmd_puppet_set_pin(s: &mut Session, p: &Value) -> Result<Value> {
+    let view = View::from_params(s, p)?;
+    let project = view.require("ecproj", "character.rig")?;
+    let layer = p["layer"].as_str().unwrap_or("#1");
+    let pin = p["pin"].as_str().unwrap_or("Puppet Pin 1");
+    let mut params = json!({"layer": layer, "pin": pin});
+    for key in ["rotation", "scale", "stiffness", "extent", "inFront"] {
+        if let Some(val) = p.get(key) {
+            params[key] = val.clone();
+        }
+    }
+    let result = effect_one(&view, &project, "puppet.setPin", params)?;
+    Ok(json!({"ok": true, "layer": layer, "pin": pin, "result": result}))
+}
+
+/// `character.puppet.selectPins` — select one or more puppet pins on a layer (`T11`).
+pub fn cmd_puppet_select_pins(s: &mut Session, p: &Value) -> Result<Value> {
+    let view = View::from_params(s, p)?;
+    let project = view.require("ecproj", "character.rig")?;
+    let layer = p["layer"].as_str().unwrap_or("#1");
+    let pins = p.get("pins").cloned().unwrap_or_else(|| json!(["Puppet Pin 1"]));
+    let result = effect_one(&view, &project, "puppet.selectPins", json!({"layer": layer, "pins": pins}))?;
+    Ok(json!({"ok": true, "layer": layer, "pins": pins, "result": result}))
+}
+
+/// `character.puppet.nullRig` — link Puppet Pins <-> Null layers (`paths.pointsFollowNulls` / `paths.nullsFollowPoints`, `T13`).
+pub fn cmd_puppet_null_rig(s: &mut Session, p: &Value) -> Result<Value> {
+    let view = View::from_params(s, p)?;
+    let project = view.require("ecproj", "character.rig")?;
+    let layer = p["layer"].as_str().unwrap_or("#1");
+    let mode = p["mode"].as_str().unwrap_or("points_follow_nulls");
+    let ec_cmd = if mode == "nulls_follow_points" {
+        "paths.nullsFollowPoints"
+    } else {
+        "paths.pointsFollowNulls"
+    };
+    let result = effect_one(&view, &project, ec_cmd, json!({"layer": layer}))?;
+    Ok(json!({"ok": true, "layer": layer, "command": ec_cmd, "result": result}))
 }
 
 /// `character.puppet.movePin` — move an existing puppet pin.
@@ -137,7 +177,7 @@ pub fn cmd_mask_add(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"ok": true, "layer": layer, "points": pts, "closed": closed, "feather": feather, "result": result}))
 }
 
-/// `character.layer.new3dModel` — add a 3D model layer (.glb/.gltf/.fbx) to the comp.
+/// `character.layer.new3dModel` — add a 3D model layer (.glb/.gltf/.obj/.fbx/.stl) to the comp.
 pub fn cmd_layer_new_3d_model(s: &mut Session, p: &Value) -> Result<Value> {
     let view = View::from_params(s, p)?;
     let project = view.require("ecproj", "character.rig")?;

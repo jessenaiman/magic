@@ -4,8 +4,8 @@
 use super::{cmd_spec, query_spec};
 use crate::commands::{CommandSpec, always};
 use crate::project::{
-    cmd_file_save_as, cmd_project_add_asset, cmd_project_close, cmd_project_import_file, cmd_project_list_assets, cmd_project_load_asset, cmd_project_new,
-    cmd_project_open, cmd_project_remove_asset, cmd_project_save, cmd_project_trunk, cmd_project_update_asset,
+    cmd_file_save_as, cmd_project_add_asset, cmd_project_autosave, cmd_project_close, cmd_project_import_file, cmd_project_list_assets,
+    cmd_project_load_asset, cmd_project_new, cmd_project_open, cmd_project_remove_asset, cmd_project_save, cmd_project_trunk, cmd_project_update_asset,
 };
 use crate::workshop::{
     cmd_audio_analyze, cmd_project_search, cmd_workshop_add, cmd_workshop_approve_draft, cmd_workshop_files, cmd_workshop_import_transcript,
@@ -13,7 +13,7 @@ use crate::workshop::{
 };
 
 pub fn specs() -> Vec<CommandSpec> {
-    let mut out = Vec::with_capacity(50);
+    let mut out = Vec::with_capacity(52);
     out.extend(specs_project());
     out.extend(specs_file());
     out.extend(specs_workshop());
@@ -53,6 +53,7 @@ fn specs_project() -> Vec<CommandSpec> {
         ),
         cmd_spec!("project.open", "Open Project", ["File"], Some("Cmd+O"), "{\"path\":\"folder/name.magic\"}", always, cmd_project_open),
         cmd_spec!("project.save", "Save Project", ["File"], Some("Cmd+S"), "{\"path\":\"optional_save_as.magic\"}", always, cmd_project_save),
+        cmd_spec!("project.autosave", "Write Crash-Recovery Journal (.history/*.autosave)", [], None, "{}", always, cmd_project_autosave),
         cmd_spec!("film.save", "Save Film (FilmCraft)", ["File"], None, "{}", always, crate::cmd::film::cmd_film_save),
         cmd_spec!("effect.save", "Save Lettering (EffectCraft)", ["File"], None, "{}", always, crate::cmd::words::native_motion::cmd_effect_save),
         cmd_spec!("shot.commit", "Save the Animation's Three Documents", ["Animation"], None, "{}", always, crate::cmd::commit::cmd_shot_commit),
@@ -97,7 +98,6 @@ fn specs_project() -> Vec<CommandSpec> {
     ]
 }
 
-/// Canonical ArtCraft `file.*` command namespace (`VectorCraft`, `DesignCraft`, `FilmCraft`, `EffectCraft`).
 fn specs_file() -> Vec<CommandSpec> {
     vec![
         cmd_spec!(
@@ -188,102 +188,18 @@ fn specs_workshop() -> Vec<CommandSpec> {
 
 fn specs_storyboard() -> Vec<CommandSpec> {
     vec![
-        cmd_spec!(
-            "storyboard.open",
-            "Open Storyboard in DesignCraft (--control)",
-            ["Storyboard"],
-            None,
-            "{\"path\":\"optional storyboard.designcraft\"}",
-            always,
-            crate::cmd::storyboard::cmd_storyboard_open
-        ),
-        cmd_spec!(
-            "storyboard.new",
-            "New Storyboard from Master Template (With CLI Sub-Frames)",
-            ["Storyboard"],
-            None,
-            "{\"path\":\"optional storyboard.designcraft\",\"overwrite\":false}",
-            always,
-            crate::cmd::storyboard::cmd_storyboard_new
-        ),
-        query_spec!(
-            "storyboard.pages",
-            "Storyboard Pages, Editable Slots, Exact magic-cli Commands & Source References",
-            "{\"path\":\"optional storyboard.designcraft\",\"page\":\"optional index\",\"label\":\"optional slot\",\"full\":false}",
-            crate::cmd::storyboard::cmd_storyboard_pages
-        ),
-        query_spec!(
-            "storyboard.check",
-            "Traffic-Light Section Readiness (Red / Amber / Green) & Production Gate",
-            "{\"path\":\"optional storyboard.designcraft\"}",
-            crate::cmd::storyboard::cmd_storyboard_check
-        ),
-        cmd_spec!(
-            "storyboard.wizard",
-            "Guided Storyboard Main-Section Setup Wizard (Cover, World, Character, Motion)",
-            ["Storyboard"],
-            None,
-            "{\"title\":\"optional\",\"style\":\"optional\",\"world\":\"optional\",\"character\":\"optional\",\"motion\":\"optional\"}",
-            always,
-            crate::cmd::storyboard::cmd_storyboard_wizard
-        ),
-        cmd_spec!(
-            "storyboard.bulk_generate",
-            "Generate Bulk Reference Images From Completed Main Section Title Pages",
-            ["Storyboard"],
-            None,
-            "{\"provider\":\"optional codex|agy|flow\",\"model\":\"optional\",\"dry_run\":false}",
-            always,
-            crate::cmd::storyboard::cmd_storyboard_bulk_generate
-        ),
-        cmd_spec!(
-            "storyboard.set",
-            "Edit Storyboard Text & Flat Image Overlays (+ Craft Source Project Reference)",
-            ["Storyboard"],
-            None,
-            "{\"page\":0,\"label\":\"optional slot\",\"text\":\"optional text\",\"image\":\"optional image or .ecproj/.pcraft/.vectorcraft\",\"source_project\":\"optional underlying Craft project\",\"fields\":{},\"images\":{},\"refs\":[]}",
-            always,
-            crate::cmd::storyboard::cmd_storyboard_set
-        ),
-        cmd_spec!(
-            "storyboard.add",
-            "Add Storyboard Page From Master Template Archetype",
-            ["Storyboard"],
-            None,
-            "{\"archetype\":\"cover|world|char|motion|scene\",\"at\":0,\"fields\":{},\"images\":{},\"refs\":[]}",
-            always,
-            crate::cmd::storyboard::cmd_storyboard_add
-        ),
+        cmd_spec!("storyboard.open", "Open Storyboard in DesignCraft (--control)", ["Storyboard"], None, "{\"path\":\"optional storyboard.designcraft\"}", always, crate::cmd::storyboard::cmd_storyboard_open),
+        cmd_spec!("storyboard.new", "New Storyboard from Master Template (With CLI Sub-Frames)", ["Storyboard"], None, "{\"path\":\"optional storyboard.designcraft\",\"overwrite\":false}", always, crate::cmd::storyboard::cmd_storyboard_new),
+        query_spec!("storyboard.pages", "Storyboard Pages, Editable Slots, Exact magic-cli Commands & Source References", "{\"path\":\"optional storyboard.designcraft\",\"page\":\"optional index\",\"label\":\"optional slot\",\"full\":false}", crate::cmd::storyboard::cmd_storyboard_pages),
+        query_spec!("storyboard.check", "Traffic-Light Section Readiness (Red / Amber / Green) & Production Gate", "{\"path\":\"optional storyboard.designcraft\"}", crate::cmd::storyboard::cmd_storyboard_check),
+        cmd_spec!("storyboard.wizard", "Guided Storyboard Main-Section Setup Wizard (Cover, World, Character, Motion)", ["Storyboard"], None, "{\"title\":\"optional\",\"style\":\"optional\",\"world\":\"optional\",\"character\":\"optional\",\"motion\":\"optional\"}", always, crate::cmd::storyboard::cmd_storyboard_wizard),
+        cmd_spec!("storyboard.bulk_generate", "Generate Bulk Reference Images From Completed Main Section Title Pages", ["Storyboard"], None, "{\"execute\":false,\"overwrite\":false}", always, crate::cmd::storyboard::cmd_storyboard_bulk_generate),
+        cmd_spec!("storyboard.set", "Edit Storyboard Text & Flat Image Overlays (+ Craft Source Project Reference)", ["Storyboard"], None, "{\"page\":0,\"label\":\"optional slot\",\"text\":\"optional text\",\"image\":\"optional image or .ecproj/.pcraft/.vectorcraft\",\"source_project\":\"optional underlying Craft project\",\"fields\":{},\"images\":{},\"refs\":[]}", always, crate::cmd::storyboard::cmd_storyboard_set),
+        cmd_spec!("storyboard.add", "Add Storyboard Page From Master Template Archetype", ["Storyboard"], None, "{\"archetype\":\"cover|world|char|motion|scene\",\"at\":0,\"fields\":{},\"images\":{},\"refs\":[]}", always, crate::cmd::storyboard::cmd_storyboard_add),
         cmd_spec!("storyboard.remove", "Delete Storyboard Page", ["Storyboard"], None, "{\"page\":6}", always, crate::cmd::storyboard::cmd_storyboard_remove),
-        cmd_spec!(
-            "storyboard.section",
-            "Create or Apply DesignCraft Parent Section",
-            ["Storyboard"],
-            None,
-            "{\"name\":\"E-Scene-Wide\",\"based_on\":\"A-Cover\",\"page\":4,\"pages\":[4,5]}",
-            always,
-            crate::cmd::storyboard::cmd_storyboard_section
-        ),
-        cmd_spec!(
-            "storyboard.locations",
-            "Inspect or Edit Storyboard World / Location Spreads",
-            ["Storyboard"],
-            None,
-            "{\"page\":\"optional world page\",\"fields\":{},\"images\":{}}",
-            always,
-            crate::cmd::storyboard::cmd_storyboard_locations
-        ),
-        query_spec!(
-            "storyboard.thumbnail",
-            "Render Storyboard Spreads to PNG via DesignCraft",
-            "{\"page\":0,\"rail\":true,\"scale\":0.5}",
-            crate::cmd::storyboard::cmd_storyboard_thumbnail
-        ),
-        query_spec!(
-            "storyboard.export",
-            "Export Storyboard to PDF, DeckCraft/PPTX, or PNG Spreads",
-            "{\"pdf\":\"optional path\",\"pptx\":\"optional path\",\"png_dir\":\"optional dir\",\"scale\":1.0}",
-            crate::cmd::storyboard::cmd_storyboard_export
-        ),
+        cmd_spec!("storyboard.section", "Create or Apply DesignCraft Parent Section", ["Storyboard"], None, "{\"name\":\"E-Scene-Wide\",\"based_on\":\"A-Cover\",\"page\":4,\"pages\":[4,5]}", always, crate::cmd::storyboard::cmd_storyboard_section),
+        cmd_spec!("storyboard.locations", "Inspect or Edit Storyboard World / Location Spreads", ["Storyboard"], None, "{\"page\":\"optional world page\",\"fields\":{},\"images\":{}}", always, crate::cmd::storyboard::cmd_storyboard_locations),
+        query_spec!("storyboard.thumbnail", "Render Storyboard Spreads to PNG via DesignCraft", "{\"page\":0,\"rail\":true,\"scale\":0.5}", crate::cmd::storyboard::cmd_storyboard_thumbnail),
+        query_spec!("storyboard.export", "Export Storyboard to PDF, DeckCraft/PPTX, or PNG Spreads", "{\"pdf\":\"optional path\",\"pptx\":\"optional path\",\"png_dir\":\"optional dir\",\"scale\":1.0}", crate::cmd::storyboard::cmd_storyboard_export),
     ]
 }

@@ -1,7 +1,13 @@
 pub mod animation;
+pub mod animation_inspector;
 pub mod home;
 pub mod lyrics;
+pub mod lyrics_inspector;
 pub mod motion;
+pub mod motion_inspector;
 pub mod project;
+pub mod project_bridge;
 pub mod storyboard;
 pub mod studio;
+pub mod studio_audio_titles;
+pub mod studio_finishing;

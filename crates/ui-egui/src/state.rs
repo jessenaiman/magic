@@ -1,5 +1,6 @@
-//! Shared UI state, view routing (with `Gallery` and `Mayhem` removed), draft tracking, and shell
-//! command queue for `magic-ui-egui`.
+//! Shared UI state, view routing (`Home`, `Project`, `Storyboard`, `Animations`, `Lyrics`,
+//! `Motion`, `Studio`), `InterfaceStyle` & `AccentChoice` appearance state, `CachedPayloads`,
+//! dirty-track invalidation, and shell action queue.
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;
@@ -7,7 +8,11 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-use crate::theme::{MagicPalette, ThemeMode};
+pub use crate::state_views::{
+    AiUiState, AnimationViewState, HomeFormState, LyricsViewState, MotionViewState,
+    ProjectViewState, StoryboardViewState, StudioViewState,
+};
+use crate::theme::{AccentChoice, InterfaceStyle, MagicPalette, ThemeMode};
 use crate::widgets::AutomationRegistry;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -26,8 +31,8 @@ pub enum ViewMode {
 }
 
 impl ViewMode {
-    /// Focused 5-stage production tabs in `#app-bar` (`Gallery` & `Mayhem` intentionally removed).
-    pub const STAGE_TABS: [Self; 5] = [
+    pub const STAGE_TABS: [Self; 6] = [
+        Self::Project,
         Self::Storyboard,
         Self::Animation,
         Self::Design,
@@ -71,6 +76,18 @@ impl ViewMode {
         }
     }
 
+    pub fn rail_icon(self) -> &'static str {
+        match self {
+            Self::Home => "home",
+            Self::Project => "folder",
+            Self::Storyboard => "book",
+            Self::Animation => "user",
+            Self::Design => "type",
+            Self::Motion => "sparkles",
+            Self::Studio => "film",
+        }
+    }
+
     pub fn parse(raw: &str) -> Option<Self> {
         match raw.trim().to_ascii_lowercase().as_str() {
             "home" => Some(Self::Home),
@@ -96,6 +113,13 @@ pub enum PickerTarget {
     AddProjectAsset,
     ImportTrunkFile,
     MotionTraceImage,
+    ImportLottie,
+    ImportAep,
+    ImportLut,
+    ImportFcgt,
+    ImportFontDir,
+    ImportWasmPlugin,
+    ImportModel3d,
 }
 
 #[derive(Clone, Debug)]
@@ -115,6 +139,9 @@ pub enum UiAction {
     SnapWindow,
     OpenPreferences,
     OpenDoctor,
+    OpenReportProblem,
+    CopyDiagnostics,
+    OpenUrl(String),
     OpenAbout,
     CloseProject,
     RequestQuit,
@@ -125,286 +152,9 @@ pub enum UiAction {
 pub enum ActiveModal {
     Preferences,
     Doctor,
+    ReportProblem,
     About,
     UnsavedClose,
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct HomeFormState {
-    pub search: String,
-    pub filter: String,
-    pub show_new_form: bool,
-    pub new_name: String,
-    pub new_root: String,
-    pub new_audio: String,
-    pub wizard_style: String,
-    pub wizard_world: String,
-    pub wizard_character: String,
-    pub wizard_motion: String,
-}
-
-#[derive(Clone, Debug)]
-pub struct ProjectViewState {
-    pub search: String,
-    pub type_filter: String,
-    pub sort_by: String,
-    pub group_by_folder: bool,
-    pub selected_asset_id: Option<String>,
-}
-
-impl Default for ProjectViewState {
-    fn default() -> Self {
-        Self {
-            search: String::new(),
-            type_filter: "all".into(),
-            sort_by: "type".into(),
-            group_by_folder: true,
-            selected_asset_id: None,
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct StoryboardViewState {
-    pub current_page: usize,
-    pub zoom: f64,
-    pub show_wizard: bool,
-    pub style_d01: String,
-    pub world_l01: String,
-    pub character_c01: String,
-    pub motion_m01: String,
-    pub selected_slot: String,
-    pub slot_value: String,
-    pub archetype: String,
-}
-
-impl Default for StoryboardViewState {
-    fn default() -> Self {
-        Self {
-            current_page: 0,
-            zoom: 100.0,
-            show_wizard: false,
-            style_d01: String::new(),
-            world_l01: String::new(),
-            character_c01: String::new(),
-            motion_m01: String::new(),
-            selected_slot: "cover_title".into(),
-            slot_value: String::new(),
-            archetype: "scene".into(),
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct LyricsViewState {
-    pub sub_mode: String,
-    pub search: String,
-    pub selected_anim_id: Option<String>,
-    pub selected_word_id: Option<String>,
-    pub scrub_seconds: f64,
-    pub font_size: f64,
-    pub tracking: f64,
-    pub rotate_deg: f64,
-    pub skew_slant_deg: f64,
-    pub skew_axis_deg: f64,
-    pub scale_x: f64,
-    pub scale_y: f64,
-    pub stroke_width: f64,
-    pub glow_radius: f64,
-    pub per_char_3d: bool,
-    pub selected_effect_id: String,
-    pub font_preset: String,
-    pub color_hex: String,
-    pub outline_hex: String,
-    pub teaching_mode: String,
-    pub choreography: String,
-    pub move_preset: String,
-    pub draw_enabled: bool,
-    pub backdrop_mode: String,
-}
-
-impl Default for LyricsViewState {
-    fn default() -> Self {
-        Self {
-            sub_mode: "design".into(),
-            search: String::new(),
-            selected_anim_id: None,
-            selected_word_id: None,
-            scrub_seconds: 0.0,
-            font_size: 56.0,
-            tracking: 0.0,
-            rotate_deg: 0.0,
-            skew_slant_deg: 0.0,
-            skew_axis_deg: 0.0,
-            scale_x: 100.0,
-            scale_y: 100.0,
-            stroke_width: 6.0,
-            glow_radius: 14.0,
-            per_char_3d: false,
-            selected_effect_id: "ec.stylize.glow".into(),
-            font_preset: "Song font".into(),
-            color_hex: "#f0f4fc".into(),
-            outline_hex: "#0e141e".into(),
-            teaching_mode: "sing_along".into(),
-            choreography: "cascade".into(),
-            move_preset: "pop".into(),
-            draw_enabled: false,
-            backdrop_mode: "scene".into(),
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct MotionViewState {
-    pub selected_word_id: Option<String>,
-    pub selected_preset: String,
-    pub selected_effect_id: String,
-    pub cue_name: String,
-    pub start_sec: f64,
-    pub end_sec: f64,
-    pub draw_duration: f64,
-    pub hold_duration: f64,
-    pub pos_x: f64,
-    pub pos_y: f64,
-    pub arc_bend_deg: f64,
-    pub taper_pct: f64,
-    pub width: f64,
-    pub height: f64,
-    pub stroke_width: f64,
-    pub stroke_color: String,
-    pub trace_source: String,
-}
-
-impl Default for MotionViewState {
-    fn default() -> Self {
-        Self {
-            selected_word_id: None,
-            selected_preset: "wave".into(),
-            selected_effect_id: "ec.shape.trim_paths".into(),
-            cue_name: "Flight Arc".into(),
-            start_sec: 0.0,
-            end_sec: 2.05,
-            draw_duration: 0.85,
-            hold_duration: 1.2,
-            pos_x: 420.0,
-            pos_y: 280.0,
-            arc_bend_deg: 22.0,
-            taper_pct: 65.0,
-            width: 320.0,
-            height: 180.0,
-            stroke_width: 8.0,
-            stroke_color: "#35e1c0".into(),
-            trace_source: String::new(),
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct AnimationViewState {
-    pub style_tab: String,
-    pub dock_tab: String,
-    pub selected_action: String,
-    pub action_name_input: String,
-    pub action_duration: f64,
-    pub loop_clip: bool,
-    pub scrub_seconds: f64,
-    pub show_grid: bool,
-    pub show_marks: bool,
-    pub show_path_hud: bool,
-    pub bone_rotation: f64,
-    pub jaw_open_deg: f64,
-    pub wing_bank_deg: f64,
-    pub lip_intensity: f64,
-    pub follow_delay: f64,
-    pub bone_scale: f64,
-    pub bone_opacity: f64,
-    pub path_x: f64,
-    pub path_y: f64,
-    pub travel_duration: f64,
-    pub start_size_pct: f64,
-    pub end_size_pct: f64,
-    pub pivot_x: f64,
-    pub pivot_y: f64,
-    pub place_start_sec: f64,
-    pub place_duration_sec: f64,
-    pub selected_part: String,
-    pub expression: String,
-    pub viseme: String,
-}
-
-impl Default for AnimationViewState {
-    fn default() -> Self {
-        Self {
-            style_tab: "cutout-2-5d".into(),
-            dock_tab: "theatre".into(),
-            selected_action: "idle".into(),
-            action_name_input: "sing".into(),
-            action_duration: 2.0,
-            loop_clip: true,
-            scrub_seconds: 0.0,
-            show_grid: true,
-            show_marks: true,
-            show_path_hud: true,
-            bone_rotation: -6.0,
-            jaw_open_deg: 18.0,
-            wing_bank_deg: 12.0,
-            lip_intensity: 100.0,
-            follow_delay: 0.07,
-            bone_scale: 100.0,
-            bone_opacity: 100.0,
-            path_x: 260.0,
-            path_y: 310.0,
-            travel_duration: 2.5,
-            start_size_pct: 100.0,
-            end_size_pct: 82.0,
-            pivot_x: 0.5,
-            pivot_y: 0.5,
-            place_start_sec: 0.0,
-            place_duration_sec: 3.0,
-            selected_part: "head".into(),
-            expression: "happy".into(),
-            viseme: "OH".into(),
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct StudioViewState {
-    pub selected_scene: usize,
-    pub seek_seconds: f64,
-    pub zoom_pct: f64,
-    pub volume: f64,
-    pub show_export_settings: bool,
-    pub export_format: String,
-    pub export_scale: f64,
-    pub export_quality: f64,
-    pub burn_captions: bool,
-    pub allow_offline: bool,
-    pub gpu_rendering: bool,
-    pub queue_export: bool,
-    pub range_start: f64,
-    pub range_end: f64,
-}
-
-impl Default for StudioViewState {
-    fn default() -> Self {
-        Self {
-            selected_scene: 0,
-            seek_seconds: 0.0,
-            zoom_pct: 100.0,
-            volume: 100.0,
-            show_export_settings: false,
-            export_format: "h264".into(),
-            export_scale: 1.0,
-            export_quality: 85.0,
-            burn_captions: false,
-            allow_offline: false,
-            gpu_rendering: true,
-            queue_export: false,
-            range_start: 0.0,
-            range_end: 10.0,
-        }
-    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -424,6 +174,13 @@ pub struct CachedPayloads {
     pub timeline: Value,
     pub film_status: Value,
     pub doctor: Value,
+    pub ai_status: Value,
+    pub bridge_status: Value,
+    pub bridge_preflight: Value,
+    pub bridge_history: Value,
+    pub ec_comps: Value,
+    pub lottie_last: Value,
+    pub aep_report: Value,
     pub last_words_frame: Option<String>,
     pub last_motion_frame: Option<String>,
     pub last_character_frame: Option<String>,
@@ -431,29 +188,44 @@ pub struct CachedPayloads {
     pub last_storyboard_thumb: Option<String>,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct UiShellState {
     pub view: ViewMode,
     pub theme_mode: ThemeMode,
+    pub interface_style: InterfaceStyle,
+    pub accent_choice: AccentChoice,
+    pub high_contrast: bool,
+    pub ui_scale_pct: u16,
+    pub autosave_enabled: bool,
+    pub autosave_minutes: f64,
     pub focused_panel: String,
     pub project_path: Option<PathBuf>,
     pub selected_character_id: Option<String>,
+    pub ribbon_collapsed: bool,
+    pub show_nav_rail: bool,
+    pub show_bottom_dock: bool,
+    pub show_right_inspector: bool,
     pub assets_drawer_open: bool,
     pub assets_drawer_pinned: bool,
     pub assets_drawer_tab: String,
+    pub global_search: String,
+    pub command_search: String,
+    pub update_banner_dismissed: bool,
     pub fidget_open: bool,
-    pub fidget_agent: String,
     pub fidget_prompt: String,
+    pub history_popup_open: bool,
     pub active_modal: Option<ActiveModal>,
     pub busy: bool,
     pub saving: bool,
     pub dirty_drafts: BTreeSet<String>,
+    pub dirty_tracks: BTreeSet<String>,
     pub toast_message: String,
     pub toast_until: f64,
     pub audio_playing: bool,
     pub audio_time_sec: f64,
     pub audio_duration_sec: f64,
     pub window_snapped_right: bool,
+    pub ai: AiUiState,
     pub home: HomeFormState,
     pub project: ProjectViewState,
     pub storyboard: StoryboardViewState,
@@ -462,6 +234,57 @@ pub struct UiShellState {
     pub animation: AnimationViewState,
     pub studio: StudioViewState,
     pub cache: CachedPayloads,
+}
+
+impl Default for UiShellState {
+    fn default() -> Self {
+        Self {
+            view: ViewMode::Home,
+            theme_mode: ThemeMode::Dark,
+            interface_style: InterfaceStyle::Aurora,
+            accent_choice: AccentChoice::Teal,
+            high_contrast: false,
+            ui_scale_pct: 100,
+            autosave_enabled: true,
+            autosave_minutes: 5.0,
+            focused_panel: String::new(),
+            project_path: None,
+            selected_character_id: None,
+            ribbon_collapsed: false,
+            show_nav_rail: true,
+            show_bottom_dock: true,
+            show_right_inspector: true,
+            assets_drawer_open: false,
+            assets_drawer_pinned: false,
+            assets_drawer_tab: "characters".into(),
+            global_search: String::new(),
+            command_search: String::new(),
+            update_banner_dismissed: false,
+            fidget_open: false,
+            fidget_prompt: String::new(),
+            history_popup_open: false,
+            active_modal: None,
+            busy: false,
+            saving: false,
+            dirty_drafts: BTreeSet::new(),
+            dirty_tracks: BTreeSet::new(),
+            toast_message: String::new(),
+            toast_until: 0.0,
+            audio_playing: false,
+            audio_time_sec: 0.0,
+            audio_duration_sec: 0.0,
+            window_snapped_right: false,
+            ai: AiUiState::default(),
+            home: HomeFormState::default(),
+            project: ProjectViewState::default(),
+            storyboard: StoryboardViewState::default(),
+            lyrics: LyricsViewState::default(),
+            motion: MotionViewState::default(),
+            animation: AnimationViewState::default(),
+            studio: StudioViewState::default(),
+            cache: CachedPayloads::default(),
+        }
+    }
 }
 
 impl UiShellState {
@@ -490,10 +313,7 @@ impl UiShellState {
         self.project_path
             .as_ref()
             .and_then(|p| p.file_stem())
-            .map_or_else(
-                || "No project".into(),
-                |s| prettify_slug(&s.to_string_lossy()),
-            )
+            .map_or_else(|| "No project".into(), |s| prettify_slug(&s.to_string_lossy()))
     }
 
     pub fn song_audio_path(&self) -> Option<String> {
@@ -510,10 +330,12 @@ impl UiShellState {
 
     pub fn drafts_report(&self) -> Value {
         let drafts: Vec<&str> = self.dirty_drafts.iter().map(String::as_str).collect();
+        let dirty_tracks: Vec<&str> = self.dirty_tracks.iter().map(String::as_str).collect();
         json!({
             "dirty": !drafts.is_empty(),
             "saving": self.saving,
             "drafts": drafts,
+            "dirty_tracks": dirty_tracks,
         })
     }
 

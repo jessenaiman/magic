@@ -1,9 +1,22 @@
 //! The film as `FilmCraft` holds it: `film/<song>.fcproj` (built by `video.assemble`), receiving
 //! independent `EffectCraft` track renders (`Character Animation` on V2, `Kinetic Lyrics` on V3,
-//! and `Action Motion` on V4), half-size Studio previews, program frames, exports, and live `--control`.
+//! and `Action Motion` on V4), dynamic-linked `.ecproj` compositions (`linked_comp`), cross-app
+//! interchange/Lottie/template/caption bridges (`bridge`), Studio finishing (`finishing`),
+//! half-size Studio previews, program frames, exports, and live `--control`.
 
 pub mod assembly;
+pub mod bridge;
+pub mod finishing;
+pub mod linked_comp;
 pub mod markers;
+pub use bridge::{
+    cmd_bridge_control, cmd_bridge_history, cmd_bridge_preflight, cmd_bridge_status, cmd_bridge_templates,
+    cmd_effect_import_aep, cmd_effect_lottie, cmd_words_captions_sync,
+};
+pub use finishing::cmd_video_finish;
+pub use linked_comp::{
+    cmd_video_bake_link, cmd_video_link_effectcraft, cmd_video_list_ec_comps, cmd_video_sync_links,
+};
 pub use markers::cmd_video_markers;
 
 use std::path::{Path, PathBuf};
@@ -29,7 +42,11 @@ struct Film {
 
 fn film(s: &Session) -> Result<Film> {
     let dir = crate::workshop::project_dir(s)?;
-    let name = s.project_path.as_ref().and_then(|p| p.file_stem()).map_or("Film".into(), |n| n.to_string_lossy().into_owned());
+    let name = s
+        .project_path
+        .as_ref()
+        .and_then(|p| p.file_stem())
+        .map_or("Film".into(), |n| n.to_string_lossy().into_owned());
     let project = s
         .video_project_path
         .clone()
@@ -48,7 +65,11 @@ pub(crate) fn link(s: &mut Session, project: &Path) -> Result<()> {
 
 impl Film {
     fn require(&self) -> Result<&Path> {
-        if self.project.is_file() { Ok(&self.project) } else { Err(bad("No film timeline yet; run video.assemble first")) }
+        if self.project.is_file() {
+            Ok(&self.project)
+        } else {
+            Err(bad("No film timeline yet; run video.assemble first"))
+        }
     }
     fn preview(&self) -> PathBuf {
         self.dir.join("film").join(format!("{}-preview.mp4", self.name))
@@ -59,8 +80,11 @@ impl Film {
 }
 
 fn file_info(path: &Path) -> Value {
-    let modified =
-        std::fs::metadata(path).and_then(|m| m.modified()).ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_millis() as u64);
+    let modified = std::fs::metadata(path)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_millis() as u64);
     json!({"path": path, "exists": path.is_file(), "modified": modified})
 }
 
@@ -86,7 +110,8 @@ fn discover_film_craft_outputs(dir: &Path, fcproj: &Path) -> Value {
     let mut v1_frames = collect_pngs_sorted(&dir.join("storyboard/renders"), 1);
     v1_frames.extend(collect_pngs_sorted(&dir.join("storyboard/.preview"), 1));
     v1_frames.extend(collect_pngs_sorted(&dir.join("assets/backgrounds"), 1));
-    let mut v2_frames = collect_pngs_sorted(&dir.join("assets/characters"), 3);
+    let mut v2_frames = collect_pngs_sorted(&dir.join("film/.linked-cache"), 0);
+    v2_frames.extend(collect_pngs_sorted(&dir.join("assets/characters"), 3));
     v2_frames.retain(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("png")));
     let v3_frames = collect_pngs_sorted(&dir.join("lettering/.preview"), 0);
     let mut v4_frames = collect_pngs_sorted(&dir.join("motion/.preview"), 0);
@@ -94,11 +119,13 @@ fn discover_film_craft_outputs(dir: &Path, fcproj: &Path) -> Value {
     let storyboard_doc = dir.join("storyboard.designcraft");
     let lyrics_ecproj = dir.join("lettering/lyrics.ecproj");
     let motion_ecproj = dir.join("motion/actions.ecproj");
+    let linked_comps = linked_comp::inspect_linked_comps(dir);
     json!({
         "fcproj": file_info(fcproj),
         "storyboard_designcraft": file_info(&storyboard_doc),
         "lyrics_ecproj": file_info(&lyrics_ecproj),
         "motion_ecproj": file_info(&motion_ecproj),
+        "linked_compositions": linked_comps,
         "program_frames": program_frames,
         "v1_frames": v1_frames,
         "v2_frames": v2_frames,
@@ -119,8 +146,18 @@ pub(crate) fn run_steps(project: Option<&Path>, fresh: bool, save: bool, steps: 
     crate::CraftHub::run_film_steps(project, fresh, save, steps)
 }
 
-/// Publish any `EffectCraft` ProRes 4444 alpha track render (`Character Animation`, `Kinetic Lyrics`,
-/// or `Action Motion`) onto its dedicated `FilmCraft` track.
+pub(crate) fn replace_item_footage(project: &Path, item: u64, movie: &Path) -> Result<Value> {
+    let params = json!({"item": item, "path": movie});
+    if let Some(live_res) = crate::CraftHub::try_live(crate::CraftTarget::Film, project, "media.replaceFootage", &params, true) {
+        return live_res;
+    }
+    let _lock = crate::project_lock::for_project(project);
+    run_steps(Some(project), false, true, &[json!({"id": "media.replaceFootage", "params": params})])?
+        .into_iter()
+        .next()
+        .ok_or_else(|| EngineError::ExternalTool("filmcraft-cli".into(), "media.replaceFootage: no result".into()))
+}
+
 pub(crate) fn publish_effect_track(s: &Session, track_name: &str, movie: &Path) -> Result<Value> {
     let project = film_path(s)?;
     if let Some(live_result) = publish_track_live(&project, movie, track_name) {
@@ -240,6 +277,8 @@ fn export_params(output: &Path, draft: bool, options: &Value) -> Value {
             "preset",
             "settings",
             "format",
+            "container",
+            "hdrTransfer",
             "audioCodec",
             "flacLevel",
             "width",
@@ -266,8 +305,10 @@ fn export_params(output: &Path, draft: bool, options: &Value) -> Value {
             "bitrateMode",
             "crf",
             "alpha",
+            "sdr",
             "exrCompression",
             "sequence",
+            "fastStartMoov",
         ] {
             if let Some(val) = src.get(key).filter(|v| !v.is_null() || matches!(key, "captionSidecar" | "preset")) {
                 dst.insert(key.into(), if key == "captionSidecar" && val.is_null() { json!("none") } else { val.clone() });
@@ -334,18 +375,23 @@ fn export_destination(f: &Film, p: &Value) -> (PathBuf, Value) {
         .unwrap_or_else(|| "h264".into());
     let ext = match format.as_str() {
         "prores" | "dnxhr" | "apv" | "mjpeg" => "mov",
-        "mxf-op1a" | "mxf-opatom" => "mxf",
+        "mxf-op1a" | "mxf-opatom" | "mxf" => "mxf",
         "png" => "png",
         "tiff" => "tiff",
+        "exr" => "exr",
+        "dpx" => "dpx",
+        "tga" => "tga",
         "bmp" => "bmp",
         "gif" => "gif",
+        "apng" => "apng",
         "wav" => "wav",
         "aiff" => "aiff",
         "flac" => "flac",
-        "aac" => "aac",
+        "aac" => "m4a",
         "mp3" => "mp3",
-        "webm" => "webm",
-        _ => "mp4",
+        "opus" => "opus",
+        "webm" | "vp9" | "av1" => "webm",
+        _ => p["container"].as_str().filter(|c| !c.is_empty()).unwrap_or("mp4"),
     };
     let out = p["path"]
         .as_str()
@@ -483,6 +529,7 @@ fn track_rows(tracks: &Value, kind: &str, media: &Value) -> Vec<Value> {
                 .flatten()
                 .map(|c| {
                     let source = media.as_array().into_iter().flatten().find(|source| source["item"].as_u64().is_some() && source["item"] == c["item"]);
+                    let offline = source.and_then(|s| s["status"].as_str()) == Some("offline");
                     json!({
                         "clip": c.get("clip").or_else(|| c.get("id")).cloned().unwrap_or(Value::Null),
                         "item": c.get("item").cloned().unwrap_or(Value::Null),
@@ -495,6 +542,7 @@ fn track_rows(tracks: &Value, kind: &str, media: &Value) -> Vec<Value> {
                         "source_out_tick": raw_tick(&c["sourceOut"]),
                         "source_path": source.and_then(|source| source["path"].as_str()),
                         "source_status": source.and_then(|source| source["status"].as_str()),
+                        "offline": offline,
                         "label": c.get("label").cloned().unwrap_or(Value::Null),
                         "enabled": c.get("enabled").cloned().unwrap_or(json!(true)),
                     })
@@ -512,7 +560,18 @@ fn track_rows(tracks: &Value, kind: &str, media: &Value) -> Vec<Value> {
             } else {
                 crate::cmd::film::assembly::track_role(&label)
             };
-            json!({"id": t["id"], "label": label, "name": name, "kind": kind, "role": role, "enabled": t["enabled"], "clips": clips})
+            json!({
+                "id": t["id"],
+                "label": label,
+                "name": name,
+                "kind": kind,
+                "role": role,
+                "enabled": t["enabled"],
+                "muted": t.get("muted").cloned().unwrap_or(json!(false)),
+                "solo": t.get("solo").cloned().unwrap_or(json!(false)),
+                "syncLock": t.get("syncLock").cloned().unwrap_or(json!(true)),
+                "clips": clips,
+            })
         })
         .collect()
 }

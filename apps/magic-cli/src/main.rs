@@ -1,23 +1,31 @@
 //! `magic-cli`: headless CLI and MCP server over `magic::Session` and live `--control`
-//! (`magic --control 9876`), following the ArtCraft suite (`VectorCraft`, `DesignCraft`,
-//! `EffectCraft`, `FilmCraft`).
+//! (`magic --control 9875`), plus sibling bridges to `FilmCraft` (`:9876` +
+//! `FILMCRAFT_CONTROL_TOKEN`) and `EffectCraft` (`:9877` + `mcp --autosave`).
 
 #![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable))]
+
+mod subcommands;
 
 use std::io::{BufRead, Write};
 
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use serde_json::{Value, json};
+use subcommands::{
+    BridgeCmd, CaptionsArgs, ControlsArgs, ExportArgs, FinishArgs, ImportAepArgs, InterchangeArgs,
+    LottieArgs, MarkersArgs,
+};
 
 const AFTER_HELP: &str = "\
-CREATE: magic-cli new --audio song.wav --name \"My Song\" [--wizard]
-BOARD:  magic-cli storyboard check | magic-cli storyboard pages page=0 | magic-cli storyboard bulk_generate
-FIND:   magic-cli commands [filter], then magic-cli describe <id>
-MCP:    magic-cli mcp [--connect 127.0.0.1:9876 | --headless]
-LIVE:   magic --control 9876, then magic-cli --connect 127.0.0.1:9876 ui inspect";
+CREATE:   magic-cli new --audio song.wav --name \"My Song\" [--wizard]
+CONTROLS: magic-cli controls [filter] [--stage studio] [--live]
+BRIDGE:   magic-cli bridge status | preflight | sync | link <p.ecproj> | fc <cmd> | ec <cmd>
+FINISH:   magic-cli finish <op> [key=val ...] | magic-cli export [out.mp4] --codec prores
+INTEROP:  magic-cli interchange export --format otio | magic-cli lottie export | magic-cli import-aep in.aep
+MCP:      magic-cli mcp [--connect 127.0.0.1:9875 | --headless]
+LIVE:     magic --control 9875, then magic-cli --connect 127.0.0.1:9875 ui inspect";
 
 #[derive(Parser)]
-#[command(name = "magic-cli", about = "Drive Magic Studio through its Rust engine or a live `magic --control` window", after_help = AFTER_HELP)]
+#[command(name = "magic-cli", about = "Drive Magic Studio, FilmCraft (:9876), and EffectCraft (:9877) headlessly or over live `--control`", after_help = AFTER_HELP)]
 pub struct Cli {
     /// Open this `.magic` project first (headless)
     #[arg(long, global = true)]
@@ -28,9 +36,18 @@ pub struct Cli {
     /// Save the project to this path when done
     #[arg(long, global = true)]
     pub save_as: Option<String>,
-    /// Connect to a running `magic --control <PORT>` window (`127.0.0.1:9876` or `9876`)
-    #[arg(long, visible_alias = "bridge", global = true)]
+    /// Connect to a running `magic --control <PORT>` window (`127.0.0.1:9875` or `9875`)
+    #[arg(long, visible_aliases = ["bridge", "control"], global = true)]
     pub connect: Option<String>,
+    /// Override FilmCraft `--control` port (`FILMCRAFT_CONTROL_PORT`, default `9876`)
+    #[arg(long, global = true)]
+    pub filmcraft_port: Option<u16>,
+    /// Override EffectCraft `--control` port (`EFFECTCRAFT_CONTROL_PORT`, default `9877`)
+    #[arg(long, global = true)]
+    pub effectcraft_port: Option<u16>,
+    /// Extra font directories forwarded as `EFFECTCRAFT_FONT_DIRS`
+    #[arg(long, global = true)]
+    pub font_dirs: Option<String>,
     /// Preview mutations without applying them
     #[arg(long, global = true)]
     pub dry_run: bool,
@@ -55,56 +72,62 @@ pub struct Cli {
 
 #[derive(Args)]
 struct NewArgs {
-    /// Destination `.magic` path (or omit and pass `--root` + `--name`)
     #[arg(long)]
     path: Option<String>,
-    /// Parent folder when creating `<root>/<slug>/<name>.magic`
     #[arg(long)]
     root: Option<String>,
-    /// Project name / title
     #[arg(long)]
     name: Option<String>,
-    /// Required song audio file to transcribe and sync onto the FilmCraft lyric track
     #[arg(long)]
     audio: Option<String>,
-    /// Optional pre-existing timed transcript JSON
     #[arg(long)]
     transcript: Option<String>,
-    /// Optional interactive or parameter-driven Storyboard setup wizard
     #[arg(long)]
     wizard: bool,
-    /// Optional D01 overall visual style for `A-Cover`
     #[arg(long)]
     style: Option<String>,
-    /// Optional L01 world / location prompt for `B-World`
     #[arg(long)]
     world: Option<String>,
-    /// Optional C01 lead character prompt for `C-Character`
     #[arg(long)]
     character: Option<String>,
-    /// Optional M01 song-action motion drawing spec for `D-Motion`
     #[arg(long)]
     motion: Option<String>,
-    /// Project mode (`project` or `animation`)
     #[arg(long)]
     mode: Option<String>,
-    /// Overwrite an existing `.magic` project
     #[arg(long)]
     overwrite: bool,
-    /// Additional `key=value` parameters
     arguments: Vec<String>,
 }
 
 #[derive(Subcommand)]
 enum Cmd {
-    /// Create a new song project: requires `--audio` to transcribe timestamps, sync FilmCraft lyrics, and initialize `storyboard.designcraft`
+    /// Create a new song project (`--audio` transcribes timestamps, syncs FilmCraft lyrics, and initializes `storyboard.designcraft`)
     New(NewArgs),
-    /// List engine commands (id and label; `describe` shows one in full)
+    /// List engine commands (`id` and `label`; `describe` shows one in full)
     Commands { filter: Option<String> },
+    /// List all `--control` RPC methods, ports (`:9875`, `:9876`, `:9877`), and stage commands
+    Controls(ControlsArgs),
     /// Describe one command as JSON
     Describe { id: String },
-    /// Inspect project, storyboard, or timeline state as JSON
+    /// Inspect project, storyboard, timeline, bridge (`:9876`/`:9877`), preflight, history, or doctor state as JSON
     Inspect { target: Option<String> },
+    /// Cross-app `FilmCraft` (`:9876`) × `EffectCraft` (`:9877`) Dynamic Link, preflight, history, templates, and `--control` bridge
+    #[command(subcommand)]
+    Bridge(BridgeCmd),
+    /// Bidirectional `OTIO` / `FCPXML` / `XML` / `EDL` / `AAF` / `OMF` / `ALE` sequence interchange (`T03`)
+    Interchange(InterchangeArgs),
+    /// Two-way Lottie (`.json`) and dotLottie (`.lottie`) export & import (`T04`)
+    Lottie(LottieArgs),
+    /// Clean-room After Effects `.aep` / `.aepx` import with dry-run loss preview (`T05`)
+    ImportAep(ImportAepArgs),
+    /// Execute a FilmCraft Studio finishing operation (`T32`–`T42`: edit, trim, color, FX, audio, mixer, titles)
+    Finish(FinishArgs),
+    /// Export master film via FilmCraft's pure-Rust codecs (`H.264`, `HEVC`, `ProRes`, `DNxHR`, `APV`, `AV1`, `MXF`, `EXR`, `Opus`) (`T42`)
+    Export(ExportArgs),
+    /// Bidirectional `V3` Lyrics ↔ `C1` FilmCraft broadcast captions (`Subtitle`, `CEA-608`, `CEA-708`, `Teletext`) (`T26`)
+    Captions(CaptionsArgs),
+    /// Manage timeline markers, 64-swatch custom colors, and 15-column review CSV export (`T35`)
+    Markers(MarkersArgs),
     /// Run one command (`exec <id> [key=value ...]` or `--params '<json>'`)
     Exec {
         command: String,
@@ -116,14 +139,16 @@ enum Cmd {
     Run {
         #[arg(default_value = "-")]
         file: String,
+        /// Continue executing subsequent lines when a command fails
+        #[arg(long)]
+        keep_going: bool,
     },
-    /// Run the Model Context Protocol server on stdio (Remote `--connect 127.0.0.1:9876` or `--headless`)
+    /// Run the Model Context Protocol server on stdio (`--connect 127.0.0.1:9875` or `--headless`)
     Mcp {
-        /// Run an in-process engine session without probing `127.0.0.1:9876`
         #[arg(long)]
         headless: bool,
     },
-    /// Control a live desktop window through `--connect 127.0.0.1:9876`
+    /// Control a live desktop window through `--connect 127.0.0.1:9875`
     Ui {
         action: String,
         target: Option<String>,
@@ -135,7 +160,7 @@ enum Cmd {
     Registry(Vec<String>),
 }
 
-fn emit(v: &Value) {
+pub(crate) fn emit(v: &Value) {
     println!("{}", serde_json::to_string_pretty(v).unwrap_or_default());
 }
 
@@ -143,7 +168,7 @@ fn dry_result(id: &str, params: &Value) -> Value {
     json!({ "dry_run": true, "id": id, "params": params })
 }
 
-fn parse_params(tokens: &[String], raw: Option<&str>) -> Result<Value, String> {
+pub(crate) fn parse_params(tokens: &[String], raw: Option<&str>) -> Result<Value, String> {
     let mut params = match raw {
         Some(t) => serde_json::from_str::<Value>(t).map_err(|e| format!("--params: {e}"))?,
         None => json!({}),
@@ -167,22 +192,22 @@ fn parse_params(tokens: &[String], raw: Option<&str>) -> Result<Value, String> {
 }
 
 fn call_live_control(connect: Option<&str>, method: &str, params: Value) -> Result<Value, String> {
-    let spec = connect.ok_or("Live UI commands require --connect 127.0.0.1:9876")?;
+    let spec = connect.ok_or("Live UI commands require --connect 127.0.0.1:9875 (or --control <PORT>)")?;
     let mut remote = magic_mcp::Remote::new(magic_mcp::normalize_control_addr(spec), magic::workspace::control_token());
     magic_mcp::Backend::execute(&mut remote, method, params)
 }
 
-struct Target {
-    session: Option<magic::Session>,
-    connect: Option<String>,
-    project: Option<String>,
-    save: bool,
-    save_as: Option<String>,
-    dry: bool,
+pub(crate) struct Target {
+    pub(crate) session: Option<magic::Session>,
+    pub(crate) connect: Option<String>,
+    pub(crate) project: Option<String>,
+    pub(crate) save: bool,
+    pub(crate) save_as: Option<String>,
+    pub(crate) dry: bool,
 }
 
 impl Target {
-    fn call(&mut self, id: &str, params: Value) -> Result<Value, String> {
+    pub(crate) fn call(&mut self, id: &str, params: Value) -> Result<Value, String> {
         if self.connect.is_some() || magic_mcp::is_live_shell_method(id) {
             return call_live_control(self.connect.as_deref(), id, params);
         }
@@ -190,11 +215,11 @@ impl Target {
         session.execute(id, params).map_err(|e| e.to_string())
     }
 
-    fn call_unless_dry(&mut self, id: &str, params: Value) -> Result<Value, String> {
+    pub(crate) fn call_unless_dry(&mut self, id: &str, params: Value) -> Result<Value, String> {
         if self.dry { Ok(dry_result(id, &params)) } else { self.call(id, params) }
     }
 
-    fn save_project(&mut self) -> Result<(), String> {
+    pub(crate) fn save_project(&mut self) -> Result<(), String> {
         if self.dry {
             return Ok(());
         }
@@ -206,7 +231,7 @@ impl Target {
         Ok(())
     }
 
-    fn run(&mut self, id: &str, params: Value) -> Result<(), String> {
+    pub(crate) fn run(&mut self, id: &str, params: Value) -> Result<(), String> {
         emit(&self.call_unless_dry(id, params)?);
         self.save_project()
     }
@@ -288,23 +313,34 @@ fn inspect(target: &mut Target, what: Option<String>) -> Result<(), String> {
         "project" => target.call("workshop.status", json!({}))?,
         "storyboard" => target.call("storyboard.check", json!({}))?,
         "timeline" | "sequence" => target.call("video.timeline", json!({}))?,
+        "bridge" => target.call("bridge.status", json!({}))?,
+        "preflight" => target.call("bridge.preflight", json!({"action": "check"}))?,
+        "history" => target.call("bridge.history", json!({"op": "list"}))?,
+        "doctor" => target.call("app.doctor", json!({}))?,
+        "effects" => json!({
+            "words": target.call("words.effects", json!({})).unwrap_or(Value::Null),
+            "motion": target.call("motion.effects", json!({})).unwrap_or(Value::Null),
+        }),
         "all" => json!({
             "project": target.call("workshop.status", json!({}))?,
             "storyboard": target.call("storyboard.check", json!({})).unwrap_or(Value::Null),
             "timeline": target.call("video.timeline", json!({})).unwrap_or(Value::Null),
+            "bridge": target.call("bridge.status", json!({})).unwrap_or(Value::Null),
         }),
-        other => return Err(format!("inspect: unknown `{other}` (project | storyboard | timeline)")),
+        other => return Err(format!("inspect: unknown `{other}` (all | project | storyboard | timeline | bridge | preflight | history | effects | doctor)")),
     };
     emit(&value);
     Ok(())
 }
 
-fn run_file(target: &mut Target, file: &str) -> Result<(), String> {
+fn run_file(target: &mut Target, file: &str, keep_going: bool) -> Result<(), String> {
     let reader: Box<dyn BufRead> = if file == "-" {
         Box::new(std::io::stdin().lock())
     } else {
         Box::new(std::io::BufReader::new(std::fs::File::open(file).map_err(|e| format!("{file}: {e}"))?))
     };
+    let mut prior_results = Vec::new();
+    let mut first_err: Option<String> = None;
     for (n, line) in reader.lines().enumerate() {
         let line = line.map_err(|e| e.to_string())?;
         let text = line.trim();
@@ -313,19 +349,51 @@ fn run_file(target: &mut Target, file: &str) -> Result<(), String> {
         }
         let item: Value = serde_json::from_str(text).map_err(|e| format!("line {}: {e}", n + 1))?;
         let id = item["id"].as_str().or_else(|| item["command"].as_str()).unwrap_or_default();
-        let params = item.get("params").cloned().unwrap_or_else(|| json!({}));
-        let result = target.call_unless_dry(id, params)?;
-        println!("{}", json!({ "line": n + 1, "ok": true, "result": result }));
+        let raw_params = item.get("params").cloned().unwrap_or_else(|| json!({}));
+        let params = magic_mcp::interpolate_batch_params(&raw_params, &prior_results);
+        match target.call_unless_dry(id, params) {
+            Ok(result) => {
+                prior_results.push(result.clone());
+                println!("{}", json!({ "line": n + 1, "id": id, "ok": true, "result": result }));
+            }
+            Err(err) => {
+                prior_results.push(Value::Null);
+                println!("{}", json!({ "line": n + 1, "id": id, "ok": false, "error": err }));
+                if !keep_going {
+                    return Err(err);
+                }
+                if first_err.is_none() {
+                    first_err = Some(err);
+                }
+            }
+        }
     }
-    target.save_project()
+    target.save_project()?;
+    match first_err {
+        Some(err) => Err(err),
+        None => Ok(()),
+    }
 }
 
 fn ui_action(action: &str, target: Option<String>, mut args: Vec<String>, raw: Option<&str>) -> Result<(String, Value), String> {
     let method = match action {
         "inspect" => "ui.inspect".to_owned(),
         "state" => "ui.state".to_owned(),
-        "view" => "ui.set".to_owned(),
+        "drafts" => "ui.drafts".to_owned(),
+        "elements" => "ui.elements".to_owned(),
+        "view" | "workspace" => "ui.set".to_owned(),
+        "locate" => "ui.viewer.locate".to_owned(),
+        "hit" => "ui.viewer.hit".to_owned(),
+        "timeline-locate" => "ui.timeline.locate".to_owned(),
+        "timeline-hit" => "ui.timeline.hit".to_owned(),
+        "render-frame" => "render.frame".to_owned(),
+        "filmcraft" | "fc" => "ui.filmcraft".to_owned(),
+        "effectcraft" | "ec" => "ui.effectcraft".to_owned(),
+        "craft" => "ui.craft".to_owned(),
+        "menu" => "ui.menu.list".to_owned(),
+        "keymap" => "ui.keymap.press".to_owned(),
         "playback" => "ui.playback".to_owned(),
+        "perf" => "perf.stats".to_owned(),
         "quit" => "app.quit".to_owned(),
         id if id.contains('.') => id.to_owned(),
         id => format!("ui.{id}"),
@@ -333,11 +401,16 @@ fn ui_action(action: &str, target: Option<String>, mut args: Vec<String>, raw: O
     if let Some(target) = target {
         let key = match (action, method.as_str()) {
             ("view", _) | (_, "ui.set_view") => Some("view"),
+            ("workspace", _) => Some("studioWorkspace"),
+            ("keymap", _) => Some("chord"),
+            ("elements", _) => Some("prefix"),
+            ("filmcraft" | "fc" | "effectcraft" | "ec", _) => Some("method"),
+            ("craft", _) => Some("app"),
             (_, "ui.focus" | "ui.click") => Some("id"),
             (_, "ui.playback") => Some("action"),
             (_, "ui.key") => Some("key"),
             (_, "ui.type" | "ui.text") => Some("text"),
-            (_, "ui.screenshot") => Some("path"),
+            (_, "ui.screenshot" | "render.frame") => Some("path"),
             _ => None,
         };
         let bare = !target.contains('=') && !target.starts_with('{');
@@ -348,7 +421,7 @@ fn ui_action(action: &str, target: Option<String>, mut args: Vec<String>, raw: O
 
 fn run_ui(target: &mut Target, action: &str, value: Option<String>, params: Option<&str>, arguments: Vec<String>) -> Result<(), String> {
     if target.connect.is_none() {
-        return Err("Live UI commands require --connect 127.0.0.1:9876".into());
+        return Err("Live UI commands require --connect 127.0.0.1:9875 (or --control <PORT>)".into());
     }
     let (method, params) = ui_action(action, value, arguments, params)?;
     let result = if target.dry { dry_result(&method, &params) } else { call_live_control(target.connect.as_deref(), &method, params)? };
@@ -369,7 +442,7 @@ fn resolve_shorthand(tokens: &[String]) -> Result<(String, Vec<String>), String>
             return Ok((snake_candidate, tokens[n..].to_vec()));
         }
     }
-    Err(format!("Unknown command '{}'. Run `magic-cli commands`.", tokens.join(" ")))
+    Err(format!("Unknown command '{}'. Run `magic-cli commands` or `magic-cli controls`.", tokens.join(" ")))
 }
 
 fn run_shorthand(target: &mut Target, tokens: &[String]) -> Result<(), String> {
@@ -402,6 +475,20 @@ fn describe(id: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn apply_port_overrides(cli: &Cli, session: &mut Option<magic::Session>) {
+    if let Some(s) = session.as_mut() {
+        if let Some(fp) = cli.filmcraft_port {
+            let _ = s.execute("prefs.set", json!({"key": "craft.filmcraft_port", "value": fp}));
+        }
+        if let Some(ep) = cli.effectcraft_port {
+            let _ = s.execute("prefs.set", json!({"key": "craft.effectcraft_port", "value": ep}));
+        }
+        if let Some(ref dirs) = cli.font_dirs {
+            let _ = s.execute("prefs.set", json!({"key": "lyrics.font_dirs", "value": dirs}));
+        }
+    }
+}
+
 fn run(cli: Cli) -> Result<(), String> {
     if let (None, Some(Cmd::Mcp { headless })) = (&cli.command_id, &cli.command) {
         return magic_mcp::run_mcp_server(
@@ -421,6 +508,7 @@ fn run(cli: Cli) -> Result<(), String> {
     let roots = magic::AutomationRoots::from_args(&cli.automation_read_roots, &cli.automation_write_roots)?;
     let live = cli.connect.is_some();
     let mut session = (!live).then(|| magic::Session::user_session().with_automation_roots(roots));
+    apply_port_overrides(&cli, &mut session);
     if let (Some(path), Some(session)) = (cli.project.as_deref(), session.as_mut()) {
         session.execute("file.open", json!({ "path": path })).map_err(|e| e.to_string())?;
     }
@@ -441,13 +529,22 @@ fn run(cli: Cli) -> Result<(), String> {
         (None, Some(command)) => match command {
             Cmd::New(args) => run_new(&mut target, args),
             Cmd::Commands { filter } => list_commands(&mut target, filter),
+            Cmd::Controls(args) => subcommands::run_controls(&mut target, args),
             Cmd::Describe { id } => describe(&id),
             Cmd::Inspect { target: what } => inspect(&mut target, what),
+            Cmd::Bridge(b) => subcommands::run_bridge(&mut target, b),
+            Cmd::Interchange(args) => subcommands::run_interchange(&mut target, args),
+            Cmd::Lottie(args) => subcommands::run_lottie(&mut target, args),
+            Cmd::ImportAep(args) => subcommands::run_import_aep(&mut target, args),
+            Cmd::Finish(args) => subcommands::run_finish(&mut target, args),
+            Cmd::Export(args) => subcommands::run_export(&mut target, args),
+            Cmd::Captions(args) => subcommands::run_captions(&mut target, args),
+            Cmd::Markers(args) => subcommands::run_markers(&mut target, args),
             Cmd::Exec { command, params, arguments } => {
                 let params = parse_params(&arguments, params.as_deref())?;
                 target.run(&command, params)
             }
-            Cmd::Run { file } => run_file(&mut target, &file),
+            Cmd::Run { file, keep_going } => run_file(&mut target, &file, keep_going),
             Cmd::Mcp { .. } => Ok(()),
             Cmd::Ui { action, target: value, params, arguments } => run_ui(&mut target, &action, value, params.as_deref(), arguments),
             Cmd::Registry(tokens) => run_shorthand(&mut target, &tokens),

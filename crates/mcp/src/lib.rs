@@ -1,13 +1,10 @@
 //! Lightweight ArtCraft MCP server (`magic-cli mcp` / `magic-mcp`) for Magic Studio.
 //!
 //! Magic is a lightweight coordinator shell — NOT a frame-rendering or timeline timing server.
-//! Timeline-to-storyboard and audio-to-frame precision live in `FilmCraft` (`filmcraft-cli`),
-//! `EffectCraft` (`effectcraft-cli`), and `DesignCraft` (`designcraft-cli`), which `magic::Session`
+//! Timeline-to-storyboard and audio-to-frame precision live in `FilmCraft` (`filmcraft-cli`,
+//! `filmcraft --control 9876`), `EffectCraft` (`effectcraft-cli`, `effectcraft --control 9877`),
+//! and `DesignCraft` (`designcraft-cli`, `designcraft --control 7979`), which `magic::Session`
 //! invokes via `CraftHub` (`<craft>-cli`) or live `--control` bridges.
-//!
-//! Reference:
-//! - <https://github.com/storytold/vectorcraft/blob/main/README.md>
-//! - <https://github.com/storytold/designcraft/blob/main/docs/mcp.md>
 
 #![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable))]
 
@@ -18,10 +15,11 @@ use std::time::Duration;
 use magic::{AutomationRoots, Session};
 use serde_json::{Value, json};
 
-/// Default loopback control port used when `MAGIC_CONTROL_PORT` is unset.
-pub const DEFAULT_CONTROL_ADDR: &str = "127.0.0.1:9876";
+/// Default loopback control port used when `MAGIC_CONTROL_PORT` is unset (`9875`, leaving `9876`
+/// free for `FilmCraft` and `9877` free for `EffectCraft`).
+pub const DEFAULT_CONTROL_ADDR: &str = "127.0.0.1:9875";
 
-/// Normalize `"9876"` -> `"127.0.0.1:9876"` or keep an explicit `"127.0.0.1:9876"`.
+/// Normalize `"9875"` -> `"127.0.0.1:9875"` or keep an explicit `"127.0.0.1:9875"`.
 pub fn normalize_control_addr(spec: &str) -> String {
     let trimmed = spec.trim();
     if trimmed.contains(':') {
@@ -31,7 +29,7 @@ pub fn normalize_control_addr(spec: &str) -> String {
     }
 }
 
-/// Default control address for auto-discovery (`MAGIC_CONTROL_PORT` if set, else `127.0.0.1:9876`).
+/// Default control address for auto-discovery (`MAGIC_CONTROL_PORT` if set, else `127.0.0.1:9875`).
 pub fn default_control_addr() -> String {
     std::env::var("MAGIC_CONTROL_PORT")
         .ok()
@@ -44,11 +42,51 @@ pub fn default_control_addr() -> String {
 pub fn is_live_shell_method(id: &str) -> bool {
     id.starts_with("ui.")
         || id.starts_with("window.")
-        || matches!(id, "app.quit" | "app.restart" | "app.hide" | "perf.stats")
+        || matches!(id, "app.quit" | "app.restart" | "app.hide" | "perf.stats" | "render.frame")
 }
 
 fn is_direct_control_method(id: &str) -> bool {
     is_live_shell_method(id) || id.starts_with("engine.")
+}
+
+/// Interpolate `"$N"`, `"$N.field"`, or `"$last.field"` step references in batch parameters
+/// (matching `EffectCraft` `batch` and `docs/architecture.md` L6 contract).
+pub fn interpolate_batch_params(params: &Value, prior_results: &[Value]) -> Value {
+    match params {
+        Value::String(s) => resolve_step_ref(s, prior_results).unwrap_or_else(|| Value::String(s.clone())),
+        Value::Array(items) => Value::Array(items.iter().map(|v| interpolate_batch_params(v, prior_results)).collect()),
+        Value::Object(map) => Value::Object(
+            map.iter()
+                .map(|(k, v)| (k.clone(), interpolate_batch_params(v, prior_results)))
+                .collect(),
+        ),
+        other => other.clone(),
+    }
+}
+
+fn resolve_step_ref(expr: &str, prior_results: &[Value]) -> Option<Value> {
+    let rest = expr.strip_prefix('$')?;
+    let (head, tail) = match rest.split_once('.') {
+        Some((h, t)) => (h, Some(t)),
+        None => (rest, None),
+    };
+    let root = if head == "last" {
+        prior_results.last()?
+    } else {
+        let idx_1 = head.parse::<usize>().ok()?.checked_sub(1)?;
+        prior_results.get(idx_1)?
+    };
+    let mut cur = root;
+    if let Some(path) = tail {
+        for seg in path.split('.') {
+            cur = if let Ok(i) = seg.parse::<usize>() {
+                cur.get(i)?
+            } else {
+                cur.get(seg)?
+            };
+        }
+    }
+    Some(cur.clone())
 }
 
 /// Execution backend for MCP tool calls.
@@ -169,10 +207,10 @@ impl Backend for Remote {
     }
 }
 
-/// Start `magic-cli mcp` / `magic-mcp` using the lightweight `VectorCraft` / `DesignCraft` contract:
+/// Start `magic-cli mcp` / `magic-mcp` using the ArtCraft suite contract:
 /// - `connect`: attach to live `magic --control` or exit with `cannot connect to <addr>: <err>`.
 /// - `headless` or `read_roots`/`write_roots`: run an in-process [`Headless`] coordinator session.
-/// - neither flag: probe `127.0.0.1:9876` (`MAGIC_CONTROL_PORT`) once and fall back to [`Headless`].
+/// - neither flag: probe `MAGIC_CONTROL_PORT` (`127.0.0.1:9875`, then `127.0.0.1:9876`) once and fall back to [`Headless`].
 pub fn run_mcp_server(
     bin_name: &str,
     connect: Option<&str>,

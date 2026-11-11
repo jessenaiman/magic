@@ -1,7 +1,7 @@
 //! Modular command registry (`command_sets`) split by Single Responsibility domain:
 //! - [`project`]: Project lifecycle (`project.*` & `file.*`), assets, workshop, audio transcription (`timing-reference.json`), and Storyboard CRUD/wizard/bulk.
-//! - [`creative`]: Kinetic Lyrics (`words.*` -> V3), Song-Action Motion (`motion.*` -> V4), Character Animation (`character.*` -> V2), `PhotoCraft` (`photo.*`), `VectorCraft` (`vector.*`), Scribbles, and `FilmCraft` (`video.*`).
-//! - [`system`]: UI inspection/controls, Craft CLI pass-throughs (`photo.exec`, `effect.exec`, `vector.exec`, `anicraft.exec`), Fidget/agent session, diagnostics, and settings.
+//! - [`creative`]: Kinetic Lyrics (`words.*` -> V3), Song-Action Motion (`motion.*` -> V4), Character Animation (`character.*` -> V2), `PhotoCraft` (`photo.*`), `VectorCraft` (`vector.*`), Fidget/Scribbles (`fidget.*`, `scribbles.*`), and `FilmCraft` (`video.*`).
+//! - [`system`]: UI inspection/controls, Craft CLI pass-throughs, `craft-ai-integrations` (`ai.*`), diagnostics, and settings.
 
 pub mod creative;
 pub mod project;
@@ -15,7 +15,6 @@ pub(crate) const fn is_long_running_id(id: &str) -> bool {
         b"project.new"
             | b"file.new"
             | b"project.intake"
-            | b"agent.send"
             | b"ui.eval"
             | b"words.design"
             | b"words.letter"
@@ -24,6 +23,7 @@ pub(crate) const fn is_long_running_id(id: &str) -> bool {
             | b"audio.analyze"
             | b"storyboard.bulk_generate"
             | b"workshop.split_panels"
+            | b"fidget.stage"
             | b"image.generate"
             | b"photo.remove_background"
             | b"vector.trace"
@@ -42,7 +42,6 @@ pub(crate) const fn is_long_running_id(id: &str) -> bool {
             | b"scribbles.actions"
             | b"scribbles.layers"
             | b"scribbles.custom"
-            | b"scribbles.video"
             | b"scribbles.svg"
             | b"scribbles.reassemble"
             | b"character.mark"

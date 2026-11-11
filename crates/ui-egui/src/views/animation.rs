@@ -1,34 +1,34 @@
 //! `Animations` view (`#view-animation`): Craft-project-native character rigging & animation
-//! backed directly by `PhotoCraft` (`.pcraft` / `.psd`), `VectorCraft` (`.vectorcraft` / `.svg`),
-//! headless `anicraft-cli` (`.anicraft`), and `EffectCraft` (`.ecproj`) documents.
-//! Stage renders actual frames on disk (`frames/*.png`, `sprites/*/frames/*.png`, `parts.json`
-//! drawings) and overlays ONLY real `parts.json` joints/pins, real `character.path` walk curves,
-//! and real `character.keys` keyframes.
+//! matching `04-animations-craft-rig.jpg`, backed directly by `PhotoCraft` (`.pcraft` / `.psd`),
+//! `VectorCraft` (`.vectorcraft` / `.svg`), headless `anicraft-cli`, `EffectCraft` (`.ecproj`),
+//! and `Sheet 08` Zone B supplementary controls (`animation_inspector.rs`: `T11`–`T20`).
 
 use craft_ui::layout::{SplitAxis, SplitSize, split_rect};
-use egui::{
-    Align, Align2, CornerRadius, FontId, Layout, Pos2, Rect, RichText, ScrollArea, Sense, Shape,
-    Stroke, Ui, Vec2,
-};
+use egui::{Align, Align2, FontId, Layout, Pos2, Rect, RichText, ScrollArea, Sense, Shape, Stroke, Ui, Vec2};
 use serde_json::{Value, json};
 
 use crate::controls::{
-    FilmbarOrientation, FilmbarStyle, ScalarSpec, badge_accent_color, child_pane, fill_card,
-    paint_craft_doc_card, paint_filmbar_frame, paint_local_image, pill_toggle, ring_slider_h,
-    rotary_dial, xy_path_pad,
+    FilmbarOrientation, FilmbarStyle, ScalarSpec, child_pane, fill_card, paint_craft_doc_card,
+    paint_filmbar_frame, paint_local_image, pill_toggle, ring_slider_h, xy_path_pad,
 };
 use crate::state::{UiAction, ViewCtx};
-use crate::widgets::{BtnSpec, action_button, status_pill, text_input};
+use crate::views::animation_inspector::{
+    draw_puppet_and_3d_inspector, draw_theatre_dock, draw_time_and_stagger_card,
+};
+use crate::widgets::{BtnSpec, action_button, status_pill};
 
 pub fn show(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     draw_roster_bar(ui, ctx);
     ui.add_space(6.0);
+    let cid = active_character(ctx);
     let remaining = ui.available_rect_before_wrap();
-    if let Some(vert) = split_rect(remaining, SplitAxis::Vertical, SplitSize::FixedSecond(132.0), 8.0, 220.0) {
+    if ctx.state.show_bottom_dock
+        && let Some(vert) = split_rect(remaining, SplitAxis::Vertical, SplitSize::FixedSecond(148.0), 8.0, 220.0)
+    {
         let mut upper = child_pane(ui, vert.first, "anim_upper");
         draw_upper_columns(&mut upper, ctx);
         let mut dock = child_pane(ui, vert.second, "anim_theatre_dock");
-        draw_theatre_dock(&mut dock, ctx);
+        draw_theatre_dock(&mut dock, ctx, &cid);
         let _ = ui.allocate_rect(remaining, Sense::hover());
     } else {
         draw_upper_columns(ui, ctx);
@@ -121,23 +121,32 @@ fn active_background_thumb(ctx: &ViewCtx<'_>) -> Option<String> {
 }
 
 fn draw_upper_columns(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
+    let cid = active_character(ctx);
+    let char_obj = active_character_obj(ctx);
+    let view_obj = active_view_obj(char_obj.as_ref());
     let body = ui.available_rect_before_wrap();
-    if let Some(left_split) = split_rect(body, SplitAxis::Horizontal, SplitSize::FixedFirst(264.0), 8.0, 180.0) {
+    let after_left = if ctx.state.show_nav_rail
+        && let Some(left_split) = split_rect(body, SplitAxis::Horizontal, SplitSize::FixedFirst(272.0), 8.0, 200.0)
+    {
         let mut left = child_pane(ui, left_split.first, "anim_left");
         draw_action_and_path_column(&mut left, ctx);
-        if let Some(right_split) = split_rect(left_split.second, SplitAxis::Horizontal, SplitSize::FixedSecond(298.0), 8.0, 220.0) {
-            let mut stage = child_pane(ui, right_split.first, "anim_stage");
-            draw_stage(&mut stage, ctx);
-            let mut right = child_pane(ui, right_split.second, "anim_puppet");
-            draw_puppet_inspector(&mut right, ctx);
-        } else {
-            let mut stage = child_pane(ui, left_split.second, "anim_stage");
-            draw_stage(&mut stage, ctx);
-        }
-        let _ = ui.allocate_rect(body, Sense::hover());
+        left_split.second
     } else {
-        draw_stage(ui, ctx);
+        body
+    };
+
+    if ctx.state.show_right_inspector
+        && let Some(right_split) = split_rect(after_left, SplitAxis::Horizontal, SplitSize::FixedSecond(304.0), 8.0, 220.0)
+    {
+        let mut stage = child_pane(ui, right_split.first, "anim_stage");
+        draw_stage(&mut stage, ctx);
+        let mut right = child_pane(ui, right_split.second, "anim_puppet");
+        draw_puppet_and_3d_inspector(&mut right, ctx, &cid, view_obj.as_ref());
+    } else {
+        let mut stage = child_pane(ui, after_left, "anim_stage");
+        draw_stage(&mut stage, ctx);
     }
+    let _ = ui.allocate_rect(body, Sense::hover());
 }
 
 fn draw_roster_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
@@ -147,7 +156,7 @@ fn draw_roster_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         ui.horizontal_wrapped(|ui| {
             ui.label(RichText::new("CHARACTER ROSTER:").monospace().size(10.5).color(ctx.pal.text_muted));
             if chars.is_empty() {
-                ui.label(RichText::new("No .pcraft / .ecproj characters yet — import via + Asset").size(11.0).color(ctx.pal.text_muted));
+                ui.label(RichText::new("No .pcraft / .ecproj characters yet — import via + Add Asset or Scribbles").size(11.0).color(ctx.pal.text_muted));
             }
             for ch in &chars {
                 let id = ch["id"].as_str().unwrap_or_default();
@@ -185,30 +194,41 @@ fn draw_roster_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                     ui,
                     ctx.reg,
                     ctx.pal,
-                    BtnSpec::new("character-open-effectcraft", "external", "EffectCraft", "Open .ecproj in EffectCraft").enabled(has_char),
+                    BtnSpec::new("anim-scribbles-open", "sparkles", "Scribbles", "Open Fidget & Scribbles character/sheet stager")
+                        .selected(ctx.state.fidget_open),
                 )
                 .clicked()
                 {
+                    ctx.state.fidget_open = true;
+                }
+                let active_ecproj = active_character_obj(ctx).and_then(|c| {
+                    c.pointer("/views/0/ecproj_path")
+                        .and_then(Value::as_str)
+                        .or_else(|| c.pointer("/action_ecprojs/0/path").and_then(Value::as_str))
+                        .map(str::to_owned)
+                });
+                if let Some(ec_path) = active_ecproj
+                    && action_button(
+                        ui,
+                        ctx.reg,
+                        ctx.pal,
+                        BtnSpec::new("character-link-filmcraft", "link", "Link V2", "Dynamic-link character .ecproj onto FilmCraft V2"),
+                    )
+                    .clicked()
+                {
+                    ctx.exec(
+                        "video.link_effectcraft",
+                        json!({"project": ec_path, "track": "V2"}),
+                        Some("Linked character .ecproj onto FilmCraft V2"),
+                    );
+                }
+                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("character-open-effectcraft", "external", "EffectCraft", "Open .ecproj in EffectCraft").enabled(has_char)).clicked() {
                     ctx.exec("character.open", json!({"character": current, "app": "effectcraft"}), Some("Opened .ecproj in EffectCraft"));
                 }
-                if action_button(
-                    ui,
-                    ctx.reg,
-                    ctx.pal,
-                    BtnSpec::new("character-open-vectorcraft", "pen", "VectorCraft", "Open .vectorcraft / .svg in VectorCraft").enabled(has_char),
-                )
-                .clicked()
-                {
+                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("character-open-vectorcraft", "pen", "VectorCraft", "Open .vectorcraft / .svg in VectorCraft").enabled(has_char)).clicked() {
                     ctx.exec("character.open", json!({"character": current, "app": "vectorcraft"}), Some("Opened VectorCraft"));
                 }
-                if action_button(
-                    ui,
-                    ctx.reg,
-                    ctx.pal,
-                    BtnSpec::new("character-open-photocraft", "image", "PhotoCraft", "Open .pcraft / .psd in PhotoCraft").enabled(has_char),
-                )
-                .clicked()
-                {
+                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("character-open-photocraft", "image", "PhotoCraft", "Open .pcraft / .psd in PhotoCraft").enabled(has_char)).clicked() {
                     ctx.exec("character.open", json!({"character": current, "app": "photocraft"}), Some("Opened .pcraft in PhotoCraft"));
                 }
                 if action_button(
@@ -223,24 +243,10 @@ fn draw_roster_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                 {
                     ctx.exec("character.rig", json!({"character": current}), Some("Built EffectCraft puppet rig (.ecproj)"));
                 }
-                if action_button(
-                    ui,
-                    ctx.reg,
-                    ctx.pal,
-                    BtnSpec::new("character-cut-run", "scissors", "Cut .pcraft", "Cut layered parts into .pcraft via PhotoCraft").enabled(has_char),
-                )
-                .clicked()
-                {
+                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("character-cut-run", "scissors", "Cut .pcraft", "Cut layered parts into .pcraft via PhotoCraft").enabled(has_char)).clicked() {
                     ctx.exec("character.cut", json!({"character": current, "remove_background": true}), Some("Cut parts into .pcraft"));
                 }
-                if action_button(
-                    ui,
-                    ctx.reg,
-                    ctx.pal,
-                    BtnSpec::new("character-mark-run", "pin", "Mark", "Mark puppet joints").enabled(has_char),
-                )
-                .clicked()
-                {
+                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("character-mark-run", "pin", "Mark", "Mark puppet joints").enabled(has_char)).clicked() {
                     ctx.exec("character.mark", json!({"character": current}), Some("Marked puppet joints"));
                 }
             });
@@ -259,9 +265,9 @@ fn draw_action_and_path_column(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                     let mode_lbl = match ctx.state.animation.style_tab.as_str() {
                         "sprite-2d" => "2D Sprite (.anicraft)",
                         "rig-3d" => "3D Anim (.ecproj)",
-                        _ => "2.5D Rig (.pcraft + .ecproj)",
+                        _ => "2.5D Cutout Rig",
                     };
-                    ui.label(RichText::new(mode_lbl).size(10.0).color(ctx.pal.text_secondary));
+                    ui.label(RichText::new(mode_lbl).size(10.5).color(ctx.pal.text_secondary));
                 });
             });
             ui.horizontal(|ui| {
@@ -290,13 +296,10 @@ fn draw_action_and_path_column(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             ui.horizontal_wrapped(|ui| {
                 for (act, lbl) in [
                     ("idle", "Idle"),
+                    ("fly", "Fly"),
+                    ("sing", "Sing"),
                     ("jump", "Jump"),
-                    ("swim", "Swim"),
                     ("turn", "Turn"),
-                    ("down", "Down"),
-                    ("left", "Left"),
-                    ("right", "Right"),
-                    ("up", "Up"),
                     ("wave", "Wave"),
                     ("rest", "Rest"),
                 ] {
@@ -310,26 +313,8 @@ fn draw_action_and_path_column(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                     }
                 }
             });
-            ui.horizontal(|ui| {
-                ui.label(RichText::new("Action name").size(10.5).color(ctx.pal.text_muted));
-                text_input(ui, ctx.reg, "anim-action-name", "Action name", &mut ctx.state.animation.action_name_input, "sing", 136.0);
-            });
-            ring_slider_h(
-                ui,
-                ctx.reg,
-                ctx.pal,
-                ScalarSpec::new("anim-cycle-duration", "Cycle duration", 0.4..=8.0, "s", ctx.pal.accent_sky),
-                &mut ctx.state.animation.action_duration,
-            );
-            pill_toggle(
-                ui,
-                ctx.reg,
-                ctx.pal,
-                "anim-loop-cycle",
-                "Loop action cycle",
-                &mut ctx.state.animation.loop_clip,
-                ctx.pal.accent_sky,
-            );
+            ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("anim-cycle-duration", "Cycle duration", 0.4..=8.0, "s", ctx.pal.accent_sky), &mut ctx.state.animation.action_duration);
+            pill_toggle(ui, ctx.reg, ctx.pal, "anim-loop-cycle", "Loop action cycle", &mut ctx.state.animation.loop_clip, ctx.pal.accent_sky);
         });
         ui.add_space(6.0);
 
@@ -346,11 +331,6 @@ fn draw_action_and_path_column(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                     );
                 });
             });
-            ui.label(
-                RichText::new("Author EffectCraft root travel keyframes and start/end perspective scale.")
-                    .size(10.5)
-                    .color(ctx.pal.text_muted),
-            );
             xy_path_pad(
                 ui,
                 ctx.reg,
@@ -360,61 +340,36 @@ fn draw_action_and_path_column(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                 ScalarSpec::new("anim-path-y", "Point Y", 0.0..=1080.0, "px", amb),
                 &mut ctx.state.animation.path_y,
             );
-            ring_slider_h(
-                ui,
-                ctx.reg,
-                ctx.pal,
-                ScalarSpec::new("anim-travel-dur", "Travel duration", 0.2..=12.0, "s", amb),
-                &mut ctx.state.animation.travel_duration,
-            );
-            ring_slider_h(
-                ui,
-                ctx.reg,
-                ctx.pal,
-                ScalarSpec::new("anim-start-size", "Start size", 20.0..=250.0, "%", amb),
-                &mut ctx.state.animation.start_size_pct,
-            );
-            ring_slider_h(
-                ui,
-                ctx.reg,
-                ctx.pal,
-                ScalarSpec::new("anim-end-size", "End size", 20.0..=250.0, "%", amb),
-                &mut ctx.state.animation.end_size_pct,
-            );
+            ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("anim-travel-dur", "Travel duration", 0.2..=12.0, "s", amb), &mut ctx.state.animation.travel_duration);
+            ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("anim-start-size", "Start size", 20.0..=250.0, "%", amb), &mut ctx.state.animation.start_size_pct);
+            ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("anim-end-size", "End size", 20.0..=250.0, "%", amb), &mut ctx.state.animation.end_size_pct);
             ui.horizontal(|ui| {
-                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-clear-path", "Clear", "Clear root path in .ecproj")).clicked()
-                    && !cid.is_empty()
-                {
-                    ctx.exec("character.path", json!({"character": cid, "op": "clear"}), Some("Cleared walk path in .ecproj"));
+                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-clear-path", "Clear", "Clear root path in .ecproj")).clicked() && !cid.is_empty() {
+                    ctx.exec("character.save_path", json!({"character": cid, "points": []}), Some("Cleared walk path in .ecproj"));
                 }
                 if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-undo-point", "Undo point", "Step back path coordinate")).clicked() {
                     ctx.state.animation.path_x = (ctx.state.animation.path_x - 40.0).max(0.0);
                 }
-                if action_button(
-                    ui,
-                    ctx.reg,
-                    ctx.pal,
-                    BtnSpec::label_only("anim-apply-path", "Apply path", "Write walk path keyframes into .ecproj")
-                        .primary()
-                        .enabled(!cid.is_empty()),
-                )
-                .clicked()
-                {
+                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-apply-path", "Apply path", "Write walk path keyframes into .ecproj").primary().enabled(!cid.is_empty())).clicked() {
                     ctx.exec(
-                        "character.path",
+                        "character.save_path",
                         json!({
                             "character": cid,
-                            "op": "apply",
                             "points": [
-                                {"x": 200.0, "y": ctx.state.animation.path_y, "time": 0.0, "scale": ctx.state.animation.start_size_pct},
-                                {"x": ctx.state.animation.path_x, "y": ctx.state.animation.path_y, "time": ctx.state.animation.travel_duration, "scale": ctx.state.animation.end_size_pct}
+                                [200.0, ctx.state.animation.path_y],
+                                [ctx.state.animation.path_x, ctx.state.animation.path_y]
                             ],
+                            "duration": ctx.state.animation.travel_duration,
+                            "start_scale": ctx.state.animation.start_size_pct,
+                            "end_scale": ctx.state.animation.end_size_pct,
                         }),
                         Some("Applied walk path to .ecproj"),
                     );
                 }
             });
         });
+        ui.add_space(6.0);
+        draw_time_and_stagger_card(ui, ctx, &cid);
     });
     let resp = ui.interact(scroll_out.inner_rect, ui.scope_id().with("motion_layers"), Sense::hover());
     ctx.reg.record("motion-layers", "Action & Path", &resp, None);
@@ -432,7 +387,7 @@ fn draw_stage(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     let ecproj_file = view_obj
         .as_ref()
         .and_then(|v| v["ecproj_path"].as_str().or_else(|| v["photo_doc"].as_str()))
-        .unwrap_or("assets/characters/<id>/<id>-front.ecproj");
+        .unwrap_or("assets/characters/rig.ecproj");
 
     let panel = fill_card(ui, ctx.pal, true, |ui| {
         ui.horizontal_wrapped(|ui| {
@@ -440,374 +395,193 @@ fn draw_stage(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             let marks_lbl = format!("Rig Marks ({total_marks})");
             pill_toggle(ui, ctx.reg, ctx.pal, "motion-marks", &marks_lbl, &mut ctx.state.animation.show_marks, ctx.pal.accent_emerald);
             pill_toggle(ui, ctx.reg, ctx.pal, "motion-path-visible", "Walk Path", &mut ctx.state.animation.show_path_hud, ctx.pal.accent_amber);
+            if ctx.state.animation.puppet_record_live {
+                status_pill(ui, ctx.pal, "REC Pin Drag", ctx.pal.danger);
+            }
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                if action_button(
-                    ui,
-                    ctx.reg,
-                    ctx.pal,
-                    BtnSpec::new("motion-export", "film", "Publish V2", "Render ProRes 4444 V2 pass into FilmCraft")
-                        .primary()
-                        .enabled(!cid.is_empty()),
-                )
-                .clicked()
-                {
+                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("motion-export", "film", "Publish V2", "Render ProRes 4444 V2 pass into FilmCraft").primary().enabled(!cid.is_empty())).clicked() {
                     ctx.exec(
                         "character.shot",
                         json!({"character": cid, "sprite": ctx.state.animation.selected_action, "duration": ctx.state.animation.action_duration, "studio": true}),
                         Some("Published V2 Character Animation"),
                     );
                 }
-                if action_button(
-                    ui,
-                    ctx.reg,
-                    ctx.pal,
-                    BtnSpec::new("anim-render-frame", "image", "Render Frame", "Render EffectCraft .ecproj frame at scrub time").enabled(!cid.is_empty()),
-                )
-                .clicked()
-                {
-                    ctx.exec(
-                        "character.frame",
-                        json!({"character": cid, "time": ctx.state.animation.scrub_seconds}),
-                        Some("Rendered EffectCraft frame"),
-                    );
+                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("anim-render-frame", "image", "Render Frame", "Render EffectCraft .ecproj frame at scrub time").enabled(!cid.is_empty())).clicked() {
+                    ctx.exec("character.frame", json!({"character": cid, "time": ctx.state.animation.scrub_seconds}), Some("Rendered EffectCraft frame"));
                 }
             });
         });
 
         let avail = ui.available_size();
-        let (outer_rect, resp) = ui.allocate_exact_size(Vec2::new(avail.x.max(200.0), (avail.y - 6.0).max(160.0)), Sense::click());
+        let sense = if ctx.state.animation.puppet_record_live {
+            Sense::click_and_drag()
+        } else {
+            Sense::click()
+        };
+        let (outer_rect, resp) = ui.allocate_exact_size(Vec2::new(avail.x.max(200.0), (avail.y - 6.0).max(160.0)), sense);
         let inner = paint_filmbar_frame(
             ui,
             outer_rect,
             ctx.pal,
             FilmbarStyle {
-                orientation: FilmbarOrientation::Vertical,
-                selected: false,
+                orientation: FilmbarOrientation::Horizontal,
+                selected: ctx.state.animation.puppet_record_live,
                 hovered: resp.hovered(),
                 timecode: Some("V2 · .pcraft / .ecproj"),
             },
         );
         let _ = paint_local_image(ui, inner, bg_thumb.as_deref(), ctx.pal.bg_stage, 4);
 
-        if ctx.state.animation.show_grid {
+        if ctx.state.animation.show_grid || ctx.state.animation.view_layout != "active" {
             let mid = inner.center();
-            ui.painter().line_segment(
-                [Pos2::new(inner.min.x, mid.y), Pos2::new(inner.max.x, mid.y)],
-                Stroke::new(1.0, ctx.pal.border_subtle),
-            );
-            ui.painter().line_segment(
-                [Pos2::new(mid.x, inner.min.y), Pos2::new(mid.x, inner.max.y)],
-                Stroke::new(1.0, ctx.pal.border_subtle),
-            );
+            ui.painter().line_segment([Pos2::new(inner.min.x, mid.y), Pos2::new(inner.max.x, mid.y)], Stroke::new(1.0, ctx.pal.border_subtle));
+            ui.painter().line_segment([Pos2::new(mid.x, inner.min.y), Pos2::new(mid.x, inner.max.y)], Stroke::new(1.0, ctx.pal.border_subtle));
+            if ctx.state.animation.view_layout != "active" {
+                ui.painter().text(
+                    Pos2::new(inner.min.x + 10.0, inner.min.y + 10.0),
+                    Align2::LEFT_TOP,
+                    format!("3D VIEW · {}", ctx.state.animation.view_layout.to_ascii_uppercase()),
+                    FontId::monospace(9.5),
+                    ctx.pal.accent_sky,
+                );
+            }
         }
 
-        let char_h = (inner.height() * 0.72).clamp(90.0, 280.0);
+        let char_h = (inner.height() * 0.74).clamp(90.0, 290.0);
         let char_rect = Rect::from_center_size(inner.center(), Vec2::new(char_h * 1.25, char_h));
         if !paint_local_image(ui, char_rect, frame_path.as_deref(), egui::Color32::TRANSPARENT, 4) {
-            paint_craft_doc_card(
-                ui,
-                char_rect,
-                ctx.pal,
-                "EC",
-                ecproj_file.rsplit('/').next().unwrap_or(ecproj_file),
-                "Click Render Frame or Rig .ecproj to render character",
-            );
+            paint_craft_doc_card(ui, char_rect, ctx.pal, "EC", ecproj_file.rsplit('/').next().unwrap_or(ecproj_file), "Click Render Frame or Rig .ecproj to render character");
         }
 
-        // Overlay ONLY real walk path keyframes returned from EffectCraft (`character.path op=inspect`)
-        if ctx.state.animation.show_path_hud
-            && let Some(pts) = ctx.state.cache.character_path["points"].as_array()
-            && pts.len() >= 2
-        {
-            let mapped: Vec<Pos2> = pts
-                .iter()
-                .filter_map(|pt| {
-                    let x = pt["x"].as_f64()? as f32;
-                    let y = pt["y"].as_f64()? as f32;
-                    Some(Pos2::new(
-                        inner.min.x + (x / 1920.0).clamp(0.02, 0.98) * inner.width(),
-                        inner.min.y + (y / 1080.0).clamp(0.02, 0.98) * inner.height(),
-                    ))
-                })
-                .collect();
-            if mapped.len() >= 2 {
-                ui.painter().add(Shape::line(mapped.clone(), Stroke::new(2.2, ctx.pal.accent_amber)));
-                for p in mapped {
-                    ui.painter().circle_filled(p, 4.2, ctx.pal.bg_input);
-                    ui.painter().circle_stroke(p, 4.2, Stroke::new(1.8, ctx.pal.accent_amber));
-                }
-            }
-        }
-
-        // Overlay ONLY real joints and puppet pins read from `parts.json`
-        if ctx.state.animation.show_marks && total_marks > 0 {
-            let (cw, ch) = view_obj
-                .as_ref()
-                .and_then(|v| v["canvas_size"].as_array())
-                .filter(|a| a.len() == 2)
-                .and_then(|a| Some((a[0].as_f64()? as f32, a[1].as_f64()? as f32)))
-                .unwrap_or((1024.0, 1024.0));
-            for j in &joints {
-                if let Some(arr) = j["joint"].as_array().filter(|a| a.len() == 2)
-                    && let (Some(jx), Some(jy)) = (arr[0].as_f64(), arr[1].as_f64())
-                {
-                    let pt = Pos2::new(
-                        char_rect.min.x + (jx as f32 / cw.max(1.0)).clamp(0.0, 1.0) * char_rect.width(),
-                        char_rect.min.y + (jy as f32 / ch.max(1.0)).clamp(0.0, 1.0) * char_rect.height(),
-                    );
-                    ui.painter().circle_filled(pt, 4.0, ctx.pal.bg_input);
-                    ui.painter().circle_stroke(pt, 4.0, Stroke::new(1.8, ctx.pal.accent_sky));
-                }
-            }
-            for pin in &pins {
-                if let Some(arr) = pin["pin"].as_array().filter(|a| a.len() == 2)
-                    && let (Some(px), Some(py)) = (arr[0].as_f64(), arr[1].as_f64())
-                {
-                    let pt = Pos2::new(
-                        char_rect.min.x + (px as f32 / cw.max(1.0)).clamp(0.0, 1.0) * char_rect.width(),
-                        char_rect.min.y + (py as f32 / ch.max(1.0)).clamp(0.0, 1.0) * char_rect.height(),
-                    );
-                    ui.painter().circle_filled(pt, 3.6, ctx.pal.bg_input);
-                    ui.painter().circle_stroke(pt, 3.6, Stroke::new(1.7, ctx.pal.accent_emerald));
-                }
-            }
-        }
-
-        let header_lbl = if cid.is_empty() {
-            "No character selected".to_owned()
-        } else {
-            let fname = frame_path
-                .as_deref()
-                .and_then(|p| p.rsplit('/').next())
-                .unwrap_or_else(|| ecproj_file.rsplit('/').next().unwrap_or(&cid));
-            format!("{cid} · {fname} · {:.2}s", ctx.state.animation.scrub_seconds)
-        };
-        ui.painter().text(
-            Pos2::new(inner.center().x, inner.min.y + 14.0),
-            Align2::CENTER_CENTER,
-            header_lbl,
-            FontId::monospace(10.5),
-            ctx.pal.text_primary,
-        );
+        capture_live_puppet_drag(ui, ctx, &cid, char_rect, &resp);
+        paint_stage_overlays(ui, ctx, inner, char_rect, view_obj.as_ref(), &joints, &pins);
         ctx.reg.record("motion-canvas", "Animation Canvas", &resp, None);
     });
     ctx.reg.record("motion-stage", "Animation Stage", &panel.response, None);
 }
 
-fn draw_puppet_inspector(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
-    let cid = active_character(ctx);
-    let char_obj = active_character_obj(ctx);
-    let view_obj = active_view_obj(char_obj.as_ref());
-    let panel = fill_card(ui, ctx.pal, true, |ui| {
-        ScrollArea::vertical().id_salt("anim_puppet_scroll").auto_shrink([false, false]).show(ui, |ui| {
-            ui.label(RichText::new("Craft Documents & Puppet Rig").size(12.0).strong().color(ctx.pal.accent_amber));
-            if let Some(v) = &view_obj {
-                ui.horizontal_wrapped(|ui| {
-                    for (key, lbl) in [
-                        ("pcraft_path", ".pcraft"),
-                        ("psd_path", ".psd"),
-                        ("vector_doc", ".svg/.vectorcraft"),
-                        ("ecproj_path", ".ecproj"),
-                        ("anicraft_path", ".anicraft"),
-                    ] {
-                        if let Some(p) = v[key].as_str() {
-                            let fname = p.rsplit('/').next().unwrap_or(lbl);
-                            status_pill(ui, ctx.pal, fname, badge_accent_color(ctx.pal, lbl));
-                        }
-                    }
-                });
-            }
-            ui.horizontal(|ui| {
-                rotary_dial(
-                    ui,
-                    ctx.reg,
-                    ctx.pal,
-                    ScalarSpec::new("bone-rotation", "Head Tilt", -90.0..=90.0, "°", ctx.pal.accent_sky),
-                    &mut ctx.state.animation.bone_rotation,
-                );
-                rotary_dial(
-                    ui,
-                    ctx.reg,
-                    ctx.pal,
-                    ScalarSpec::new("puppet-jaw-open", "Jaw Open", 0.0..=45.0, "°", ctx.pal.accent_amber),
-                    &mut ctx.state.animation.jaw_open_deg,
-                );
-                rotary_dial(
-                    ui,
-                    ctx.reg,
-                    ctx.pal,
-                    ScalarSpec::new("puppet-wing-bank", "Wing Bank", -60.0..=60.0, "°", ctx.pal.accent_emerald),
-                    &mut ctx.state.animation.wing_bank_deg,
-                );
-            });
-
-            ui.horizontal_wrapped(|ui| {
-                let en = !cid.is_empty();
-                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("authoring-puppet-rig-face", "wand", "Rig Face", "Rig facial mesh in .ecproj").enabled(en)).clicked() {
-                    ctx.exec("character.puppet.rig_face", json!({"character": cid}), Some("Rigged facial mesh in .ecproj"));
-                }
-                if action_button(
-                    ui,
-                    ctx.reg,
-                    ctx.pal,
-                    BtnSpec::new("authoring-puppet-lipsync", "music", "Lipsync", "Sync mouth visemes to song").primary().enabled(en),
+fn capture_live_puppet_drag(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str, char_rect: Rect, resp: &egui::Response) {
+    if !ctx.state.animation.puppet_record_live {
+        return;
+    }
+    if ctx.state.animation.puppet_show_mesh {
+        for gx in 1..5 {
+            let fx = (gx as f32) / 5.0;
+            let x = char_rect.min.x + fx * char_rect.width();
+            ui.painter().line_segment(
+                [Pos2::new(x, char_rect.min.y), Pos2::new(x, char_rect.max.y)],
+                Stroke::new(0.8, ctx.pal.accent_emerald.gamma_multiply(0.32)),
+            );
+        }
+    }
+    if resp.dragged()
+        && let Some(pos) = resp.interact_pointer_pos()
+    {
+        let nx = ((pos.x - char_rect.min.x) / char_rect.width().max(1.0)).clamp(0.0, 1.0) as f64;
+        let ny = ((pos.y - char_rect.min.y) / char_rect.height().max(1.0)).clamp(0.0, 1.0) as f64;
+        let t = ctx.state.animation.scrub_seconds + (ctx.state.animation.puppet_recorded_samples.len() as f64) / 24.0;
+        ctx.state.animation.puppet_recorded_samples.push([t, nx * 1024.0, ny * 1024.0]);
+    }
+    if ctx.state.animation.puppet_recorded_samples.len() >= 2 {
+        let pts: Vec<Pos2> = ctx
+            .state
+            .animation
+            .puppet_recorded_samples
+            .iter()
+            .map(|s| {
+                Pos2::new(
+                    char_rect.min.x + (s[1] as f32 / 1024.0) * char_rect.width(),
+                    char_rect.min.y + (s[2] as f32 / 1024.0) * char_rect.height(),
                 )
-                .clicked()
-                {
-                    ctx.exec(
-                        "character.puppet.lipsync",
-                        json!({"character": cid, "intensity": ctx.state.animation.lip_intensity / 100.0}),
-                        Some("Synced mouth visemes in .ecproj"),
-                    );
-                }
-                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("authoring-puppet-follow", "sparkles", "Follow", "Cascade secondary follow pins").enabled(en)).clicked() {
-                    ctx.exec(
-                        "character.puppet.follow",
-                        json!({"character": cid, "delay": ctx.state.animation.follow_delay}),
-                        Some("Applied puppet.follow in .ecproj"),
-                    );
-                }
-            });
-
-            ui.label(RichText::new("Mouth Visemes").size(10.5).color(ctx.pal.text_muted));
-            ui.horizontal_wrapped(|ui| {
-                for v in ["AA", "EE", "OH", "OO", "MBP", "Rest"] {
-                    let id = format!("puppet-viseme-{v}");
-                    let sel = ctx.state.animation.viseme == v;
-                    if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, v, "Preview mouth viseme").selected(sel)).clicked() {
-                        ctx.state.animation.viseme = v.into();
-                    }
-                }
-            });
-
-            ui.label(RichText::new("Expressions").size(10.5).color(ctx.pal.text_muted));
-            ui.horizontal_wrapped(|ui| {
-                for expr in ["happy", "surprised", "focused", "blink", "neutral"] {
-                    let id = format!("puppet-expr-{expr}");
-                    let sel = ctx.state.animation.expression == expr;
-                    if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, expr, "Keyframe expression in .ecproj").selected(sel)).clicked() {
-                        ctx.state.animation.expression = expr.into();
-                        if !cid.is_empty() {
-                            ctx.exec("character.puppet.expression", json!({"character": cid, "expression": expr}), Some("Keyframed expression"));
-                        }
-                    }
-                }
-            });
-
-            ring_slider_h(
-                ui,
-                ctx.reg,
-                ctx.pal,
-                ScalarSpec::new("puppet-lip-intensity", "Lip Intensity", 0.0..=150.0, "%", ctx.pal.accent_amber),
-                &mut ctx.state.animation.lip_intensity,
-            );
-            ring_slider_h(
-                ui,
-                ctx.reg,
-                ctx.pal,
-                ScalarSpec::new("puppet-follow-delay", "Follow Delay", 0.01..=0.35, "s", ctx.pal.accent_sky),
-                &mut ctx.state.animation.follow_delay,
-            );
-            if action_button(
-                ui,
-                ctx.reg,
-                ctx.pal,
-                BtnSpec::new("authoring-part-apply", "check", "Apply Transform", "Write part transform keyframe to .ecproj").enabled(!cid.is_empty()),
-            )
-            .clicked()
-            {
-                ctx.exec(
-                    "character.set",
-                    json!({
-                        "character": cid,
-                        "part": ctx.state.animation.selected_part,
-                        "prop": "rotation",
-                        "value": ctx.state.animation.bone_rotation,
-                        "time": ctx.state.animation.scrub_seconds,
-                    }),
-                    Some("Updated part transform in .ecproj"),
-                );
-            }
-            status_pill(ui, ctx.pal, "V2 · Character Animation (.ecproj)", ctx.pal.accent_emerald);
-        });
-    });
-    ctx.reg.record("motion-inspector", "Puppet Inspector", &panel.response, None);
+            })
+            .collect();
+        ui.painter().add(Shape::line(pts, Stroke::new(2.0, ctx.pal.danger)));
+    }
+    if resp.drag_stopped() && !cid.is_empty() && !ctx.state.animation.puppet_recorded_samples.is_empty() {
+        let samples: Vec<Value> = ctx
+            .state
+            .animation
+            .puppet_recorded_samples
+            .drain(..)
+            .map(|s| json!([s[0], s[1], s[2]]))
+            .collect();
+        ctx.exec(
+            "character.puppet.record",
+            json!({
+                "character": cid,
+                "part": ctx.state.animation.selected_part,
+                "smoothing": ctx.state.animation.puppet_smoothing,
+                "draft_deform": ctx.state.animation.puppet_draft_deform,
+                "show_mesh": ctx.state.animation.puppet_show_mesh,
+                "samples": samples,
+            }),
+            Some("Recorded live Puppet pin take into .ecproj"),
+        );
+    }
 }
 
-fn draw_theatre_dock(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
-    let cid = active_character(ctx);
-    let key_layers = ctx.state.cache.character_keys["layers"].as_array().cloned().unwrap_or_default();
-    let dur = ctx.state.animation.action_duration.max(4.0);
-
-    let dock = fill_card(ui, ctx.pal, true, |ui| {
-        ui.horizontal(|ui| {
-            ui.label(RichText::new("⊞ Theatre (.ecproj Keys)").size(12.0).strong().color(ctx.pal.accent_emerald));
-            for (tid, word) in [("theatre", "Theatre"), ("keys", "Keys"), ("curves", "Curves")] {
-                let id = format!("anim-dock-{tid}");
-                let sel = ctx.state.animation.dock_tab == tid;
-                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, word, "Switch EffectCraft keyframe view").selected(sel)).clicked() {
-                    ctx.state.animation.dock_tab = tid.into();
-                    if !cid.is_empty() {
-                        ctx.exec("character.keys", json!({"character": cid, "op": "list"}), None);
-                    }
-                }
-            }
-            ui.label(
-                RichText::new(format!("RANGE 0.0s–{dur:.1}s"))
-                    .monospace()
-                    .size(10.0)
-                    .color(ctx.pal.text_muted),
-            );
-            ring_slider_h(
-                ui,
-                ctx.reg,
-                ctx.pal,
-                ScalarSpec::new("motion-scrub", "Scrub", 0.0..=dur, "s", ctx.pal.accent_emerald),
-                &mut ctx.state.animation.scrub_seconds,
-            );
-        });
-
-        let w = ui.available_width().max(160.0);
-        let h = ui.available_height().max(42.0);
-        let (track_rect, tresp) = ui.allocate_exact_size(Vec2::new(w, h), Sense::click());
-        ui.painter().rect_filled(track_rect, CornerRadius::same(6), ctx.pal.bg_input);
-        if tresp.clicked()
-            && let Some(pos) = tresp.interact_pointer_pos()
-        {
-            let frac = ((pos.x - track_rect.min.x) / track_rect.width()).clamp(0.0, 1.0) as f64;
-            ctx.state.animation.scrub_seconds = frac * dur;
-        }
-
-        let mut key_count = 0usize;
-        for (l_idx, layer) in key_layers.iter().take(4).enumerate() {
-            let y = track_rect.min.y + 11.0 + (l_idx as f32) * 10.5;
-            if y > track_rect.max.y - 4.0 {
-                break;
-            }
-            for prop in layer["properties"].as_array().into_iter().flatten() {
-                for k in prop["keys"].as_array().into_iter().flatten() {
-                    if let Some(t) = k["time"].as_f64() {
-                        let x = track_rect.min.x + 8.0 + ((t / dur).clamp(0.0, 1.0) as f32) * (w - 16.0);
-                        ui.painter().circle_filled(Pos2::new(x, y), 3.4, ctx.pal.accent_amber);
-                        key_count += 1;
-                    }
-                }
+fn paint_stage_overlays(
+    ui: &mut Ui,
+    ctx: &ViewCtx<'_>,
+    inner: Rect,
+    char_rect: Rect,
+    view_obj: Option<&Value>,
+    joints: &[Value],
+    pins: &[Value],
+) {
+    if ctx.state.animation.show_path_hud
+        && let Some(pts) = ctx.state.cache.character_path["points"].as_array()
+        && pts.len() >= 2
+    {
+        let mapped: Vec<Pos2> = pts
+            .iter()
+            .filter_map(|pt| {
+                let x = pt["x"].as_f64()? as f32;
+                let y = pt["y"].as_f64()? as f32;
+                Some(Pos2::new(
+                    inner.min.x + (x / 1920.0).clamp(0.02, 0.98) * inner.width(),
+                    inner.min.y + (y / 1080.0).clamp(0.02, 0.98) * inner.height(),
+                ))
+            })
+            .collect();
+        if mapped.len() >= 2 {
+            ui.painter().add(Shape::line(mapped.clone(), Stroke::new(2.2, ctx.pal.accent_amber)));
+            for p in mapped {
+                ui.painter().circle_filled(p, 4.2, ctx.pal.bg_input);
+                ui.painter().circle_stroke(p, 4.2, Stroke::new(1.8, ctx.pal.accent_amber));
             }
         }
-        if key_count == 0 {
-            ui.painter().text(
-                track_rect.center(),
-                Align2::CENTER_CENTER,
-                "No EffectCraft keyframes sampled yet — rig .ecproj and trigger an Action or Apply Path",
-                FontId::monospace(10.0),
-                ctx.pal.text_muted,
-            );
+    }
+
+    if ctx.state.animation.show_marks && (!joints.is_empty() || !pins.is_empty()) {
+        let (cw, ch) = view_obj
+            .and_then(|v| v["canvas_size"].as_array())
+            .filter(|a| a.len() == 2)
+            .and_then(|a| Some((a[0].as_f64()? as f32, a[1].as_f64()? as f32)))
+            .unwrap_or((1024.0, 1024.0));
+        for j in joints {
+            if let Some(arr) = j["joint"].as_array().filter(|a| a.len() == 2)
+                && let (Some(jx), Some(jy)) = (arr[0].as_f64(), arr[1].as_f64())
+            {
+                let pt = Pos2::new(
+                    char_rect.min.x + (jx as f32 / cw.max(1.0)).clamp(0.0, 1.0) * char_rect.width(),
+                    char_rect.min.y + (jy as f32 / ch.max(1.0)).clamp(0.0, 1.0) * char_rect.height(),
+                );
+                ui.painter().circle_filled(pt, 4.0, ctx.pal.bg_input);
+                ui.painter().circle_stroke(pt, 4.0, Stroke::new(1.8, ctx.pal.accent_amber));
+            }
         }
-        let play_x = track_rect.min.x + 8.0 + ((ctx.state.animation.scrub_seconds / dur).clamp(0.0, 1.0) as f32) * (w - 16.0);
-        ui.painter().line_segment(
-            [Pos2::new(play_x, track_rect.min.y + 2.0), Pos2::new(play_x, track_rect.max.y - 2.0)],
-            Stroke::new(1.5, ctx.pal.accent_emerald),
-        );
-    });
-    ctx.reg.record("anim-theatre-dock", "Theatre Dock", &dock.response, None);
+        for pin in pins {
+            if let Some(arr) = pin["pin"].as_array().filter(|a| a.len() == 2)
+                && let (Some(px), Some(py)) = (arr[0].as_f64(), arr[1].as_f64())
+            {
+                let pt = Pos2::new(
+                    char_rect.min.x + (px as f32 / cw.max(1.0)).clamp(0.0, 1.0) * char_rect.width(),
+                    char_rect.min.y + (py as f32 / ch.max(1.0)).clamp(0.0, 1.0) * char_rect.height(),
+                );
+                ui.painter().circle_filled(pt, 3.6, ctx.pal.bg_input);
+                ui.painter().circle_stroke(pt, 3.6, Stroke::new(1.7, ctx.pal.accent_emerald));
+            }
+        }
+    }
 }

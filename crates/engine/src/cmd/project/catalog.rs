@@ -142,17 +142,18 @@ fn discover_project_craft_badges(dir: &Path, doc: &Value) -> Vec<&'static str> {
     }
     let has_ecproj = dir.join("lettering/lyrics.ecproj").is_file()
         || dir.join("motion/actions.ecproj").is_file()
-        || has_ext_in_tree(&dir.join("assets/characters"), &["ecproj"], 2);
+        || has_ext_in_tree(&dir.join("animations"), &["ecproj"], 3)
+        || has_ext_in_tree(&dir.join("assets/characters"), &["ecproj"], 3);
     if has_ecproj {
         badges.push(".ecproj");
     }
-    if has_ext_in_tree(&dir.join("assets"), &["pcraft"], 3) {
+    if has_ext_in_tree(&dir.join("assets"), &["pcraft"], 4) {
         badges.push(".pcraft");
-    } else if has_ext_in_tree(&dir.join("assets"), &["psd"], 3) {
+    } else if has_ext_in_tree(&dir.join("assets"), &["psd"], 4) {
         badges.push(".psd");
     }
     if has_ext_in_tree(&dir.join("motion"), &["vectorcraft", "svg"], 2)
-        || has_ext_in_tree(&dir.join("assets"), &["vectorcraft", "svg"], 2)
+        || has_ext_in_tree(&dir.join("assets"), &["vectorcraft", "svg"], 3)
     {
         badges.push(".svg");
     }
@@ -174,6 +175,7 @@ fn find_character_preview(project_dir: &Path, char_dir: &Path, raw_name: &str, c
         char_dir.join(format!("{canonical_id}-assembled.png")),
         char_dir.join("rig/assembled.png"),
         char_dir.join("cutout.png"),
+        char_dir.join("front.png"),
         char_dir.join("3d/breakouts").join(format!("{canonical_id}-cutout.png")),
         char_dir.join("angles/front.png"),
     ];
@@ -211,7 +213,7 @@ fn find_project_cover(project_dir: &Path, doc: &Value) -> Option<PathBuf> {
             }
         }
     }
-    first_image_in_tree(&project_dir.join("assets"), 2)
+    first_image_in_tree(&project_dir.join("assets"), 3)
 }
 
 fn project_card(raw_path: &str) -> Value {
@@ -227,26 +229,22 @@ fn project_card(raw_path: &str) -> Value {
         .unwrap_or("Untitled");
     let cover = exists.then(|| find_project_cover(dir, &doc)).flatten();
     let craft_badges = if exists { discover_project_craft_badges(dir, &doc) } else { Vec::new() };
-    let chars_dir = dir.join("assets/characters");
     let mut character_previews = Vec::new();
-    for entry in sorted_dir_entries(&chars_dir) {
-        if entry.is_dir()
-            && let Some(raw_name) = entry.file_name().and_then(|n| n.to_str())
-        {
-            let cid = crate::workspace::sanitize_asset_id(raw_name);
-            let has_pcraft = has_ext_in_tree(&entry, &["pcraft"], 1);
-            let has_ecproj = has_ext_in_tree(&entry, &["ecproj"], 1);
-            if let Some(img) = find_character_preview(dir, &entry, raw_name, &cid) {
-                character_previews.push(json!({
-                    "id": cid,
-                    "name": raw_name,
-                    "preview": img,
-                    "pcraft": has_pcraft,
-                    "ecproj": has_ecproj,
-                    "project": raw_path,
-                    "project_name": name,
-                }));
-            }
+    for (raw_name, group, entry) in crate::cmd::character::discover_character_folders(dir) {
+        let cid = crate::workspace::sanitize_asset_id(&raw_name);
+        let has_pcraft = has_ext_in_tree(&entry, &["pcraft"], 2);
+        let has_ecproj = has_ext_in_tree(&entry, &["ecproj"], 2);
+        if let Some(img) = find_character_preview(dir, &entry, &raw_name, &cid) {
+            character_previews.push(json!({
+                "id": cid,
+                "name": raw_name,
+                "group": group,
+                "preview": img,
+                "pcraft": has_pcraft,
+                "ecproj": has_ecproj,
+                "project": raw_path,
+                "project_name": name,
+            }));
         }
     }
     let modified = fs::metadata(path).and_then(|m| m.modified()).ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs());

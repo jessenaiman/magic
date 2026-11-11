@@ -301,7 +301,7 @@ pub fn cmd_workshop_import_transcript(s: &mut Session, params: &Value) -> Result
                 .map(|w| json!({"text": w["text"], "start_tick": w["start_tick"], "end_tick": w["end_tick"], "start": w["start"], "end": w["end"]}))
                 .collect::<Vec<_>>()
         );
-        grouping = "provisional word fallback; original word timestamps";
+        grouping = "provisional word grouping; original word timestamps";
     }
     let srt_text = caption_raw.or_else(|| srt_from_paragraphs(&doc));
     let probed = probed_duration(s);

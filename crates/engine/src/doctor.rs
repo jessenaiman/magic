@@ -1,9 +1,6 @@
-//! `app.doctor` (`magic-cli app doctor`): install, ArtCraft Launcher, CLI, and `--control`
-//! readiness checks in the Craft suite's standard doctor shape (`checks: [{name, status, message, remediation?}]`).
-//!
-//! System Craft application installations and updates are owned by the ArtCraft Launcher
-//! (`storytold/craft-launcher`), so `app.doctor` verifies local desktop/CLI binaries and active
-//! `--control` listeners without polling GitHub's release API for sibling Craft apps.
+//! `app.doctor` (`magic-cli app doctor`): install, ArtCraft Launcher, `<product>-cli`, `--control`,
+//! and `storytold/craft-ai-integrations` status checks in the Craft suite's standard doctor shape
+//! (`checks: [{name, status, message, remediation?}]`).
 
 use std::path::Path;
 
@@ -14,7 +11,6 @@ use crate::craft_hub::control::is_listening;
 use crate::craft_hub::discovery::{control_addr, detect_craft_launcher, resolve_executable_path};
 use crate::{Result, Session};
 
-/// One doctor finding.
 struct Check {
     name: String,
     status: &'static str,
@@ -27,8 +23,18 @@ impl Check {
         Self { name: name.into(), status: "ok", message: message.into(), remediation: None }
     }
 
-    fn problem(status: &'static str, name: impl Into<String>, message: impl Into<String>, remediation: impl Into<String>) -> Self {
-        Self { name: name.into(), status, message: message.into(), remediation: Some(remediation.into()) }
+    fn problem(
+        status: &'static str,
+        name: impl Into<String>,
+        message: impl Into<String>,
+        remediation: impl Into<String>,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            status,
+            message: message.into(),
+            remediation: Some(remediation.into()),
+        }
     }
 
     fn to_json(&self) -> Value {
@@ -57,7 +63,13 @@ fn craft_target_checks(target: CraftTarget) -> [Check; 2] {
         Some(path) => {
             let live_note = control_addr(target)
                 .ok()
-                .map(|addr| if is_listening(addr) { format!(" (--control listening on {addr})") } else { format!(" (--control idle on {addr})") })
+                .map(|addr| {
+                    if is_listening(addr) {
+                        format!(" (--control listening on {addr})")
+                    } else {
+                        format!(" (--control idle on {addr})")
+                    }
+                })
                 .unwrap_or_default();
             Check::ok(format!("app:{app_name}"), format!("{app_name} is at {}{live_note}", path.display()))
         }
@@ -82,16 +94,33 @@ fn checks(s: &Session) -> Vec<Check> {
         out.extend(craft_target_checks(target));
     }
 
-    out.push(tool_check("magic-cli", "fail", "Build it with `cargo build -p magic-cli` and put target/debug on PATH"));
-    out.push(tool_check("ffmpeg", "warn", "Optional fallback media tool (FilmCraft and craft-audio handle primary media)"));
-    out.push(tool_check("codex", "warn", "Optional if using AGY or Flow for Scribbles image generation"));
+    out.push(tool_check(
+        "magic-cli",
+        "fail",
+        "Build it with `cargo build -p magic-cli` and put target/debug on PATH",
+    ));
+
+    let ai = crate::craft_ai::craft_ai_status();
+    let ai_enabled = ai["enabled"].as_bool().unwrap_or(false);
+    let conn_count = ai["connections"].as_array().map_or(0, Vec::len);
+    out.push(Check::ok(
+        "ai:craft-ai-integrations",
+        format!(
+            "ai.enabled={ai_enabled}, {conn_count} SharedStore connection(s) configured via storytold/craft-ai-integrations"
+        ),
+    ));
 
     out.push(match s.control_address {
         Some(addr) => Check::ok("control", format!("live control listening on {addr}")),
         None => Check::ok("control", "no live control listener in this session (headless)"),
     });
 
-    let project_dir = s.project_path.as_ref().and_then(|p| p.parent()).map(Path::to_path_buf).unwrap_or_else(|| s.cwd.clone());
+    let project_dir = s
+        .project_path
+        .as_ref()
+        .and_then(|p| p.parent())
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| s.cwd.clone());
     let server_file = project_dir.join(".video-server.json");
     if server_file.is_file() {
         out.push(Check::problem(
@@ -104,7 +133,6 @@ fn checks(s: &Session) -> Vec<Check> {
     out
 }
 
-/// `app.doctor`: local ArtCraft Launcher, `<product>` / `<product>-cli`, and `--control` checks.
 pub fn cmd_app_doctor(s: &mut Session, _p: &Value) -> Result<Value> {
     let found = checks(s);
     let checks: Vec<Value> = found.iter().map(Check::to_json).collect();

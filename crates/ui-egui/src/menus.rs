@@ -1,7 +1,6 @@
 //! Native & in-window system menu bar built on [`craft_menu`] (`File`, `Edit`, `View`,
-//! `Storyboard`, `Character`, `Words & Motion`, `Studio`, `Window`, `Help`) with platform role
-//! placement, `craft-keymap` shortcut binding, live per-frame enablement/check state, and
-//! `--control` inspection (`ui.menu.list` / `ui.menu.invoke`).
+//! `Window`, `Help`) — deduplicated so stage-specific commands live exclusively on their
+//! respective view ribbons (`Storyboard`, `Animations`, `Lyrics`, `Motion`, `Studio`).
 
 use craft_keymap::{CommandRef, Keymap};
 use craft_menu::{
@@ -14,17 +13,8 @@ use crate::state::{UiAction, UiShellState, ViewMode};
 use crate::theme::ThemeMode;
 use crate::widgets::AutomationRegistry;
 
-pub const MENU_ORDER: &[&str] = &[
-    "File",
-    "Edit",
-    "View",
-    "Storyboard",
-    "Character",
-    "Words & Motion",
-    "Studio",
-    "Window",
-    "Help",
-];
+/// Clean app-level menus only — stage actions live directly on each view's ribbon & toolbar.
+pub const MENU_ORDER: &[&str] = &["File", "Edit", "View", "Window", "Help"];
 
 fn plain_row(path: &[&str], cmd: CommandRef, label: &str) -> Row {
     let kind = Item::new(cmd.clone(), label).kind;
@@ -55,7 +45,7 @@ fn sep_row(menu: &str) -> Row {
 }
 
 fn build_rows(state: &UiShellState) -> Vec<Row> {
-    let mut rows = Vec::with_capacity(64);
+    let mut rows = Vec::with_capacity(42);
     // File
     rows.push(plain_row(&["File"], CommandRef::from("project.new"), "New Song Project…"));
     rows.push(plain_row(&["File"], CommandRef::from("project.open"), "Open Project…"));
@@ -63,6 +53,8 @@ fn build_rows(state: &UiShellState) -> Vec<Row> {
     rows.push(plain_row(&["File"], CommandRef::from("file.save"), "Save Project"));
     rows.push(plain_row(&["File"], CommandRef::from("file.saveAs"), "Save Project As…"));
     rows.push(plain_row(&["File"], CommandRef::from("project.import_file"), "Import Media or Asset…"));
+    rows.push(sep_row("File"));
+    rows.push(plain_row(&["File"], CommandRef::from("ui.preferences"), "Options…"));
     rows.push(sep_row("File"));
     rows.push(plain_row(&["File"], CommandRef::from("file.close"), "Close Project"));
     rows.push(plain_row(&["File"], CommandRef::from("app.quit"), "Quit Magic Studio"));
@@ -73,9 +65,9 @@ fn build_rows(state: &UiShellState) -> Vec<Row> {
     rows.push(sep_row("Edit"));
     rows.push(plain_row(&["Edit"], CommandRef::from("clipboard.import_image"), "Paste Clipboard Artwork"));
     rows.push(sep_row("Edit"));
-    rows.push(plain_row(&["Edit", "Preferences"], CommandRef::from("ui.preferences"), "General & AI Providers…"));
+    rows.push(plain_row(&["Edit", "Preferences"], CommandRef::from("ui.preferences"), "Options (Style & AI Providers)…"));
 
-    // View (`Gallery` & `Mayhem` removed)
+    // View
     for (view, title) in [
         (ViewMode::Home, "Home Catalog"),
         (ViewMode::Project, "Project Files & Assets"),
@@ -93,8 +85,9 @@ fn build_rows(state: &UiShellState) -> Vec<Row> {
         ));
     }
     rows.push(sep_row("View"));
-    rows.push(plain_row(&["View"], CommandRef::from("ui.toggle_assets"), "Stage Assets Drawer"));
-    rows.push(plain_row(&["View"], CommandRef::from("ui.toggle_fidget"), "Fidget Assistant"));
+    rows.push(plain_row(&["View"], CommandRef::from("ui.toggle_ribbon"), "Command Ribbon"));
+    rows.push(plain_row(&["View"], CommandRef::from("ui.toggle_assets"), "Stage Assets Shelf"));
+    rows.push(plain_row(&["View"], CommandRef::from("ui.toggle_fidget"), "Fidget & Scribbles Stager"));
     for (mode, label) in [
         (ThemeMode::Dark, "Dark Workstation"),
         (ThemeMode::Light, "Light Paper"),
@@ -107,48 +100,6 @@ fn build_rows(state: &UiShellState) -> Vec<Row> {
             state.theme_mode == mode,
         ));
     }
-
-    // Storyboard (`DesignCraft`)
-    rows.push(plain_row(&["Storyboard"], CommandRef::from("storyboard.new"), "Initialize Storyboard"));
-    rows.push(plain_row(&["Storyboard"], CommandRef::from("ui.storyboard.wizard"), "Title-Page Wizard…"));
-    rows.push(plain_row(&["Storyboard"], CommandRef::from("storyboard.bulk_generate"), "Bulk Generate Scenes"));
-    rows.push(plain_row(&["Storyboard"], CommandRef::from("storyboard.check"), "Verify Readiness Gate"));
-    rows.push(sep_row("Storyboard"));
-    rows.push(plain_row(&["Storyboard"], CommandRef::from("storyboard.open"), "Edit in DesignCraft"));
-    rows.push(plain_row(&["Storyboard"], CommandRef::from("storyboard.export"), "Export Storyboard PDF"));
-
-    // Character (`PhotoCraft` + `EffectCraft` V2 + `Scribbles`)
-    rows.push(plain_row(&["Character"], CommandRef::from("scribbles.open"), "Open Scribbles Companion"));
-    rows.push(plain_row(&["Character"], CommandRef::from("character.mark"), "Mark Puppet Joints"));
-    rows.push(plain_row(&["Character"], CommandRef::from("character.cut"), "Cut Parts in PhotoCraft"));
-    rows.push(plain_row(&["Character"], CommandRef::from("character.rig"), "Build EffectCraft Puppet Rig"));
-    rows.push(plain_row(&["Character"], CommandRef::from("character.puppet.rig_face"), "Rig 11-Pin Facial Mesh"));
-    rows.push(plain_row(&["Character"], CommandRef::from("character.puppet.lipsync"), "Sync Mouth Visemes"));
-
-    // Words & Motion (`EffectCraft` V3/V4 + `VectorCraft` + `PhotoCraft`)
-    rows.push(plain_row(&["Words & Motion"], CommandRef::from("audio.analyze"), "Transcribe Song & Sync Timing"));
-    rows.push(plain_row(&["Words & Motion"], CommandRef::from("words.effects"), "Refresh Craft Typography Effects"));
-    rows.push(plain_row(&["Words & Motion"], CommandRef::from("motion.effects"), "Refresh Craft Motion Effects"));
-    rows.push(plain_row(&["Words & Motion"], CommandRef::from("words.letter"), "Publish Kinetic Lyrics (V3)"));
-    rows.push(plain_row(&["Words & Motion"], CommandRef::from("motion.publish"), "Publish Action Motion (V4)"));
-    rows.push(sep_row("Words & Motion"));
-    rows.push(plain_row(
-        &["Words & Motion"],
-        CommandRef::with_params("workspace.open", json!({"app": "effectcraft", "domain": "lyrics"})),
-        "Open Lyrics in EffectCraft",
-    ));
-    rows.push(plain_row(
-        &["Words & Motion"],
-        CommandRef::with_params("motion.open", json!({"app": "vectorcraft"})),
-        "Open Action SVG in VectorCraft",
-    ));
-
-    // Studio (`FilmCraft`)
-    rows.push(plain_row(&["Studio"], CommandRef::from("video.assemble"), "Assemble Master Sequence"));
-    rows.push(plain_row(&["Studio"], CommandRef::from("video.preview"), "Render Studio Preview"));
-    rows.push(plain_row(&["Studio"], CommandRef::from("video.export"), "Export Master Film"));
-    rows.push(sep_row("Studio"));
-    rows.push(plain_row(&["Studio"], CommandRef::from("video.open"), "Open Sequence in FilmCraft"));
 
     // Window (ArtCraft Suite Launchers)
     rows.push(plain_row(&["Window"], CommandRef::from("window.snap"), "Snap Window Left / Right"));
@@ -169,6 +120,8 @@ fn build_rows(state: &UiShellState) -> Vec<Row> {
 
     // Help
     rows.push(plain_row(&["Help"], CommandRef::from("ui.doctor"), "ArtCraft Suite Doctor…"));
+    rows.push(plain_row(&["Help"], CommandRef::from("ui.copy_diagnostics"), "Copy Diagnostics"));
+    rows.push(plain_row(&["Help"], CommandRef::from("ui.report_problem"), "Report a Problem…"));
     rows.push(plain_row(&["Help"], CommandRef::from("app.update"), "Check for Updates"));
     rows.push(sep_row("Help"));
     rows.push(plain_row(&["Help"], CommandRef::from("help.about"), "About Magic Studio"));
@@ -181,10 +134,6 @@ pub fn build_menu_bar(state: &UiShellState, keymap: &Keymap, is_enabled: impl Fn
     bar.tag_menu("File", MenuRole::File);
     bar.tag_menu("Edit", MenuRole::Edit);
     bar.tag_menu("View", MenuRole::View);
-    bar.tag_menu("Storyboard", MenuRole::Other);
-    bar.tag_menu("Character", MenuRole::Other);
-    bar.tag_menu("Words & Motion", MenuRole::Other);
-    bar.tag_menu("Studio", MenuRole::Other);
     bar.tag_menu("Window", MenuRole::Window);
     bar.tag_menu("Help", MenuRole::Help);
     bar.tag_item(&CommandRef::from("help.about"), ItemRole::About);
@@ -195,6 +144,7 @@ pub fn build_menu_bar(state: &UiShellState, keymap: &Keymap, is_enabled: impl Fn
     apply_keymap(&mut bar, keymap);
     apply_state(&mut bar, |cmd| {
         let checked = match cmd.id.as_str() {
+            "ui.toggle_ribbon" => Some(!state.ribbon_collapsed),
             "ui.toggle_assets" => Some(state.assets_drawer_open),
             "ui.toggle_fidget" => Some(state.fidget_open),
             "ui.set" => {
@@ -224,15 +174,16 @@ fn command_enabled(state: &UiShellState, id: &str, engine_enabled: &impl Fn(&str
         | "app.quit"
         | "ui.preferences"
         | "ui.set"
+        | "ui.toggle_ribbon"
         | "ui.toggle_fidget"
+        | "ui.copy_diagnostics"
+        | "ui.report_problem"
         | "window.snap"
         | "workspace.open"
-        | "words.effects"
-        | "motion.effects"
         | "ui.doctor"
         | "app.update"
         | "help.about" => true,
-        "ui.toggle_assets" | "ui.storyboard.wizard" | "file.save" | "file.saveAs" | "file.close" => has_project,
+        "ui.toggle_assets" | "file.save" | "file.saveAs" | "file.close" => has_project,
         other => engine_enabled(other),
     }
 }
@@ -309,19 +260,20 @@ pub fn translate_menu_command(cmd: &CommandRef, state: &mut UiShellState) -> Opt
         "app.quit" => Some(UiAction::RequestQuit),
         "ui.preferences" => Some(UiAction::OpenPreferences),
         "ui.doctor" => Some(UiAction::OpenDoctor),
+        "ui.copy_diagnostics" => Some(UiAction::CopyDiagnostics),
+        "ui.report_problem" => Some(UiAction::OpenReportProblem),
         "help.about" => Some(UiAction::OpenAbout),
         "window.snap" => Some(UiAction::SnapWindow),
+        "ui.toggle_ribbon" => {
+            state.ribbon_collapsed = !state.ribbon_collapsed;
+            None
+        }
         "ui.toggle_assets" => {
             state.assets_drawer_open = !state.assets_drawer_open;
             None
         }
         "ui.toggle_fidget" => {
             state.fidget_open = !state.fidget_open;
-            None
-        }
-        "ui.storyboard.wizard" => {
-            state.view = ViewMode::Storyboard;
-            state.storyboard.show_wizard = true;
             None
         }
         "ui.set" => {

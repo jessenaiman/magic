@@ -541,12 +541,12 @@ impl crate::doc_state::ProjectDoc for WordsDesign {
 fn normalize_words_doc(mut doc: Value) -> Value {
     if let Some(anims) = doc["animations"].as_array_mut() {
         for anim in anims.iter_mut() {
-            let fallback_line = anim["scope"]["line_ids"].as_array().and_then(|arr| arr.first()).and_then(Value::as_str).unwrap_or("l1").to_owned();
+            let default_line = anim["scope"]["line_ids"].as_array().and_then(|arr| arr.first()).and_then(Value::as_str).unwrap_or("l1").to_owned();
             if let Some(words) = anim["words"].as_array_mut() {
                 for w in words.iter_mut() {
                     let wid_prefix = w["word_id"].as_str().and_then(|wid| wid.split_once('/').map(|(prefix, _)| prefix.to_owned()));
                     if w["line_id"].as_str().is_none_or(str::is_empty) {
-                        w["line_id"] = json!(wid_prefix.clone().unwrap_or_else(|| fallback_line.clone()));
+                        w["line_id"] = json!(wid_prefix.clone().unwrap_or_else(|| default_line.clone()));
                     }
                     if w["sung_id"].as_str().is_none_or(str::is_empty) {
                         w["sung_id"] = w["line_id"].clone();

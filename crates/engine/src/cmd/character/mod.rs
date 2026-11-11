@@ -28,7 +28,7 @@ pub use action::{cmd_character_action, cmd_character_actions};
 pub use cut::cmd_character_cut;
 pub use effect::{
     cmd_expression_set, cmd_keyframe_easy_ease, cmd_keyframe_velocity, cmd_layer_new_3d_model, cmd_layer_set_blend_mode, cmd_layer_set_parent, cmd_mask_add,
-    cmd_puppet_add_pin, cmd_puppet_move_pin, cmd_puppet_remove_pin, cmd_time_remap,
+    cmd_puppet_add_pin, cmd_puppet_move_pin, cmd_puppet_null_rig, cmd_puppet_remove_pin, cmd_puppet_select_pins, cmd_puppet_set_pin, cmd_time_remap,
 };
 pub use manage::{
     classify_animation_style, cmd_animation_open, cmd_animation_view, cmd_character_frame, cmd_character_import, cmd_character_list, cmd_character_open,
@@ -43,6 +43,15 @@ pub use shot::{cmd_character_publish, cmd_character_shot};
 pub use sprite::cmd_character_sprite;
 
 pub(crate) const POSES: &str = include_str!("poses.json");
+pub(crate) const SKIP_CHARACTER_GROUPS: &[&str] = &[
+    "_incoming",
+    "approved-crops",
+    "lineup",
+    "expressions",
+    "contact-parts-v1",
+    "cast",
+    "tripo-input",
+];
 
 pub(crate) fn bad(message: impl Into<String>) -> EngineError {
     EngineError::InvalidParams(message.into())
@@ -52,40 +61,88 @@ pub(crate) fn path_arg(path: &Path) -> String {
     path.to_string_lossy().into_owned()
 }
 
-pub(crate) fn character_folder(project_dir: &Path, id: &str) -> PathBuf {
+fn matches_character_name(folder_name: &str, id: &str) -> bool {
+    let sanitized = crate::workspace::sanitize_asset_id(folder_name);
+    folder_name.eq_ignore_ascii_case(id) || sanitized == id || id.starts_with(&format!("{sanitized}_"))
+}
+
+/// Discover all character directories under `assets/characters` (both flat `<char>` and nested
+/// cast/family folders `<group>/<char>`) plus `animations/characters/<char>`.
+pub(crate) fn discover_character_folders(project_dir: &Path) -> Vec<(String, Option<String>, PathBuf)> {
+    let mut out = Vec::new();
     let root = project_dir.join("assets/characters");
-    if let Ok(entries) = std::fs::read_dir(&root) {
-        for entry in entries.flatten() {
-            let name = entry.file_name().to_string_lossy().into_owned();
-            if name.eq_ignore_ascii_case(id)
-                || crate::workspace::sanitize_asset_id(&name) == id
-                || id.starts_with(&format!("{}_", crate::workspace::sanitize_asset_id(&name)))
+    let mut top_entries: Vec<PathBuf> = std::fs::read_dir(&root).into_iter().flatten().flatten().map(|e| e.path()).filter(|p| p.is_dir()).collect();
+    top_entries.sort();
+
+    for entry in top_entries {
+        let Some(name) = entry.file_name().and_then(|n| n.to_str()) else {
+            continue;
+        };
+        if SKIP_CHARACTER_GROUPS.iter().any(|s| name.eq_ignore_ascii_case(s)) || name.starts_with('.') {
+            continue;
+        }
+        let direct_has_craft = entry.join("front").is_dir()
+            || entry.join("parts.json").is_file()
+            || entry.join("character.magic").is_file()
+            || std::fs::read_dir(&entry)
+                .into_iter()
+                .flatten()
+                .flatten()
+                .any(|f| f.path().is_file() && crate::workspace::has_extension(&f.path(), &["pcraft", "psd", "ecproj", "vectorcraft", "png", "webp"]));
+        if direct_has_craft {
+            out.push((name.to_owned(), None, entry));
+            continue;
+        }
+        let mut sub_entries: Vec<PathBuf> = std::fs::read_dir(&entry).into_iter().flatten().flatten().map(|e| e.path()).filter(|p| p.is_dir()).collect();
+        sub_entries.sort();
+        for sub in sub_entries {
+            if let Some(sub_name) = sub.file_name().and_then(|n| n.to_str())
+                && !sub_name.starts_with('.')
+                && !SKIP_CHARACTER_GROUPS.iter().any(|s| sub_name.eq_ignore_ascii_case(s))
             {
-                return entry.path();
+                out.push((sub_name.to_owned(), Some(name.to_owned()), sub));
             }
         }
     }
-    root.join(id)
+
+    for anim_chars_root in [
+        project_dir.join("animations/characters"),
+        project_dir.join("assets/animations/characters"),
+    ] {
+        let mut anim_entries: Vec<PathBuf> =
+            std::fs::read_dir(&anim_chars_root).into_iter().flatten().flatten().map(|e| e.path()).filter(|p| p.is_dir()).collect();
+        anim_entries.sort();
+        for entry in anim_entries {
+            if let Some(name) = entry.file_name().and_then(|n| n.to_str())
+                && !out.iter().any(|(existing, _, _)| crate::workspace::sanitize_asset_id(existing) == crate::workspace::sanitize_asset_id(name))
+            {
+                out.push((name.to_owned(), Some("animations".into()), entry));
+            }
+        }
+    }
+    out
+}
+
+pub(crate) fn character_folder(project_dir: &Path, id: &str) -> PathBuf {
+    for (raw_name, _, path) in discover_character_folders(project_dir) {
+        if matches_character_name(&raw_name, id) {
+            return path;
+        }
+    }
+    project_dir.join("assets/characters").join(id)
 }
 
 pub(crate) fn find_initial_cutout(char_folder: &Path) -> Option<PathBuf> {
     let folder_name = char_folder.file_name().and_then(|n| n.to_str()).unwrap_or_default();
-    if let (Some(name), Some(project)) = (char_folder.file_name().and_then(|n| n.to_str()), char_folder.parent().and_then(Path::parent).and_then(Path::parent))
-    {
-        for candidate in
-            [project.join("assets/characters/approved-crops").join(format!("{name}_from-lineup-v2.png")), char_folder.join("parts/source/body-plate_v1.png")]
-        {
-            if candidate.is_file() {
-                return Some(candidate);
-            }
-        }
-    }
     for named in [
         char_folder.join("assembled.png"),
         char_folder.join("cutout.png"),
+        char_folder.join("front.png"),
         char_folder.join(format!("{folder_name}-clean.png")),
         char_folder.join(format!("{folder_name}-drawing.png")),
+        char_folder.join(format!("{folder_name}-front.png")),
         char_folder.join("flow-original.png"),
+        char_folder.join("parts/source/body-plate_v1.png"),
     ] {
         if named.is_file() {
             return Some(named);
@@ -124,8 +181,14 @@ fn find_by_ext(dir: &Path, id: &str, folder_name: &str, view: &str, is_flat: boo
     let mut candidates = vec![dir.join(format!("{id}-{view}.{ext}")), dir.join(format!("{folder_name}-{view}.{ext}"))];
     if is_flat {
         candidates.extend([
+            dir.join(format!("cutout.{ext}")),
+            dir.join(format!("cut-contours.{ext}")),
+            dir.join(format!("layered_motion.{ext}")),
             dir.join(format!("{folder_name}-parts.{ext}")),
             dir.join(format!("{id}-parts.{ext}")),
+            dir.join(format!("{folder_name}-atlas-editable.{ext}")),
+            dir.join(format!("{folder_name}-identity-atlas.{ext}")),
+            dir.join(format!("{folder_name}-matte.{ext}")),
             dir.join(format!("{folder_name}-rig.{ext}")),
             dir.join(format!("{id}-rig.{ext}")),
             dir.join(format!("{folder_name}.{ext}")),

@@ -43,6 +43,12 @@ impl CommandSpec {
 pub fn is_read_only_command(id: &str, params: &Value) -> bool {
     match id {
         "project.catalog" | "file.recent" => params.get("forget").is_none_or(Value::is_null) && params["clear"] != true,
+        "video.sync_links" => params.get("render").and_then(Value::as_bool) != Some(true),
+        "bridge.history" => params["op"].as_str().or_else(|| params["action"].as_str()).unwrap_or("list") == "list",
+        "bridge.control" => matches!(params["action"].as_str().unwrap_or("status"), "status" | "focus"),
+        "video.finish" => matches!(params["op"].as_str().unwrap_or_default(), "jobs_list" | "scopes" | "workspace"),
+        "effect.import_aep" => params["dry_run"].as_bool().or_else(|| params["dryRun"].as_bool()).unwrap_or(true),
+        "bridge.templates" => params["action"].as_str().unwrap_or("list") == "list",
         "storyboard.locations" => {
             params.get("fields").is_none()
                 && params.get("images").is_none()
@@ -51,6 +57,8 @@ pub fn is_read_only_command(id: &str, params: &Value) -> bool {
                 && params.get("refs").is_none()
         }
         "project.attach"
+        | "project.autosave"
+        | "workspace.close_opened"
         | "file.list"
         | "backstage.changes"
         | "backstage.events"
@@ -75,13 +83,27 @@ pub fn is_read_only_command(id: &str, params: &Value) -> bool {
         | "words.effects"
         | "words.track"
         | "motion.read"
-        | "agent.session"
-        | "agent.config"
-        | "agent.models"
+        | "motion.effects"
+        | "video.film"
+        | "video.timeline"
+        | "video.list_ec_comps"
+        | "bridge.status"
+        | "bridge.preflight"
+        | "ai.status"
+        | "fidget.prepare"
+        | "scribbles.templates"
+        | "prefs.schema"
+        | "prefs.get"
         | "command.list"
         | "ui.inspect"
         | "ui.state"
+        | "ui.drafts"
         | "ui.elements"
+        | "ui.viewer.locate"
+        | "ui.viewer.hit"
+        | "ui.timeline.locate"
+        | "ui.timeline.hit"
+        | "perf.stats"
         | "app.doctor"
         | "app.update" => true,
         "project.root" => params.get("root").is_none_or(Value::is_null),
@@ -90,9 +112,8 @@ pub fn is_read_only_command(id: &str, params: &Value) -> bool {
             let has_time_or_name =
                 params.get("time").is_some() || params.get("seconds").is_some() || params.get("tick").is_some() || params.get("name").is_some();
             let action = params["action"].as_str().unwrap_or(if has_time_or_name { "add" } else { "list" });
-            action == "list"
+            action == "list" || action == "export_csv"
         }
-        "agent.log" => params.get("refresh").and_then(Value::as_bool) != Some(true),
         _ => false,
     }
 }

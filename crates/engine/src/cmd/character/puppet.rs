@@ -12,7 +12,7 @@ use super::{View, bad, effectcraft, part_list, step};
 use crate::time::{TICKS_PER_SECOND, Tick, parse_tick};
 use crate::{Result, Session};
 
-/// Resolve the head layer (or fallback primary character layer) and its `[x, y, w, h]` pixel bounds.
+/// Resolve the head layer (or primary character layer) and its `[x, y, w, h]` pixel bounds.
 fn resolve_face_layer(parts: &Value) -> Result<(String, [f64; 4])> {
     let list = part_list(parts)?;
     let chosen = list
@@ -379,13 +379,24 @@ pub fn cmd_puppet_record(s: &mut Session, p: &Value) -> Result<Value> {
     let layer = p["layer"].as_str().ok_or_else(|| bad("layer=<layer name> is required"))?;
     let pin = p["pin"].as_str().ok_or_else(|| bad("pin=<pin name> is required"))?;
     let samples = p["samples"].as_array().filter(|a| !a.is_empty()).ok_or_else(|| bad("samples=[[time, x, y], ...] is required"))?;
+    let smoothing = p["smoothing"].as_f64().or_else(|| p["smooth"].as_f64()).unwrap_or(2.0);
+    let rec_opts = json!({
+        "speed": p["speed"].as_f64().unwrap_or(100.0),
+        "smoothing": smoothing,
+        "useDraftDeformation": p["draft_deform"].as_bool().or_else(|| p["useDraftDeformation"].as_bool()).unwrap_or(true),
+        "showMesh": p["show_mesh"].as_bool().or_else(|| p["showMesh"].as_bool()).unwrap_or(true),
+    });
     let params = json!({
         "layer": layer,
         "pin": pin,
         "samples": samples,
-        "smooth": p["smooth"].as_f64().unwrap_or(2.0),
+        "smooth": smoothing,
     });
-    let steps = vec![step("comp.open", json!({"comp": view.comp()})), step("puppet.recordPin", params)];
+    let steps = vec![
+        step("comp.open", json!({"comp": view.comp()})),
+        step("puppet.recordOptions", rec_opts),
+        step("puppet.recordPin", params),
+    ];
     let out = effectcraft(&view.dir, Some(&project), &steps, true)?;
     Ok(json!({"ok": true, "ecproj": project, "layer": layer, "pin": pin, "samples": samples.len(), "result": out.last()}))
 }
