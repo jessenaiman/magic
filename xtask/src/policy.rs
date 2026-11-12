@@ -13,7 +13,13 @@ use serde_json::Value;
 use crate::Result;
 
 /// Library crates in `crates/*` and their layers (`apps/*` and `xtask` are top-level binaries exempt from inward edges).
-const CRATE_LAYERS: &[(&str, u8)] = &[("magic-util", 4), ("magic-scribbles", 4), ("magic-engine", 5), ("magic-mcp", 6), ("magic-ui-egui", 6)];
+const CRATE_LAYERS: &[(&str, u8)] = &[
+    ("magic-util", 4),
+    ("magic-scribbles", 4),
+    ("magic-engine", 5),
+    ("magic-mcp", 6),
+    ("magic-ui-egui", 6),
+];
 
 /// Top-level binary packages in `apps/*` and `xtask`.
 const APP_BINARIES: &[&str] = &["magic", "magic-cli", "magic-tui", "xtask"];
@@ -36,7 +42,13 @@ const UI_CRATES: &[&str] = &[
 ];
 
 /// Non-Tauri / pure-Rust enforcement across the entire workspace (`photocraft/AGENTS.md`, `deckcraft/AGENTS.md`).
-const FORBIDDEN_WEBVIEW: &[&str] = &["tauri", "tauri-build", "wry", "tao", "webkit2gtk"];
+const FORBIDDEN_WEBVIEW: &[&str] = &[
+    "tauri",
+    "tauri-build",
+    "wry",
+    "tao",
+    "webkit2gtk",
+];
 
 /// Sibling ArtCraft product crates are never linked as Cargo dependencies (`storytold/craft-libs` only).
 const FORBIDDEN_SIBLING_PREFIXES: &[&str] = &[
@@ -64,7 +76,10 @@ fn workspace_layer(name: &str) -> Option<u8> {
 }
 
 pub(crate) fn metadata() -> Result<Value> {
-    let out = Command::new(env!("CARGO")).args(["metadata", "--format-version", "1", "--no-deps"]).output().map_err(|e| e.to_string())?;
+    let out = Command::new(env!("CARGO"))
+        .args(["metadata", "--format-version", "1", "--no-deps"])
+        .output()
+        .map_err(|e| e.to_string())?;
     if !out.status.success() {
         return Err(String::from_utf8_lossy(&out.stderr).into());
     }
@@ -90,7 +105,10 @@ fn workspace_packages(md: &Value) -> Vec<(String, Vec<String>)> {
 }
 
 fn workspace_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap_or_else(|| Path::new(".")).to_path_buf()
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .to_path_buf()
 }
 
 pub(crate) fn layers() -> Result<()> {
@@ -100,23 +118,31 @@ pub(crate) fn layers() -> Result<()> {
 
     for (name, deps) in &packages {
         if name.starts_with("craft-") {
-            errors.push(format!("{name}: local workspace crates must use `magic-*` and never impersonate `storytold/craft-libs` (`craft-*`)"));
+            errors.push(format!(
+                "{name}: local workspace crates must use `magic-*` and never impersonate `storytold/craft-libs` (`craft-*`)"
+            ));
             continue;
         }
         let is_app = APP_BINARIES.contains(&name.as_str());
         let src_layer = workspace_layer(name);
         if !is_app && src_layer.is_none() {
-            errors.push(format!("{name}: unregistered workspace package (add it to `CRATE_LAYERS` or `APP_BINARIES` in `xtask/src/policy.rs`)"));
+            errors.push(format!(
+                "{name}: unregistered workspace package (add it to `CRATE_LAYERS` or `APP_BINARIES` in `xtask/src/policy.rs`)"
+            ));
             continue;
         }
 
         for dep in deps {
             if FORBIDDEN_WEBVIEW.contains(&dep.as_str()) || dep.starts_with("tauri-") {
-                errors.push(format!("{name} depends on forbidden webview/Tauri crate `{dep}`: Magic Studio is pure Rust (`eframe` + `egui`)"));
+                errors.push(format!(
+                    "{name} depends on forbidden webview/Tauri crate `{dep}`: Magic Studio is pure Rust (`eframe` + `egui`)"
+                ));
                 continue;
             }
             if FORBIDDEN_SIBLING_PREFIXES.iter().any(|p| dep.starts_with(p)) {
-                errors.push(format!("{name} depends on sibling app crate `{dep}`: exchange files on disk via `storytold/craft-libs` instead"));
+                errors.push(format!(
+                    "{name} depends on sibling app crate `{dep}`: exchange files on disk via `storytold/craft-libs` instead"
+                ));
                 continue;
             }
             if APP_BINARIES.contains(&dep.as_str()) {
@@ -125,13 +151,17 @@ pub(crate) fn layers() -> Result<()> {
             }
             if let Some(l) = src_layer {
                 if l < 6 && (UI_CRATES.contains(&dep.as_str()) || dep.ends_with("-ui-egui")) {
-                    errors.push(format!("{name} (L{l}) depends on UI crate `{dep}`: nothing below L6 may depend on egui/eframe/winit/rfd/craft-ui"));
+                    errors.push(format!(
+                        "{name} (L{l}) depends on UI crate `{dep}`: nothing below L6 may depend on egui/eframe/winit/rfd/craft-ui"
+                    ));
                     continue;
                 }
                 if let Some(dl) = workspace_layer(dep)
                     && dl >= l
                 {
-                    errors.push(format!("{name} (L{l}) depends on workspace crate `{dep}` (L{dl}): edges must point strictly downward"));
+                    errors.push(format!(
+                        "{name} (L{l}) depends on workspace crate `{dep}` (L{dl}): edges must point strictly downward"
+                    ));
                 }
             }
         }
@@ -165,7 +195,8 @@ fn collect_files(dir: &Path, root: &Path, out: &mut Vec<String>) {
 pub(crate) fn assets() -> Result<()> {
     let root = workspace_root();
     let attr_path = root.join("ATTRIBUTION.md");
-    let attr_text = std::fs::read_to_string(&attr_path).map_err(|e| format!("could not read ATTRIBUTION.md: {e}"))?;
+    let attr_text = std::fs::read_to_string(&attr_path)
+        .map_err(|e| format!("could not read ATTRIBUTION.md: {e}"))?;
 
     let mut tracked = Vec::new();
     for folder in ["assets", "docs/brand", "figcraft"] {

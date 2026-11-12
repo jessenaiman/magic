@@ -107,7 +107,11 @@ impl Clone for Session {
 
 impl Session {
     pub fn user_session() -> Self {
-        Self { record_user_state: true, settings: crate::settings::SessionSettings::auto(), ..Self::default() }
+        Self {
+            record_user_state: true,
+            settings: crate::settings::SessionSettings::auto(),
+            ..Self::default()
+        }
     }
 
     pub fn with_automation_roots(mut self, roots: Option<crate::confinement::AutomationRoots>) -> Self {

@@ -1,7 +1,10 @@
 //! Workstation modals (`Options`, `Doctor`, `About`, `UnsavedChanges`, `ReportProblem`),
 //! `#app-footer` session/journal chips, Undo & AutoSave recovery window, and toast notifications.
 
-use egui::{Align, Align2, CornerRadius, Frame, Layout, Margin, RichText, ScrollArea, Sense, Stroke, StrokeKind, Ui, Vec2};
+use egui::{
+    Align, Align2, CornerRadius, Frame, Layout, Margin, RichText, ScrollArea, Sense, Stroke,
+    StrokeKind, Ui, Vec2,
+};
 use serde_json::json;
 
 use crate::options_modal::{draw_options_window, draw_report_problem_window};
@@ -12,12 +15,39 @@ use crate::widgets::{BtnSpec, action_button};
 pub fn draw_footer_session_pills(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     let has_proj = ctx.state.project_path.is_some();
     let dirty = !ctx.state.dirty_drafts.is_empty() || !ctx.state.dirty_tracks.is_empty();
-    draw_status_chip(ui, ctx, "footer-history-pill", "History", has_proj && !dirty, has_proj, "Open Session Undo & AutoSave Journal (.history/)", true);
-    draw_status_chip(ui, ctx, "footer-control-pill", "Magic :9875", has_proj, true, "Run Magic Studio workspace & Craft tool health check (app.doctor)", false);
+    draw_status_chip(
+        ui,
+        ctx,
+        "footer-history-pill",
+        "History",
+        has_proj && !dirty,
+        has_proj,
+        "Open Session Undo & AutoSave Journal (.history/)",
+        true,
+    );
+    draw_status_chip(
+        ui,
+        ctx,
+        "footer-control-pill",
+        "Magic :9875",
+        has_proj,
+        true,
+        "Run Magic Studio workspace & Craft tool health check (app.doctor)",
+        false,
+    );
 }
 
 #[allow(clippy::too_many_arguments)]
-fn draw_status_chip(ui: &mut Ui, ctx: &mut ViewCtx<'_>, id: &str, label: &str, ok: bool, ready: bool, tooltip: &str, opens_history: bool) {
+fn draw_status_chip(
+    ui: &mut Ui,
+    ctx: &mut ViewCtx<'_>,
+    id: &str,
+    label: &str,
+    ok: bool,
+    ready: bool,
+    tooltip: &str,
+    opens_history: bool,
+) {
     let dot_col = if ok {
         ctx.pal.accent_emerald
     } else if ready {
@@ -26,12 +56,27 @@ fn draw_status_chip(ui: &mut Ui, ctx: &mut ViewCtx<'_>, id: &str, label: &str, o
         ctx.pal.border
     };
     let font = egui::FontId::monospace(9.5);
-    let galley = ui.painter().layout_no_wrap(label.to_owned(), font.clone(), ctx.pal.text_secondary);
+    let galley = ui
+        .painter()
+        .layout_no_wrap(label.to_owned(), font.clone(), ctx.pal.text_secondary);
     let (rect, resp) = ui.allocate_exact_size(Vec2::new(galley.size().x + 20.0, 18.0), Sense::click());
     let fill = if resp.hovered() { ctx.pal.bg_hover } else { ctx.pal.bg_input };
-    ui.painter().rect(rect, CornerRadius::same(9), fill, Stroke::new(1.0, dot_col.gamma_multiply(0.55)), StrokeKind::Inside);
-    ui.painter().circle_filled(egui::pos2(rect.min.x + 7.5, rect.center().y), 2.8, dot_col);
-    ui.painter().text(egui::pos2(rect.min.x + 13.5, rect.center().y), Align2::LEFT_CENTER, label, font, ctx.pal.text_secondary);
+    ui.painter().rect(
+        rect,
+        CornerRadius::same(9),
+        fill,
+        Stroke::new(1.0, dot_col.gamma_multiply(0.55)),
+        StrokeKind::Inside,
+    );
+    ui.painter()
+        .circle_filled(egui::pos2(rect.min.x + 7.5, rect.center().y), 2.8, dot_col);
+    ui.painter().text(
+        egui::pos2(rect.min.x + 13.5, rect.center().y),
+        Align2::LEFT_CENTER,
+        label,
+        font,
+        ctx.pal.text_secondary,
+    );
     let resp = resp.on_hover_text(tooltip);
     if resp.clicked() {
         if opens_history {
@@ -45,7 +90,12 @@ fn draw_status_chip(ui: &mut Ui, ctx: &mut ViewCtx<'_>, id: &str, label: &str, o
 
 /// Options dialog `History & Control` tab (restored without cross-app CraftHub polling).
 pub fn draw_options_history_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
-    ui.label(RichText::new("Undo History, Atomic AutoSave & Live --control (:9875)").size(15.0).strong().color(ctx.pal.accent_emerald));
+    ui.label(
+        RichText::new("Undo History, Atomic AutoSave & Live --control (:9875)")
+            .size(15.0)
+            .strong()
+            .color(ctx.pal.accent_emerald),
+    );
     ui.add_space(4.0);
     ui.label(
         RichText::new(
@@ -104,19 +154,43 @@ pub fn draw_history_recovery_window(egui_ctx: &egui::Context, ctx: &mut ViewCtx<
         .anchor(Align2::LEFT_TOP, egui::vec2(18.0, 42.0))
         .show(egui_ctx, |ui| {
             ui.horizontal(|ui| {
-                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("history-undo", "undo", "Undo", "Undo last project command")).clicked() {
+                if action_button(
+                    ui,
+                    ctx.reg,
+                    ctx.pal,
+                    BtnSpec::new("history-undo", "undo", "Undo", "Undo last project command"),
+                )
+                .clicked()
+                {
                     ctx.exec("edit.undo", json!({}), None);
                 }
-                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("history-redo", "redo", "Redo", "Redo last undone project command")).clicked() {
+                if action_button(
+                    ui,
+                    ctx.reg,
+                    ctx.pal,
+                    BtnSpec::new("history-redo", "redo", "Redo", "Redo last undone project command"),
+                )
+                .clicked()
+                {
                     ctx.exec("edit.redo", json!({}), None);
                 }
-                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("history-autosave", "save", "Snapshot", "Write crash-recovery .autosave journal")).clicked()
+                if action_button(
+                    ui,
+                    ctx.reg,
+                    ctx.pal,
+                    BtnSpec::new("history-autosave", "save", "Snapshot", "Write crash-recovery .autosave journal"),
+                )
+                .clicked()
                 {
                     ctx.exec("project.autosave", json!({}), Some("Wrote .history/*.autosave snapshot"));
                 }
             });
             ui.add_space(6.0);
-            ui.label(RichText::new("Project changes are journaled atomically inside `.history/` via craft-atomic.").size(11.0).color(ctx.pal.text_muted));
+            ui.label(
+                RichText::new("Project changes are journaled atomically inside `.history/` via craft-atomic.")
+                    .size(11.0)
+                    .color(ctx.pal.text_muted),
+            );
         });
     if !keep_open {
         ctx.state.history_popup_open = false;
@@ -233,15 +307,18 @@ pub fn draw_toast_if_active(egui_ctx: &egui::Context, ctx: &mut ViewCtx<'_>) {
     if ctx.state.toast_message.is_empty() || now > ctx.state.toast_until {
         return;
     }
-    egui::Area::new(egui::Id::unique("app-toast")).anchor(Align2::RIGHT_BOTTOM, egui::vec2(-16.0, -48.0)).order(egui::Order::Foreground).show(egui_ctx, |ui| {
-        let resp = Frame::new()
-            .fill(ctx.pal.bg_elevated)
-            .corner_radius(CornerRadius::same(8))
-            .inner_margin(Margin::symmetric(12, 8))
-            .stroke(Stroke::new(1.0, ctx.pal.accent_emerald))
-            .show(ui, |ui| {
-                ui.label(RichText::new(&ctx.state.toast_message).color(ctx.pal.text_primary));
-            });
-        ctx.reg.record("app-toast", &ctx.state.toast_message, &resp.response, None);
-    });
+    egui::Area::new(egui::Id::unique("app-toast"))
+        .anchor(Align2::RIGHT_BOTTOM, egui::vec2(-16.0, -48.0))
+        .order(egui::Order::Foreground)
+        .show(egui_ctx, |ui| {
+            let resp = Frame::new()
+                .fill(ctx.pal.bg_elevated)
+                .corner_radius(CornerRadius::same(8))
+                .inner_margin(Margin::symmetric(12, 8))
+                .stroke(Stroke::new(1.0, ctx.pal.accent_emerald))
+                .show(ui, |ui| {
+                    ui.label(RichText::new(&ctx.state.toast_message).color(ctx.pal.text_primary));
+                });
+            ctx.reg.record("app-toast", &ctx.state.toast_message, &resp.response, None);
+        });
 }

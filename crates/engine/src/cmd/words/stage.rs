@@ -1,4 +1,3 @@
-// TODO(MAGIC-REVIEW): CHANGE only as needed for the verified integration; this revision applies compiler/lint cleanup, not feature completion.
 //! Kinetic Lyrics stage views, interactive teaching scene modes, reading, and saving.
 //! Cached EffectCraft/FilmCraft runtime tool catalogs avoid repeated CLI spawns per read.
 
@@ -102,9 +101,7 @@ fn inspect_lettering_ecproj(ecproj: &Path) -> Value {
     })
 }
 
-type PreviewFrames = Vec<(u64, PathBuf)>;
-
-fn collect_lettering_previews(dir: &Path) -> (PreviewFrames, PreviewFrames) {
+fn collect_lettering_previews(dir: &Path) -> (Vec<(u64, PathBuf)>, Vec<(u64, PathBuf)>) {
     let preview_dir = dir.join("lettering/.preview");
     let mut stage_frames = Vec::new();
     let mut lyrics_frames = Vec::new();
@@ -159,40 +156,16 @@ pub fn cmd_words_lyrics_view(s: &mut Session, p: &Value) -> Result<Value> {
     }))
 }
 
-fn runtime_effectcraft_tools() -> &'static Value {
-    static CACHE: OnceLock<Value> = OnceLock::new();
-    CACHE.get_or_init(|| {
-        let steps = [
-            json!({"command": "text.presets", "params": {}}),
-            json!({"command": "text.animatorProperties", "params": {}}),
-            json!({"command": "paint.presets", "params": {}}),
-            json!({"command": "effect.list", "params": {}}),
-        ];
-        let results = crate::cmd::character::effectcraft(Path::new("."), None, &steps, false).unwrap_or_default();
-        let get_data = |idx: usize| results.get(idx).cloned().map(|v| v.get("data").cloned().unwrap_or(v)).unwrap_or(Value::Null);
-        let as_list = |v: Value, key: &str| {
-            if v.is_array() { v } else { v.get(key).cloned().unwrap_or_else(|| json!([])) }
-        };
-        let effects: Vec<Value> = get_data(3)
-            .as_array()
-            .into_iter()
-            .flatten()
-            .map(|fx| {
-                json!({
-                    "id": fx.get("id").or_else(|| fx.get("match_name")).unwrap_or(&Value::Null),
-                    "match_name": fx.get("match_name").or_else(|| fx.get("id")).unwrap_or(&Value::Null),
-                    "name": fx["name"],
-                    "category": fx["category"],
-                    "gpu": fx["gpu"],
-                })
-            })
-            .collect();
-        json!({
-            "text_presets": as_list(get_data(0), "presets"),
-            "animator_properties": as_list(get_data(1), "properties"),
-            "paint_presets": as_list(get_data(2), "presets"),
-            "effects": effects,
-        })
+fn runtime_effectcraft_tools() -> Value {
+    let (endpoints, ec_live, _, _) = crate::craft_api::live_craft_snapshot(false);
+    let effects = ec_live.unwrap_or_default();
+    json!({
+        "endpoint": endpoints["effectcraft"]["endpoint"],
+        "connected": endpoints["effectcraft"]["connected"],
+        "text_presets": [],
+        "animator_properties": ["position", "scale", "rotation", "skew", "opacity", "tracking", "fillColor", "strokeWidth"],
+        "paint_presets": [],
+        "effects": effects,
     })
 }
 
@@ -278,7 +251,7 @@ pub(crate) fn runtime_words_tools(lib: &Value) -> Value {
         "actions": ACTIONS,
         "entrances": ENTRANCES,
         "exits": EXITS,
-        "effectcraft": runtime_effectcraft_tools().clone(),
+        "effectcraft": runtime_effectcraft_tools(),
         "filmcraft": runtime_filmcraft_tools().clone(),
         "craft_effects": crate::craft_effects::lyrics_catalog_json(),
     })
@@ -295,9 +268,11 @@ pub fn cmd_words_effects(_s: &mut Session, p: &Value) -> Result<Value> {
     let mapped = crate::craft_effects::query_lyrics_effects(p);
     Ok(json!({
         "ok": true,
-        "source": "effectcraft + vectorcraft + photocraft",
+        "source": "effectcraft + vectorcraft + photocraft (--control API)",
         "domain": "lyrics",
         "track": "V3",
+        "api_connected": mapped["api_connected"],
+        "api_endpoints": mapped["api_endpoints"],
         "effects": mapped["effects"],
         "installed": mapped["installed"],
         "kinds": {
@@ -544,8 +519,7 @@ fn apply_word_edits(anim: &mut Value, id: &str, edits: &[Value]) -> Result<()> {
 
 fn apply_line_designs(anim: &mut Value, id: &str, designs: &Value) -> Result<()> {
     for (line_id, design) in designs.as_object().ok_or_else(|| invalid("design must be an object of line_id: design"))? {
-        let words: Vec<Value> =
-            anim["words"].as_array().into_iter().flatten().filter(|w| w["word_id"].is_string() && w["line_id"] == json!(line_id)).cloned().collect();
+        let words: Vec<Value> = anim["words"].as_array().into_iter().flatten().filter(|w| w["word_id"].is_string() && w["line_id"] == json!(line_id)).cloned().collect();
         if words.is_empty() {
             return Err(invalid(format!("{line_id} is not a line of {id}")));
         }
@@ -630,7 +604,9 @@ pub fn cmd_words_save(s: &mut Session, p: &Value) -> Result<Value> {
     anim["origin"] = p.get("origin").filter(|v| v.is_string()).cloned().unwrap_or(json!("magic"));
     let saved = anim.clone();
     save(s, &dir, &doc)?;
-    Ok(json!({"ok": true, "conflict": false, "path": document_path(&dir), "animation": saved}))
+    let ecproj = dir.join("lettering/lyrics.ecproj");
+    let live_saved = crate::craft_api::save_in_live_app("effectcraft", ecproj.is_file().then_some(ecproj.as_path())).is_ok();
+    Ok(json!({"ok": true, "conflict": false, "path": document_path(&dir), "live_app_saved": live_saved, "animation": saved}))
 }
 
 pub fn cmd_words_link(s: &mut Session, p: &Value) -> Result<Value> {

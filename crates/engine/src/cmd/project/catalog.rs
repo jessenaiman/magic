@@ -163,8 +163,8 @@ fn has_ext_in_tree(dir: &Path, exts: &[&str], max_depth: usize) -> bool {
 
 fn discover_project_craft_badges(dir: &Path, doc: &Value) -> Vec<&'static str> {
     let mut badges = Vec::new();
-    let has_fcproj =
-        doc.pointer("/workshop/video_project").and_then(Value::as_str).is_some_and(|s| !s.is_empty()) || has_ext_in_tree(&dir.join("film"), &["fcproj"], 1);
+    let has_fcproj = doc.pointer("/workshop/video_project").and_then(Value::as_str).is_some_and(|s| !s.is_empty())
+        || has_ext_in_tree(&dir.join("film"), &["fcproj"], 1);
     if has_fcproj {
         badges.push(".fcproj");
     }
@@ -183,7 +183,9 @@ fn discover_project_craft_badges(dir: &Path, doc: &Value) -> Vec<&'static str> {
     } else if has_ext_in_tree(&dir.join("assets"), &["psd"], 4) {
         badges.push(".psd");
     }
-    if has_ext_in_tree(&dir.join("motion"), &["vectorcraft", "svg"], 2) || has_ext_in_tree(&dir.join("assets"), &["vectorcraft", "svg", "emf", "wmf"], 3) {
+    if has_ext_in_tree(&dir.join("motion"), &["vectorcraft", "svg"], 2)
+        || has_ext_in_tree(&dir.join("assets"), &["vectorcraft", "svg", "emf", "wmf"], 3)
+    {
         badges.push(".svg");
     }
     badges

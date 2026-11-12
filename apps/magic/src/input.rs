@@ -1,7 +1,9 @@
 //! Synthetic `egui` 0.37 pointer, scroll, keyboard, text, and focus event injection for `--control`
 //! (`ui.click`, `ui.move`, `ui.drag`, `ui.scroll`, `ui.key`, `ui.type`, `ui.focus`).
 
-use egui::{Event, Key, Modifiers, MouseWheelSource, MouseWheelUnit, PointerButton, Pos2, TouchPhase, Vec2};
+use egui::{
+    Event, Key, Modifiers, MouseWheelSource, MouseWheelUnit, PointerButton, Pos2, TouchPhase, Vec2,
+};
 use magic_ui_egui::AutomationRegistry;
 use serde_json::{Value, json};
 
@@ -23,7 +25,13 @@ pub fn parse_modifiers(raw: Option<&Value>) -> Result<Modifiers, String> {
         let command = obj.get("command").and_then(Value::as_bool).unwrap_or(false);
         let ctrl_flag = obj.get("ctrl").and_then(Value::as_bool).unwrap_or(false);
         let on_mac = cfg!(target_os = "macos");
-        return Ok(Modifiers { alt, ctrl: ctrl_flag || (!on_mac && command), shift, mac_cmd: on_mac && command, command });
+        return Ok(Modifiers {
+            alt,
+            ctrl: ctrl_flag || (!on_mac && command),
+            shift,
+            mac_cmd: on_mac && command,
+            command,
+        });
     }
     if let Some(arr) = val.as_array() {
         let mut mods = Modifiers::NONE;
@@ -56,7 +64,9 @@ pub fn parse_modifiers(raw: Option<&Value>) -> Result<Modifiers, String> {
 
 pub fn resolve_point(reg: &AutomationRegistry, params: &Value, method: &str) -> Result<Pos2, String> {
     if let Some(id) = params.get("id").and_then(Value::as_str) {
-        let elem = reg.get(id).ok_or_else(|| format!("{method}: widget `{id}` is missing or off-screen"))?;
+        let elem = reg
+            .get(id)
+            .ok_or_else(|| format!("{method}: widget `{id}` is missing or off-screen"))?;
         if !elem.enabled {
             return Err(format!("{method}: widget `{id}` is disabled"));
         }
@@ -66,10 +76,16 @@ pub fn resolve_point(reg: &AutomationRegistry, params: &Value, method: &str) -> 
         let y = elem.rect.min.y + elem.rect.height() * fy;
         return Ok(Pos2::new(x, y));
     }
-    let x =
-        params.get("x").and_then(Value::as_f64).filter(|v| v.is_finite()).ok_or_else(|| format!("{method}: provide `id` or finite `x` and `y` coordinates"))?;
-    let y =
-        params.get("y").and_then(Value::as_f64).filter(|v| v.is_finite()).ok_or_else(|| format!("{method}: provide `id` or finite `x` and `y` coordinates"))?;
+    let x = params
+        .get("x")
+        .and_then(Value::as_f64)
+        .filter(|v| v.is_finite())
+        .ok_or_else(|| format!("{method}: provide `id` or finite `x` and `y` coordinates"))?;
+    let y = params
+        .get("y")
+        .and_then(Value::as_f64)
+        .filter(|v| v.is_finite())
+        .ok_or_else(|| format!("{method}: provide `id` or finite `x` and `y` coordinates"))?;
     Ok(Pos2::new(x as f32, y as f32))
 }
 
@@ -77,7 +93,10 @@ fn parse_fraction(raw: Option<&Value>, default: f32, name: &str) -> Result<f32, 
     let Some(val) = raw.filter(|v| !v.is_null()) else {
         return Ok(default);
     };
-    let f = val.as_f64().filter(|n| n.is_finite() && (0.0..=1.0).contains(n)).ok_or_else(|| format!("{name} must be a number in 0.0..=1.0"))?;
+    let f = val
+        .as_f64()
+        .filter(|n| n.is_finite() && (0.0..=1.0).contains(n))
+        .ok_or_else(|| format!("{name} must be a number in 0.0..=1.0"))?;
     Ok(f as f32)
 }
 
@@ -93,24 +112,44 @@ fn parse_button(raw: Option<&Value>) -> Result<PointerButton, String> {
 pub fn build_move(reg: &AutomationRegistry, params: &Value) -> Result<(Vec<Event>, Value), String> {
     super::only_keys(params, "ui.move", &["id", "fx", "fy", "x", "y"])?;
     let pos = resolve_point(reg, params, "ui.move")?;
-    Ok((vec![Event::PointerMoved(pos)], json!({"ok": true, "x": pos.x, "y": pos.y})))
+    Ok((
+        vec![Event::PointerMoved(pos)],
+        json!({"ok": true, "x": pos.x, "y": pos.y}),
+    ))
 }
 
 pub fn build_click(reg: &AutomationRegistry, params: &Value) -> Result<(Vec<Event>, Value), String> {
     super::only_keys(params, "ui.click", &["id", "fx", "fy", "x", "y", "button", "count", "modifiers"])?;
     let count = match params.get("count") {
         None | Some(Value::Null) => 1u32,
-        Some(v) => v.as_u64().and_then(|n| u32::try_from(n).ok()).filter(|&n| n <= 10).ok_or("ui.click: count must be an integer from 0 to 10")?,
+        Some(v) => v
+            .as_u64()
+            .and_then(|n| u32::try_from(n).ok())
+            .filter(|&n| n <= 10)
+            .ok_or("ui.click: count must be an integer from 0 to 10")?,
     };
     let button = parse_button(params.get("button"))?;
     let modifiers = parse_modifiers(params.get("modifiers"))?;
     let pos = resolve_point(reg, params, "ui.click")?;
     let mut events = vec![Event::PointerMoved(pos)];
     for _ in 0..count {
-        events.push(Event::PointerButton { pos, button, pressed: true, modifiers });
-        events.push(Event::PointerButton { pos, button, pressed: false, modifiers });
+        events.push(Event::PointerButton {
+            pos,
+            button,
+            pressed: true,
+            modifiers,
+        });
+        events.push(Event::PointerButton {
+            pos,
+            button,
+            pressed: false,
+            modifiers,
+        });
     }
-    Ok((events, json!({"ok": true, "x": pos.x, "y": pos.y, "count": count})))
+    Ok((
+        events,
+        json!({"ok": true, "x": pos.x, "y": pos.y, "count": count}),
+    ))
 }
 
 pub fn build_drag(reg: &AutomationRegistry, params: &Value) -> Result<(Vec<Event>, Value), String> {
@@ -121,25 +160,46 @@ pub fn build_drag(reg: &AutomationRegistry, params: &Value) -> Result<(Vec<Event
     let to = resolve_point(reg, to_obj, "ui.drag.to")?;
     let raw_steps = match params.get("steps") {
         None | Some(Value::Null) => 12u32,
-        Some(v) => v.as_u64().and_then(|n| u32::try_from(n).ok()).filter(|&n| n <= 1024).ok_or("ui.drag: steps must be an integer from 0 to 1024")?,
+        Some(v) => v
+            .as_u64()
+            .and_then(|n| u32::try_from(n).ok())
+            .filter(|&n| n <= 1024)
+            .ok_or("ui.drag: steps must be an integer from 0 to 1024")?,
     };
     let steps = raw_steps.max(2);
     let button = parse_button(params.get("button"))?;
     let modifiers = parse_modifiers(params.get("modifiers"))?;
     let mut events = Vec::with_capacity((steps as usize) + 4);
     events.push(Event::PointerMoved(from));
-    events.push(Event::PointerButton { pos: from, button, pressed: true, modifiers });
+    events.push(Event::PointerButton {
+        pos: from,
+        button,
+        pressed: true,
+        modifiers,
+    });
     for i in 1..=steps {
         let t = (i as f32) / (steps as f32);
         let p = Pos2::new(from.x + (to.x - from.x) * t, from.y + (to.y - from.y) * t);
         events.push(Event::PointerMoved(p));
     }
-    events.push(Event::PointerButton { pos: to, button, pressed: false, modifiers });
-    Ok((events, json!({"ok": true, "from": [from.x, from.y], "to": [to.x, to.y], "steps": steps})))
+    events.push(Event::PointerButton {
+        pos: to,
+        button,
+        pressed: false,
+        modifiers,
+    });
+    Ok((
+        events,
+        json!({"ok": true, "from": [from.x, from.y], "to": [to.x, to.y], "steps": steps}),
+    ))
 }
 
 pub fn build_scroll(reg: &AutomationRegistry, params: &Value) -> Result<(Vec<Event>, Value), String> {
-    super::only_keys(params, "ui.scroll", &["id", "fx", "fy", "x", "y", "dx", "dy", "unit", "source", "modifiers"])?;
+    super::only_keys(
+        params,
+        "ui.scroll",
+        &["id", "fx", "fy", "x", "y", "dx", "dy", "unit", "source", "modifiers"],
+    )?;
     let dx = params.get("dx").and_then(Value::as_f64).unwrap_or(0.0) as f32;
     let dy = params.get("dy").and_then(Value::as_f64).unwrap_or(0.0) as f32;
     if !dx.is_finite() || !dy.is_finite() {
@@ -163,13 +223,23 @@ pub fn build_scroll(reg: &AutomationRegistry, params: &Value) -> Result<(Vec<Eve
         let pos = resolve_point(reg, params, "ui.scroll")?;
         events.push(Event::PointerMoved(pos));
     }
-    events.push(Event::MouseWheel { unit, delta: Vec2::new(dx, dy), modifiers, phase: TouchPhase::Move, source });
+    events.push(Event::MouseWheel {
+        unit,
+        delta: Vec2::new(dx, dy),
+        modifiers,
+        phase: TouchPhase::Move,
+        source,
+    });
     Ok((events, json!({"ok": true, "dx": dx, "dy": dy})))
 }
 
 pub fn build_key(params: &Value) -> Result<(Vec<Event>, Value), String> {
     super::only_keys(params, "ui.key", &["key", "modifiers"])?;
-    let raw_key = params.get("key").and_then(Value::as_str).filter(|s| !s.trim().is_empty()).ok_or("ui.key requires non-empty `key`")?;
+    let raw_key = params
+        .get("key")
+        .and_then(Value::as_str)
+        .filter(|s| !s.trim().is_empty())
+        .ok_or("ui.key requires non-empty `key`")?;
     let mut modifiers = parse_modifiers(params.get("modifiers"))?;
     let mut key_part = raw_key;
     if raw_key.contains('+') {
@@ -198,8 +268,20 @@ pub fn build_key(params: &Value) -> Result<(Vec<Event>, Value), String> {
     }
     let key = map_egui_key(key_part).ok_or_else(|| format!("ui.key: unrecognized key `{key_part}`"))?;
     let events = vec![
-        Event::Key { key, physical_key: Some(key), pressed: true, repeat: false, modifiers },
-        Event::Key { key, physical_key: Some(key), pressed: false, repeat: false, modifiers },
+        Event::Key {
+            key,
+            physical_key: Some(key),
+            pressed: true,
+            repeat: false,
+            modifiers,
+        },
+        Event::Key {
+            key,
+            physical_key: Some(key),
+            pressed: false,
+            repeat: false,
+            modifiers,
+        },
     ];
     Ok((events, json!({"ok": true, "key": raw_key})))
 }

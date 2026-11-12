@@ -87,7 +87,9 @@ pub fn write_file_new(path: impl AsRef<Path>, bytes: impl AsRef<[u8]>) -> Result
 pub fn write_private_file(path: impl AsRef<Path>, bytes: impl AsRef<[u8]>) -> Result<()> {
     let path = path.as_ref();
     ensure_parent(path)?;
-    WriteOptions::default().with_new_file_permissions(NewFilePermissions::Private).atomic_write(path, bytes.as_ref())?;
+    WriteOptions::default()
+        .with_new_file_permissions(NewFilePermissions::Private)
+        .atomic_write(path, bytes.as_ref())?;
     Ok(())
 }
 
@@ -96,7 +98,9 @@ pub fn write_private_file(path: impl AsRef<Path>, bytes: impl AsRef<[u8]>) -> Re
 pub fn write_private_file_new(path: impl AsRef<Path>, bytes: impl AsRef<[u8]>) -> Result<()> {
     let path = path.as_ref();
     ensure_parent(path)?;
-    WriteOptions::default().with_new_file_permissions(NewFilePermissions::Private).write_new(path, bytes.as_ref())?;
+    WriteOptions::default()
+        .with_new_file_permissions(NewFilePermissions::Private)
+        .write_new(path, bytes.as_ref())?;
     Ok(())
 }
 
@@ -155,7 +159,10 @@ pub(crate) fn atomic_copy_file(source: &Path, dest: &Path, overwrite: bool) -> R
                 if dest.is_file() && files_have_identical_bytes(source, dest).unwrap_or(false) {
                     return Ok(len);
                 }
-                return Err(EngineError::InvalidParams(format!("destination already exists with different bytes: {}", dest.display())));
+                return Err(EngineError::InvalidParams(format!(
+                    "destination already exists with different bytes: {}",
+                    dest.display()
+                )));
             }
             Err(e) => return Err(e.into()),
         }
@@ -175,7 +182,10 @@ pub(crate) fn atomic_copy_dir(source_dir: &Path, dest_dir: &Path, overwrite: boo
     }
     std::fs::create_dir_all(dest_dir)?;
     let mut count = 0usize;
-    let mut entries: Vec<PathBuf> = std::fs::read_dir(source_dir)?.flatten().map(|e| e.path()).collect();
+    let mut entries: Vec<PathBuf> = std::fs::read_dir(source_dir)?
+        .flatten()
+        .map(|e| e.path())
+        .collect();
     entries.sort();
     for entry in entries {
         let Some(name) = entry.file_name() else { continue };

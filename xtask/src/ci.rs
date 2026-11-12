@@ -6,11 +6,25 @@ use std::time::{Duration, Instant};
 
 use crate::Result;
 
-pub(crate) const SETS: &[(&str, &[&str])] =
-    &[("workspace", &["magic-util", "magic-scribbles", "magic-engine", "magic-mcp", "magic-ui-egui", "magic-cli", "magic", "magic-tui", "xtask"])];
+pub(crate) const SETS: &[(&str, &[&str])] = &[(
+    "workspace",
+    &[
+        "magic-util",
+        "magic-scribbles",
+        "magic-engine",
+        "magic-mcp",
+        "magic-ui-egui",
+        "magic-cli",
+        "magic",
+        "magic-tui",
+        "xtask",
+    ],
+)];
 
 pub(crate) fn packages(set: &[&str]) -> Vec<String> {
-    set.iter().flat_map(|name| ["-p".to_owned(), (*name).to_owned()]).collect()
+    set.iter()
+        .flat_map(|name| ["-p".to_owned(), (*name).to_owned()])
+        .collect()
 }
 
 fn check_sets() -> Result<()> {
@@ -25,7 +39,11 @@ fn check_sets() -> Result<()> {
             _ => errors.push(format!("{name}: in more than one build group")),
         }
     }
-    if errors.is_empty() { Ok(()) } else { Err(errors.join("\n")) }
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors.join("\n"))
+    }
 }
 
 fn report_path() -> std::path::PathBuf {
@@ -36,7 +54,11 @@ fn record_failure(command_desc: &str, tail: &str) {
     let path = report_path();
     if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
         use std::io::Write as _;
-        let _ = writeln!(file, "{}", serde_json::json!({"command": command_desc, "tail": tail}));
+        let _ = writeln!(
+            file,
+            "{}",
+            serde_json::json!({"command": command_desc, "tail": tail})
+        );
     }
 }
 
@@ -53,9 +75,21 @@ fn run_bounded(cmd: &mut Command, timeout: Duration) -> Result<()> {
                 if output.status.success() {
                     return Ok(());
                 }
-                let text = format!("{}{}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
+                let text = format!(
+                    "{}{}",
+                    String::from_utf8_lossy(&output.stdout),
+                    String::from_utf8_lossy(&output.stderr)
+                );
                 print!("{text}");
-                let tail = text.lines().rev().take(40).collect::<Vec<_>>().into_iter().rev().collect::<Vec<_>>().join("\n");
+                let tail = text
+                    .lines()
+                    .rev()
+                    .take(40)
+                    .collect::<Vec<_>>()
+                    .into_iter()
+                    .rev()
+                    .collect::<Vec<_>>()
+                    .join("\n");
                 record_failure(&desc, &tail);
                 return Err(format!("failed ({}): {desc}", output.status));
             }
@@ -80,7 +114,11 @@ fn stage(name: &str, gate: impl FnOnce() -> Result<()>) -> Result<()> {
 }
 
 fn test_timeout() -> Duration {
-    let mins = std::env::var("MAGIC_TEST_TIMEOUT_MINUTES").ok().and_then(|v| v.trim().parse::<u64>().ok()).filter(|&m| m > 0).unwrap_or(20);
+    let mins = std::env::var("MAGIC_TEST_TIMEOUT_MINUTES")
+        .ok()
+        .and_then(|v| v.trim().parse::<u64>().ok())
+        .filter(|&m| m > 0)
+        .unwrap_or(20);
     Duration::from_secs(mins * 60)
 }
 
@@ -88,7 +126,9 @@ fn clippy() -> Result<()> {
     let cargo = env!("CARGO");
     for (_, set) in SETS {
         let mut cmd = Command::new(cargo);
-        cmd.arg("clippy").args(packages(set)).args(["--all-targets", "--", "-D", "warnings"]);
+        cmd.arg("clippy")
+            .args(packages(set))
+            .args(["--all-targets", "--", "-D", "warnings"]);
         run_bounded(&mut cmd, test_timeout())?;
     }
     Ok(())
@@ -96,7 +136,10 @@ fn clippy() -> Result<()> {
 
 pub(crate) fn tests() -> Result<()> {
     let cargo = env!("CARGO");
-    let threads = std::env::var("RUST_TEST_THREADS").ok().filter(|s| !s.trim().is_empty()).unwrap_or_else(|| "4".to_owned());
+    let threads = std::env::var("RUST_TEST_THREADS")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| "4".to_owned());
     let mut cmd = Command::new(cargo);
     cmd.args(["test", "--workspace", "--", "--test-threads", &threads]);
     run_bounded(&mut cmd, test_timeout())

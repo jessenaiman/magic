@@ -53,7 +53,6 @@ pub fn is_read_only_command(id: &str, params: &Value) -> bool {
                 && params.get("refs").is_none()
         }
         "project.attach"
-        | "project.autosave"
         | "file.list"
         | "backstage.changes"
         | "backstage.events"
@@ -79,6 +78,7 @@ pub fn is_read_only_command(id: &str, params: &Value) -> bool {
         | "words.track"
         | "motion.read"
         | "motion.effects"
+        | "craft.api_status"
         | "video.film"
         | "video.timeline"
         | "video.list_ec_comps"

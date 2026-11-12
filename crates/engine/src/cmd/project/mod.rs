@@ -17,14 +17,15 @@ pub mod workshop;
 pub mod workspace_layout;
 
 pub use assets::{
-    cmd_project_add_asset, cmd_project_list_assets, cmd_project_load_asset, cmd_project_remove_asset, cmd_project_save_asset, cmd_project_update_asset,
+    cmd_project_add_asset, cmd_project_list_assets, cmd_project_load_asset, cmd_project_remove_asset,
+    cmd_project_save_asset, cmd_project_update_asset,
 };
 pub use convert::cmd_project_convert;
-pub use new_project::cmd_project_new;
+pub use workspace_layout::cmd_workspace_init;
 pub(crate) use new_project::copy_audio_into_project;
+pub use new_project::cmd_project_new;
 pub use trunk::{cmd_project_import_file, cmd_project_trunk};
 pub use ui_state::{cmd_project_snapshot, save_theatre_state, theatre_state};
-pub use workspace_layout::cmd_workspace_init;
 
 use std::path::{Path, PathBuf};
 
@@ -202,7 +203,10 @@ pub(crate) fn create_initial_project_file(s: &Session, overwrite: bool) -> Resul
     let (stamp, written) = match crate::doc_state::write_json_new(path, &doc) {
         Ok(res) => res,
         Err(EngineError::Io(e)) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-            return Err(EngineError::InvalidParams(format!("project already exists: {} (pass \"overwrite\": true to replace it)", path.display())));
+            return Err(EngineError::InvalidParams(format!(
+                "project already exists: {} (pass \"overwrite\": true to replace it)",
+                path.display()
+            )));
         }
         Err(e) => return Err(e),
     };
@@ -253,7 +257,11 @@ pub(crate) fn project_file_path(s: &Session, params: &Value) -> Result<PathBuf> 
         (Some(path), _, _) => path.to_string(),
         (None, Some(root), Some(name)) => {
             let slug = validate_project_name(name)?;
-            crate::workspace::expand_tilde(root).join(slug).join(format!("{name}.magic")).to_string_lossy().into_owned()
+            crate::workspace::expand_tilde(root)
+                .join(slug)
+                .join(format!("{name}.magic"))
+                .to_string_lossy()
+                .into_owned()
         }
         (None, None, _) => return Err(EngineError::InvalidParams("give the project `path`, or a `root` folder and a `name`".into())),
         (None, Some(_), None) => return Err(EngineError::InvalidParams("give the project `name` to create it in `root`".into())),
@@ -344,7 +352,11 @@ fn apply_opened_state(s: &mut Session, path: &Path, doc: &Value, assets: Vec<cra
     s.song = song;
     s.song_audio = doc.pointer("/workshop/audio").and_then(Value::as_str).map(|source| opened_path(source, path));
     s.draft_approved = doc.pointer("/workshop/draft_approved").and_then(Value::as_bool).unwrap_or(false);
-    if let Some(target) = doc.pointer("/workshop/target").and_then(Value::as_str).filter(|t| crate::cmd::project::workshop::VIDEO_TARGETS.contains(t)) {
+    if let Some(target) = doc
+        .pointer("/workshop/target")
+        .and_then(Value::as_str)
+        .filter(|t| crate::cmd::project::workshop::VIDEO_TARGETS.contains(t))
+    {
         s.video_target = target.into();
     }
     s.video_project_path = doc.pointer("/workshop/video_project").and_then(Value::as_str).map(|source| opened_path(source, path));
@@ -360,12 +372,20 @@ pub fn cmd_project_open(s: &mut Session, params: &Value) -> Result<Value> {
     }
     let journal = autosave_journal_path(&path);
     let use_journal = params["recover_autosave"] == true && journal.is_file();
-    let doc = if use_journal { read_project_document(&journal)? } else { read_project_document(&path)? };
+    let doc = if use_journal {
+        read_project_document(&journal)?
+    } else {
+        read_project_document(&path)?
+    };
     if doc.get("format").and_then(Value::as_str) != Some(PROJECT_FORMAT) {
         return Err(EngineError::InvalidParams(format!("{} is not a Magic Studio project", path.display())));
     }
     let assets = project_assets_from_doc(&path, &doc)?;
-    let missing: Vec<&str> = assets.iter().filter(|a| a.path.as_ref().is_some_and(|p| !p.exists())).map(|a| a.id.as_str()).collect::<Vec<_>>();
+    let missing: Vec<&str> = assets
+        .iter()
+        .filter(|a| a.path.as_ref().is_some_and(|p| !p.exists()))
+        .map(|a| a.id.as_str())
+        .collect::<Vec<_>>();
     let missing = json!(missing);
     apply_opened_state(s, &path, &doc, assets)?;
     if params["read_only"] != true
@@ -396,7 +416,11 @@ pub fn cmd_project_open(s: &mut Session, params: &Value) -> Result<Value> {
 }
 
 fn project_guard(s: &Session, p: &Value) -> Result<()> {
-    let selected = s.project_path.as_ref().ok_or_else(|| EngineError::InvalidParams("Select the intended project".into()))?.canonicalize()?;
+    let selected = s
+        .project_path
+        .as_ref()
+        .ok_or_else(|| EngineError::InvalidParams("Select the intended project".into()))?
+        .canonicalize()?;
     let expected = project_file_path(s, &json!({"path": p["expected_project"]}))?.canonicalize()?;
     if selected != expected {
         return Err(EngineError::InvalidParams("expected_project differs from selected project".into()));
@@ -489,7 +513,9 @@ fn copy_project_tree_on_save_as(old_dir: &Path, new_dir: &Path) -> Result<Vec<Pa
 
 fn save_as(s: &mut Session, target: PathBuf) -> Result<Value> {
     let old_dir = s.project_path.as_deref().and_then(Path::parent).map(Path::to_path_buf);
-    let target_parent = target.parent().ok_or_else(|| EngineError::InvalidParams("Save As target must reside in a directory".into()))?;
+    let target_parent = target
+        .parent()
+        .ok_or_else(|| EngineError::InvalidParams("Save As target must reside in a directory".into()))?;
     std::fs::create_dir_all(target_parent)?;
     if target.exists() && !target.is_file() {
         return Err(EngineError::InvalidParams("Project destination must be a regular file; no write performed".into()));
@@ -575,7 +601,9 @@ pub fn ensure_default_asset_project(s: &mut Session) -> Result<PathBuf> {
     } else {
         let _ = cmd_project_new(s, &json!({"path": default_proj, "overwrite": true, "allow_empty_audio": true}));
     }
-    s.project_path.clone().ok_or_else(|| EngineError::InvalidParams("could not initialize default asset project".into()))
+    s.project_path
+        .clone()
+        .ok_or_else(|| EngineError::InvalidParams("could not initialize default asset project".into()))
 }
 
 pub fn cmd_project_identity(s: &mut Session, p: &Value) -> Result<Value> {

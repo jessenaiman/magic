@@ -13,8 +13,16 @@ use super::{bad, film};
 
 fn map_edit_and_trim_op(op: &str, p: &Value) -> Option<(&'static str, Value, bool)> {
     match op {
-        "workspace" => Some(("workspace.select", json!({"name": p["preset"].as_str().unwrap_or("Assembly")}), false)),
-        "toggle_proxies" => Some(("media.toggleProxies", json!({"enabled": p["enabled"].as_bool().unwrap_or(true)}), true)),
+        "workspace" => Some((
+            "workspace.select",
+            json!({"name": p["preset"].as_str().unwrap_or("Assembly")}),
+            false,
+        )),
+        "toggle_proxies" => Some((
+            "media.toggleProxies",
+            json!({"enabled": p["enabled"].as_bool().unwrap_or(true)}),
+            true,
+        )),
         "mark_in" => Some(("source.markIn", json!({"seconds": p["seconds"].as_f64().unwrap_or(0.0)}), true)),
         "mark_out" => Some(("source.markOut", json!({"seconds": p["seconds"].as_f64().unwrap_or(5.0)}), true)),
         "insert" => Some((
@@ -35,7 +43,11 @@ fn map_edit_and_trim_op(op: &str, p: &Value) -> Option<(&'static str, Value, boo
         )),
         "lift" => Some(("sequence.lift", json!({}), true)),
         "extract" => Some(("sequence.extract", json!({"ripple": true}), true)),
-        "replace_from_bin" => Some(("clip.replaceFromBin", json!({"matchFrame": p["match_frame"].as_bool().unwrap_or(true)}), true)),
+        "replace_from_bin" => Some((
+            "clip.replaceFromBin",
+            json!({"matchFrame": p["match_frame"].as_bool().unwrap_or(true)}),
+            true,
+        )),
         "track_patch" => Some((
             "timeline.setTrack",
             json!({
@@ -66,7 +78,11 @@ fn map_edit_and_trim_op(op: &str, p: &Value) -> Option<(&'static str, Value, boo
             }),
             true,
         )),
-        "trim_nudge" => Some(("trim.nudge", json!({"frames": p["frames"].as_i64().unwrap_or(1)}), true)),
+        "trim_nudge" => Some((
+            "trim.nudge",
+            json!({"frames": p["frames"].as_i64().unwrap_or(1)}),
+            true,
+        )),
         "ripple_to_playhead" => Some((
             "trim.extendToPlayhead",
             json!({
@@ -119,7 +135,11 @@ fn map_color_and_fx_op(op: &str, p: &Value) -> Option<(&'static str, Value, bool
             }),
             true,
         )),
-        "interpret_log" => Some(("clip.interpretFootage", json!({"colorSpace": p["log_curve"].as_str().unwrap_or("Sony S-Log3")}), true)),
+        "interpret_log" => Some((
+            "clip.interpretFootage",
+            json!({"colorSpace": p["log_curve"].as_str().unwrap_or("Sony S-Log3")}),
+            true,
+        )),
         "lumetri_section" => Some((
             "lumetri.setSection",
             json!({
@@ -176,7 +196,11 @@ fn map_color_and_fx_op(op: &str, p: &Value) -> Option<(&'static str, Value, bool
             }),
             true,
         )),
-        "fx_apply" | "transition_apply" => Some(("effects.apply", json!({"effect": p["effect"].as_str().unwrap_or("Cross Dissolve")}), true)),
+        "fx_apply" | "transition_apply" => Some((
+            "effects.apply",
+            json!({"effect": p["effect"].as_str().unwrap_or("Cross Dissolve")}),
+            true,
+        )),
         "clip_motion" => Some((
             "clip.motion",
             json!({
@@ -188,7 +212,11 @@ fn map_color_and_fx_op(op: &str, p: &Value) -> Option<(&'static str, Value, bool
             }),
             true,
         )),
-        "blend_mode" => Some(("clip.setBlendMode", json!({"mode": p["mode"].as_str().unwrap_or("Normal")}), true)),
+        "blend_mode" => Some((
+            "clip.setBlendMode",
+            json!({"mode": p["mode"].as_str().unwrap_or("Normal")}),
+            true,
+        )),
         "keyframe_toggle" => Some((
             "effects.addKeyframe",
             json!({
@@ -232,10 +260,16 @@ fn map_audio_and_titles_op(op: &str, p: &Value) -> Option<(&'static str, Value, 
             }),
             true,
         )),
-        "essential_sound" => {
-            Some(("essentialSound.set", json!({"values": p.get("values").cloned().unwrap_or_else(|| json!({"repair.noise.on": true}))}), true))
-        }
-        "audio_sync" => Some(("sequence.syncAudio", json!({"method": "gcc_phat", "subsample": true}), true)),
+        "essential_sound" => Some((
+            "essentialSound.set",
+            json!({"values": p.get("values").cloned().unwrap_or_else(|| json!({"repair.noise.on": true}))}),
+            true,
+        )),
+        "audio_sync" => Some((
+            "sequence.syncAudio",
+            json!({"method": "gcc_phat", "subsample": true}),
+            true,
+        )),
         "mixer_strip" => Some((
             "mixer.setStrip",
             json!({
@@ -266,7 +300,11 @@ fn map_audio_and_titles_op(op: &str, p: &Value) -> Option<(&'static str, Value, 
             }),
             true,
         )),
-        "clip_mixer" => Some(("clipMixer.set", json!({"gainDb": p["gain_db"].as_f64().unwrap_or(0.0), "pan": p["pan"].as_f64().unwrap_or(0.0)}), true)),
+        "clip_mixer" => Some((
+            "clipMixer.set",
+            json!({"gainDb": p["gain_db"].as_f64().unwrap_or(0.0), "pan": p["pan"].as_f64().unwrap_or(0.0)}),
+            true,
+        )),
         "graphic_text" => Some((
             if p["vertical"].as_bool() == Some(true) { "graphics.newVerticalText" } else { "graphics.newText" },
             json!({
@@ -287,7 +325,11 @@ fn map_audio_and_titles_op(op: &str, p: &Value) -> Option<(&'static str, Value, 
             }),
             true,
         )),
-        "graphic_style" => Some(("graphics.set", json!({"props": p.get("props").cloned().unwrap_or_else(|| json!({}))}), true)),
+        "graphic_style" => Some((
+            "graphics.set",
+            json!({"props": p.get("props").cloned().unwrap_or_else(|| json!({}))}),
+            true,
+        )),
         "graphic_pin" => Some((
             "graphics.setPinning",
             json!({
@@ -324,7 +366,10 @@ fn map_audio_and_titles_op(op: &str, p: &Value) -> Option<(&'static str, Value, 
 pub fn cmd_video_finish(s: &mut Session, p: &Value) -> Result<Value> {
     let op = p["op"].as_str().ok_or_else(|| bad("op=<finishing operation> is required"))?;
     if op == "scopes" {
-        let scopes = p.get("shown").cloned().unwrap_or_else(|| json!(["waveform", "vectorscopeYuv"]));
+        let scopes = p
+            .get("shown")
+            .cloned()
+            .unwrap_or_else(|| json!(["waveform", "vectorscopeYuv"]));
         let ui_payload = json!({
             "panels": {
                 "scopes": {

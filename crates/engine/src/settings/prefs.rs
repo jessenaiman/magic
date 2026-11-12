@@ -39,7 +39,12 @@ pub struct FidgetPrefs {
 
 impl Default for FidgetPrefs {
     fn default() -> Self {
-        Self { enabled: true, seamless: false, connection: None, model: None }
+        Self {
+            enabled: true,
+            seamless: false,
+            connection: None,
+            model: None,
+        }
     }
 }
 
@@ -55,7 +60,13 @@ pub struct ScribblesPrefs {
 
 impl Default for ScribblesPrefs {
     fn default() -> Self {
-        Self { enabled: true, connection: None, model: None, endpoint: None, template: Some("new".into()) }
+        Self {
+            enabled: true,
+            connection: None,
+            model: None,
+            endpoint: None,
+            template: Some("new".into()),
+        }
     }
 }
 
@@ -71,7 +82,13 @@ pub struct ProjectPrefs {
 
 impl Default for ProjectPrefs {
     fn default() -> Self {
-        Self { root: None, characters_root: None, storyboard_template: "magic".into(), storyboard_format: "pdfcraft".into(), storyboard_locked: true }
+        Self {
+            root: None,
+            characters_root: None,
+            storyboard_template: "magic".into(),
+            storyboard_format: "pdfcraft".into(),
+            storyboard_locked: true,
+        }
     }
 }
 
@@ -85,7 +102,11 @@ pub struct LyricsPrefs {
 
 impl Default for LyricsPrefs {
     fn default() -> Self {
-        Self { default_size: 72, outline: true, font_dirs: None }
+        Self {
+            default_size: 72,
+            outline: true,
+            font_dirs: None,
+        }
     }
 }
 
@@ -114,7 +135,13 @@ pub struct AppearancePrefs {
 
 impl Default for AppearancePrefs {
     fn default() -> Self {
-        Self { interface_style: "aurora".into(), theme: "dark".into(), accessible_contrast: false, accent: "teal".into(), ui_scale: 1.0 }
+        Self {
+            interface_style: "aurora".into(),
+            theme: "dark".into(),
+            accessible_contrast: false,
+            accent: "teal".into(),
+            ui_scale: 1.0,
+        }
     }
 }
 
@@ -185,7 +212,10 @@ fn bad(msg: impl Into<String>) -> EngineError {
 }
 
 fn validate_schema_value(key: &str, value: &Value) -> Result<()> {
-    let (_, field) = fields_with_cat().into_iter().find(|(_, f)| f.key == key).ok_or_else(|| bad(format!("unknown setting `{key}`; see prefs.schema")))?;
+    let (_, field) = fields_with_cat()
+        .into_iter()
+        .find(|(_, f)| f.key == key)
+        .ok_or_else(|| bad(format!("unknown setting `{key}`; see prefs.schema")))?;
     match field.kind {
         Kind::Bool => {
             if !value.is_boolean() {
@@ -319,7 +349,10 @@ pub struct SessionSettings {
 
 impl fmt::Debug for SessionSettings {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("SessionSettings").field("path", &self.path()).field("persistent", &self.is_persistent()).finish()
+        f.debug_struct("SessionSettings")
+            .field("path", &self.path())
+            .field("persistent", &self.is_persistent())
+            .finish()
     }
 }
 

@@ -48,7 +48,8 @@ pub fn ensure_valid_png(src: &Path, dst: &Path) -> Result<(u32, u32)> {
     if bytes.len() < 8 {
         return Err(ScribblesError::Invalid(format!("Image file {} is empty or truncated", src.display())));
     }
-    let img = image::load_from_memory(&bytes).map_err(|e| ScribblesError::Invalid(format!("Could not decode image {}: {e}", src.display())))?;
+    let img = image::load_from_memory(&bytes)
+        .map_err(|e| ScribblesError::Invalid(format!("Could not decode image {}: {e}", src.display())))?;
     let (width, height) = (img.width(), img.height());
     if let Some(parent) = dst.parent() {
         fs::create_dir_all(parent)?;
@@ -58,7 +59,8 @@ pub fn ensure_valid_png(src: &Path, dst: &Path) -> Result<(u32, u32)> {
             fs::copy(src, dst)?;
         }
     } else {
-        img.save_with_format(dst, image::ImageFormat::Png).map_err(|e| ScribblesError::Invalid(format!("Failed to write PNG {}: {e}", dst.display())))?;
+        img.save_with_format(dst, image::ImageFormat::Png)
+            .map_err(|e| ScribblesError::Invalid(format!("Failed to write PNG {}: {e}", dst.display())))?;
     }
     Ok((width, height))
 }
@@ -74,7 +76,10 @@ fn newest_matching_file(dir: &Path, prefixes: &[&str], ext: &str) -> Option<Path
         let Some(name) = path.file_name().and_then(|n| n.to_str()) else { continue };
         let lower = name.to_ascii_lowercase();
         if lower.ends_with(ext) && prefixes.iter().any(|p| lower.starts_with(p)) {
-            let mtime = entry.metadata().and_then(|m| m.modified()).unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+            let mtime = entry
+                .metadata()
+                .and_then(|m| m.modified())
+                .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
             if best.as_ref().is_none_or(|(t, _)| mtime > *t) {
                 best = Some((mtime, path));
             }
@@ -100,9 +105,16 @@ pub fn sanitize_id(raw: &str) -> String {
 
 /// Ingests an explicitly specified character bundle directory (`character.png`, `parts-sheet.png`,
 /// `pose-sheet.png`, optional `handoff.json` / `parts.json`) into `<project>/assets/characters/<id>/`.
-pub fn ingest_bundle_dir(project_root: &Path, source_dir: &Path, requested_character_id: Option<&str>) -> Result<IngestedCharacterBundle> {
+pub fn ingest_bundle_dir(
+    project_root: &Path,
+    source_dir: &Path,
+    requested_character_id: Option<&str>,
+) -> Result<IngestedCharacterBundle> {
     if !source_dir.is_dir() {
-        return Err(ScribblesError::Invalid(format!("Character bundle directory {} does not exist", source_dir.display())));
+        return Err(ScribblesError::Invalid(format!(
+            "Character bundle directory {} does not exist",
+            source_dir.display()
+        )));
     }
 
     let handoff_src = newest_matching_file(source_dir, &["handoff", "bundle"], ".json");
@@ -143,8 +155,11 @@ pub fn ingest_bundle_dir(project_root: &Path, source_dir: &Path, requested_chara
         .unwrap_or("front")
         .to_string();
 
-    let action =
-        meta["action"].as_str().map(sanitize_id).filter(|s| !s.is_empty()).unwrap_or_else(|| if view == "side" { "walk_right".into() } else { "idle".into() });
+    let action = meta["action"]
+        .as_str()
+        .map(sanitize_id)
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| if view == "side" { "walk_right".into() } else { "idle".into() });
 
     let cols = meta["columns"].as_u64().or_else(|| meta["grid"][0].as_u64()).unwrap_or(2) as u32;
     let rows = meta["rows"].as_u64().or_else(|| meta["grid"][1].as_u64()).unwrap_or(2) as u32;

@@ -20,12 +20,22 @@ pub(crate) fn templates() -> Result<Value> {
     serde_json::from_str(TEMPLATES).map_err(|e| bad(format!("scribbles templates: {e}")))
 }
 
-pub fn format_fidget_markdown(template: &str, save_command: &str, tags: &[String], canvas: Option<[u64; 2]>, body: &str) -> String {
+pub fn format_fidget_markdown(
+    template: &str,
+    save_command: &str,
+    tags: &[String],
+    canvas: Option<[u64; 2]>,
+    body: &str,
+) -> String {
     let trimmed = body.trim();
     if trimmed.starts_with("---\n") {
         return trimmed.to_owned();
     }
-    let tags_str = if tags.is_empty() { format!("[magic, fidget, {template}]") } else { format!("[{}]", tags.join(", ")) };
+    let tags_str = if tags.is_empty() {
+        format!("[magic, fidget, {template}]")
+    } else {
+        format!("[{}]", tags.join(", "))
+    };
     let canvas_line = canvas.map(|[w, h]| format!("canvas: [{w}, {h}]\n")).unwrap_or_default();
     format!(
         "---\n\
@@ -63,7 +73,9 @@ fn layout(kind: &Value, p: &Value, sb_style: Option<&str>) -> Result<String> {
     let mut text = kind["layout"].as_str().unwrap_or_default().to_string();
     if let Some(actions) = kind["actions"].as_object() {
         let name = p["action"].as_str().unwrap_or("walk");
-        let action = actions.get(name).ok_or_else(|| bad(format!("action must be one of {}", actions.keys().cloned().collect::<Vec<_>>().join(", "))))?;
+        let action = actions
+            .get(name)
+            .ok_or_else(|| bad(format!("action must be one of {}", actions.keys().cloned().collect::<Vec<_>>().join(", "))))?;
         text = text
             .replace("{frames}", "8")
             .replace("{action}", &format!("a {name} cycle"))
@@ -71,7 +83,10 @@ fn layout(kind: &Value, p: &Value, sb_style: Option<&str>) -> Result<String> {
             .replace("{keys}", action["keys"].as_str().unwrap_or_default());
     }
     if text.contains("{prompt}") {
-        let prompt = p["prompt"].as_str().filter(|t| !t.trim().is_empty()).or_else(|| sb_style.filter(|t| !t.trim().is_empty()));
+        let prompt = p["prompt"]
+            .as_str()
+            .filter(|t| !t.trim().is_empty())
+            .or_else(|| sb_style.filter(|t| !t.trim().is_empty()));
         text = text.replace("{prompt}", prompt.ok_or_else(|| bad("prompt is required"))?);
     }
     Ok(text)
@@ -95,7 +110,10 @@ fn compose(all: &Value, kind: &Value, p: &Value, sb_style: Option<&str>) -> Resu
     if let Some(notes) = p["notes"].as_str().filter(|t| !t.trim().is_empty()) {
         parts.push(format!("Notes: {notes}"));
     }
-    let shared = kind["shared_override"].as_str().or_else(|| all["shared"].as_str()).unwrap_or_default();
+    let shared = kind["shared_override"]
+        .as_str()
+        .or_else(|| all["shared"].as_str())
+        .unwrap_or_default();
     if !shared.is_empty() {
         parts.push(shared.to_string());
     }
@@ -110,13 +128,16 @@ pub(crate) struct PreparedDrawing {
 
 impl PreparedDrawing {
     pub fn prepare(s: Option<&Session>, p: &Value, name: &str) -> Result<Self> {
+        let name = if name == "moppet" { "cutout_rig" } else { name };
         let all = templates()?;
         let kind = all["kinds"].get(name).ok_or_else(|| bad(format!("unknown drawing kind `{name}`")))?;
         if p.get("reference").is_some() && p.get("references").is_some() {
             return Err(bad("use `reference` or `references`, not both"));
         }
         let prefer_char = name != "image" && name != "custom";
-        let (sb_style, sb_refs) = s.map(|sess| crate::cmd::storyboard::storyboard_media_references_for(sess, prefer_char)).unwrap_or((None, Vec::new()));
+        let (sb_style, sb_refs) = s
+            .map(|sess| crate::cmd::storyboard::storyboard_media_references_for(sess, prefer_char))
+            .unwrap_or((None, Vec::new()));
 
         let mut references = match p.get("references").or_else(|| p.get("reference")) {
             None => Vec::new(),
@@ -125,13 +146,19 @@ impl PreparedDrawing {
             _ => return Err(bad("references must be an image path or array of image paths")),
         };
         if references.is_empty() && !sb_refs.is_empty() {
-            references = sb_refs.iter().take(5).map(|pb| json!(pb.to_string_lossy().into_owned())).collect();
+            references = sb_refs
+                .iter()
+                .take(5)
+                .map(|pb| json!(pb.to_string_lossy().into_owned()))
+                .collect();
         }
         if references.len() > 5 || references.iter().any(|r| r.as_str().is_none_or(|s| s.trim().is_empty())) {
             return Err(bad("references must contain at most five nonempty image paths"));
         }
         if kind["needs_reference"] == true && references.is_empty() {
-            return Err(bad(format!("`{name}` requires reference=<image of the character> (or a character image placed in Storyboard)")));
+            return Err(bad(format!(
+                "`{name}` requires reference=<image of the character> (or a character image placed in Storyboard)"
+            )));
         }
         if name == "new" && p["prompt"].as_str().is_none_or(|t| t.trim().is_empty()) && sb_style.is_none() {
             return Err(bad("`new` requires prompt=<the character to draw>"));
@@ -139,7 +166,13 @@ impl PreparedDrawing {
         let prompt = compose(&all, kind, p, sb_style.as_deref())?;
         let save_command = kind["save_command"].as_str().unwrap_or("project.add_asset").to_owned();
         let save_kind = kind["save_kind"].as_str().unwrap_or("image").to_owned();
-        let tags: Vec<String> = kind["tags"].as_array().into_iter().flatten().filter_map(Value::as_str).map(str::to_owned).collect();
+        let tags: Vec<String> = kind["tags"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .map(str::to_owned)
+            .collect();
         let canvas = [kind["canvas"][0].as_u64().unwrap_or(1024), kind["canvas"][1].as_u64().unwrap_or(1536)];
         let markdown = format_fidget_markdown(name, &save_command, &tags, Some(canvas), &prompt);
         let mut request = json!({
@@ -198,10 +231,23 @@ pub fn cmd_fidget_stage(s: &mut Session, p: &Value) -> Result<Value> {
     let base_prompt = prepared.request["prompt"].as_str().unwrap_or_default().to_owned();
 
     let structured = crate::craft_ai::rephrase_prompt_with_fidget(name, &base_prompt)?;
-    let final_prompt = structured["staged_prompt"].as_str().filter(|t| !t.trim().is_empty()).unwrap_or(&base_prompt).to_owned();
+    let final_prompt = structured["staged_prompt"]
+        .as_str()
+        .filter(|t| !t.trim().is_empty())
+        .unwrap_or(&base_prompt)
+        .to_owned();
     let save_cmd = prepared.fidget["save_command"].as_str().unwrap_or("project.add_asset").to_owned();
-    let tags: Vec<String> = prepared.fidget["tags"].as_array().into_iter().flatten().filter_map(Value::as_str).map(str::to_owned).collect();
-    let canvas = [prepared.fidget["canvas"][0].as_u64().unwrap_or(1024), prepared.fidget["canvas"][1].as_u64().unwrap_or(1536)];
+    let tags: Vec<String> = prepared.fidget["tags"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .map(str::to_owned)
+        .collect();
+    let canvas = [
+        prepared.fidget["canvas"][0].as_u64().unwrap_or(1024),
+        prepared.fidget["canvas"][1].as_u64().unwrap_or(1536),
+    ];
     let md = format_fidget_markdown(name, &save_cmd, &tags, Some(canvas), &final_prompt);
 
     prepared.request["prompt"] = json!(final_prompt);
@@ -232,7 +278,10 @@ pub fn cmd_fidget_stage(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// Ingests an explicitly specified character bundle folder (`dir` required — never scrapes `~/Downloads`).
 pub fn cmd_scribbles_ingest(s: &mut Session, p: &Value) -> Result<Value> {
-    let project = s.project_path.clone().ok_or_else(|| bad("Open a project before ingesting a character bundle"))?;
+    let project = s
+        .project_path
+        .clone()
+        .ok_or_else(|| bad("Open a project before ingesting a character bundle"))?;
     let root = project.parent().ok_or_else(|| bad("Project has no parent directory"))?;
     let dir_raw = p["dir"]
         .as_str()
@@ -242,11 +291,16 @@ pub fn cmd_scribbles_ingest(s: &mut Session, p: &Value) -> Result<Value> {
     let source_dir = crate::workspace::resolve_workspace_path(s, dir_raw);
     let requested_char = p["character"].as_str().filter(|c| !c.trim().is_empty());
 
-    let bundle = magic_scribbles::ingest_bundle_dir(root, &source_dir, requested_char).map_err(|e| bad(e.to_string()))?;
+    let bundle = magic_scribbles::ingest_bundle_dir(root, &source_dir, requested_char)
+        .map_err(|e| bad(e.to_string()))?;
 
     let mut registered = Vec::new();
     let char_id = &bundle.character_id;
-    for (opt_path, suffix) in [(&bundle.character_png, "character"), (&bundle.parts_sheet_png, "parts-sheet"), (&bundle.pose_sheet_png, "pose-sheet")] {
+    for (opt_path, suffix) in [
+        (&bundle.character_png, "character"),
+        (&bundle.parts_sheet_png, "parts-sheet"),
+        (&bundle.pose_sheet_png, "pose-sheet"),
+    ] {
         if let Some(path) = opt_path
             && let Ok(res) = s.execute(
                 "project.add_asset",
@@ -310,9 +364,14 @@ fn resolve_template_request(s: &Session, p: &Value) -> Result<(Value, Value)> {
         let prepared = PreparedDrawing::prepare(Some(s), p, kind_name)?;
         return Ok((prepared.request, prepared.fidget));
     }
-    let frontmatter_kind = p["markdown"].as_str().and_then(parse_frontmatter_template).or_else(|| p["prompt"].as_str().and_then(parse_frontmatter_template));
+    let frontmatter_kind = p["markdown"]
+        .as_str()
+        .and_then(parse_frontmatter_template)
+        .or_else(|| p["prompt"].as_str().and_then(parse_frontmatter_template));
     if let Some(kind_name) = frontmatter_kind {
-        let spec = kinds.get(&kind_name).ok_or_else(|| bad(format!("Unknown Scribbles template `{kind_name}`")))?;
+        let spec = kinds
+            .get(&kind_name)
+            .ok_or_else(|| bad(format!("Unknown Scribbles template `{kind_name}`")))?;
         return Ok((
             p.clone(),
             json!({
@@ -363,8 +422,10 @@ pub fn cmd_scribbles_generate(s: &mut Session, p: &Value) -> Result<Value> {
             && let (Some(img), Some(char_id)) = (generated["image"].as_str(), iter_req["character"].as_str().filter(|v| !v.is_empty()))
         {
             let action_name = iter_req["action"].as_str().unwrap_or("walk");
-            let _ =
-                s.execute("character.sprite", json!({"character": char_id, "name": action_name, "action": action_name, "sheet": img, "columns": 4, "rows": 2}));
+            let _ = s.execute(
+                "character.sprite",
+                json!({"character": char_id, "name": action_name, "action": action_name, "sheet": img, "columns": 4, "rows": 2}),
+            );
         }
         runs.push(generated.clone());
         last_result = generated;
@@ -405,9 +466,16 @@ kind_command!(cmd_scribbles_layers, "layers");
 kind_command!(cmd_scribbles_custom, "custom");
 
 pub fn cmd_scribbles_moppet(s: &mut Session, p: &Value) -> Result<Value> {
-    let project = s.project_path.clone().ok_or_else(|| bad("Open a project before running scribbles.moppet"))?;
+    let project = s
+        .project_path
+        .clone()
+        .ok_or_else(|| bad("Open a project before running scribbles.moppet"))?;
     let root = project.parent().ok_or_else(|| bad("Project has no parent directory"))?;
-    let char_raw = p["character"].as_str().or_else(|| p["name"].as_str()).filter(|v| !v.trim().is_empty()).unwrap_or("character");
+    let char_raw = p["character"]
+        .as_str()
+        .or_else(|| p["name"].as_str())
+        .filter(|v| !v.trim().is_empty())
+        .unwrap_or("character");
     let char_id = crate::workspace::sanitize_asset_id(char_raw);
     let prompt = p["prompt"].as_str().map(str::trim).filter(|v| !v.is_empty()).unwrap_or(char_raw);
 
@@ -496,17 +564,35 @@ pub fn cmd_scribbles_templates(_: &mut Session, _: &Value) -> Result<Value> {
 /// Traces a pose sheet into clean vector paths via `VectorCraft` (`native_media::trace_silhouette_svg`)
 /// and attaches the resulting `.svg` + sprite project.
 pub fn cmd_scribbles_svg(s: &mut Session, p: &Value) -> Result<Value> {
-    let sheet_raw = p["sheet"].as_str().map(str::trim).filter(|v| !v.is_empty()).ok_or_else(|| bad("scribbles.svg requires sheet=<pose-sheet.png>"))?;
+    let sheet_raw = p["sheet"]
+        .as_str()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .ok_or_else(|| bad("scribbles.svg requires sheet=<pose-sheet.png>"))?;
     let sheet = crate::workspace::resolve_workspace_path(s, sheet_raw);
-    let project = s.project_path.clone().ok_or_else(|| bad("Open a project before building vector pose sheets"))?;
+    let project = s
+        .project_path
+        .clone()
+        .ok_or_else(|| bad("Open a project before building vector pose sheets"))?;
     let root = project.parent().ok_or_else(|| bad("Project has no parent directory"))?;
-    let char_id = p["character"].as_str().map(crate::workspace::sanitize_asset_id).unwrap_or_else(|| "character".into());
+    let char_id = p["character"]
+        .as_str()
+        .map(crate::workspace::sanitize_asset_id)
+        .unwrap_or_else(|| "character".into());
     let action = p["action"].as_str().unwrap_or("wave");
-    let out_svg = root.join("assets/characters").join(&char_id).join("sprites").join(action).join(format!("{char_id}-{action}.svg"));
+    let out_svg = root
+        .join("assets/characters")
+        .join(&char_id)
+        .join("sprites")
+        .join(action)
+        .join(format!("{char_id}-{action}.svg"));
     let fps = p["fps"].as_u64().unwrap_or(6);
     crate::native_media::trace_silhouette_svg(&sheet, &out_svg, 1.5, false)?;
     let sprite_res = s
-        .execute("character.sprite", json!({"character": char_id, "action": action, "name": action, "sheet": sheet, "columns": 2, "rows": 2, "fps": fps}))
+        .execute(
+            "character.sprite",
+            json!({"character": char_id, "action": action, "name": action, "sheet": sheet, "columns": 2, "rows": 2, "fps": fps}),
+        )
         .ok();
     let attached = s.execute(
         "project.add_asset",
@@ -528,9 +614,15 @@ pub fn cmd_scribbles_svg(s: &mut Session, p: &Value) -> Result<Value> {
 /// Separates a `parts-sheet.png` using native `PhotoCraft` (`layer.maskAllObjects` + `file.export.layersToFiles`)
 /// and optionally builds the `EffectCraft` `.ecproj` rig.
 pub fn cmd_scribbles_reassemble(s: &mut Session, p: &Value) -> Result<Value> {
-    let project = s.project_path.clone().ok_or_else(|| bad("Open a project before reassembling a parts sheet"))?;
+    let project = s
+        .project_path
+        .clone()
+        .ok_or_else(|| bad("Open a project before reassembling a parts sheet"))?;
     let root = project.parent().ok_or_else(|| bad("Project has no parent directory"))?;
-    let char_id = p["character"].as_str().map(crate::workspace::sanitize_asset_id).unwrap_or_else(|| "character".into());
+    let char_id = p["character"]
+        .as_str()
+        .map(crate::workspace::sanitize_asset_id)
+        .unwrap_or_else(|| "character".into());
     let view = p["view"].as_str().unwrap_or("front");
     let char_dir = root.join("assets/characters").join(&char_id);
     let sheet = p["sheet"]

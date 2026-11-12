@@ -85,30 +85,30 @@
       "needs_reference": true,
       "save_command": "project.add_asset",
       "save_kind": "parts_sheet",
-      "tags": ["character", "moppet", "parts-sheet", "chroma-green"],
+      "tags": ["character", "cutout_rig", "parts-sheet", "chroma-green"],
       "layout": "Exploded 2D puppet disassembly parts sheet of the attached character on a flat solid chroma-green (#00FF00) background in 6 non-overlapping regions with rounded overlap caps at each joint.",
       "shared_override": "Match the attached reference's art style, design, materials, palette and proportions exactly. Use ONE perfectly flat solid pure chroma-green (#00FF00) background with no gradient or shadow.",
       "rules": []
     },
     "poses_2x2": {
-      "label": "2x2 Moppet pose sheet (4 poses)",
+      "label": "2x2 Character pose sheet (4 poses)",
       "reference": "https://schoolofmotion.com/blog/walk-cycle-after-effects",
       "canvas": [1024, 1024],
       "needs_reference": true,
       "save_command": "project.add_asset",
       "save_kind": "poses",
-      "tags": ["character", "moppet", "pose-sheet", "2x2"],
+      "tags": ["character", "cutout_rig", "pose-sheet", "2x2"],
       "layout": "Four full-body poses of the attached character in a 2x2 grid of 512x512 cells: idle, talk_sing, walk_hop, celebration wave.",
       "rules": []
     },
-    "moppet": {
-      "label": "Moppet Maker pack (character + chroma parts + 2x2 poses)",
+    "cutout_rig": {
+      "label": "Character Rig Pack (character + chroma parts + 2x2 poses)",
       "reference": "https://esotericsoftware.com/blog/How-to-cut-your-assets-for-animation",
       "canvas": [1024, 1024],
       "needs_reference": false,
       "save_command": "scribbles.ingest",
-      "save_kind": "moppet_pack",
-      "tags": ["character", "moppet", "pack", "rig-ready"],
+      "save_kind": "cutout_rig_pack",
+      "tags": ["character", "cutout_rig", "pack", "rig-ready"],
       "layout": "Three-part character bundle (front cutout, #00FF00 chroma parts sheet, 2x2 pose sheet) ingested into assets/characters/<id>/.",
       "rules": ["stance"]
     },

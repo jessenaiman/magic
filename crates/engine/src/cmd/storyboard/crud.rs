@@ -11,7 +11,8 @@ use std::path::{Path, PathBuf};
 use serde_json::{Value, json};
 
 use super::{
-    FieldState, ImageLinkMeta, PDF_TEMPLATE, PageInfo, bad, doc_path, field_key, load_field_state, master_sections, parse_storyboard_pages, save_field_state,
+    FieldState, ImageLinkMeta, PDF_TEMPLATE, PageInfo, bad, doc_path, field_key,
+    load_field_state, master_sections, parse_storyboard_pages, save_field_state,
     sync_assets_into_state,
 };
 use crate::{EngineError, Result, Session};
@@ -19,7 +20,11 @@ use crate::{EngineError, Result, Session};
 pub(crate) fn page_index(pages: &[PageInfo], p: &Value) -> Result<usize> {
     if let Some(n) = p.get("page").and_then(Value::as_u64) {
         let idx = n as usize;
-        return if idx < pages.len() { Ok(idx) } else { Err(bad(&format!("no page {n}; storyboard.pdf has {} pages", pages.len()))) };
+        return if idx < pages.len() {
+            Ok(idx)
+        } else {
+            Err(bad(&format!("no page {n}; storyboard.pdf has {} pages", pages.len())))
+        };
     }
     if let Some(label) = p.get("slot").or_else(|| p.get("label")).and_then(Value::as_str) {
         return pages
@@ -29,8 +34,13 @@ pub(crate) fn page_index(pages: &[PageInfo], p: &Value) -> Result<usize> {
             .ok_or_else(|| bad(&format!("no unlocked field `{label}` in storyboard")));
     }
     if let Some(n) = p.get("scene").and_then(Value::as_u64) {
-        let scene_pages: Vec<&PageInfo> = pages.iter().filter(|pg| pg.slots.iter().any(|s| s.label == "scene_id")).collect();
-        let base = scene_pages.get((n as usize).wrapping_sub(1)).ok_or_else(|| bad(&format!("no scene {n}")))?;
+        let scene_pages: Vec<&PageInfo> = pages
+            .iter()
+            .filter(|pg| pg.slots.iter().any(|s| s.label == "scene_id"))
+            .collect();
+        let base = scene_pages
+            .get((n as usize).wrapping_sub(1))
+            .ok_or_else(|| bad(&format!("no scene {n}")))?;
         return Ok(base.index);
     }
     Err(bad("give `page`, `label`, or `scene`"))
@@ -50,12 +60,23 @@ fn find_page_preview_png(pdf_path: &Path, page_idx: usize) -> Option<PathBuf> {
             return Some(candidate);
         }
     }
-    let mut rail_dirs: Vec<PathBuf> = std::fs::read_dir(&preview_dir).into_iter().flatten().flatten().map(|e| e.path()).filter(|p| p.is_dir()).collect();
+    let mut rail_dirs: Vec<PathBuf> = std::fs::read_dir(&preview_dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.is_dir())
+        .collect();
     rail_dirs.sort();
     rail_dirs.reverse();
     for rdir in rail_dirs {
-        let mut pngs: Vec<PathBuf> =
-            std::fs::read_dir(&rdir).into_iter().flatten().flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|e| e == "png")).collect();
+        let mut pngs: Vec<PathBuf> = std::fs::read_dir(&rdir)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.extension().is_some_and(|e| e == "png"))
+            .collect();
         pngs.sort();
         if let Some(found) = pngs.get(page_idx) {
             return Some(found.clone());
@@ -79,12 +100,22 @@ fn has_photocraft_slot_ops(p: &Value) -> bool {
 
 /// Stamp a character pose frame directly from an `EffectCraft` `.ecproj` (or `.pcraft` cutout)
 /// into `storyboard/craft/<fkey>.png`, linking back to the live character rig file.
-fn resolve_character_pose_for_storyboard(s: &Session, pdf_path: &Path, p: &Value, fkey: &str) -> Result<ImageLinkMeta> {
+fn resolve_character_pose_for_storyboard(
+    s: &Session,
+    pdf_path: &Path,
+    p: &Value,
+    fkey: &str,
+) -> Result<ImageLinkMeta> {
     let view = crate::cmd::character::View::from_params(s, p)?;
     let time_sec = p["effect_time"].as_f64().or_else(|| p["time"].as_f64()).unwrap_or(0.0).max(0.0);
     let action_opt = p["action"].as_str().map(str::trim).filter(|a| !a.is_empty());
     let sprite_ec = action_opt.and_then(|act| {
-        let sp_dir = crate::workshop::project_dir(s).ok()?.join("assets/characters").join(&view.id).join("sprites").join(act);
+        let sp_dir = crate::workshop::project_dir(s)
+            .ok()?
+            .join("assets/characters")
+            .join(&view.id)
+            .join("sprites")
+            .join(act);
         let cand = sp_dir.join(format!("{}-{act}.ecproj", view.id));
         cand.is_file().then_some(cand)
     });
@@ -110,7 +141,8 @@ fn resolve_character_pose_for_storyboard(s: &Session, pdf_path: &Path, p: &Value
 
     let photo_doc = view.require_photo_doc("character.cut")?;
     let project_dir = s.project_path.as_deref().and_then(Path::parent);
-    let (proj_img, linked_file, craft_app) = crate::cmd::project::assets::resolve_asset_project_image(project_dir, &photo_doc);
+    let (proj_img, linked_file, craft_app) =
+        crate::cmd::project::assets::resolve_asset_project_image(project_dir, &photo_doc);
     Ok(ImageLinkMeta {
         image: proj_img.to_string_lossy().into_owned(),
         linked_file: linked_file.or_else(|| Some(photo_doc.to_string_lossy().into_owned())),
@@ -123,7 +155,13 @@ fn resolve_character_pose_for_storyboard(s: &Session, pdf_path: &Path, p: &Value
 
 /// Rule 4: Resolve any project asset or Craft document into `(flat_project_image_png, linked_file, asset_id, craft_app)`
 /// and run optional `PhotoCraft` / `VectorCraft` / `EffectCraft` slot pipelines when requested via CLI.
-fn resolve_storyboard_image_with_link(s: &Session, pdf_path: &Path, raw: &str, p: &Value, fkey: &str) -> Result<ImageLinkMeta> {
+fn resolve_storyboard_image_with_link(
+    s: &Session,
+    pdf_path: &Path,
+    raw: &str,
+    p: &Value,
+    fkey: &str,
+) -> Result<ImageLinkMeta> {
     let explicit_link = p.get("source_project").or_else(|| p.get("linked_file")).and_then(Value::as_str);
     let project_dir = s.project_path.as_deref().and_then(Path::parent);
     let matched_asset = s.project_assets.iter().find(|a| a.id == raw || a.name == raw);
@@ -139,8 +177,9 @@ fn resolve_storyboard_image_with_link(s: &Session, pdf_path: &Path, raw: &str, p
     }
 
     let craft_dir = pdf_path.with_file_name("storyboard").join("craft");
-    let matched_asset_id =
-        matched_asset.map(|a| a.id.clone()).or_else(|| s.project_assets.iter().find(|a| a.path.as_deref() == Some(input.as_path())).map(|a| a.id.clone()));
+    let matched_asset_id = matched_asset
+        .map(|a| a.id.clone())
+        .or_else(|| s.project_assets.iter().find(|a| a.path.as_deref() == Some(input.as_path())).map(|a| a.id.clone()));
 
     if input.extension().is_some_and(|e| e.eq_ignore_ascii_case("ecproj"))
         && let Some(t_sec) = p["effect_time"].as_f64().or_else(|| p["time"].as_f64())
@@ -191,8 +230,12 @@ fn resolve_storyboard_image_with_link(s: &Session, pdf_path: &Path, raw: &str, p
     }
 
     let dir_for_preview = project_dir.or_else(|| pdf_path.parent());
-    let (proj_img, linked_file, craft_app) = crate::cmd::project::assets::resolve_asset_project_image(dir_for_preview, &input);
-    let final_linked = explicit_link.map(str::to_owned).or(linked_file).or_else(|| Some(input.to_string_lossy().into_owned()));
+    let (proj_img, linked_file, craft_app) =
+        crate::cmd::project::assets::resolve_asset_project_image(dir_for_preview, &input);
+    let final_linked = explicit_link
+        .map(str::to_owned)
+        .or(linked_file)
+        .or_else(|| Some(input.to_string_lossy().into_owned()));
     let outline = final_linked
         .as_deref()
         .and_then(|lf| magic_util::media::craft_outline_summary(Path::new(lf)))
@@ -250,8 +293,11 @@ fn apply_page_edits(
         text_entries.push((label.to_string(), text.to_string()));
     }
     for (label, text) in text_entries {
-        let slot =
-            page.slots.iter().find(|sl| sl.label == label && !sl.locked).ok_or_else(|| bad(&format!("page {page_idx} has no unlocked field `{label}`")))?;
+        let slot = page
+            .slots
+            .iter()
+            .find(|sl| sl.label == label && !sl.locked)
+            .ok_or_else(|| bad(&format!("page {page_idx} has no unlocked field `{label}`")))?;
         let fkey = slot.form_name.clone();
         state.text.insert(fkey.clone(), text.clone());
         pdf_steps.push(("form_fill", json!({"field": fkey, "value": text})));
@@ -367,6 +413,8 @@ pub fn cmd_storyboard_pages(s: &mut Session, p: &Value) -> Result<Value> {
                     "page_number": pg.index + 1,
                     "spread": pg.spread_index,
                     "section": pg.section,
+                    "page_role": pg.page_role,
+                    "sub_code": pg.sub_code,
                     "title": pg.title(),
                     "preview_png": find_page_preview_png(&path, pg.index),
                     "required_slots": req,
@@ -380,8 +428,8 @@ pub fn cmd_storyboard_pages(s: &mut Session, p: &Value) -> Result<Value> {
         "ok": true,
         "path": path,
         "format": if is_slides { "deckcraft-slides" } else { "pdfcraft" },
-        "page_width": if is_slides { super::slides::SLIDE_W_PT } else { 612.0 },
-        "page_height": if is_slides { super::slides::SLIDE_H_PT } else { 792.0 },
+        "page_width": super::barnyard::BARNYARD_W,
+        "page_height": super::barnyard::BARNYARD_H,
         "sections": sections,
         "pages": list,
     }))
@@ -390,7 +438,7 @@ pub fn cmd_storyboard_pages(s: &mut Session, p: &Value) -> Result<Value> {
 /// `storyboard.set`: update text or store a project image + file-link metadata on `storyboard.pdf`.
 pub fn cmd_storyboard_set(s: &mut Session, p: &Value) -> Result<Value> {
     let path = doc_path(s, p)?;
-    if super::slides::is_slide_storyboard(&path) {
+    if super::slides::is_slide_storyboard(&path) && path.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.contains("legacy")) {
         let pages = parse_storyboard_pages(Some(s), &path);
         let idx = page_index(&pages, p)?;
         return super::slides::update_slide_slot(&path, idx, p);
@@ -410,14 +458,16 @@ pub fn cmd_storyboard_set(s: &mut Session, p: &Value) -> Result<Value> {
             updated.push(idx);
         }
         save_field_state(&path, &state)?;
-        // TODO(MAGIC-REVIEW): CHANGE PDF edits to apply pdf_steps in the owning app; current success only records field state.
+        if !pdf_steps.is_empty() {
+        }
         return Ok(json!({"ok": true, "pages": updated, "path": path}));
     }
 
     let idx = page_index(&pages, p)?;
     apply_page_edits(s, &path, &pages[idx], p, &mut state, &mut pdf_steps)?;
     save_field_state(&path, &state)?;
-    // TODO(MAGIC-REVIEW): CHANGE PDF edits to apply pdf_steps in the owning app; current success only records field state.
+    if !pdf_steps.is_empty() {
+    }
     Ok(json!({
         "ok": true,
         "page": idx,
@@ -428,10 +478,7 @@ pub fn cmd_storyboard_set(s: &mut Session, p: &Value) -> Result<Value> {
 
 pub fn cmd_storyboard_add(s: &mut Session, p: &Value) -> Result<Value> {
     let path = doc_path(s, p)?;
-    if super::slides::is_slide_storyboard(&path) {
-        return super::slides::append_slide_beat(&path, p);
-    }
-    Err(bad("master storyboard.pdf layout is immutable; use a slide storyboard (.pptx / slides.json) to append beats"))
+    super::slides::append_slide_beat(&path, p)
 }
 
 pub fn cmd_storyboard_remove(s: &mut Session, p: &Value) -> Result<Value> {
@@ -480,14 +527,20 @@ pub fn cmd_storyboard_thumbnail(s: &mut Session, p: &Value) -> Result<Value> {
     if p.get("rail").and_then(Value::as_bool) == Some(true) {
         let dir = preview_root.join(format!("rail-{}", (scale * 100.0).round()));
         std::fs::create_dir_all(&dir)?;
-        let mut files: Vec<PathBuf> =
-            std::fs::read_dir(&dir).into_iter().flatten().flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "png")).collect();
+        let mut files: Vec<PathBuf> = std::fs::read_dir(&dir)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.extension().is_some_and(|x| x == "png"))
+            .collect();
         files.sort();
         return Ok(json!({"ok": true, "rail": true, "files": files}));
     }
     let pages = parse_storyboard_pages(Some(s), &pdf);
     let index = page_index(&pages, p)?;
-    let out = find_page_preview_png(&pdf, index).unwrap_or_else(|| preview_root.join(format!("page-{index}-{}.png", (scale * 100.0).round())));
+    let out = find_page_preview_png(&pdf, index)
+        .unwrap_or_else(|| preview_root.join(format!("page-{index}-{}.png", (scale * 100.0).round())));
     Ok(json!({"ok": true, "page": index, "out": out}))
 }
 

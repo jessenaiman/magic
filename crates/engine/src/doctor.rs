@@ -14,11 +14,26 @@ struct Check {
 
 impl Check {
     fn ok(name: impl Into<String>, message: impl Into<String>) -> Self {
-        Self { name: name.into(), status: "ok", message: message.into(), remediation: None }
+        Self {
+            name: name.into(),
+            status: "ok",
+            message: message.into(),
+            remediation: None,
+        }
     }
 
-    fn problem(status: &'static str, name: impl Into<String>, message: impl Into<String>, remediation: impl Into<String>) -> Self {
-        Self { name: name.into(), status, message: message.into(), remediation: Some(remediation.into()) }
+    fn problem(
+        status: &'static str,
+        name: impl Into<String>,
+        message: impl Into<String>,
+        remediation: impl Into<String>,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            status,
+            message: message.into(),
+            remediation: Some(remediation.into()),
+        }
     }
 
     fn to_json(&self) -> Value {
@@ -38,21 +53,31 @@ fn checks(s: &Session) -> Vec<Check> {
     let conn_count = ai["connections"].as_array().map_or(0, Vec::len);
     out.push(Check::ok(
         "ai:craft-ai-integrations",
-        format!("ai.enabled={ai_enabled}, {conn_count} SharedStore connection(s) configured via storytold/craft-ai-integrations"),
+        format!(
+            "ai.enabled={ai_enabled}, {conn_count} SharedStore connection(s) configured via storytold/craft-ai-integrations"
+        ),
     ));
 
     let settings_report = s.settings.report_json();
-    if settings_report["has_problems"].as_bool() == Some(true) || settings_report["read_only"].as_bool() == Some(true) {
+    if settings_report["has_problems"].as_bool() == Some(true)
+        || settings_report["read_only"].as_bool() == Some(true)
+    {
         out.push(Check::problem(
             "warn",
             "settings:config",
-            format!("craft-settings LoadReport flagged problems or read-only mode: {settings_report}"),
+            format!(
+                "craft-settings LoadReport flagged problems or read-only mode: {settings_report}"
+            ),
             "Inspect config.toml (or any config.broken-*.toml backup beside it) and verify folder write permissions",
         ));
     } else {
         out.push(Check::ok(
             "settings:config",
-            format!("craft-settings ready (persistent={}, path={})", settings_report["persistent"], settings_report["path"].as_str().unwrap_or("memory")),
+            format!(
+                "craft-settings ready (persistent={}, path={})",
+                settings_report["persistent"],
+                settings_report["path"].as_str().unwrap_or("memory")
+            ),
         ));
     }
 

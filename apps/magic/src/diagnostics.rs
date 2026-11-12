@@ -13,7 +13,11 @@ fn scrub_home(raw: &str) -> String {
         return raw.to_owned();
     };
     let trimmed = home.trim_end_matches(['/', '\\']);
-    if trimmed.is_empty() { raw.to_owned() } else { raw.replace(trimmed, "~") }
+    if trimmed.is_empty() {
+        raw.to_owned()
+    } else {
+        raw.replace(trimmed, "~")
+    }
 }
 
 /// Build a sanitized Markdown + JSON diagnostics payload (scrubs `$HOME` to `~` and never includes secrets/tokens).
@@ -29,7 +33,10 @@ pub fn build_sanitized_diagnostics(session: &mut Session, ui_state: &mut UiShell
         ui_state.cache.ai_status = ai;
     }
 
-    let proj_display = ui_state.project_path.as_ref().map_or_else(|| "none".into(), |p| scrub_home(&p.to_string_lossy()));
+    let proj_display = ui_state
+        .project_path
+        .as_ref()
+        .map_or_else(|| "none".into(), |p| scrub_home(&p.to_string_lossy()));
 
     let summary = ui_state.ai.problem_summary.trim();
     let steps = ui_state.ai.problem_steps.trim();
@@ -134,7 +141,10 @@ pub fn sync_ai_ui_from_status(ui_state: &mut UiShellState, ai: &Value) {
 
 pub fn hydrate_selected_character(session: &mut Session, ui_state: &mut UiShellState) {
     let chars = ui_state.cache.characters["characters"].as_array().cloned().unwrap_or_default();
-    let active_id = ui_state.selected_character_id.clone().or_else(|| chars.first().and_then(|c| c["id"].as_str().map(str::to_owned)));
+    let active_id = ui_state
+        .selected_character_id
+        .clone()
+        .or_else(|| chars.first().and_then(|c| c["id"].as_str().map(str::to_owned)));
     let Some(cid) = active_id else {
         ui_state.cache.character_keys = Value::Null;
         ui_state.cache.character_path = Value::Null;
@@ -146,8 +156,12 @@ pub fn hydrate_selected_character(session: &mut Session, ui_state: &mut UiShellS
         .and_then(|c| c["views"].as_array())
         .is_some_and(|vs| vs.iter().any(|v| v["ecproj"].as_bool() == Some(true)));
     if has_ecproj {
-        ui_state.cache.character_keys = session.execute("character.keys", json!({"character": cid, "op": "list"})).unwrap_or(Value::Null);
-        ui_state.cache.character_path = session.execute("character.path", json!({"character": cid, "op": "inspect"})).unwrap_or(Value::Null);
+        ui_state.cache.character_keys = session
+            .execute("character.keys", json!({"character": cid, "op": "list"}))
+            .unwrap_or(Value::Null);
+        ui_state.cache.character_path = session
+            .execute("character.path", json!({"character": cid, "op": "inspect"}))
+            .unwrap_or(Value::Null);
     } else {
         ui_state.cache.character_keys = Value::Null;
         ui_state.cache.character_path = Value::Null;
@@ -235,7 +249,9 @@ pub fn open_https_url(ctx: &egui::Context, url: &str) {
 }
 
 pub fn apply_app_font_dirs(raw: &str) {
-    let dirs: Vec<PathBuf> = std::env::split_paths(raw).filter(|p| !p.as_os_str().is_empty()).collect();
+    let dirs: Vec<PathBuf> = std::env::split_paths(raw)
+        .filter(|p| !p.as_os_str().is_empty())
+        .collect();
     craft_font_catalog::Catalog::global().set_app_dirs(dirs);
     craft_font_catalog::Catalog::global().rescan_if_changed();
 }

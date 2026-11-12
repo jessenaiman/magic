@@ -16,8 +16,25 @@ pub fn cmd_words_effect_install(s: &mut Session, p: &Value) -> Result<Value> {
     let rel = format!("lettering/effects/{safe_stem}.json");
     let name = raw_name;
     let target = dir.join(&rel);
+    let live_applied = if let Some(mapped) = crate::craft_effects::find_lyrics_effect(name) {
+        let params = match mapped.craft_command {
+            "effect.apply" => json!({"effect": mapped.match_name}),
+            _ => (mapped.default_params)(),
+        };
+        let applied = crate::craft_api::execute_in_live_app(mapped.craft_app, mapped.craft_command, params).is_ok();
+        if applied {
+            let _ = crate::craft_api::save_in_live_app(mapped.craft_app, None);
+        }
+        applied
+    } else {
+        let applied = crate::craft_api::execute_in_live_app("effectcraft", "effect.apply", json!({"effect": name})).is_ok();
+        if applied {
+            let _ = crate::craft_api::save_in_live_app("effectcraft", None);
+        }
+        applied
+    };
     if target.is_file() {
-        return Ok(json!({"name":name,"src":rel,"installed":false,"already":true}));
+        return Ok(json!({"name":name,"src":rel,"installed":false,"already":true,"live_app_synced":live_applied}));
     }
     if let Some(parent) = target.parent() {
         fs::create_dir_all(parent)?;
@@ -48,7 +65,7 @@ pub fn cmd_words_effect_install(s: &mut Session, p: &Value) -> Result<Value> {
         })
     };
     crate::doc_state::write_file(&target, serde_json::to_vec_pretty(&spec).map_err(|e| invalid(e.to_string()))?)?;
-    Ok(json!({"name":name,"src":rel,"installed":true,"already":false}))
+    Ok(json!({"name":name,"src":rel,"installed":true,"already":false,"live_app_synced":live_applied}))
 }
 
 fn hex_color(v: &Value) -> Option<Value> {

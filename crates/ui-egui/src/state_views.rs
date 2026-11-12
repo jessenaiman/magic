@@ -2,6 +2,8 @@
 //! `LyricsViewState`, `MotionViewState`, `AnimationViewState`, `StudioViewState`) and
 //! `AiUiState` (`storytold/craft-ai-integrations`).
 
+use std::collections::BTreeMap;
+
 #[derive(Clone, Debug)]
 pub struct AiUiState {
     pub enabled: bool,
@@ -132,7 +134,7 @@ impl Default for StoryboardViewState {
         Self {
             current_page: 0,
             zoom: 100.0,
-            double_page_mode: true,
+            double_page_mode: false,
             req_filter: "all".into(),
             scroll_to_page: None,
             editing_page: None,
@@ -148,6 +150,8 @@ pub struct LyricsViewState {
     pub sub_mode: String,
     pub inspector_tab: String,
     pub search: String,
+    pub fx_search: String,
+    pub fx_category: String,
     pub selected_anim_id: Option<String>,
     pub selected_word_id: Option<String>,
     pub scrub_seconds: f64,
@@ -197,6 +201,15 @@ pub struct LyricsViewState {
     pub backdrop_mode: String,
     pub track_source: String,
     pub audio_source: String,
+    pub show_tethers: bool,
+    pub show_warp_paths: bool,
+    pub flat_preview_only: bool,
+    pub curve_p1: [f32; 2],
+    pub curve_p2: [f32; 2],
+    pub word_offsets: BTreeMap<String, [f32; 2]>,
+    pub word_scales: BTreeMap<String, f32>,
+    pub word_rotations: BTreeMap<String, f32>,
+    pub word_effects: BTreeMap<String, String>,
 }
 
 impl Default for LyricsViewState {
@@ -205,6 +218,8 @@ impl Default for LyricsViewState {
             sub_mode: "design".into(),
             inspector_tab: "animators".into(),
             search: String::new(),
+            fx_search: String::new(),
+            fx_category: "all".into(),
             selected_anim_id: None,
             selected_word_id: None,
             scrub_seconds: 0.0,
@@ -219,7 +234,7 @@ impl Default for LyricsViewState {
             glow_radius: 14.0,
             per_char_3d: false,
             selected_effect_id: "ec.stylize.glow".into(),
-            font_preset: "Song font".into(),
+            font_preset: "Fraunces".into(),
             font_dir_extra: String::new(),
             var_weight: 600.0,
             var_width: 100.0,
@@ -248,12 +263,21 @@ impl Default for LyricsViewState {
             color_hex: "#f0f4fc".into(),
             outline_hex: "#0e141e".into(),
             teaching_mode: "sing_along".into(),
-            choreography: "cascade".into(),
+            choreography: "poster".into(),
             move_preset: "pop".into(),
             draw_enabled: false,
             backdrop_mode: "scene".into(),
             track_source: "overlay".into(),
             audio_source: "filmcraft".into(),
+            show_tethers: true,
+            show_warp_paths: true,
+            flat_preview_only: false,
+            curve_p1: [0.22, 0.88],
+            curve_p2: [0.68, 1.0],
+            word_offsets: BTreeMap::new(),
+            word_scales: BTreeMap::new(),
+            word_rotations: BTreeMap::new(),
+            word_effects: BTreeMap::new(),
         }
     }
 }
@@ -296,6 +320,10 @@ pub struct MotionViewState {
     pub lottie_show_warnings: bool,
     pub track_source: String,
     pub audio_source: String,
+    pub show_tethers: bool,
+    pub flat_preview_only: bool,
+    pub tangent_in: [f32; 2],
+    pub tangent_out: [f32; 2],
 }
 
 impl Default for MotionViewState {
@@ -310,12 +338,12 @@ impl Default for MotionViewState {
             end_sec: 2.05,
             draw_duration: 0.85,
             hold_duration: 1.2,
-            pos_x: 420.0,
-            pos_y: 280.0,
+            pos_x: 960.0,
+            pos_y: 540.0,
             arc_bend_deg: 22.0,
             taper_pct: 65.0,
-            width: 320.0,
-            height: 180.0,
+            width: 520.0,
+            height: 240.0,
             stroke_width: 8.0,
             stroke_color: "#35e1c0".into(),
             trace_source: String::new(),
@@ -337,6 +365,10 @@ impl Default for MotionViewState {
             lottie_show_warnings: false,
             track_source: "overlay".into(),
             audio_source: "filmcraft".into(),
+            show_tethers: true,
+            flat_preview_only: false,
+            tangent_in: [-120.0, -54.0],
+            tangent_out: [120.0, -54.0],
         }
     }
 }

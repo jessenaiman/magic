@@ -7,8 +7,8 @@ use std::path::Path;
 use serde_json::{Value, json};
 
 use super::{
-    BaseConverter, ConversionPlan, ConvertKind, DiscoveredAsset, HardWallIssue, LegacyConverter, MissingAssetNotice, collect_files_filtered, extract_attr,
-    extract_quoted_paths,
+    BaseConverter, ConversionPlan, ConvertKind, DiscoveredAsset, HardWallIssue, LegacyConverter,
+    MissingAssetNotice, collect_files_filtered, extract_attr, extract_quoted_paths,
 };
 use crate::Result;
 
@@ -109,7 +109,10 @@ fn parse_hyperframes_html(hf_root: &Path, html_path: &Path, html: &str, plan: &m
         }
         let resolved = hf_root.join(rel.trim_start_matches("./"));
         if !resolved.is_file() {
-            let is_audio = matches!(Path::new(&rel).extension().and_then(|e| e.to_str()).unwrap_or_default(), "wav" | "mp3" | "m4a" | "flac" | "ogg");
+            let is_audio = matches!(
+                Path::new(&rel).extension().and_then(|e| e.to_str()).unwrap_or_default(),
+                "wav" | "mp3" | "m4a" | "flac" | "ogg"
+            );
             plan.missing_assets.push(MissingAssetNotice {
                 referenced_path: rel.clone(),
                 referenced_in: html_path.display().to_string(),
@@ -136,8 +139,7 @@ fn parse_hyperframes_html(hf_root: &Path, html_path: &Path, html: &str, plan: &m
                 concat!(
                     "Build a matching EffectCraft composition (`effectcraft-cli mcp`) ",
                     "and link it onto FilmCraft (`magic-cli exec video.link_effectcraft project= <comp.ecproj>`)."
-                )
-                .into(),
+                ).into(),
             ],
             doc_links: vec![
                 ("HyperFrames Compositions & Sub-Compositions", "https://hyperframes.heygen.com/concepts/compositions"),
@@ -197,10 +199,13 @@ fn scan_hyperframes_scripts(hf_root: &Path, plan: &mut ConversionPlan) {
                         js_path.file_name().and_then(|n| n.to_str()).unwrap_or("script.js")
                     ),
                     "Translate joint poses onto EffectCraft (`V2` `character.*` rig or `V4` `motion.*` keyframes) at integer `Tick` times.".into(),
-                    "Link the resulting `.ecproj` onto FilmCraft via `magic-cli exec video.link_effectcraft project= animations/<rig>.ecproj --track V2`."
-                        .into(),
+                    "Link the resulting `.ecproj` onto FilmCraft via `magic-cli exec video.link_effectcraft project= animations/<rig>.ecproj --track V2`.".into(),
                 ],
-                doc_links: vec![HF_DOCS[5], HF_DOCS[4], HF_DOCS[0]],
+                doc_links: vec![
+                    HF_DOCS[5],
+                    HF_DOCS[4],
+                    HF_DOCS[0],
+                ],
             });
         }
         if code.contains("MorphSVGPlugin") || code.contains("SplitText") || code.contains("CustomBounce") {
@@ -242,6 +247,11 @@ fn discover_local_media(source_dir: &Path, plan: &mut ConversionPlan) {
         } else {
             "images"
         };
-        plan.discovered_assets.push(DiscoveredAsset { source_path: img, bucket: bucket.into(), character_id: None, promote_shared: false });
+        plan.discovered_assets.push(DiscoveredAsset {
+            source_path: img,
+            bucket: bucket.into(),
+            character_id: None,
+            promote_shared: false,
+        });
     }
 }

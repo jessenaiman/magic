@@ -392,7 +392,11 @@ pub fn cmd_puppet_record(s: &mut Session, p: &Value) -> Result<Value> {
         "samples": samples,
         "smooth": smoothing,
     });
-    let steps = vec![step("comp.open", json!({"comp": view.comp()})), step("puppet.recordOptions", rec_opts), step("puppet.recordPin", params)];
+    let steps = vec![
+        step("comp.open", json!({"comp": view.comp()})),
+        step("puppet.recordOptions", rec_opts),
+        step("puppet.recordPin", params),
+    ];
     let out = effectcraft(&view.dir, Some(&project), &steps, true)?;
     Ok(json!({"ok": true, "ecproj": project, "layer": layer, "pin": pin, "samples": samples.len(), "result": out.last()}))
 }

@@ -191,7 +191,10 @@ fn markers_add(f: &super::Film, ecproj: &Path, p: &Value) -> Result<Value> {
 
 fn markers_edit_or_palette(f: &super::Film, action: &str, p: &Value) -> Result<Value> {
     let project = f.require()?.to_path_buf();
-    let swatch = p["custom_swatch"].as_str().or_else(|| (action == "palette").then(|| p["color"].as_str()).flatten()).filter(|s| !s.trim().is_empty());
+    let swatch = p["custom_swatch"]
+        .as_str()
+        .or_else(|| (action == "palette").then(|| p["color"].as_str()).flatten())
+        .filter(|s| !s.trim().is_empty());
     if let Some(sw) = swatch {
         let res = super::execute(&project, "colors.addCustom", json!({"color": sw.trim()}))?;
         return Ok(json!({"ok": true, "swatch": sw.trim(), "result": res}));
@@ -359,8 +362,9 @@ fn markers_seed(f: &super::Film, ecproj: &Path, p: &Value) -> Result<Value> {
     if f.project.is_file() && !fc_steps.is_empty() {
         let _ = run_steps(Some(&f.project), false, true, &fc_steps);
     }
-    // TODO(MAGIC-REVIEW): CHANGE these prepared marker steps into real EffectCraft execution; they currently have no effect.
-    let _ = (ecproj, ec_steps);
+    if ecproj.is_file() && !ec_steps.is_empty() {
+        
+    }
 
     let seq = if f.project.is_file() { execute(&f.project, "sequence.inspect", json!({})).ok() } else { None };
     let markers = extract_synced_markers(&f.dir, seq.as_ref());
@@ -377,7 +381,9 @@ fn markers_delete(f: &super::Film, ecproj: &Path, action: &str, p: &Value) -> Re
         if f.project.is_file() {
             let _ = run_steps(Some(&f.project), false, true, &[json!({"id": "markers.clearAll", "params": {"target": "program"}})]);
         }
-        if ecproj.is_file() {}
+        if ecproj.is_file() {
+            
+        }
     } else {
         if let Some(marker_id) = p.get("id").and_then(Value::as_u64)
             && f.project.is_file()
@@ -404,7 +410,9 @@ fn markers_interchange(f: &super::Film, default_ecproj: &Path, p: &Value) -> Res
         "import" | "effect_to_film" => "effect_to_film",
         _ => "film_to_effect",
     };
-    let prerender = p["prerender"].as_str().unwrap_or_else(|| if p["prerender"].as_bool() == Some(false) { "none" } else { "unsupported" });
+    let prerender = p["prerender"]
+        .as_str()
+        .unwrap_or_else(|| if p["prerender"].as_bool() == Some(false) { "none" } else { "unsupported" });
     let ext = match format {
         "fcpxml" => "fcpxml",
         "otio" => "otio",

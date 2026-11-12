@@ -2,7 +2,10 @@
 //! 3-Strip Console Mixer (`A1`/`A2`/`Master`), 35+ Audio DSP, Essential Graphics (`.fcgt`),
 //! Broadcast Captions (`C1`), & Pure-Rust Export Queue (`T39`–`T42`).
 
-use egui::{Align, Align2, Color32, CornerRadius, FontId, Layout, Pos2, Rect, RichText, Sense, Stroke, StrokeKind, Ui, Vec2};
+use egui::{
+    Align, Align2, Color32, CornerRadius, FontId, Layout, Pos2, Rect, RichText, Sense, Stroke,
+    StrokeKind, Ui, Vec2,
+};
 use serde_json::json;
 
 use crate::controls::{ScalarSpec, pill_toggle, ring_slider_h};
@@ -119,17 +122,33 @@ fn draw_four_bar_loudness_meters(ui: &mut Ui, ctx: &ViewCtx<'_>) {
     ];
     let avail_w = (ui.available_width() - 4.0).max(180.0);
     let (panel_rect, _) = ui.allocate_exact_size(Vec2::new(avail_w, 66.0), Sense::hover());
-    ui.painter().rect(panel_rect, CornerRadius::same(6), Color32::from_rgb(10, 14, 21), Stroke::new(1.0, ctx.pal.border), StrokeKind::Inside);
+    ui.painter().rect(
+        panel_rect,
+        CornerRadius::same(6),
+        Color32::from_rgb(10, 14, 21),
+        Stroke::new(1.0, ctx.pal.border),
+        StrokeKind::Inside,
+    );
     let tgt_frac = ((tgt + 36.0) / 36.0).clamp(0.08, 0.96) as f32;
     for (idx, (code, _tip, val, unit, col)) in bars.into_iter().enumerate() {
         let row_y = panel_rect.min.y + 6.0 + (idx as f32) * 14.2;
-        ui.painter().text(Pos2::new(panel_rect.min.x + 8.0, row_y + 5.0), Align2::LEFT_CENTER, code, FontId::monospace(9.0), ctx.pal.text_secondary);
+        ui.painter().text(
+            Pos2::new(panel_rect.min.x + 8.0, row_y + 5.0),
+            Align2::LEFT_CENTER,
+            code,
+            FontId::monospace(9.0),
+            ctx.pal.text_secondary,
+        );
         let track_min_x = panel_rect.min.x + 28.0;
         let track_max_x = (panel_rect.max.x - 74.0).max(track_min_x + 40.0);
         let track_r = Rect::from_min_max(Pos2::new(track_min_x, row_y + 1.5), Pos2::new(track_max_x, row_y + 9.5));
         ui.painter().rect_filled(track_r, CornerRadius::same(3), ctx.pal.bg_input);
 
-        let frac = if code == "TP" { ((val + 18.0) / 18.0).clamp(0.12, 0.94) as f32 } else { ((val + 36.0) / 36.0).clamp(0.08, 0.96) as f32 };
+        let frac = if code == "TP" {
+            ((val + 18.0) / 18.0).clamp(0.12, 0.94) as f32
+        } else {
+            ((val + 36.0) / 36.0).clamp(0.08, 0.96) as f32
+        };
         let fill_r = Rect::from_min_max(track_r.min, Pos2::new(track_r.min.x + track_r.width() * frac, track_r.max.y));
         ui.painter().rect_filled(fill_r, CornerRadius::same(3), col);
 
@@ -152,10 +171,13 @@ fn draw_three_strip_console_mixer(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         ui.label(RichText::new("Console Mixer & Automation (T40)").size(11.2).strong().color(ctx.pal.accent_sky));
         ui.label(RichText::new(format!("Insert: {}", ctx.state.studio.audio_dsp_fx)).monospace().size(9.0).color(ctx.pal.text_muted));
     });
-    for (idx, (strip_code, strip_lbl, col)) in
-        [("A1", "A1 · Song Bed", ctx.pal.accent_emerald), ("A2", "A2 · Dialogue / SFX", ctx.pal.accent_sky), ("Master", "Master Bus", ctx.pal.accent_amber)]
-            .into_iter()
-            .enumerate()
+    for (idx, (strip_code, strip_lbl, col)) in [
+        ("A1", "A1 · Song Bed", ctx.pal.accent_emerald),
+        ("A2", "A2 · Dialogue / SFX", ctx.pal.accent_sky),
+        ("Master", "Master Bus", ctx.pal.accent_amber),
+    ]
+    .into_iter()
+    .enumerate()
     {
         ui.horizontal(|ui| {
             let fader_w = (ui.available_width() - 62.0).max(110.0);
@@ -182,7 +204,8 @@ fn draw_three_strip_console_mixer(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                 ui,
                 ctx.reg,
                 ctx.pal,
-                BtnSpec::label_only(&format!("fc-strip-mute-{strip_code}"), if muted { "Muted" } else { "Mute" }, "Toggle mixer strip mute").selected(muted),
+                BtnSpec::label_only(&format!("fc-strip-mute-{strip_code}"), if muted { "Muted" } else { "Mute" }, "Toggle mixer strip mute")
+                    .selected(muted),
             )
             .clicked()
             {
@@ -216,7 +239,15 @@ pub fn draw_titles_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         }
     }
     ui.label(RichText::new("Essential Graphics & OpenType Titles (T41)").size(11.5).strong().color(ctx.pal.accent_emerald));
-    text_input(ui, ctx.reg, "fc-title-text", "Graphic Title Text", &mut ctx.state.studio.title_text, "Project Title", (ui.available_width() - 4.0).max(140.0));
+    text_input(
+        ui,
+        ctx.reg,
+        "fc-title-text",
+        "Graphic Title Text",
+        &mut ctx.state.studio.title_text,
+        "Project Title",
+        (ui.available_width() - 4.0).max(140.0),
+    );
     pill_toggle(
         ui,
         ctx.reg,
@@ -230,7 +261,11 @@ pub fn draw_titles_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         ui.spacing_mut().item_spacing.x = 4.0;
         ui.spacing_mut().item_spacing.y = 4.0;
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("fc-new-title", "+ Title Layer", "graphics.newText / newVerticalText").primary()).clicked() {
-            let txt = if ctx.state.studio.title_text.trim().is_empty() { ctx.state.project_name() } else { ctx.state.studio.title_text.clone() };
+            let txt = if ctx.state.studio.title_text.trim().is_empty() {
+                ctx.state.project_name()
+            } else {
+                ctx.state.studio.title_text.clone()
+            };
             ctx.exec(
                 "video.finish",
                 json!({
@@ -250,9 +285,7 @@ pub fn draw_titles_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                 ctx.exec("video.finish", json!({"op": "graphic_shape", "shape": shp, "duration": 5.0}), Some("Added graphic shape layer"));
             }
         }
-        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("fc-style-bg", "Stroke + Pill BG", "graphics.set multi-stroke & rounded background"))
-            .clicked()
-        {
+        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("fc-style-bg", "Stroke + Pill BG", "graphics.set multi-stroke & rounded background")).clicked() {
             ctx.exec(
                 "video.finish",
                 json!({"op": "graphic_style", "props": {"strokeWidth": 4.0, "backgroundEnabled": true, "backgroundCornerRadius": 14.0, "shadowOpacity": 0.65}}),
@@ -265,7 +298,11 @@ pub fn draw_titles_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     ui.label(RichText::new("Responsive Design — Pinning, Intro/Outro & Roll/Crawl").size(11.0).strong().color(ctx.pal.accent_amber));
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
-        for (pin_lbl, edges) in [("Bottom-Left", json!(["bottom", "left"])), ("Top-Right", json!(["top", "right"])), ("Center Safe", json!(["center"]))] {
+        for (pin_lbl, edges) in [
+            ("Bottom-Left", json!(["bottom", "left"])),
+            ("Top-Right", json!(["top", "right"])),
+            ("Center Safe", json!(["center"])),
+        ] {
             let id = format!("fc-pin-{pin_lbl}");
             let sel = ctx.state.studio.title_pin_edge.eq_ignore_ascii_case(pin_lbl);
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, pin_lbl, "graphics.setPinning").selected(sel)).clicked() {
@@ -382,20 +419,8 @@ pub fn draw_export_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             }
         }
     });
-    ring_slider_h(
-        ui,
-        ctx.reg,
-        ctx.pal,
-        ScalarSpec::new("fc-exp-crf", "CRF / Quality", 0.0..=51.0, "", ctx.pal.accent_emerald),
-        &mut ctx.state.studio.crf_value,
-    );
-    ring_slider_h(
-        ui,
-        ctx.reg,
-        ctx.pal,
-        ScalarSpec::new("fc-exp-scale", "Render Scale", 0.25..=2.0, "×", ctx.pal.accent_sky),
-        &mut ctx.state.studio.export_scale,
-    );
+    ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("fc-exp-crf", "CRF / Quality", 0.0..=51.0, "", ctx.pal.accent_emerald), &mut ctx.state.studio.crf_value);
+    ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("fc-exp-scale", "Render Scale", 0.25..=2.0, "×", ctx.pal.accent_sky), &mut ctx.state.studio.export_scale);
 
     pill_toggle(ui, ctx.reg, ctx.pal, "fc-exp-gpu", "Linear-Light GPU Compositor", &mut ctx.state.studio.gpu_rendering, ctx.pal.accent_emerald);
     pill_toggle(ui, ctx.reg, ctx.pal, "fc-exp-hw", "Hardware Encoder (VideoToolbox / NVENC)", &mut ctx.state.studio.hw_encoding, ctx.pal.accent_sky);

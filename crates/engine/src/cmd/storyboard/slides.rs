@@ -38,7 +38,11 @@ fn resolve_rel(base: &Path, raw: &str) -> String {
         return trimmed.to_owned();
     }
     let cand = base.join(trimmed);
-    if cand.exists() { cand.to_string_lossy().into_owned() } else { trimmed.to_owned() }
+    if cand.exists() {
+        cand.to_string_lossy().into_owned()
+    } else {
+        trimmed.to_owned()
+    }
 }
 
 /// Extract plain `<a:t>` text runs per slide from a `.pptx` archive when `slides.json` is absent.
@@ -120,7 +124,11 @@ pub(crate) fn parse_slide_storyboard(_s: Option<&Session>, doc_path: &Path) -> V
         && let Ok(val) = serde_json::from_str::<Value>(&raw)
         && let Some(slides) = val["slides"].as_array()
     {
-        return slides.iter().enumerate().map(|(idx, sl)| build_page_from_slide_json(idx, sl, base_dir)).collect();
+        return slides
+            .iter()
+            .enumerate()
+            .map(|(idx, sl)| build_page_from_slide_json(idx, sl, base_dir))
+            .collect();
     }
 
     // Fallback when a raw Google Slides / DeckCraft `.pptx` is placed without `slides.json`
@@ -153,6 +161,8 @@ pub(crate) fn parse_slide_storyboard(_s: Option<&Session>, doc_path: &Path) -> V
                 page_in_spread: 0,
                 spread_page_count: 1,
                 section,
+                page_role: if idx == 0 { "cover" } else { "subpage" },
+                sub_code: format!("S{:02}", idx + 1),
                 bounds: [0.0, 0.0, SLIDE_W_PT, SLIDE_H_PT],
                 heading: Some(text.chars().take(72).collect()),
                 slots: vec![slot],
@@ -262,6 +272,8 @@ fn build_page_from_slide_json(idx: usize, sl: &Value, base_dir: &Path) -> PageIn
         page_in_spread: 0,
         spread_page_count: 1,
         section,
+        page_role: "subpage",
+        sub_code: format!("SC-{:02}", idx + 1),
         bounds: [0.0, 0.0, SLIDE_W_PT, SLIDE_H_PT],
         heading: Some(title),
         slots,

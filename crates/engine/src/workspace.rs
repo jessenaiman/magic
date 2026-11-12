@@ -1,4 +1,3 @@
-// TODO(MAGIC-REVIEW): CHANGE only as needed for the verified integration; this revision applies compiler/lint cleanup, not feature completion.
 //! Workspace path resolution and OS file handoff (`workspace.open`).
 //!
 //! Following the ArtCraft cross-editor file pattern (`photocraft/docs/embedded-vector-editing.md`),
@@ -14,7 +13,10 @@ use crate::{EngineError, Result};
 
 /// Optional bearer token from `MAGIC_CONTROL_TOKEN` when explicitly configured by the user.
 pub fn control_token() -> Option<String> {
-    std::env::var("MAGIC_CONTROL_TOKEN").ok().map(|t| t.trim().to_owned()).filter(|t| !t.is_empty())
+    std::env::var("MAGIC_CONTROL_TOKEN")
+        .ok()
+        .map(|t| t.trim().to_owned())
+        .filter(|t| !t.is_empty())
 }
 
 pub fn workspace_root(s: &crate::Session) -> PathBuf {
@@ -74,7 +76,12 @@ pub(crate) fn user_data_dir() -> Option<PathBuf> {
     std::env::var_os("XDG_DATA_HOME")
         .map(PathBuf::from)
         .filter(|path| path.is_absolute())
-        .or_else(|| std::env::var_os("HOME").map(PathBuf::from).filter(|path| path.is_absolute()).map(|home| home.join(".local/share")))
+        .or_else(|| {
+            std::env::var_os("HOME")
+                .map(PathBuf::from)
+                .filter(|path| path.is_absolute())
+                .map(|home| home.join(".local/share"))
+        })
 }
 
 /// Resolve an installed executable via `config.toml` `[tools]` or `PATH`.
@@ -84,7 +91,12 @@ pub fn resolve_executable_path(name: &str) -> Option<PathBuf> {
         return None;
     }
     let stored = crate::project_settings::stored_settings();
-    if let Some(cfg) = stored.pointer(&format!("/tools/{trimmed}")).and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty()) {
+    if let Some(cfg) = stored
+        .pointer(&format!("/tools/{trimmed}"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
         let candidate = expand_tilde(cfg);
         if candidate.is_file() {
             return Some(candidate);
@@ -110,8 +122,16 @@ pub fn resolve_executable_path(name: &str) -> Option<PathBuf> {
     None
 }
 
+pub(crate) fn find_executable(name: &str) -> Result<PathBuf> {
+    resolve_executable_path(name).ok_or_else(|| {
+        EngineError::ExternalTool(name.to_owned(), "executable not found on PATH".into())
+    })
+}
+
 pub fn resolve_tool(name: &str) -> String {
-    resolve_executable_path(name).map(|p| p.to_string_lossy().into_owned()).unwrap_or_else(|| name.to_string())
+    resolve_executable_path(name)
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_else(|| name.to_string())
 }
 
 /// Open a document on disk using an optional app binary or the platform default file opener,
@@ -149,14 +169,24 @@ pub fn open_editor(app: &str, document: &Path) -> Result<()> {
 
 /// Open a project file in its native desktop editor on disk (`workspace.open`).
 pub fn cmd_workspace_open(s: &mut crate::Session, params: &Value) -> Result<Value> {
-    let raw = params["path"].as_str().filter(|p| !p.trim().is_empty()).ok_or_else(|| EngineError::InvalidParams("missing `path`".into()))?;
+    let raw = params["path"]
+        .as_str()
+        .filter(|p| !p.trim().is_empty())
+        .ok_or_else(|| EngineError::InvalidParams("missing `path`".into()))?;
     let path = resolve_workspace_path(s, raw);
     if !magic_util::media::is_craft_doc_path(&path) {
         return Err(EngineError::InvalidParams(format!("file does not exist: {}", path.display())));
     }
-    let app = params.get("app").and_then(Value::as_str).map(str::trim).filter(|a| !a.is_empty()).unwrap_or("system");
+    let app = params
+        .get("app")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|a| !a.is_empty())
+        .unwrap_or("system");
     if app.eq_ignore_ascii_case("anicraft") {
-        return Err(EngineError::InvalidParams("AniCraft desktop UI is disabled while in early alpha".into()));
+        return Err(EngineError::InvalidParams(
+            "AniCraft desktop UI is disabled while in early alpha".into(),
+        ));
     }
     open_editor(app, &path)?;
     Ok(json!({
@@ -170,7 +200,9 @@ pub fn cmd_workspace_open(s: &mut crate::Session, params: &Value) -> Result<Valu
 pub(crate) const AUDIO_EXTENSIONS: &[&str] = &["wav", "mp3", "flac", "m4a", "aac", "ogg"];
 
 pub(crate) fn has_extension(path: &Path, allowed: &[&str]) -> bool {
-    path.extension().and_then(|e| e.to_str()).is_some_and(|e| allowed.iter().any(|a| a.eq_ignore_ascii_case(e)))
+    path.extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| allowed.iter().any(|a| a.eq_ignore_ascii_case(e)))
 }
 
 pub(crate) fn song_audio_path(s: &crate::Session, raw: &str) -> Result<PathBuf> {

@@ -173,13 +173,7 @@ fn classify_file(path: &Path) -> Option<FileClass> {
             group_label: "PhotoCraft & VectorCraft (.pcraft / .svg)",
             group_order: 3,
             craft_priority: 3,
-            badge: if ext == "emf" {
-                "EMF"
-            } else if ext == "wmf" {
-                "WMF"
-            } else {
-                "SVG"
-            },
+            badge: if ext == "emf" { "EMF" } else if ext == "wmf" { "WMF" } else { "SVG" },
             open_label: "Open in VectorCraft",
             is_craft_project: true,
         }),
@@ -284,7 +278,13 @@ fn first_png_in_dir(dir: &Path) -> Option<PathBuf> {
     files.into_iter().next()
 }
 
-fn resolve_craft_preview(project_dir: &Path, path: &Path, badge: &str, modified_ms: u64, linked_comp: Option<&LinkedCompRecord>) -> Option<PathBuf> {
+fn resolve_craft_preview(
+    project_dir: &Path,
+    path: &Path,
+    badge: &str,
+    modified_ms: u64,
+    linked_comp: Option<&LinkedCompRecord>,
+) -> Option<PathBuf> {
     if let Some(lc) = linked_comp
         && lc.preview_png.is_file()
     {
@@ -306,7 +306,8 @@ fn resolve_craft_preview(project_dir: &Path, path: &Path, badge: &str, modified_
     }
     match badge {
         "FC" => first_png_in_dir(&project_dir.join("film/frames")),
-        "DC" => first_png_in_dir(&project_dir.join("storyboard/.preview")).or_else(|| first_png_in_dir(&project_dir.join("storyboard/renders"))),
+        "DC" => first_png_in_dir(&project_dir.join("storyboard/.preview"))
+            .or_else(|| first_png_in_dir(&project_dir.join("storyboard/renders"))),
         "EC" => {
             let fname = path.file_name().and_then(|n| n.to_str()).unwrap_or_default();
             if fname == "lyrics.ecproj" {
@@ -314,7 +315,8 @@ fn resolve_craft_preview(project_dir: &Path, path: &Path, badge: &str, modified_
             } else if fname == "actions.ecproj" {
                 first_png_in_dir(&project_dir.join("motion/.preview"))
             } else {
-                path.parent().and_then(|p| first_png_in_dir(&p.join("frames")).or_else(|| first_png_in_dir(p)))
+                path.parent()
+                    .and_then(|p| first_png_in_dir(&p.join("frames")).or_else(|| first_png_in_dir(p)))
             }
         }
         _ => None,
@@ -424,7 +426,11 @@ fn walk_project_files(root: &Path, current: &Path, visited: &mut BTreeSet<PathBu
     let mut entries: Vec<PathBuf> = read_dir.flatten().map(|e| e.path()).collect();
     entries.sort();
     for entry in entries {
-        if entry.file_name().and_then(|n| n.to_str()).is_some_and(|n| n == ".git" || n == ".history" || (n == ".preview" && current == root)) {
+        if entry
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|n| n == ".git" || n == ".history" || (n == ".preview" && current == root))
+        {
             continue;
         }
         let Ok(canonical) = entry.canonicalize() else {

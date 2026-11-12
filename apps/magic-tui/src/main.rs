@@ -1,7 +1,17 @@
 //! Backstage (`apps/magic-tui`): interactive terminal companion for Magic Studio, supporting both
 //! headless `magic::Session` and live `magic --control 9875` (`--connect 127.0.0.1:9875`) sessions.
 
-#![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable))]
+#![cfg_attr(
+    not(test),
+    deny(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::unimplemented,
+        clippy::todo,
+        clippy::unreachable
+    )
+)]
 
 use std::io::{self, BufRead, Read, Write};
 
@@ -13,7 +23,10 @@ use serde_json::{Value, json};
 const MAX_REPL_LINE: usize = 1024 * 1024;
 
 #[derive(Parser)]
-#[command(name = "magic-tui", about = "Magic Studio Backstage terminal console (headless or live `--connect 127.0.0.1:9875`)")]
+#[command(
+    name = "magic-tui",
+    about = "Magic Studio Backstage terminal console (headless or live `--connect 127.0.0.1:9875`)"
+)]
 struct Cli {
     /// Open this `.magic` project at launch (headless mode)
     #[arg(long)]
@@ -49,7 +62,10 @@ fn parse_repl_line(line: &str) -> (&str, Value) {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
-    let mut remote = cli.connect.as_deref().map(|spec| Remote::new(normalize_control_addr(spec), magic::workspace::control_token()));
+    let mut remote = cli
+        .connect
+        .as_deref()
+        .map(|spec| Remote::new(normalize_control_addr(spec), magic::workspace::control_token()));
     let mut session = remote.is_none().then(Session::user_session);
 
     if let (Some(path), Some(sess)) = (cli.project.as_deref(), session.as_mut()) {
@@ -76,7 +92,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         print!("backstage> ");
         io::stdout().flush()?;
         let mut buf = Vec::new();
-        let n = locked.by_ref().take((MAX_REPL_LINE + 1) as u64).read_until(b'\n', &mut buf)?;
+        let n = locked
+            .by_ref()
+            .take((MAX_REPL_LINE + 1) as u64)
+            .read_until(b'\n', &mut buf)?;
         if n == 0 {
             break;
         }
