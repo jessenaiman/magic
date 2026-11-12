@@ -427,7 +427,11 @@ impl ServerHandler for Server {
         rmcp::model::ServerConfig::new(rmcp::model::ServerCapabilities::builder().enable_tools().build())
             .with_server_info(rmcp::model::Implementation::new("magic", env!("CARGO_PKG_VERSION")))
             .with_instructions(
+<<<<<<< HEAD
                 "Magic Studio is a pure-Rust eframe/egui 0.37 project, storyboard, puppet-rig, and lyric-timing coordinator built on storytold/craft-libs. Start `magic --control 9875` and connect with `magic-cli mcp --connect 127.0.0.1:9875` to drive the live Magic window, or run `magic-cli mcp` headlessly. Connect directly to each sibling ArtCraft app's own `<app>-cli mcp` server when editing in FilmCraft, EffectCraft, DeckCraft, DesignCraft, PhotoCraft, or VectorCraft."
+=======
+                "Magic Studio is an eframe/egui project, storyboard, puppet-rig, and lyric-timing coordinator built on storytold/craft-libs. Start `magic --control 9875` and connect with `magic-cli mcp --connect 127.0.0.1:9875` to drive the live Magic window, or run `magic-cli mcp` headlessly. Connect directly to each sibling ArtCraft app's own `<app>-cli mcp` server when editing in DesignCraft, PhotoCraft, VectorCraft, EffectCraft, or FilmCraft."
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
                     .to_string(),
             )
     }

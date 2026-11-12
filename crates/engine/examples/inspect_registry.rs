@@ -3,7 +3,11 @@
 //! Run with:
 //!     cargo run -p magic-engine --example inspect_registry
 
+<<<<<<< HEAD
 use magic::{Session, command_specs, find_command};
+=======
+use magic_engine::{Session, command_specs, find_command};
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 
 fn main() {
     println!("=== Magic Studio Command Registry ===");

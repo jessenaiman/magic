@@ -8,7 +8,11 @@ use craft_keymap::{Active, Bindable, Binding, Chord, CommandRef, Keymap, Lookup,
 pub fn catalog_keymap() -> &'static Keymap {
     static KEYMAP: OnceLock<Keymap> = OnceLock::new();
     KEYMAP.get_or_init(|| {
+<<<<<<< HEAD
         let catalog = magic::command_specs()
+=======
+        let catalog = magic_engine::command_specs()
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             .iter()
             .filter_map(|spec| {
                 let binding = Binding::parse(spec.shortcut?).ok()?;

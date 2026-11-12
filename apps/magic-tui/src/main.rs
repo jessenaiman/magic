@@ -1,12 +1,20 @@
 //! Backstage (`apps/magic-tui`): interactive terminal companion for Magic Studio, supporting both
+<<<<<<< HEAD
 //! headless `magic::Session` and live `magic --control 9875` (`--connect 127.0.0.1:9875`) sessions.
+=======
+//! headless `magic_engine::Session` and live `magic --control 9875` (`--connect 127.0.0.1:9875`) sessions.
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 
 #![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable))]
 
 use std::io::{self, BufRead, Read, Write};
 
 use clap::Parser;
+<<<<<<< HEAD
 use magic::{Session, command_specs};
+=======
+use magic_engine::{Session, command_specs};
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 use magic_mcp::{Backend, Remote, normalize_control_addr};
 use serde_json::{Value, json};
 
@@ -49,7 +57,11 @@ fn parse_repl_line(line: &str) -> (&str, Value) {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
+<<<<<<< HEAD
     let mut remote = cli.connect.as_deref().map(|spec| Remote::new(normalize_control_addr(spec), magic::workspace::control_token()));
+=======
+    let mut remote = cli.connect.as_deref().map(|spec| Remote::new(normalize_control_addr(spec), magic_engine::workspace::control_token()));
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     let mut session = remote.is_none().then(Session::user_session);
 
     if let (Some(path), Some(sess)) = (cli.project.as_deref(), session.as_mut()) {

@@ -45,6 +45,10 @@ pub fn is_read_only_command(id: &str, params: &Value) -> bool {
         "project.catalog" | "file.recent" => params.get("forget").is_none_or(Value::is_null) && params["clear"] != true,
         "video.sync_links" => params.get("render").and_then(Value::as_bool) != Some(true),
         "video.finish" => matches!(params["op"].as_str().unwrap_or_default(), "jobs_list" | "scopes" | "workspace"),
+<<<<<<< HEAD
+=======
+        "project.archive" => params.get("inspect").and_then(Value::as_str).is_some_and(|s| !s.trim().is_empty()),
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         "storyboard.locations" => {
             params.get("fields").is_none()
                 && params.get("images").is_none()
@@ -57,6 +61,11 @@ pub fn is_read_only_command(id: &str, params: &Value) -> bool {
         | "backstage.changes"
         | "backstage.events"
         | "app.errors"
+<<<<<<< HEAD
+=======
+        | "app.extensions"
+        | "craft.api_status"
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         | "project.identity"
         | "project.list_assets"
         | "project.snapshot"
@@ -78,7 +87,15 @@ pub fn is_read_only_command(id: &str, params: &Value) -> bool {
         | "words.track"
         | "motion.read"
         | "motion.effects"
+<<<<<<< HEAD
         | "craft.api_status"
+=======
+        | "mesh.inspect"
+        | "timeline.detect"
+        | "timeline.timecode"
+        | "timeline.inspect"
+        | "ui.docking"
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         | "video.film"
         | "video.timeline"
         | "video.list_ec_comps"

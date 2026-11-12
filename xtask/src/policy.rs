@@ -1,9 +1,16 @@
 //! Established ArtCraft architecture & repository gates (`layers` and `assets`):
 //! - Downward-only workspace crate DAG (`L4` util/scribbles -> `L5` engine -> `L6` mcp / ui-egui; `apps/*` & `xtask` exempt).
+<<<<<<< HEAD
 //! - UI / windowing crates (`egui`, `eframe`, `winit`, `rfd`, `arboard`, `craft-ui`, `craft-window`) forbidden below `L6`.
 //! - Pure-Rust non-Tauri rule (`tauri`, `wry`, `tao`, `webkit2gtk` forbidden everywhere).
 //! - Sibling ArtCraft app crates (`deckcraft-*`, `filmcraft-*`, etc.) forbidden in `Cargo.toml`.
 //! - `ATTRIBUTION.md` completeness check across `assets/`, `docs/brand/`, and `figcraft/diagrams/`.
+=======
+//! - UI, windowing, and webview-host crates (`egui`, `eframe`, `winit`, `wry`, `craft-ui`, `craft-web-host`, etc.) forbidden below `L6`.
+//! - Upstream GUI test harnesses (`egui_kittest`) and non-`eframe` desktop shells are forbidden.
+//! - Sibling ArtCraft app crates (`deckcraft-*`, `filmcraft-*`, etc.) forbidden in `Cargo.toml`.
+//! - `ATTRIBUTION.md` completeness check across `assets/`, `docs/brand/`, and `figcraft/`.
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -18,6 +25,7 @@ const CRATE_LAYERS: &[(&str, u8)] = &[("magic-util", 4), ("magic-scribbles", 4),
 /// Top-level binary packages in `apps/*` and `xtask`.
 const APP_BINARIES: &[&str] = &["magic", "magic-cli", "magic-tui", "xtask"];
 
+<<<<<<< HEAD
 /// UI and windowing dependencies forbidden in headless `L0..=L5` crates.
 const UI_CRATES: &[&str] = &[
     "craft-ui",
@@ -31,10 +39,34 @@ const UI_CRATES: &[&str] = &[
     "egui_extras",
     "eframe",
     "winit",
+=======
+/// UI, windowing, and web-host dependencies forbidden in headless `L0..=L5` crates (allowed in `L6` UI and `L7` app binaries).
+const UI_CRATES: &[&str] = &[
+    "craft-ai-egui",
+    "craft-dialogs",
+    "craft-font-manager",
+    "craft-keymap",
+    "craft-menu",
+    "craft-platform",
+    "craft-quit",
+    "craft-ui",
+    "craft-web-api",
+    "craft-web-host",
+    "craft-window",
+    "eframe",
+    "egui",
+    "egui-wgpu",
+    "egui_extras",
+    "egui_glow",
+    "winit",
+    "wry",
+    "webkit2gtk",
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     "rfd",
     "arboard",
 ];
 
+<<<<<<< HEAD
 /// Non-Tauri / pure-Rust enforcement across the entire workspace (`photocraft/AGENTS.md`, `deckcraft/AGENTS.md`).
 const FORBIDDEN_WEBVIEW: &[&str] = &["tauri", "tauri-build", "wry", "tao", "webkit2gtk"];
 
@@ -43,6 +75,14 @@ const FORBIDDEN_SIBLING_PREFIXES: &[&str] = &[
     "anicraft-",
     "cadcraft-",
     "deckcraft-",
+=======
+/// Upstream GUI test harnesses forbidden in Magic Studio (upstream `egui` tests belong in `egui` / `craft-libs`, not maintained here).
+const FORBIDDEN_TEST_HARNESSES: &[&str] = &["egui_kittest"];
+
+/// Sibling ArtCraft product crates are never linked as Cargo dependencies (`storytold/craft-libs` only).
+const FORBIDDEN_SIBLING_PREFIXES: &[&str] = &[
+    "cadcraft-",
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     "designcraft-",
     "effectcraft-",
     "filmcraft-",
@@ -50,7 +90,10 @@ const FORBIDDEN_SIBLING_PREFIXES: &[&str] = &[
     "gridcraft-",
     "lightcraft-",
     "materialcraft-",
+<<<<<<< HEAD
     "pdfcraft-",
+=======
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     "photocraft-",
     "solidcraft-",
     "soundcraft-",
@@ -71,12 +114,23 @@ pub(crate) fn metadata() -> Result<Value> {
     serde_json::from_slice(&out.stdout).map_err(|e| e.to_string())
 }
 
+<<<<<<< HEAD
 fn workspace_packages(md: &Value) -> Vec<(String, Vec<String>)> {
+=======
+struct PackageDeps {
+    name: String,
+    normal_and_build: Vec<String>,
+    all_deps: Vec<String>,
+}
+
+fn workspace_packages(md: &Value) -> Vec<PackageDeps> {
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     md["packages"]
         .as_array()
         .into_iter()
         .flatten()
         .map(|p| {
+<<<<<<< HEAD
             let deps = p["dependencies"]
                 .as_array()
                 .into_iter()
@@ -85,6 +139,20 @@ fn workspace_packages(md: &Value) -> Vec<(String, Vec<String>)> {
                 .filter_map(|d| d["name"].as_str().map(str::to_string))
                 .collect();
             (p["name"].as_str().unwrap_or_default().to_string(), deps)
+=======
+            let raw_deps = p["dependencies"].as_array().into_iter().flatten();
+            let mut normal_and_build = Vec::new();
+            let mut all_deps = Vec::new();
+            for d in raw_deps {
+                if let Some(dep_name) = d["name"].as_str() {
+                    all_deps.push(dep_name.to_string());
+                    if d["kind"].is_null() || d["kind"] == "build" {
+                        normal_and_build.push(dep_name.to_string());
+                    }
+                }
+            }
+            PackageDeps { name: p["name"].as_str().unwrap_or_default().to_string(), normal_and_build, all_deps }
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         })
         .collect()
 }
@@ -98,7 +166,12 @@ pub(crate) fn layers() -> Result<()> {
     let packages = workspace_packages(&md);
     let mut errors = Vec::new();
 
+<<<<<<< HEAD
     for (name, deps) in &packages {
+=======
+    for pkg in &packages {
+        let name = &pkg.name;
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         if name.starts_with("craft-") {
             errors.push(format!("{name}: local workspace crates must use `magic-*` and never impersonate `storytold/craft-libs` (`craft-*`)"));
             continue;
@@ -110,11 +183,23 @@ pub(crate) fn layers() -> Result<()> {
             continue;
         }
 
+<<<<<<< HEAD
         for dep in deps {
             if FORBIDDEN_WEBVIEW.contains(&dep.as_str()) || dep.starts_with("tauri-") {
                 errors.push(format!("{name} depends on forbidden webview/Tauri crate `{dep}`: Magic Studio is pure Rust (`eframe` + `egui`)"));
                 continue;
             }
+=======
+        for dep in &pkg.all_deps {
+            if FORBIDDEN_TEST_HARNESSES.contains(&dep.as_str()) {
+                errors.push(format!(
+                    "{name} depends on forbidden upstream GUI test harness `{dep}`: do not maintain upstream `egui` widget tests in Magic Studio"
+                ));
+            }
+        }
+
+        for dep in &pkg.normal_and_build {
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             if FORBIDDEN_SIBLING_PREFIXES.iter().any(|p| dep.starts_with(p)) {
                 errors.push(format!("{name} depends on sibling app crate `{dep}`: exchange files on disk via `storytold/craft-libs` instead"));
                 continue;
@@ -125,7 +210,11 @@ pub(crate) fn layers() -> Result<()> {
             }
             if let Some(l) = src_layer {
                 if l < 6 && (UI_CRATES.contains(&dep.as_str()) || dep.ends_with("-ui-egui")) {
+<<<<<<< HEAD
                     errors.push(format!("{name} (L{l}) depends on UI crate `{dep}`: nothing below L6 may depend on egui/eframe/winit/rfd/craft-ui"));
+=======
+                    errors.push(format!("{name} (L{l}) depends on UI/web-host crate `{dep}`: nothing below L6 may depend on UI or webview crates"));
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
                     continue;
                 }
                 if let Some(dl) = workspace_layer(dep)

@@ -1,5 +1,11 @@
+<<<<<<< HEAD
 //! Embedded `24x24` monochrome workstation icon catalog and full-color companion poses
 //! (`Fidget` dog and `Scribbles` cat) prepared once via [`craft_ui::icons::SvgIconSet`].
+=======
+//! Embedded `24x24` monochrome workstation icon catalog (including custom studio/NLE/3D/spline
+//! SVGs under `assets/icons/*.svg`) and full-color companion poses (`Fidget` dog and `Scribbles`
+//! cat) prepared once via [`craft_ui::icons::SvgIconSet`].
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 
 use std::sync::OnceLock;
 
@@ -41,7 +47,11 @@ static MONO_ICONS: &[(&str, &[u8])] = &[
     ("external", stroke_svg!(r#"<path d="M14 4h6v6M20 4l-9 9M10 6H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/>"#)),
     (
         "sparkles",
+<<<<<<< HEAD
         stroke_svg!(r#"<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3zm6 12l.9 2.1L21 18l-2.1.9L18 21l-.9-2.1L15 18l2.1-.9L18 15z"/>"#),
+=======
+        stroke_svg!(r#"<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3zm6 12l.9 2.1L19 18l-2.1.9L18 21l-.9-2.1L15 18l2.1-.9L18 15z"/>"#),
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     ),
     ("scissors", stroke_svg!(r#"<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4L8.12 15.88M14.47 14.48L20 20M8.12 8.12L12 12"/>"#)),
     ("layers", stroke_svg!(r#"<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>"#)),
@@ -76,6 +86,16 @@ static MONO_ICONS: &[(&str, &[u8])] = &[
     ("dockBottom", stroke_svg!(r#"<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="15" x2="21" y2="15"/>"#)),
     ("inspector", stroke_svg!(r#"<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/>"#)),
     ("eye", stroke_svg!(r#"<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>"#)),
+<<<<<<< HEAD
+=======
+    ("moon", stroke_svg!(r#"<path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"/>"#)),
+    (
+        "sun",
+        stroke_svg!(
+            r#"<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>"#
+        ),
+    ),
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     ("upload", stroke_svg!(r#"<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>"#)),
     ("download", stroke_svg!(r#"<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>"#)),
     (
@@ -105,6 +125,34 @@ static MONO_ICONS: &[(&str, &[u8])] = &[
         "link",
         stroke_svg!(r#"<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>"#),
     ),
+<<<<<<< HEAD
+=======
+    // Custom studio / NLE / 3D / spline / archive SVGs from `assets/icons/*.svg`
+    ("skipStart", include_bytes!("../../../assets/icons/skip-start.svg")),
+    ("stepBack", include_bytes!("../../../assets/icons/step-back.svg")),
+    ("stepForward", include_bytes!("../../../assets/icons/step-forward.svg")),
+    ("skipEnd", include_bytes!("../../../assets/icons/skip-end.svg")),
+    ("stop", include_bytes!("../../../assets/icons/stop.svg")),
+    ("razor", include_bytes!("../../../assets/icons/razor.svg")),
+    ("rippleDelete", include_bytes!("../../../assets/icons/ripple-delete.svg")),
+    ("markIn", include_bytes!("../../../assets/icons/mark-in.svg")),
+    ("markOut", include_bytes!("../../../assets/icons/mark-out.svg")),
+    ("keyframe", include_bytes!("../../../assets/icons/keyframe.svg")),
+    ("prevKeyframe", include_bytes!("../../../assets/icons/prev-keyframe.svg")),
+    ("nextKeyframe", include_bytes!("../../../assets/icons/next-keyframe.svg")),
+    ("scopesWave", include_bytes!("../../../assets/icons/scopes-wave.svg")),
+    ("colorWheel", include_bytes!("../../../assets/icons/color-wheel.svg")),
+    ("waveform", include_bytes!("../../../assets/icons/waveform-bars.svg")),
+    ("captionsCc", include_bytes!("../../../assets/icons/captions-cc.svg")),
+    ("mesh3d", include_bytes!("../../../assets/icons/mesh-3d.svg")),
+    ("puppetPin", include_bytes!("../../../assets/icons/puppet-pin.svg")),
+    ("bezierSpline", include_bytes!("../../../assets/icons/bezier-spline.svg")),
+    ("archiveZip", include_bytes!("../../../assets/icons/archive-zip.svg")),
+    ("spreadTwoPage", include_bytes!("../../../assets/icons/spread-two-page.svg")),
+    ("pageSingle", include_bytes!("../../../assets/icons/page-single.svg")),
+    ("muteSpeaker", include_bytes!("../../../assets/icons/mute-speaker.svg")),
+    ("soloHeadphones", include_bytes!("../../../assets/icons/solo-headphones.svg")),
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 ];
 
 static COMPANION_ICONS: &[(&str, &[u8])] = &[

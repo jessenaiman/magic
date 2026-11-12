@@ -14,7 +14,11 @@ workspace = true
 
 [dependencies]
 craft-atomic = { workspace = true }
+<<<<<<< HEAD
 flate2 = { workspace = true }
+=======
+craft-zip = { workspace = true }
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 image = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

@@ -4,7 +4,11 @@
 use super::{cmd_spec, query_spec};
 use crate::commands::{CommandSpec, always};
 use crate::project::{
+<<<<<<< HEAD
     cmd_file_save_as, cmd_project_add_asset, cmd_project_autosave, cmd_project_close, cmd_project_convert, cmd_project_import_file, cmd_project_list_assets,
+=======
+    cmd_file_save_as, cmd_project_add_asset, cmd_project_archive, cmd_project_autosave, cmd_project_close, cmd_project_import_file, cmd_project_list_assets,
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     cmd_project_load_asset, cmd_project_new, cmd_project_open, cmd_project_remove_asset, cmd_project_save, cmd_project_save_asset, cmd_project_trunk,
     cmd_project_update_asset, cmd_workspace_init,
 };
@@ -115,6 +119,7 @@ fn specs_project() -> Vec<CommandSpec> {
             cmd_workspace_init
         ),
         cmd_spec!(
+<<<<<<< HEAD
             "project.convert",
             "Convert Legacy Project (HyperFrames, Remotion, or Custom) Into magic/projects/<slug>",
             ["File"],
@@ -122,6 +127,15 @@ fn specs_project() -> Vec<CommandSpec> {
             "{\"kind\":\"hyperframes|remotion|custom|auto\",\"source\":\"legacy project directory\",\"magic_root\":\"optional magic workspace folder\",\"name\":\"optional project title\",\"overwrite\":false}",
             always,
             cmd_project_convert
+=======
+            "project.archive",
+            "Compress Project Folder Into Verified .zip Archive (craft-zip)",
+            ["File"],
+            None,
+            "{\"source\":\"optional directory (defaults to open project)\",\"output\":\"optional archive.zip\",\"inspect\":\"optional archive.zip\"}",
+            always,
+            cmd_project_archive
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         ),
     ]
 }
@@ -218,37 +232,64 @@ fn specs_storyboard() -> Vec<CommandSpec> {
     vec![
         cmd_spec!(
             "storyboard.open",
+<<<<<<< HEAD
             "Open Storyboard PDF in PDFCraft (--control)",
             ["Storyboard"],
             None,
             "{\"path\":\"optional storyboard.pdf\",\"page\":0}",
+=======
+            "Open Storyboard in Host DesignCraft (.designcraft)",
+            ["Storyboard"],
+            None,
+            "{\"app\":\"designcraft\",\"path\":\"optional storyboard.designcraft\",\"page\":0}",
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             always,
             crate::cmd::storyboard::cmd_storyboard_open
         ),
         cmd_spec!(
             "storyboard.new",
+<<<<<<< HEAD
             "Initialize storyboard.pdf from Read-Only Master Template",
             ["Storyboard"],
             None,
             "{\"path\":\"optional storyboard.pdf\",\"overwrite\":false}",
+=======
+            "Initialize Editable storyboard.designcraft Design Document",
+            ["Storyboard"],
+            None,
+            "{\"path\":\"optional storyboard.designcraft\",\"overwrite\":false}",
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             always,
             crate::cmd::storyboard::cmd_storyboard_new
         ),
         query_spec!(
             "storyboard.pages",
+<<<<<<< HEAD
             "Inspect 17-Page Storyboard PDF Sections, Fields & Previews",
             "{\"path\":\"optional storyboard.pdf\",\"page\":\"optional index\",\"label\":\"optional field\",\"full\":false}",
+=======
+            "Inspect 17-Page Storyboard (.designcraft) Sections, Fields & Previews",
+            "{\"path\":\"optional storyboard.designcraft\",\"page\":\"optional index\",\"label\":\"optional field\",\"full\":false}",
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             crate::cmd::storyboard::cmd_storyboard_pages
         ),
         query_spec!(
             "storyboard.check",
             "Red/Green Required-Field Readiness Across Storyboard Sections",
+<<<<<<< HEAD
             "{\"path\":\"optional storyboard.pdf\"}",
+=======
+            "{\"path\":\"optional storyboard.designcraft\"}",
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             crate::cmd::storyboard::cmd_storyboard_check
         ),
         cmd_spec!(
             "storyboard.wizard",
+<<<<<<< HEAD
             "Populate Core Storyboard PDF Fields (Title, Style, World, Character, Motion)",
+=======
+            "Populate Core DesignCraft Storyboard Fields (Title, Style, World, Character, Motion)",
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             ["Storyboard"],
             None,
             "{\"title\":\"optional\",\"style\":\"optional\",\"world\":\"optional\",\"character\":\"optional\",\"motion\":\"optional\"}",
@@ -266,7 +307,11 @@ fn specs_storyboard() -> Vec<CommandSpec> {
         ),
         cmd_spec!(
             "storyboard.set",
+<<<<<<< HEAD
             "Edit Storyboard PDF Text Field or Place PhotoCraft / VectorCraft / EffectCraft Artwork",
+=======
+            "Edit DesignCraft Storyboard Text Field or Place PhotoCraft / VectorCraft / EffectCraft Artwork",
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             ["Storyboard"],
             None,
             "{\"page\":0,\"label\":\"optional field\",\"text\":\"optional text\",\"image\":\"optional .png/.pcraft/.psd/.vectorcraft/.ecproj\",\"character\":\"optional id\",\"time\":0.0,\"remove_background\":false,\"lut\":\"optional .cube\",\"vectorize\":false,\"fields\":{},\"images\":{}}",
@@ -320,14 +365,23 @@ fn specs_storyboard() -> Vec<CommandSpec> {
         ),
         query_spec!(
             "storyboard.thumbnail",
+<<<<<<< HEAD
             "Render storyboard.pdf Pages to PNG via PDFCraft",
+=======
+            "Render storyboard.designcraft Pages to PNG via Host DesignCraft",
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             "{\"page\":0,\"rail\":true,\"scale\":1.5}",
             crate::cmd::storyboard::cmd_storyboard_thumbnail
         ),
         query_spec!(
             "storyboard.export",
+<<<<<<< HEAD
             "Export storyboard.pdf Copy or PNG Page Directory",
             "{\"pdf\":\"optional path\",\"png_dir\":\"optional dir\",\"scale\":1.0}",
+=======
+            "Export storyboard.designcraft Package or PNG Spread Directory via DesignCraft",
+            "{\"designcraft\":\"optional path\",\"png_dir\":\"optional dir\",\"scale\":1.0}",
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             crate::cmd::storyboard::cmd_storyboard_export
         ),
     ]

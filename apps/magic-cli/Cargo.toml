@@ -20,7 +20,11 @@ path = "src/mcp_bin.rs"
 
 [dependencies]
 clap = { workspace = true }
+<<<<<<< HEAD
 magic = { workspace = true }
+=======
+magic-engine = { workspace = true }
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 magic-mcp = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

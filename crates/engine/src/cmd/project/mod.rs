@@ -1,4 +1,5 @@
 //! Project lifecycle: `.magic` open/save/saveAs/close/autosave (`project.*` and ArtCraft `file.*`
+<<<<<<< HEAD
 //! suite aliases), delegating `project.new` / `file.new` to [`new_project`].
 //!
 //! Includes `craft_atomic::write_new` exclusive creation, private (`0600`) rolling
@@ -7,6 +8,14 @@
 pub mod assets;
 pub mod catalog;
 pub mod convert;
+=======
+//! suite aliases), delegating `project.new` / `file.new` to [`new_project`] and project
+//! directory `.zip` bundling to [`archive`] (`craft-zip`).
+
+pub mod archive;
+pub mod assets;
+pub mod catalog;
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 pub mod intake;
 pub mod new_project;
 pub mod settings;
@@ -16,10 +25,17 @@ pub mod ui_state;
 pub mod workshop;
 pub mod workspace_layout;
 
+<<<<<<< HEAD
 pub use assets::{
     cmd_project_add_asset, cmd_project_list_assets, cmd_project_load_asset, cmd_project_remove_asset, cmd_project_save_asset, cmd_project_update_asset,
 };
 pub use convert::cmd_project_convert;
+=======
+pub use archive::cmd_project_archive;
+pub use assets::{
+    cmd_project_add_asset, cmd_project_list_assets, cmd_project_load_asset, cmd_project_remove_asset, cmd_project_save_asset, cmd_project_update_asset,
+};
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 pub use new_project::cmd_project_new;
 pub(crate) use new_project::copy_audio_into_project;
 pub use trunk::{cmd_project_import_file, cmd_project_trunk};
@@ -69,7 +85,11 @@ pub fn project_document(s: &Session) -> Value {
         "assets": s.project_assets,
         "workshop": {
             "audio": s.song_audio,
+<<<<<<< HEAD
             "storyboard": "storyboard.pdf",
+=======
+            "storyboard": "storyboard.designcraft",
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             "draft_approved": s.draft_approved,
             "target": s.video_target,
             "video_project": s.video_project_path,
@@ -133,8 +153,11 @@ fn autosave_journal_path(project: &Path) -> PathBuf {
     history_dir(project).join(format!("{fname}.autosave"))
 }
 
+<<<<<<< HEAD
 /// Rotate up to 3 rolling `.magic.bak.{1..3}` snapshots inside `<project_dir>/.history/` using
 /// private `craft-atomic` permissions (`0600` on Unix).
+=======
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 fn rotate_project_backups(project: &Path) {
     if !project.is_file() {
         return;

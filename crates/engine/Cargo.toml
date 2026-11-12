@@ -1,27 +1,38 @@
 [package]
 name = "magic-engine"
+<<<<<<< HEAD
 description = "Magic Studio engine: command registry and session for song films, kinetic lyrics, action motion, and Craft orchestration"
+=======
+description = "Magic Studio engine: command registry and session coordinating DesignCraft, PhotoCraft, VectorCraft, EffectCraft, and FilmCraft"
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 repository.workspace = true
 
+<<<<<<< HEAD
 [lib]
 name = "magic"
 
+=======
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 [lints]
 workspace = true
 
 [dependencies]
+<<<<<<< HEAD
 flate2 = { workspace = true }
 glam = { workspace = true }
+=======
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 image = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 thiserror = { workspace = true }
+<<<<<<< HEAD
 base64 = "0.23"
 
 # Shared Craft foundation libraries (`storytold/craft-libs` & `storytold/craft-ai-integrations`)
@@ -37,6 +48,31 @@ craft-media = { workspace = true }
 magic-scribbles = { workspace = true }
 craft-settings = { workspace = true }
 craft-update = { workspace = true }
+=======
+
+# Shared Craft foundation libraries (`storytold/craft-libs`, `storytold/craft-extensions`, `storytold/craft-ai-integrations`)
+craft-ai-client = { workspace = true }
+craft-ai-core = { workspace = true }
+craft-ai-features = { workspace = true }
+craft-ai-native = { workspace = true }
+craft-atomic = { workspace = true }
+craft-audio = { workspace = true }
+craft-captions = { workspace = true }
+craft-doc = { workspace = true }
+craft-docpath = { workspace = true }
+craft-drawingml = { workspace = true }
+craft-ext-core = { workspace = true }
+craft-ext-store = { workspace = true }
+craft-font-catalog = { workspace = true }
+craft-media = { workspace = true }
+craft-mesh = { workspace = true }
+craft-settings = { workspace = true }
+craft-text = { workspace = true }
+craft-timeline = { workspace = true }
+craft-update = { workspace = true }
+craft-zip = { workspace = true }
+magic-scribbles = { workspace = true }
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 magic-util = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]

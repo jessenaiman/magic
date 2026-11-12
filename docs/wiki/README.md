@@ -19,7 +19,11 @@ The 5 Starlight Markdown pages in [`docs/wiki/magic/`](magic/) follow the exact 
   slug: "magic",
   name: "Magic Studio",
   tagline: "Song-driven storyboard, puppet animation, and kinetic lyric studio",
+<<<<<<< HEAD
   repo: "https://github.com/jessenaiman/magic-studio-app",
+=======
+  repo: "https://github.com/jessenaiman/magic",
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
   cli: "magic-cli",
   controlPort: 9876,
 }

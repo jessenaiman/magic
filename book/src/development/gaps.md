@@ -1,5 +1,6 @@
 # Magic Studio Feature Gaps & Unimplemented Requests
 
+<<<<<<< HEAD
 This document tracks every missing feature, unimplemented request, `// TODO:` host-verification hook, and upstream ArtCraft parity enhancement in Magic Studio, following the gap-tracking convention in [`EffectCraft` `docs/gaps.md`](https://github.com/storytold/effectcraft/blob/main/docs/gaps.md) and [`PhotoCraft` `ROADMAP.md`](https://github.com/storytold/photocraft/blob/main/ROADMAP.md).
 
 ## 1. `--control` Protocol & Pure-Rust `eframe` Shell Enhancements
@@ -46,3 +47,30 @@ Nice-to-have control methods and runtime flags identified when cross-checking `a
 - [ ] Configure macOS Developer ID + notarization secrets and Windows Authenticode signing secrets in GitHub repository settings for `.github/workflows/release.yml` (`storytold/craft-common-actions/release.yml@main`).
 - [ ] Verify Linux `.deb`, `.rpm`, and Flatpak/AppStream metadata (`packaging/linux/io.github.jessenaiman.magic.xml`) with `packaging-lint.yml`.
 - [ ] Submit `docs/wiki/magic/*.md` and `magic` app entry to [`storytold/craft-wiki`](https://github.com/storytold/craft-wiki).
+=======
+This document tracks remaining host-verification hooks and upcoming upstream ArtCraft parity enhancements in Magic Studio, following [`EffectCraft` `docs/gaps.md`](https://github.com/storytold/effectcraft/blob/main/docs/gaps.md) and [`FilmCraft` `docs/gaps.md`](https://github.com/storytold/filmcraft/blob/main/docs/gaps.md).
+
+## Completed in Current Pre-Alpha Baseline
+
+- [x] Replaced all custom panel layout, tab groups, and floating windows with **`craft_ui::docking`** ([`crates/ui-egui/src/docking.rs`](../../../crates/ui-egui/src/docking.rs)), `DockCommand::IDS`, `FloatSpace` on `Home`, native desktop floating windows, and `ui.docking` hit-rect inspection in [`apps/magic/src/control.rs`](../../../apps/magic/src/control.rs).
+- [x] Added 24 custom clean-room `24x24` `currentColor` SVG icons under [`assets/icons/`](../../../assets/icons/) (tracked in [`ATTRIBUTION.md`](../../../ATTRIBUTION.md)) and switched transport, editorial, rigging, scopes, mixer, and compact stage controls to icon-first rendering ([`crates/ui-egui/src/icons.rs`](../../../crates/ui-egui/src/icons.rs)).
+- [x] Replaced bespoke `Tick`/timecode/interchange parsers with **`craft-timeline`** (`["serde", "xml", "otio"]` in [`crates/util/src/time.rs`](../../../crates/util/src/time.rs) and [`crates/engine/src/cmd/film/timeline_interchange.rs`](../../../crates/engine/src/cmd/film/timeline_interchange.rs)) and **`craft-captions`** (`SRT`/`WebVTT`/`TTML`/`SCC`/`MCC`/`EBU-STL` in [`crates/engine/src/cmd/film/fcproj_doc.rs`](../../../crates/engine/src/cmd/film/fcproj_doc.rs)).
+- [x] Replaced `.glb` header stubs with pure-Rust **`craft-mesh`** (`GLB`/`GLTF`/`OBJ`/`FBX`/`STL`/`PLY`/`3MF`) validation, joint/skin inspection, and conversion in [`crates/engine/src/cmd/character/mesh_io.rs`](../../../crates/engine/src/cmd/character/mesh_io.rs) and [`model3d.rs`](../../../crates/engine/src/cmd/character/model3d.rs).
+- [x] Replaced `flate2`/tar archives and synthetic LCG waveforms with **`craft-zip`** ([`crates/engine/src/cmd/project/archive.rs`](../../../crates/engine/src/cmd/project/archive.rs)), **`craft-audio`** + **`craft-media`** real PCM envelopes & live `rmsDbfs`/`peakDbfs` meters ([`crates/engine/src/cmd/song/waveform.rs`](../../../crates/engine/src/cmd/song/waveform.rs), [`apps/magic/src/audio_player.rs`](../../../apps/magic/src/audio_player.rs)), **`craft-drawingml`** preset shapes/warps ([`crates/engine/src/cmd/motion/mod.rs`](../../../crates/engine/src/cmd/motion/mod.rs)), and **`craft-font-manager::FontsPanel`** + **`storytold/font-preview-service`** ([`crates/ui-egui/src/fonts_ui.rs`](../../../crates/ui-egui/src/fonts_ui.rs)).
+
+## Remaining Enhancements & Host-Verification Hooks
+
+### 1. `--control` Shell & Optional Web/Shader Extensions
+- [ ] Add `--control-input-only` startup flag to [`apps/magic/src/main.rs`](../../../apps/magic/src/main.rs) so automated `--control` runs ignore physical pointer/keyboard events.
+- [ ] Support inline `base64: true` and `max_side` downscaling options on `ui.screenshot` and `render.frame`.
+- [ ] Opt out of macOS App Nap (`NSProcessInfo`) while `--control` is active and expose read-only MCP resources (`magic://document`, `magic://storyboard`, `magic://commands`) in [`crates/mcp/src/lib.rs`](../../../crates/mcp/src/lib.rs).
+
+### 2. 3D Character & Sibling CLI Host Checks
+- [ ] Map `.anim.json` skeletal joint tracks directly onto `EffectCraft` `advanced3D` `.glb` node transforms once `effectcraft-cli` exposes per-bone glTF animation channel overrides ([`crates/engine/src/cmd/character/model3d.rs`](../../../crates/engine/src/cmd/character/model3d.rs)).
+- [ ] Add interactive `wgpu` 3D orbit/camera preview callback in [`crates/ui-egui/src/views/animation.rs`](../../../crates/ui-egui/src/views/animation.rs) driving `EffectCraft` `layer.newCamera`.
+- [ ] Confirm exact `vectorcraft-cli` flat PNG export verb on host machines in [`crates/engine/src/cmd/storyboard/crud.rs`](../../../crates/engine/src/cmd/storyboard/crud.rs).
+
+### 3. Phoneme Lip-Sync, Duet Stems & Release Packaging
+- [ ] Add sub-word phoneme/viseme extraction (`AA`, `EE`, `OH`, `OO`, `MBP`, `FV`, `WQ`, `rest`) from `craft-audio` / Whisper word timestamps and multi-character duet vocal stems (`A1` + character stems).
+- [ ] Configure macOS Developer ID + notarization and Windows Authenticode secrets for `.github/workflows/release.yml` (`storytold/craft-common-actions`) and submit [`docs/wiki/magic/`](../../../docs/wiki/magic/overview.md) to [`storytold/craft-wiki`](https://github.com/storytold/craft-wiki).
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)

@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 //! Interactive widescreen `960 × 540 pt` (16:9 Barnyard `Storyboard.potx`) and `612 × 792 pt`
+=======
+//! Interactive `612 × 792 pt` DesignCraft (`storyboard.designcraft`)
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 //! Storyboard page renderer with anti-slop word-wrapped card typography, click-in-place text
 //! editing, drag-and-drop / Wayland paste / click artwork placement, and right-click handoff
 //! to `PhotoCraft`, `VectorCraft`, `EffectCraft`, or `FilmCraft`.
@@ -11,8 +15,13 @@ use crate::editorial::{WrappedTextSpec, paint_wrapped_editorial_text};
 use crate::state::{PickerTarget, UiAction, ViewCtx};
 use crate::theme::MagicPalette;
 
+<<<<<<< HEAD
 pub const DEFAULT_PAGE_W_PT: f32 = 960.0;
 pub const DEFAULT_PAGE_H_PT: f32 = 540.0;
+=======
+pub const DEFAULT_PAGE_W_PT: f32 = 612.0;
+pub const DEFAULT_PAGE_H_PT: f32 = 792.0;
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 
 const SLOT_PICKER_EXTS: &[&str] = &[
     "png",

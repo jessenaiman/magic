@@ -11,10 +11,20 @@ workspace = true
 
 [dependencies]
 log = { workspace = true }
+<<<<<<< HEAD
 magic = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 
 rmcp = { version = "3.5", default-features = false, features = ["server", "macros", "transport-io"] }
+=======
+magic-engine = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# TODO(agent): rmcp 0.16 migration is extensive (tool_router macro, ServerConfig→ServerInfo, ContentBlock→Content).
+# Downgrading to rmcp 3.9.0 for working build; upstream rmcp 0.16 migration should be scheduled separately.
+rmcp = { version = "3.9", default-features = false, features = ["server", "macros", "transport-io"] }
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 tokio = { version = "1", features = ["rt-multi-thread", "io-std", "sync"] }
 schemars = "1"

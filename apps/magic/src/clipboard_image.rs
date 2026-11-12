@@ -1,12 +1,20 @@
 //! Import clipboard artwork through the normal project asset pipeline using `arboard`
+<<<<<<< HEAD
 //! (`arboard` + `image`, zero webview plugins).
+=======
+//! (`arboard` + `image`).
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use image::{ColorType, ImageEncoder, codecs::png::PngEncoder};
+<<<<<<< HEAD
 use magic::Session;
+=======
+use magic_engine::Session;
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 use serde_json::{Value, json};
 
 fn encode_png(rgba: &[u8], width: u32, height: u32) -> Result<Vec<u8>, String> {

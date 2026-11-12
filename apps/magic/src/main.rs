@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 //! Pure-Rust `eframe` 0.37 + `egui` 0.37 + `storytold/craft-libs` + `storytold/craft-ai-integrations`
+=======
+//! `eframe` + `egui` + `storytold/craft-libs` + `storytold/craft-ai-integrations`
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 //! desktop coordinator for Magic Studio (`magic --control 9875`).
 
 #![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable))]
@@ -32,7 +36,11 @@ use control::{ControlEnvelope, DeferredReply};
 use craft_keymap::CommandRef;
 use craft_keymap::egui::Dispatcher;
 use egui::{Event, ViewportCommand};
+<<<<<<< HEAD
 use magic::{AutomationRoots, Session};
+=======
+use magic_engine::{AutomationRoots, Session};
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 use magic_ui_egui::{ActiveModal, AutomationRegistry, MagicPalette, UiAction, UiShellState, ViewCtx, ViewMode};
 use serde_json::{Value, json};
 
@@ -42,8 +50,19 @@ const APP_ICON_PNG: &[u8] = include_bytes!("../../../assets/app-icon/icon.png");
 #[derive(Parser, Debug)]
 #[command(name = "magic", about = "Magic Studio pure-Rust ArtCraft desktop coordinator (`--control 9875`)")]
 struct Cli {
+<<<<<<< HEAD
     #[arg(long)]
     project: Option<String>,
+=======
+    /// Optional `.magic` project file path (`magic my-song.magic`)
+    #[arg(value_name = "FILE")]
+    file: Option<String>,
+    #[arg(long)]
+    project: Option<String>,
+    /// Disable the default `127.0.0.1:9875` loopback `--control` listener
+    #[arg(long, default_value_t = false)]
+    no_control: bool,
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     #[arg(
         long,
         default_value = "project",
@@ -155,7 +174,12 @@ impl MagicDesktopApp {
         control_rx: Option<mpsc::Receiver<ControlEnvelope>>,
     ) -> Self {
         magic_ui_egui::install_loaders(&cc.egui_ctx);
+<<<<<<< HEAD
         let mut ui_state = UiShellState { view: initial_view, ..UiShellState::default() };
+=======
+        let mut ui_state = UiShellState { view: initial_view, control_port: session.control_address.map(|a| a.port()), ..UiShellState::default() };
+        magic_ui_egui::fonts_ui::refresh_available_fonts(&mut ui_state);
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         diagnostics::hydrate_prefs_and_ai(&mut session, &mut ui_state);
         MagicPalette::resolve(ui_state.theme_mode, ui_state.interface_style, ui_state.accent_choice, ui_state.high_contrast, None).apply(&cc.egui_ctx);
 
@@ -215,7 +239,11 @@ impl MagicDesktopApp {
         {
             return Err("The active project changed; the previous workspace command was not run".into());
         }
+<<<<<<< HEAD
         let changed = !magic::commands::is_read_only_command(id, &params);
+=======
+        let changed = !magic_engine::commands::is_read_only_command(id, &params);
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         let is_project_switch = matches!(id, "project.open" | "project.new" | "project.close" | "file.open" | "file.new" | "file.close");
         if is_project_switch && self.session.project_path.is_some() {
             lifecycle::verify_clean(&self.session, &self.ui_state)?;
@@ -243,6 +271,10 @@ impl MagicDesktopApp {
         match id {
             "project.catalog" => self.ui_state.cache.catalog = result.clone(),
             "song.lyrics" => self.ui_state.cache.song_lyrics = result.clone(),
+<<<<<<< HEAD
+=======
+            "song.waveform" => self.ui_state.cache.song_waveform = result.clone(),
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             "storyboard.pages" => self.ui_state.cache.storyboard_pages = result.clone(),
             "storyboard.check" => self.ui_state.cache.storyboard_check = result.clone(),
             "storyboard.new" | "storyboard.set" | "storyboard.wizard" => {
@@ -346,6 +378,14 @@ impl MagicDesktopApp {
                     self.ui_state.view = ViewMode::Animation;
                 }
             }
+<<<<<<< HEAD
+=======
+            UiAction::DockCommand { id, params } => {
+                if let Err(err) = magic_ui_egui::docking::execute_dock_command(ctx, &mut self.ui_state, &id, &params) {
+                    self.ui_state.set_toast(now, err);
+                }
+            }
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             UiAction::Execute { id, params, toast } => match self.execute_engine(ctx, &id, params) {
                 Ok(_) => {
                     if let Some(msg) = toast {
@@ -373,6 +413,18 @@ impl MagicDesktopApp {
                 let _ = self.execute_engine(ctx, "ai.status", json!({}));
                 self.ui_state.active_modal = Some(ActiveModal::Preferences);
             }
+<<<<<<< HEAD
+=======
+            UiAction::OpenFontManager => {
+                craft_font_catalog::Catalog::global().rescan_if_changed();
+                magic_ui_egui::fonts_ui::refresh_available_fonts(&mut self.ui_state);
+                if self.ui_state.project_path.is_some() {
+                    self.ui_state.docking.set_panel_visible(magic_ui_egui::PanelId::Fonts, true);
+                } else {
+                    self.ui_state.active_modal = Some(ActiveModal::FontManager);
+                }
+            }
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             UiAction::OpenDoctor => {
                 let _ = self.execute_engine(ctx, "app.doctor", json!({}));
                 self.ui_state.active_modal = Some(ActiveModal::Doctor);
@@ -469,6 +521,7 @@ impl MagicDesktopApp {
     fn handle_dropped_files(&mut self, ctx: &egui::Context, dropped: Vec<PathBuf>) {
         let now = ctx.input(|i| i.time);
         if self.ui_state.project_path.is_none() {
+<<<<<<< HEAD
             self.ui_state.set_toast(now, "Open a project before dropping Craft files");
             return;
         }
@@ -489,6 +542,37 @@ impl MagicDesktopApp {
                     let asset_path = val["path"].as_str().map(PathBuf::from).unwrap_or(path);
                     let _ = magic::native_media::write_staged_steps(ec_doc, &json!({"id": "file.import", "params": {"paths": [asset_path]}}));
                 }
+=======
+            if let Some(first) = dropped.first() {
+                if first.is_dir() {
+                    if let Ok(rd) = std::fs::read_dir(first)
+                        && let Some(magic_file) = rd.flatten().map(|e| e.path()).find(|p| p.extension().and_then(|e| e.to_str()) == Some("magic"))
+                        && self.execute_engine(ctx, "file.open", json!({"path": magic_file})).is_ok()
+                    {
+                        self.ui_state.view = ViewMode::Project;
+                        self.ui_state.set_toast(now, "Opened .magic project");
+                    }
+                } else if self.execute_engine(ctx, "file.open", json!({"path": first})).is_ok() {
+                    self.ui_state.view = ViewMode::Project;
+                }
+            }
+            return;
+        }
+        let _ = file_sync::stage_ecproj_for_drop(&self.ui_state);
+        let mut imported = 0usize;
+        for path in dropped {
+            let ext = path.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase).unwrap_or_default();
+            let res = if matches!(ext.as_str(), "ecproj" | "pcraft" | "psd" | "vectorcraft") {
+                self.execute_engine(ctx, "character.import", json!({"path": path}))
+            } else if matches!(ext.as_str(), "glb" | "gltf" | "obj" | "fbx" | "stl" | "ply" | "3mf") {
+                let cid = self.ui_state.selected_character_id.clone().unwrap_or_else(|| "lead".into());
+                self.execute_engine(ctx, "character.layer.new3dModel", json!({"character": cid, "path": path}))
+            } else {
+                self.execute_engine(ctx, "project.add_asset", json!({"path": path, "kind": "image"}))
+            };
+            if res.is_ok() {
+                imported += 1;
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             }
         }
         if imported > 0 {
@@ -558,9 +642,12 @@ impl eframe::App for MagicDesktopApp {
         }
 
         self.file_sync.poll_frame(ctx, &mut self.session, &mut self.ui_state);
+<<<<<<< HEAD
         if ctx.input(|i| i.focused) {
             craft_font_catalog::Catalog::global().rescan_if_changed();
         }
+=======
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 
         if ctx.input(|i| i.viewport().close_requested()) && !self.lifecycle.is_approved() {
             if lifecycle::verify_clean(&self.session, &self.ui_state).is_err() {
@@ -593,7 +680,11 @@ impl eframe::App for MagicDesktopApp {
         {
             let session_ref = &self.session;
             let clicks = (menu.sync_frame)(&egui_ctx, &self.ui_state, modal_open, &|cid| {
+<<<<<<< HEAD
                 magic::find_command(cid).is_some_and(|spec| (spec.enabled)(session_ref).is_ok())
+=======
+                magic_engine::find_command(cid).is_some_and(|spec| (spec.enabled)(session_ref).is_ok())
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             });
             for cmd in clicks {
                 if let Some(act) = magic_ui_egui::menus::translate_menu_command(&cmd, &mut self.ui_state) {
@@ -614,12 +705,29 @@ impl eframe::App for MagicDesktopApp {
 
         self.registry.begin_frame();
         let mut emitted = Vec::new();
+<<<<<<< HEAD
         {
             let session_ref = &self.session;
             let mut view_ctx = ViewCtx { state: &mut self.ui_state, reg: &mut self.registry, pal: &palette, actions: &mut emitted };
             magic_ui_egui::shell::draw_workstation(ui, &mut view_ctx, keymap::catalog_keymap(), self.in_window_menus, |cid| {
                 magic::find_command(cid).is_some_and(|spec| (spec.enabled)(session_ref).is_ok())
             });
+=======
+        let dock_outcome = {
+            let session_ref = &self.session;
+            let mut view_ctx = ViewCtx { state: &mut self.ui_state, reg: &mut self.registry, pal: &palette, actions: &mut emitted };
+            magic_ui_egui::shell::draw_workstation(ui, &mut view_ctx, keymap::catalog_keymap(), self.in_window_menus, modal_open, |cid| {
+                magic_engine::find_command(cid).is_some_and(|spec| (spec.enabled)(session_ref).is_ok())
+            })
+        };
+        if !self.control_input_only {
+            for ev in dock_outcome.forwarded_events {
+                self.synthetic_events.push_back(ev);
+            }
+            if !dock_outcome.dropped_files.is_empty() {
+                self.handle_dropped_files(&egui_ctx, dock_outcome.dropped_files);
+            }
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         }
         for action in emitted {
             self.handle_ui_action(&egui_ctx, action);
@@ -687,7 +795,11 @@ fn start_control_bridge(
 fn main() {
     let cli = Cli::parse();
     if cli.list_controls {
+<<<<<<< HEAD
         let cmds: Vec<Value> = magic::command_specs().iter().map(magic::commands::CommandSpec::describe).collect();
+=======
+        let cmds: Vec<Value> = magic_engine::command_specs().iter().map(magic_engine::commands::CommandSpec::describe).collect();
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         let payload = json!({
             "ok": true,
             "ports": {"magic": 9875},
@@ -713,13 +825,21 @@ fn main() {
             std::process::exit(2);
         }
     };
+<<<<<<< HEAD
     let token = magic::workspace::control_token();
+=======
+    let token = magic_engine::workspace::control_token();
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 
     craft_font_catalog::Catalog::global().scan_in_background();
 
     let mut session = Session::user_session().with_automation_roots(automation_roots);
 
+<<<<<<< HEAD
     if let Some(path) = &cli.project
+=======
+    if let Some(path) = cli.project.as_deref().or(cli.file.as_deref())
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         && let Err(err) = session.execute("file.open", json!({"path": path}))
     {
         diag(format_args!("magic: could not open {path}: {err}"));
@@ -727,8 +847,15 @@ fn main() {
     }
 
     let wake_ctx: Arc<std::sync::Mutex<Option<egui::Context>>> = Arc::new(std::sync::Mutex::new(None));
+<<<<<<< HEAD
     let control_rx = match &cli.control {
         Some(spec) => match start_control_bridge(spec, token.as_deref(), Arc::clone(&wake_ctx)) {
+=======
+    let control_rx = if cli.no_control && cli.control.is_none() {
+        None
+    } else if let Some(spec) = &cli.control {
+        match start_control_bridge(spec, token.as_deref(), Arc::clone(&wake_ctx)) {
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             Ok((address, rx)) => {
                 session.control_address = Some(address);
                 diag(format_args!("MAGIC_CONTROL_PORT={}\nmagic: control listening on {address}", address.port()));
@@ -738,8 +865,21 @@ fn main() {
                 diag(format_args!("magic: {err}"));
                 std::process::exit(1);
             }
+<<<<<<< HEAD
         },
         None => None,
+=======
+        }
+    } else {
+        match start_control_bridge("127.0.0.1:9875", token.as_deref(), Arc::clone(&wake_ctx)) {
+            Ok((address, rx)) => {
+                session.control_address = Some(address);
+                diag(format_args!("MAGIC_CONTROL_PORT={}\nmagic: control listening on {address}", address.port()));
+                Some(rx)
+            }
+            Err(_) => None,
+        }
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     };
 
     let initial_view = ViewMode::parse(&cli.view).unwrap_or(ViewMode::Project);

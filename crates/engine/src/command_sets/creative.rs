@@ -182,7 +182,12 @@ fn specs_motion() -> Vec<CommandSpec> {
             "motion.effects",
             "CLI-Mapped Craft Vector & Motion Effects (VectorCraft, EffectCraft & PhotoCraft)",
             "{\"app\":\"optional vectorcraft|effectcraft|photocraft\",\"category\":\"optional\",\"filter\":\"optional\"}",
+<<<<<<< HEAD
             crate::cmd::motion::cmd_motion_effects
+=======
+            // TODO(agent): verify command_sets README for motion.effects handler; d23f5f3 renamed cmd_motion_effects to cmd_motion_open
+            crate::cmd::motion::cmd_motion_open
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         ),
         cmd_spec!(
             "motion.save",
@@ -465,10 +470,17 @@ fn specs_character() -> Vec<CommandSpec> {
         ),
         cmd_spec!(
             "character.sprite",
+<<<<<<< HEAD
             "Build Sprite Cycle in PhotoCraft / Headless AniCraft CLI + EffectCraft",
             ["Animation"],
             None,
             "{\"character\":\"id\",\"action\":\"walk\",\"sheet\":\"sheet.png or .anicraft\",\"columns\":4,\"rows\":2}",
+=======
+            "Build Sprite Cycle in PhotoCraft + EffectCraft",
+            ["Animation"],
+            None,
+            "{\"character\":\"id\",\"action\":\"walk\",\"sheet\":\"sheet.png\",\"columns\":4,\"rows\":2}",
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             always,
             crate::cmd::character::cmd_character_sprite
         ),
@@ -726,6 +738,24 @@ fn specs_character() -> Vec<CommandSpec> {
             always,
             crate::cmd::character::cmd_layer_set_parent
         ),
+<<<<<<< HEAD
+=======
+        query_spec!(
+            "mesh.inspect",
+            "Inspect 3D Mesh / Scene Topology & Skeleton (craft-mesh)",
+            "{\"path\":\"model.glb\"}",
+            crate::cmd::character::cmd_mesh_inspect
+        ),
+        cmd_spec!(
+            "mesh.convert",
+            "Convert 3D Mesh Between .glb, .obj/.mtl, and .stl (craft-mesh)",
+            ["Animation"],
+            None,
+            "{\"path\":\"in.obj\",\"output\":\"out.glb\"}",
+            always,
+            crate::cmd::character::cmd_mesh_convert
+        ),
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         query_spec!("character.model3d.catalog", "3D Character Breakout & Motion Preset Catalog", "{}", crate::cmd::character::cmd_model3d_catalog),
         cmd_spec!(
             "character.model3d.breakout",
@@ -810,6 +840,63 @@ fn specs_film() -> Vec<CommandSpec> {
             always,
             crate::cmd::film::cmd_video_finish
         ),
+<<<<<<< HEAD
+=======
+        query_spec!(
+            "timeline.detect",
+            "Detect Timeline Format (OTIO, FCPXML, FCP7 XML, EDL, AAF, OMF)",
+            "{\"path\":\"optional edit.xml\"}",
+            crate::cmd::film::cmd_timeline_detect
+        ),
+        query_spec!(
+            "timeline.timecode",
+            "Convert Exact Ticks, Seconds, Frames & SMPTE Timecode (craft-timeline)",
+            "{\"seconds\":0,\"fps\":24}",
+            crate::cmd::film::cmd_timeline_timecode
+        ),
+        query_spec!(
+            "timeline.inspect",
+            "Inspect Active .fcproj or External Timeline via craft-timeline Model",
+            "{\"path\":\"optional edit.otio\"}",
+            crate::cmd::film::cmd_timeline_inspect
+        ),
+        cmd_spec!(
+            "timeline.export",
+            "Export Sequence to OTIO, FCPXML, FCP7 XML, CMX 3600 EDL, or ALE (craft-timeline)",
+            ["Studio"],
+            None,
+            "{\"format\":\"otio|fcpxml|xml|edl|ale\",\"path\":\"optional\"}",
+            always,
+            crate::cmd::film::cmd_timeline_export
+        ),
+        cmd_spec!(
+            "timeline.import",
+            "Import OTIO, FCPXML, FCP7 XML, CMX 3600 EDL, or ALE into Sequence (craft-timeline)",
+            ["Studio"],
+            None,
+            "{\"path\":\"edit.otio\"}",
+            always,
+            crate::cmd::film::cmd_timeline_import
+        ),
+        cmd_spec!(
+            "timeline.ale",
+            "Parse or Export Avid Log Exchange .ale (craft-timeline)",
+            ["Studio"],
+            None,
+            "{\"action\":\"parse|export\",\"path\":\"optional\"}",
+            always,
+            crate::cmd::film::cmd_timeline_ale
+        ),
+        cmd_spec!(
+            "timeline.edl",
+            "Parse or Export CMX 3600 .edl (craft-timeline)",
+            ["Studio"],
+            None,
+            "{\"action\":\"parse|export\",\"path\":\"optional\"}",
+            always,
+            crate::cmd::film::cmd_timeline_edl
+        ),
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         query_spec!("video.film", "Film Timeline, Preview and Export Status", "{}", crate::cmd::film::cmd_video_film),
         cmd_spec!("video.preview", "Render Half-Scale Film Preview (FilmCraft)", ["Studio"], None, "{}", always, crate::cmd::film::cmd_video_preview),
         cmd_spec!("video.export", "Export Final Film (FilmCraft)", ["Studio"], None, "{}", always, crate::cmd::film::cmd_video_export),

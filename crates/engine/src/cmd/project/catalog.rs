@@ -168,8 +168,13 @@ fn discover_project_craft_badges(dir: &Path, doc: &Value) -> Vec<&'static str> {
     if has_fcproj {
         badges.push(".fcproj");
     }
+<<<<<<< HEAD
     if dir.join("storyboard.pdf").is_file() || dir.join("storyboard-template.pdf").is_file() {
         badges.push(".pdf");
+=======
+    if dir.join("storyboard.designcraft").is_file() {
+        badges.push(".designcraft");
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     }
     let has_ecproj = dir.join("lettering/lyrics.ecproj").is_file()
         || dir.join("motion/actions.ecproj").is_file()

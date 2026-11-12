@@ -96,6 +96,7 @@ pub struct CaptionsArgs {
 }
 
 #[derive(Args)]
+<<<<<<< HEAD
 pub struct ConvertArgs {
     /// Converter mode: `hyperframes`, `remotion`, `custom`, or `auto`
     #[arg(default_value = "auto")]
@@ -111,6 +112,17 @@ pub struct ConvertArgs {
     /// Overwrite existing converted project if present
     #[arg(long)]
     pub overwrite: bool,
+=======
+pub struct ArchiveArgs {
+    /// Optional folder to compress (defaults to the open project directory)
+    pub source: Option<String>,
+    /// Optional destination `.zip` file path
+    #[arg(long = "out", visible_alias = "output")]
+    pub output: Option<String>,
+    /// Verify an existing `.zip` archive via `craft-zip` preflight without writing
+    #[arg(long)]
+    pub inspect: Option<String>,
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 }
 
 #[derive(Args)]
@@ -123,11 +135,45 @@ pub struct MarkersArgs {
     pub arguments: Vec<String>,
 }
 
+<<<<<<< HEAD
+=======
+#[derive(Args)]
+pub struct TimelineCliArgs {
+    /// `inspect`, `detect`, `export`, `import`, `timecode`, `ale`, or `edl`
+    #[arg(default_value = "inspect")]
+    pub action: String,
+    #[arg(long)]
+    pub format: Option<String>,
+    #[arg(long)]
+    pub path: Option<String>,
+    #[arg(long)]
+    pub params: Option<String>,
+    pub arguments: Vec<String>,
+}
+
+#[derive(Args)]
+pub struct MeshCliArgs {
+    /// `inspect` or `convert`
+    #[arg(default_value = "inspect")]
+    pub action: String,
+    /// Source `.glb`, `.gltf`, `.obj`, `.fbx`, `.stl`, `.ply`, or `.3mf` file
+    pub path: String,
+    /// Output `.glb`, `.obj`, or `.stl` path (for `convert`)
+    #[arg(long)]
+    pub output: Option<String>,
+}
+
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 pub const CONTROL_METHODS: &[(&str, &str)] = &[
     ("engine.execute", "Run any registered coordinator command on the live session"),
     ("engine.commands", "List coordinator commands with live enabled status"),
     ("document.inspect", "Inspect open .magic project snapshot"),
     ("ui.inspect", "Inspect active view, panels, focus, and playback state"),
+<<<<<<< HEAD
+=======
+    ("ui.docking", "Inspect craft-ui panel docking Layout, focused panel, hidden panels, and hitRects"),
+    ("ui.dock", "Execute a craft-ui DockCommand operation (open, close, activate, float, move, resizeSplit)"),
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     ("ui.elements", "List visible egui widget automation IDs, labels, and logical rects"),
     ("ui.set", "Switch view, studioWorkspace, animTab, theatreTab, lyricsTab, motionTab, theme, style, or widget value"),
     ("ui.viewer.locate", "Map stage coordinates (x, y) to logical window coordinates"),
@@ -160,13 +206,21 @@ pub const CONTROL_METHODS: &[(&str, &str)] = &[
 pub fn run_controls(target: &mut Target, args: ControlsArgs) -> Result<(), String> {
     let q = args.filter.unwrap_or_default().to_ascii_lowercase();
     let stage_q = args.stage.unwrap_or_default().to_ascii_lowercase();
+<<<<<<< HEAD
     let cmds: Vec<Value> = magic::command_specs()
+=======
+    let cmds: Vec<Value> = magic_engine::command_specs()
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         .iter()
         .filter(|c| {
             (q.is_empty() || c.id.to_ascii_lowercase().contains(&q) || c.label.to_ascii_lowercase().contains(&q))
                 && (stage_q.is_empty() || c.id.to_ascii_lowercase().starts_with(&stage_q) || c.menu.iter().any(|m| m.to_ascii_lowercase().contains(&stage_q)))
         })
+<<<<<<< HEAD
         .map(magic::commands::CommandSpec::describe)
+=======
+        .map(magic_engine::commands::CommandSpec::describe)
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         .collect();
     let methods: Vec<Value> = CONTROL_METHODS
         .iter()
@@ -252,6 +306,7 @@ pub fn run_markers(target: &mut Target, args: MarkersArgs) -> Result<(), String>
     target.run("video.markers", p)
 }
 
+<<<<<<< HEAD
 pub fn run_convert(target: &mut Target, args: ConvertArgs) -> Result<(), String> {
     let res = target.call_unless_dry(
         "project.convert",
@@ -266,4 +321,45 @@ pub fn run_convert(target: &mut Target, args: ConvertArgs) -> Result<(), String>
     )?;
     emit(&res);
     target.save_project()
+=======
+pub fn run_archive(target: &mut Target, args: ArchiveArgs) -> Result<(), String> {
+    let mut p = json!({});
+    if let Some(src) = args.source {
+        p["source"] = json!(src);
+    }
+    if let Some(out) = args.output {
+        p["output"] = json!(out);
+    }
+    if let Some(ins) = args.inspect {
+        p["inspect"] = json!(ins);
+    }
+    target.run("project.archive", p)
+}
+
+pub fn run_timeline_cli(target: &mut Target, args: TimelineCliArgs) -> Result<(), String> {
+    let mut p = parse_params(&args.arguments, args.params.as_deref())?;
+    if let Some(fmt) = args.format {
+        p["format"] = json!(fmt);
+    }
+    if let Some(path) = args.path {
+        p["path"] = json!(path);
+    }
+    let cmd = match args.action.as_str() {
+        "detect" => "timeline.detect",
+        "export" | "write" => "timeline.export",
+        "import" | "read" | "parse" => "timeline.import",
+        "timecode" | "tc" => "timeline.timecode",
+        "ale" => "timeline.ale",
+        "edl" => "timeline.edl",
+        _ => "timeline.inspect",
+    };
+    target.run(cmd, p)
+}
+
+pub fn run_mesh_cli(target: &mut Target, args: MeshCliArgs) -> Result<(), String> {
+    match args.action.as_str() {
+        "convert" => target.run("mesh.convert", json!({"path": args.path, "output": args.output})),
+        _ => target.run("mesh.inspect", json!({"path": args.path})),
+    }
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 }

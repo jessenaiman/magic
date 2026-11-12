@@ -83,7 +83,11 @@ fn finish_capture(
         let opts = WriteOptions::default().with_new_file_permissions(NewFilePermissions::Private);
         opts.atomic_write(target, &png).map_err(|e| format!("could not write {}: {e}", target.display()))?;
     } else {
+<<<<<<< HEAD
         magic::write_file(target, &png).map_err(|e| format!("could not write {}: {e}", target.display()))?;
+=======
+        magic_engine::write_file(target, &png).map_err(|e| format!("could not write {}: {e}", target.display()))?;
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     }
     Ok(json!({
         "ok": true,

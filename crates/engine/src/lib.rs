@@ -21,6 +21,10 @@ pub mod craft_effects;
 pub mod doc_state;
 pub mod doctor;
 pub mod error;
+<<<<<<< HEAD
+=======
+pub mod extensions;
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 pub mod guard;
 pub mod history;
 pub mod link_watch;

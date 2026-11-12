@@ -1,6 +1,10 @@
 [package]
 name = "magic"
+<<<<<<< HEAD
 description = "Magic Studio pure-Rust desktop coordinator over magic-engine and the ArtCraft suite"
+=======
+description = "Magic Studio desktop coordinator over magic-engine and the installed Craft apps (DesignCraft, PhotoCraft, VectorCraft, EffectCraft, FilmCraft)"
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -18,21 +22,36 @@ path = "src/main.rs"
 arboard = { workspace = true }
 clap = { workspace = true }
 craft-atomic = { workspace = true }
+<<<<<<< HEAD
+=======
+craft-audio = { workspace = true }
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 craft-dialogs = { workspace = true }
 craft-font-catalog = { workspace = true }
 craft-keymap = { workspace = true }
 craft-menu = { workspace = true }
+<<<<<<< HEAD
 craft-platform = { workspace = true }
 craft-quit = { workspace = true }
 craft-ui = { workspace = true }
 magic-util = { workspace = true }
+=======
+craft-quit = { workspace = true }
+craft-ui = { workspace = true }
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 craft-window = { workspace = true }
 eframe = { workspace = true }
 egui = { workspace = true }
 image = { workspace = true }
 log = { workspace = true }
+<<<<<<< HEAD
 magic = { workspace = true }
 magic-ui-egui = { workspace = true }
+=======
+magic-engine = { workspace = true }
+magic-ui-egui = { workspace = true }
+magic-util = { workspace = true }
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 serde = { workspace = true }
 serde_json = { workspace = true }
 subtle = { workspace = true }

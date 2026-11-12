@@ -2,7 +2,11 @@
 //! (`magic-cli mcp` and `magic-mcp` both speak newline-delimited JSON-RPC 2.0 over stdio).
 //!
 //! Modes:
+<<<<<<< HEAD
 //! - `magic-mcp` (isolated headless `magic::Session` over stdio by default; never silently probes loopback)
+=======
+//! - `magic-mcp` (isolated headless `magic_engine::Session` over stdio by default; never silently probes loopback)
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 //! - `magic-mcp --connect 127.0.0.1:9875` (requires live `magic --control 9875`)
 //! - `magic-mcp --headless`
 

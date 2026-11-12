@@ -290,7 +290,11 @@ fn render_linked_cache(record: &mut LinkedCompRecord, duration_sec: f64) -> std:
             "resolution": "full",
         }),
     };
+<<<<<<< HEAD
     crate::native_media::write_staged_steps(&record.ecproj_path, &render_params).map_err(|e| e.to_string())?;
+=======
+    let _ = crate::craft_api::execute_in_live_app("effectcraft", "render.comp", render_params);
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     let _ = crate::native_media::extract_or_copy_preview(&record.ecproj_path, &record.preview_png, 960);
     Ok(())
 }
@@ -356,7 +360,11 @@ pub fn cmd_video_link_effectcraft(s: &mut Session, p: &Value) -> Result<Value> {
     let sync_rate = p["sync_comp_rate"].as_bool().or_else(|| p["sync_fps"].as_bool()).unwrap_or(true);
     if sync_rate && ecproj.is_file() {
         let fps_f = (fps_num as f64) / (fps_den.max(1) as f64);
+<<<<<<< HEAD
         let _ = crate::native_media::write_staged_steps(&ecproj, &json!({"comp": comp, "frameRate": fps_f}));
+=======
+        let _ = crate::craft_api::execute_in_live_app("effectcraft", "comp.setSettings", json!({"comp": comp, "frameRate": fps_f}));
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     }
 
     let link_id = build_link_id(&ecproj, &comp);

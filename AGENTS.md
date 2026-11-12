@@ -1,8 +1,6 @@
 # Agent Instructions (`Magic Studio`)
 
-> **Notice on Legacy Repository**: Do NOT read, reference, or import code/patterns from the legacy prototype repository (`jessenaiman/magic-studio-app`) unless the user explicitly requests it, as historical churn and divergent iterations can introduce regressions. Historical development, early prototypes, and past discussions are preserved for human record at https://github.com/jessenaiman/magic-studio-app.
-
-Magic Studio is a pure-Rust ArtCraft coordinator application (`magic`, `magic-cli`, `magic-mcp`, `magic-tui`) built on `eframe` + `egui` 0.37 + [`storytold/craft-libs`](https://github.com/storytold/craft-libs) and governed by [`storytold/craft-contrib`](https://github.com/storytold/craft-contrib/blob/main/AGENTS.md).
+Magic Studio (`magic`, `magic-cli`, `magic-mcp`, `magic-tui`) is a pure-Rust ArtCraft coordinator application (`magic`, `magic-cli`, `magic-tui`) built on `eframe` + `egui` 0.37 + [`storytold/craft-libs`](https://github.com/storytold/craft-libs) and governed by [`storytold/craft-contrib`](https://github.com/storytold/craft-contrib/blob/main/AGENTS.md).
 
 ## 1. Drive Magic Through `magic-cli mcp` and Live `--control`
 
@@ -36,7 +34,7 @@ These apply in every Craft repository. A later rule may be stricter, not weaker.
 6. **Look for a better pull request.** If another fixes the same thing, close yours when it is better or equal, and say why.
 7. **Report only what ran.** Say what you tested and what you could not run. Without a local build or test, say so and rely on CI before marking ready.
 8. **`main` changes through a pull request.** Do not push to it. Branch protection enforces this. There is no exception.
-9. **Stop and ask only about** licensing outside the allowlist, publishing, releases, a new remote, secrets, spending money, destructive git, and anything else hard to undo. Otherwise keep working. `plan/` is a gitignored notebook, not rules. Without it, do not ask for it and do not stop.
+9. **Stop and ask only about** licensing outside the allowlist, publishing, releases, a new remote, secrets, spending money, and anything else hard to undo. Otherwise keep working. `plan/` is a gitignored notebook, not rules. Without it, do not ask for it and do not stop.
 10. **Keep secrets and personal details out** of the repository, logs and requests.
 11. **CI stays shared.** Workflows call `storytold/craft-common-actions`. Do not change CI in a feature or fix pull request. If CI cannot cover a change, open an issue there.
 12. **Guards say why.** A check that looks removable says what it prevents. Read that before changing it.

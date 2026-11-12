@@ -201,7 +201,11 @@ fn bootstrap_new_project_workshop(s: &mut Session, path: &Path, project_dir: &Pa
 
     copy_initial_project_collections(s, params, overwrite, copied, &mut steps);
 
+<<<<<<< HEAD
     let sb = path.with_file_name("storyboard.pdf");
+=======
+    let sb = path.with_file_name("storyboard.designcraft");
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     if !sb.is_file() || overwrite {
         let mut sb_req = json!({
             "path": sb,
@@ -212,7 +216,13 @@ fn bootstrap_new_project_workshop(s: &mut Session, path: &Path, project_dir: &Pa
             sb_req["wizard"] = wiz.clone();
         }
         match crate::cmd::storyboard::cmd_storyboard_new(s, &sb_req) {
+<<<<<<< HEAD
             Ok(_) => steps.push(json!({"command": "storyboard.new", "status": "complete; printable storyboard.pdf initialized from read-only master"})),
+=======
+            Ok(_) => {
+                steps.push(json!({"command": "storyboard.new", "status": "complete; storyboard.designcraft initialized as editable DesignCraft document"}))
+            }
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             Err(e) => steps.push(json!({"command": "storyboard.new", "status": "failed", "error": e.to_string()})),
         }
     }
@@ -290,7 +300,11 @@ fn project_audio_source(s: &Session, params: &Value, require_audio: bool) -> Res
         None if require_audio => Err(EngineError::InvalidParams(
             concat!(
                 "project.new requires `audio` (<song file>) so Magic can copy the recording into `<project>/audio/`, ",
+<<<<<<< HEAD
                 "initialize the FilmCraft timeline, and create `storyboard.pdf` (or pass mode=\"animation\" for a standalone character study)"
+=======
+                "initialize the FilmCraft timeline, and create `storyboard.designcraft` (or pass mode=\"animation\" for a standalone character study)"
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             )
             .into(),
         )),
@@ -370,7 +384,11 @@ pub fn cmd_project_new(s: &mut Session, params: &Value) -> Result<Value> {
         "storyboard": storyboard,
         "workflow": [
             "1. Self-contained project folder created with audio and assets atomically copied inside",
+<<<<<<< HEAD
             "2. Printable storyboard.pdf initialized from the read-only .designcraft master for visual reference",
+=======
+            "2. Editable storyboard.designcraft design document initialized for DesignCraft layout and visual direction",
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             "3. Author Animation (V2), Kinetic Lyrics (V3), and Song-Action Motion (V4) in EffectCraft onto the FilmCraft timeline"
         ],
     }))
@@ -445,7 +463,11 @@ mod tests {
         let created_dir = created_magic.parent().unwrap();
         assert_eq!(created_dir.file_name().unwrap().to_str().unwrap(), "hey-ho");
         assert!(created_dir.join("audio/song-demo.wav").is_file());
+<<<<<<< HEAD
         assert!(created_dir.join("storyboard.pdf").is_file());
+=======
+        assert!(created_dir.join("storyboard.designcraft").is_file());
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         assert!(created_dir.join("film").is_dir());
         assert!(created_dir.join("animations").is_dir());
 

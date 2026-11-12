@@ -112,6 +112,20 @@ fn specs_edit_and_diagnostics() -> Vec<CommandSpec> {
         query_spec!("backstage.changes", "Saved-Project Change Notifications", "{}", crate::change_marker::status),
         query_spec!("backstage.events", "Recent Activity Receipts", "{\"after\":0,\"limit\":20}", crate::activity::events),
         query_spec!("app.doctor", "Doctor: ArtCraft Suite & Environment Check", "{\"updates\":true}", cmd_app_doctor),
+<<<<<<< HEAD
+=======
+        query_spec!("app.extensions", "Shared Craft Extensions Store Status", "{}", crate::extensions::cmd_app_extensions),
+        query_spec!("craft.api_status", "Live Host Craft App --control Endpoints", "{\"refresh\":true}", crate::craft_api::cmd_craft_api_status),
+        cmd_spec!(
+            "craft.live_save",
+            "Save Active Document in Live Host Craft App",
+            ["File"],
+            None,
+            "{\"app\":\"designcraft|photocraft|vectorcraft|effectcraft|filmcraft\",\"path\":\"optional\"}",
+            always,
+            crate::craft_api::cmd_craft_live_save
+        ),
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         query_spec!("app.update", "Check for Newer Release", "{}", crate::update::cmd_app_update),
         query_spec!("app.errors", "Recorded Runtime Errors", "{\"after\":0,\"limit\":50}", crate::activity::errors),
         query_spec!("command.list", "List Engine Commands", "{\"filter\":\"optional\"}", cmd_query_list),

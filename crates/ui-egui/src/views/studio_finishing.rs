@@ -2,10 +2,18 @@
 //! panels (`Sheet 08` Zone E — `T32`–`T38`), wired 1:1 to `crates/engine/src/cmd/film/finishing.rs`.
 
 use egui::{Align2, Color32, CornerRadius, FontId, Pos2, Rect, RichText, ScrollArea, Sense, Stroke, StrokeKind, Ui, Vec2};
+<<<<<<< HEAD
 use magic::craft_effects::FILMCRAFT_27_BLEND_MODES;
 use serde_json::{Value, json};
 
 use crate::controls::{ScalarSpec, paint_cubic_bezier, pill_toggle, ring_slider_h};
+=======
+use magic_engine::craft_effects::FILMCRAFT_27_BLEND_MODES;
+use serde_json::{Value, json};
+
+use crate::controls::{ScalarSpec, fill_card, paint_cubic_bezier, pill_toggle, ring_slider_h};
+use crate::docking::PanelId;
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 use crate::state::{PickerTarget, UiAction, ViewCtx};
 use crate::widgets::{BtnSpec, action_button, text_input};
 
@@ -26,6 +34,7 @@ pub fn draw_studio_mode_tabs(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
         ui.spacing_mut().item_spacing.y = 4.0;
+<<<<<<< HEAD
         for (tid, lbl, fc_ws, tip) in [
             ("matrix", "Assembly", Some("Assembly"), "Assembly workspace: V2/V3/V4 Craft Matrix & Dynamic-Link Sync"),
             ("edit", "Edit", Some("Editing"), "Editing workspace: 3-Point Edit, Trim/JKL, Proxies, Markers & Sequence FPS (T33-T35)"),
@@ -38,6 +47,20 @@ pub fn draw_studio_mode_tabs(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             let id = format!("studio-tab-{tid}");
             let sel = ctx.state.studio.inspector_tab == tid;
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, lbl, tip).selected(sel)).clicked() {
+=======
+        for (tid, ico, lbl, fc_ws, tip) in [
+            ("matrix", "grid", "Assembly", Some("Assembly"), "Assembly workspace: V2/V3/V4 Craft Matrix & Dynamic-Link Sync"),
+            ("edit", "razor", "Edit", Some("Editing"), "Editing workspace: Clip Inspector, 3-Point Edit, Trim/JKL & Sequence FPS"),
+            ("color", "colorWheel", "Color", Some("Color"), "Color workspace: 32f Linear Color, 3-Way Wheels & Monotone-Cubic Curves"),
+            ("fx", "sparkles", "FX", Some("Effects"), "Effects workspace: 90+ Video FX, 30 Transitions, 27 Blend Modes & Keyframes"),
+            ("audio", "waveform", "Audio", Some("Audio"), "Audio workspace: BS.1770-4 Loudness, craft-audio Peaks, 35+ DSP & Mixer"),
+            ("titles", "type", "Titles", None, "OpenType V/H Graphics, craft-drawingml Shapes, .fcgt & C1 Captions"),
+            ("export", "upload", "Export", None, "Pure-Rust Codecs, HDR PQ/HLG, CRF/VBR/CBR & Queue Jobs"),
+        ] {
+            let id = format!("studio-tab-{tid}");
+            let sel = ctx.state.studio.inspector_tab == tid;
+            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new(&id, ico, lbl, tip).selected(sel)).clicked() {
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
                 ctx.state.studio.inspector_tab = tid.into();
                 if let Some(ws) = fc_ws {
                     ctx.state.studio.workspace_preset = ws.into();
@@ -49,11 +72,16 @@ pub fn draw_studio_mode_tabs(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
 }
 
 /// Program Monitor 3-Point Editing (`Mark In [I]`, `Mark Out [O]`, `Insert [,]`, `Overwrite [.]`, `Lift [;]`, `Extract [']`) + `J/K/L` Dynamic Trim bar (`T33`–`T34`).
+<<<<<<< HEAD
+=======
+/// Program Monitor icon-first 3-Point Editing (`Mark In`, `Mark Out`, `Insert`, `Overwrite`, `Lift`, `Ripple Extract`) + `J/K/L` Shuttle & `Scopes` bar.
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 pub fn draw_program_trim_and_three_point_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     let sec = ctx.state.studio.seek_seconds;
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
         ui.spacing_mut().item_spacing.y = 4.0;
+<<<<<<< HEAD
         for (id, lbl, op, extra, tip) in [
             ("fc-mark-in", "Mark In [I]", "mark_in", json!({"seconds": sec}), "Mark Source In at playhead (I)"),
             ("fc-mark-out", "Mark Out [O]", "mark_out", json!({"seconds": sec + 3.0}), "Mark Source Out (O)"),
@@ -63,17 +91,37 @@ pub fn draw_program_trim_and_three_point_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>)
             ("fc-extract", "Extract [']", "extract", json!({}), "Ripple extract In-to-Out range closing gap (')"),
         ] {
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(id, lbl, tip)).clicked() {
+=======
+        for (id, ico, op, extra, tip) in [
+            ("fc-mark-in", "markIn", "mark_in", json!({"seconds": sec}), "Mark In at playhead (I)"),
+            ("fc-mark-out", "markOut", "mark_out", json!({"seconds": sec + 3.0}), "Mark Out (O)"),
+            ("fc-insert", "download", "insert", json!({"track": "V1", "audioTrack": "A1"}), "Ripple Insert onto patched track (,)"),
+            ("fc-overwrite", "layers", "overwrite", json!({"track": "V1", "audioTrack": "A1"}), "Overwrite onto patched track (.)"),
+            ("fc-lift", "scissors", "lift", json!({}), "Lift In-to-Out range leaving gap (;)"),
+            ("fc-extract", "rippleDelete", "extract", json!({}), "Ripple Extract In-to-Out range closing gap (')"),
+        ] {
+            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only(id, ico, tip)).clicked() {
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
                 let mut p = extra;
                 p["op"] = json!(op);
                 ctx.exec("video.finish", p, Some("Applied 3-point edit on FilmCraft timeline"));
             }
         }
+<<<<<<< HEAD
         for (id, lbl, dir, tip) in [
             ("fc-jkl-j", "◀ J", -1, "Dynamic trim shuttle reverse (J)"),
             ("fc-jkl-k", "■ K", 0, "Commit dynamic trim as 1 undo step (K)"),
             ("fc-jkl-l", "L ▶", 1, "Dynamic trim shuttle forward (L)"),
         ] {
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(id, lbl, tip)).clicked() {
+=======
+        for (id, ico, dir, tip) in [
+            ("fc-jkl-j", "stepBack", -1, "Dynamic trim shuttle reverse (J)"),
+            ("fc-jkl-k", "stop", 0, "Commit dynamic trim as 1 undo step (K)"),
+            ("fc-jkl-l", "stepForward", 1, "Dynamic trim shuttle forward (L)"),
+        ] {
+            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only(id, ico, tip)).clicked() {
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
                 if dir == 0 {
                     ctx.exec("video.finish", json!({"op": "trim_stop", "clock": sec}), Some("Committed dynamic trim"));
                 } else {
@@ -81,16 +129,33 @@ pub fn draw_program_trim_and_three_point_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>)
                 }
             }
         }
+<<<<<<< HEAD
         let sc_on = ctx.state.studio.scopes_visible;
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("fc-scopes-toggle", "Scopes", "Toggle Linear-Light Graded Scopes (T37)").selected(sc_on))
             .clicked()
         {
             ctx.state.studio.scopes_visible = !sc_on;
+=======
+        let sc_on = ctx.state.studio.scopes_visible || ctx.state.docking.is_panel_visible(PanelId::Scopes);
+        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("fc-scopes-toggle", "scopesWave", "Toggle 32f Linear Scopes").selected(sc_on)).clicked() {
+            ctx.state.studio.scopes_visible = !ctx.state.studio.scopes_visible;
+            ctx.state.docking.set_panel_visible(PanelId::Scopes, ctx.state.studio.scopes_visible);
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             ctx.exec("video.finish", json!({"op": "scopes", "shown": ["waveform", "vectorscopeYuv"], "color_space": ctx.state.studio.color_space_mode}), None);
         }
     });
 }
 
+<<<<<<< HEAD
+=======
+/// Dockable `Scopes & Meters` panel (`PanelId::Scopes` in `craft_ui::docking`).
+pub fn draw_scopes_panel(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
+    fill_card(ui, ctx.pal, true, |ui| {
+        draw_scopes_body(ui, ctx, 128.0);
+    });
+}
+
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 /// Graded 32-bit float Waveform / Parade / Vectorscope / Histogram strip (`T37`).
 pub fn draw_graded_scopes_strip(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     if !ctx.state.studio.scopes_visible {
@@ -98,6 +163,7 @@ pub fn draw_graded_scopes_strip(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     }
     ui.add_space(4.0);
     ctx.pal.inset_frame().show(ui, |ui| {
+<<<<<<< HEAD
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing.x = 4.0;
             for (sm, lbl) in [("waveform", "Waveform IRE"), ("parade", "RGB Parade"), ("vectorscopeYuv", "Vectorscope"), ("histogram", "Histogram")] {
@@ -137,6 +203,84 @@ pub fn draw_graded_scopes_strip(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
 
 /// `[Edit]` tab: Track Patching, Trim Tools, Nudge, WSOLA Rate Stretch, Proxies, Markers & Sequence FPS (`T33`–`T35`).
 pub fn draw_edit_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
+=======
+        draw_scopes_body(ui, ctx, 60.0);
+    });
+}
+
+fn draw_scopes_body(ui: &mut Ui, ctx: &mut ViewCtx<'_>, height: f32) {
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
+        for (sm, lbl) in [("waveform", "Waveform IRE"), ("parade", "RGB Parade"), ("vectorscopeYuv", "Vectorscope"), ("histogram", "Histogram")] {
+            let id = format!("fc-scope-mode-{sm}");
+            let sel = ctx.state.studio.scopes_mode == sm;
+            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, lbl, "Select graded linear-light scope").selected(sel)).clicked() {
+                ctx.state.studio.scopes_mode = sm.into();
+                ctx.exec("video.finish", json!({"op": "scopes", "shown": [sm], "color_space": ctx.state.studio.color_space_mode}), None);
+            }
+        }
+    });
+    let w = (ui.available_width() - 4.0).max(180.0);
+    let (rect, resp) = ui.allocate_exact_size(Vec2::new(w, height), Sense::hover());
+    ui.painter().rect(rect, CornerRadius::same(5), Color32::from_rgb(8, 12, 18), Stroke::new(1.0, ctx.pal.border_subtle), StrokeKind::Inside);
+    for ire in [0.25_f32, 0.5, 0.75] {
+        let y = rect.max.y - ire * rect.height();
+        ui.painter().line_segment([Pos2::new(rect.min.x, y), Pos2::new(rect.max.x, y)], Stroke::new(0.7, ctx.pal.border_subtle));
+    }
+    let cols = [ctx.pal.danger, ctx.pal.accent_emerald, ctx.pal.accent_sky];
+    for i in 0..36 {
+        let fx = (i as f32 + 0.5) / 36.0;
+        let x = rect.min.x + fx * rect.width();
+        let amp = ((fx * 9.4 + ctx.state.studio.seek_seconds as f32).sin() * 0.32 + 0.52).clamp(0.1, 0.92);
+        let y = rect.max.y - amp * rect.height();
+        ui.painter().line_segment([Pos2::new(x, rect.max.y - 4.0), Pos2::new(x, y)], Stroke::new(2.0, cols[i % 3].gamma_multiply(0.65)));
+    }
+    ui.painter().text(
+        Pos2::new(rect.min.x + 6.0, rect.min.y + 5.0),
+        Align2::LEFT_TOP,
+        format!("32f Linear · {} · {}", ctx.state.studio.scopes_mode, ctx.state.studio.color_space_mode),
+        FontId::monospace(8.5),
+        ctx.pal.text_muted,
+    );
+    ctx.reg.record("studio-scopes-canvas", "Graded Scopes", &resp, None);
+}
+
+/// `[Edit]` tab: Track Patching, Trim Tools, Nudge, WSOLA Rate Stretch, Proxies, Markers & Sequence FPS (`T33`–`T35`).
+pub fn draw_edit_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
+    if let Some(cid) = ctx.state.studio.selected_clip_id {
+        ctx.pal.inset_frame().show(ui, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                ui.label(
+                    RichText::new(format!("Selected Clip #{cid} ({})", ctx.state.studio.selected_clip_track)).size(11.2).strong().color(ctx.pal.accent_amber),
+                );
+                ui.label(RichText::new(&ctx.state.studio.selected_clip_name).monospace().size(9.5).color(ctx.pal.text_primary));
+            });
+            ui.horizontal_wrapped(|ui| {
+                ui.label(
+                    RichText::new(format!("In {:.2}s → Out {:.2}s", ctx.state.studio.selected_clip_start, ctx.state.studio.selected_clip_end))
+                        .monospace()
+                        .size(9.2)
+                        .color(ctx.pal.text_muted),
+                );
+                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("fc-sel-split", "razor", "Split selected clip at playhead")).clicked() {
+                    ctx.exec("video.finish", json!({"op": "razor", "clip": cid, "seconds": ctx.state.studio.seek_seconds}), Some("Split selected clip"));
+                }
+                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("fc-sel-ripple-del", "rippleDelete", "Ripple delete selected clip & close gap"))
+                    .clicked()
+                {
+                    ctx.exec(
+                        "video.finish",
+                        json!({"op": "ripple_delete", "clip": cid, "track": ctx.state.studio.selected_clip_track}),
+                        Some("Ripple-deleted clip"),
+                    );
+                    ctx.state.studio.selected_clip_id = None;
+                }
+            });
+        });
+        ui.add_space(4.0);
+    }
+
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     ui.label(RichText::new("Track Patching & Sync Lock (T33)").size(11.5).strong().color(ctx.pal.accent_emerald));
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;

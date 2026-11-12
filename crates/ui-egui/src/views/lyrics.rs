@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 //! `Lyrics` view (`#lyrics-workspace-root`): Interactive `EffectCraft` `V3` Kinetic Typography
 //! editor matching `05-lyrics-v3-effectcraft.jpg` and the Argon kinetic lyric concept:
 //! - **Interactive 16:9 Stage**: Selectable, pointer-draggable kinetic words over the scene backdrop
@@ -41,10 +42,41 @@ struct StageWordToken {
     emphasis: bool,
     start_sec: f64,
     end_sec: f64,
+=======
+//! `03 Lyrics` view (`#lyrics-workspace-root`): Interactive `EffectCraft` `V3` Kinetic Typography
+//! stage hosted inside [`craft_ui::docking`]:
+//! - `draw_stage_header`: section publish/save/reload + choreography & move strip.
+//! - `draw_navigator_panel`: `lyrics_dock::draw_moment_film_reel` (`Lyric Moments`).
+//! - `draw_canvas_panel`: interactive 16:9 kinetic lyrics stage + transport + word pills + captions.
+//! - `draw_inspector_panel`: `lyrics_inspector::draw_lyrics_inspector` (`Typography & FX`).
+//! - `draw_timeline_panel`: `lyrics_dock::draw_lyrics_timeline_panel` (`Lyrics Timeline`).
+
+use std::time::Duration;
+
+use egui::epaint::CubicBezierShape;
+use egui::{Align, Align2, Color32, CornerRadius, FontId, Id, LayerId, Layout, Order, Painter, Pos2, Rect, RichText, Sense, Stroke, StrokeKind, Ui, Vec2};
+use serde_json::{Value, json};
+
+use crate::controls::{FilmbarOrientation, FilmbarStyle, fill_card, paint_craft_doc_card, paint_filmbar_frame, paint_local_image, pill_toggle};
+use crate::editorial::{ScrubberSpec, draw_compact_scrubber};
+use crate::state::{UiAction, ViewCtx};
+use crate::views::lyrics_dock::{draw_lyrics_timeline_panel, draw_moment_film_reel};
+use crate::views::lyrics_inspector::{draw_captions_and_template_strip, draw_lyrics_inspector};
+use crate::widgets::{BtnSpec, action_button};
+
+#[derive(Clone)]
+pub struct StageWordToken {
+    pub id: String,
+    pub text: String,
+    pub emphasis: bool,
+    pub start_sec: f64,
+    pub end_sec: f64,
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 }
 
 #[derive(Default, Clone, Copy)]
 struct LyricsTetherAnchors {
+<<<<<<< HEAD
     reel_socket: Option<Pos2>,
     stage_word_left: Option<Pos2>,
     stage_word_bottom: Option<Pos2>,
@@ -89,6 +121,47 @@ pub fn show(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     }
 }
 
+=======
+    stage_word_bottom: Option<Pos2>,
+    token_pill_top: Option<Pos2>,
+}
+
+pub fn draw_stage_header(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
+    let anims = ctx.state.cache.words_doc.pointer("/document/animations").and_then(Value::as_array).cloned().unwrap_or_default();
+    let active =
+        ctx.state.lyrics.selected_anim_id.as_deref().and_then(|id| anims.iter().find(|a| a["animation_id"].as_str() == Some(id))).or_else(|| anims.first());
+    ctx.pal.panel_frame().show(ui, |ui| {
+        ui.set_min_width(ui.available_width());
+        draw_stage_header_bar(ui, ctx, active);
+    });
+}
+
+pub fn draw_navigator_panel(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
+    let _ = draw_moment_film_reel(ui, ctx);
+}
+
+pub fn draw_canvas_panel(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
+    let anims = ctx.state.cache.words_doc.pointer("/document/animations").and_then(Value::as_array).cloned().unwrap_or_default();
+    let active =
+        ctx.state.lyrics.selected_anim_id.as_deref().and_then(|id| anims.iter().find(|a| a["animation_id"].as_str() == Some(id))).or_else(|| anims.first());
+    let tokens = collect_stage_word_tokens(ctx, active);
+    let mut anchors = LyricsTetherAnchors::default();
+    let clip_rect = ui.max_rect();
+    draw_interactive_lyrics_stage_card(ui, ctx, active, &tokens, &mut anchors);
+    if ctx.state.lyrics.show_tethers && ctx.state.active_modal.is_none() {
+        paint_stage_to_pill_tether(ui, ctx, clip_rect, &anchors);
+    }
+}
+
+pub fn draw_inspector_panel(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
+    let _ = draw_lyrics_inspector(ui, ctx);
+}
+
+pub fn draw_timeline_panel(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
+    draw_lyrics_timeline_panel(ui, ctx);
+}
+
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 fn cubic_point(p0: Pos2, c1: Pos2, c2: Pos2, p3: Pos2, t: f32) -> Pos2 {
     let u = 1.0 - t;
     let b0 = u * u * u;
@@ -130,6 +203,7 @@ pub(crate) fn paint_musical_bezier_tether(painter: &Painter, spec: MusicalTether
     }
 }
 
+<<<<<<< HEAD
 fn paint_animated_musical_tethers(ui: &Ui, ctx: &ViewCtx<'_>, clip_rect: Rect, anchors: &LyricsTetherAnchors) {
     let time_sec = ui.ctx().input(|i| i.time);
     let layer = LayerId::new(Order::Foreground, Id::unique("lyrics_musical_tethers"));
@@ -193,6 +267,32 @@ fn paint_animated_musical_tethers(ui: &Ui, ctx: &ViewCtx<'_>, clip_rect: Rect, a
         );
     }
 
+=======
+fn paint_stage_to_pill_tether(ui: &Ui, ctx: &ViewCtx<'_>, clip_rect: Rect, anchors: &LyricsTetherAnchors) {
+    let Some((word_b, pill_t)) = anchors.stage_word_bottom.zip(anchors.token_pill_top) else {
+        return;
+    };
+    if (pill_t.y - word_b.y).abs() <= 10.0 {
+        return;
+    }
+    let time_sec = ui.ctx().input(|i| i.time);
+    let layer = LayerId::new(Order::Foreground, Id::unique("lyrics_musical_tethers"));
+    let painter = ui.ctx().layer_painter(layer).with_clip_rect(clip_rect);
+    let dy = ((pill_t.y - word_b.y) * 0.48).clamp(16.0, 72.0);
+    paint_musical_bezier_tether(
+        &painter,
+        MusicalTetherSpec {
+            from: word_b,
+            to: pill_t,
+            c1: Pos2::new(word_b.x, word_b.y + dy),
+            c2: Pos2::new(pill_t.x, pill_t.y - dy),
+            color_a: ctx.pal.accent_sky,
+            color_b: ctx.pal.accent_amber,
+            time_sec,
+            phase_offset: 0.25,
+        },
+    );
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     ui.ctx().request_repaint_after(Duration::from_millis(48));
 }
 
@@ -205,6 +305,7 @@ fn active_section_revision(ctx: &ViewCtx<'_>) -> Option<(String, u64)> {
     Some((id, rev))
 }
 
+<<<<<<< HEAD
 fn collect_lyric_reel_entries(ctx: &ViewCtx<'_>, anims: &[Value]) -> Vec<LyricReelEntry> {
     let film_frames = ctx.state.active_film_frames();
     if !anims.is_empty() {
@@ -252,6 +353,9 @@ fn collect_lyric_reel_entries(ctx: &ViewCtx<'_>, anims: &[Value]) -> Vec<LyricRe
 
 /// Resolve interactive stage words for the active section — even when `words_doc` has not been aligned yet!
 fn collect_stage_word_tokens(ctx: &ViewCtx<'_>, active: Option<&Value>) -> Vec<StageWordToken> {
+=======
+pub fn collect_stage_word_tokens(ctx: &ViewCtx<'_>, active: Option<&Value>) -> Vec<StageWordToken> {
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     if let Some(arr) = active.and_then(|a| a["words"].as_array()).filter(|a| !a.is_empty()) {
         let anchor = active.and_then(|a| a["song_anchor"].as_f64()).unwrap_or(0.0);
         return arr
@@ -306,7 +410,10 @@ fn collect_stage_word_tokens(ctx: &ViewCtx<'_>, active: Option<&Value>) -> Vec<S
             .collect();
     }
 
+<<<<<<< HEAD
     // Starter kinetic phrase when no song lyric sheet is loaded yet
+=======
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     ["Kinetic", "Lyrics", "Stage", "Ready"]
         .into_iter()
         .enumerate()
@@ -320,6 +427,7 @@ fn collect_stage_word_tokens(ctx: &ViewCtx<'_>, active: Option<&Value>) -> Vec<S
         .collect()
 }
 
+<<<<<<< HEAD
 /// Dedicated Left 35mm Film Reel (`FilmbarOrientation::Vertical`), returning right-edge socket `Pos2` of selected card.
 fn draw_moment_film_reel(ui: &mut Ui, ctx: &mut ViewCtx<'_>) -> Option<Pos2> {
     let anims = ctx.state.cache.words_doc.pointer("/document/animations").and_then(Value::as_array).cloned().unwrap_or_default();
@@ -435,6 +543,8 @@ fn draw_center_kinetic_workspace(ui: &mut Ui, ctx: &mut ViewCtx<'_>, anchors: &m
     }
 }
 
+=======
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 fn draw_stage_header_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>, active: Option<&Value>) {
     let sec_heading = active.and_then(|a| a["scope"]["section"].as_str().or_else(|| a["animation_id"].as_str())).unwrap_or("Lyrics Stage");
     let ecproj_meta = &ctx.state.cache.words_doc["ecproj"];
@@ -449,7 +559,11 @@ fn draw_stage_header_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>, active: Option<&Val
         ui.spacing_mut().item_spacing.x = 4.0;
         ui.label(RichText::new(sec_heading).size(12.2).strong());
         ui.label(RichText::new(ecproj_summary).monospace().size(9.2).color(ctx.pal.text_muted));
+<<<<<<< HEAD
         let _ = pill_toggle(ui, ctx.reg, ctx.pal, "words-tethers-toggle", "♪ Tethers", &mut ctx.state.lyrics.show_tethers, ctx.pal.accent_emerald);
+=======
+        let _ = pill_toggle(ui, ctx.reg, ctx.pal, "words-tethers-toggle", "Tethers", &mut ctx.state.lyrics.show_tethers, ctx.pal.accent_emerald);
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         let _ = pill_toggle(ui, ctx.reg, ctx.pal, "words-warp-toggle", "Warp Arcs", &mut ctx.state.lyrics.show_warp_paths, ctx.pal.accent_sky);
         let _ = pill_toggle(ui, ctx.reg, ctx.pal, "words-flat-preview-toggle", "Flat PNG", &mut ctx.state.lyrics.flat_preview_only, ctx.pal.accent_amber);
 
@@ -465,6 +579,7 @@ fn draw_stage_header_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>, active: Option<&Val
             {
                 ctx.exec("words.letter", json!({"render": true, "studio": true}), Some("Published Kinetic Lyrics onto V3"));
             }
+<<<<<<< HEAD
             if action_button(
                 ui,
                 ctx.reg,
@@ -476,6 +591,14 @@ fn draw_stage_header_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>, active: Option<&Val
                 ctx.exec("workspace.open", json!({"app": "effectcraft", "domain": "lyrics"}), Some("Opened lettering/lyrics.ecproj"));
             }
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("words-save", "save", "Save", "Save lyric section & sync open EffectCraft app")).clicked() {
+=======
+            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("words-open-effectcraft", "external", "Open lettering/lyrics.ecproj in EffectCraft"))
+                .clicked()
+            {
+                ctx.exec("workspace.open", json!({"app": "effectcraft", "domain": "lyrics"}), Some("Opened lettering/lyrics.ecproj"));
+            }
+            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("words-save", "save", "Save lyric section & sync EffectCraft")).clicked() {
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
                 if let Some((anim_id, rev)) = active_section_revision(ctx) {
                     let payload = json!({
                         "animation_id": anim_id,
@@ -493,16 +616,58 @@ fn draw_stage_header_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>, active: Option<&Val
                     ctx.exec("project.autosave", json!({}), Some("Saved lyric draft"));
                 }
             }
+<<<<<<< HEAD
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("words-reload", "refresh", "Reload words.read & words.effects (--control API)")).clicked()
             {
+=======
+            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("words-reload", "refresh", "Reload words.read & words.effects")).clicked() {
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
                 ctx.exec("words.read", json!({}), None);
                 ctx.exec("words.effects", json!({"refresh": true}), None);
             }
         });
     });
+<<<<<<< HEAD
 }
 
 /// Sleek single-line 24px music transport + scrubber + compact source selector (replaces bulky player).
+=======
+
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 3.5;
+        ui.label(RichText::new("Choreo:").monospace().size(9.0).color(ctx.pal.text_muted));
+        for (cid, lbl, tip) in [
+            ("poster", "Poster", "Storybook hero word center-stage"),
+            ("cascade", "Cascade", "Diagonal kinetic staircase"),
+            ("scatter", "Scatter", "Tilted expressive spread"),
+            ("stack", "Stack", "Stepped two-column stack"),
+            ("plain", "Sing-Along", "Clean lyric follow line"),
+        ] {
+            let id = format!("words-choreo-{cid}");
+            let sel = ctx.state.lyrics.choreography == cid;
+            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, lbl, tip).selected(sel)).clicked() {
+                ctx.state.lyrics.choreography = cid.into();
+                ctx.state.dirty_drafts.insert("lyrics".into());
+            }
+        }
+        ui.label(RichText::new("·").color(ctx.pal.border));
+        for (mid, lbl) in [("pop", "Pop"), ("rise", "Rise"), ("loop", "Wave"), ("fall", "Fall"), ("sleep", "Sleep"), ("settle", "Settle")] {
+            let id = format!("words-move-{mid}");
+            let sel = ctx.state.lyrics.move_preset == mid;
+            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, lbl, "Per-word kinetic act").selected(sel)).clicked() {
+                ctx.state.lyrics.move_preset = mid.into();
+                ctx.state.dirty_drafts.insert("lyrics".into());
+            }
+        }
+        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("words-reset-offsets", "undo", "Reset manual stage word offsets")).clicked() {
+            ctx.state.lyrics.word_offsets.clear();
+            ctx.state.lyrics.word_scales.clear();
+            ctx.state.lyrics.word_rotations.clear();
+        }
+    });
+}
+
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 fn draw_compact_music_transport_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     let has_audio = ctx.state.song_audio_path().is_some();
     let play_icon = if ctx.state.audio_playing { "pause" } else { "play" };
@@ -521,7 +686,11 @@ fn draw_compact_music_transport_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             ctx.pal.text_secondary
         }));
 
+<<<<<<< HEAD
         let scrub_w = (ui.available_width() - 312.0).clamp(80.0, 380.0);
+=======
+        let scrub_w = (ui.available_width() - 284.0).clamp(80.0, 420.0);
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         if let Some(sec) = draw_compact_scrubber(
             ui,
             ctx.reg,
@@ -543,6 +712,7 @@ fn draw_compact_music_transport_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                 ctx.state.lyrics.track_source = src.into();
             }
         }
+<<<<<<< HEAD
         let aud_lbl = if ctx.state.lyrics.audio_source == "filmcraft" { "FC Mix" } else { "♪ Song" };
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("words-audio-src-toggle", aud_lbl, "Toggle Song Stem vs FilmCraft Audio Mix")).clicked() {
             ctx.state.lyrics.audio_source = if ctx.state.lyrics.audio_source == "filmcraft" { "song".into() } else { "filmcraft".into() };
@@ -551,11 +721,25 @@ fn draw_compact_music_transport_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             ctx.exec("audio.analyze", json!({}), Some("Aligned song audio"));
         }
         let cap_lbl = if ctx.state.lyrics.draw_enabled { "C1 ▴" } else { "C1 ▾" };
+=======
+        let aud_icon = if ctx.state.lyrics.audio_source == "filmcraft" { "waveform" } else { "music" };
+        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("words-audio-src-toggle", aud_icon, "Toggle Song Stem vs FilmCraft Audio Mix")).clicked() {
+            ctx.state.lyrics.audio_source = if ctx.state.lyrics.audio_source == "filmcraft" { "song".into() } else { "filmcraft".into() };
+        }
+        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("words-align-audio", "sparkles", "Run speech alignment on song audio")).clicked() {
+            ctx.exec("audio.analyze", json!({}), Some("Aligned song audio"));
+        }
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         if action_button(
             ui,
             ctx.reg,
             ctx.pal,
+<<<<<<< HEAD
             BtnSpec::label_only("words-captions-drawer-toggle", cap_lbl, "Toggle C1 Broadcast Captions & .ectemplate").selected(ctx.state.lyrics.draw_enabled),
+=======
+            BtnSpec::icon_only("words-captions-drawer-toggle", "captionsCc", "Toggle C1 Broadcast Captions (craft-captions) & .ectemplate")
+                .selected(ctx.state.lyrics.draw_enabled),
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         )
         .clicked()
         {
@@ -564,8 +748,12 @@ fn draw_compact_music_transport_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     });
 }
 
+<<<<<<< HEAD
 /// Interactive bracketed word token strip (`[ All · the · pterodactyls · were · sleeping ✨ · very · still. ]`).
 fn draw_bracketed_word_token_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>, tokens: &[StageWordToken], anchors: &mut LyricsTetherAnchors) {
+=======
+fn draw_native_word_token_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>, tokens: &[StageWordToken], anchors: &mut LyricsTetherAnchors) {
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     let active_wid = ctx
         .state
         .lyrics
@@ -577,6 +765,7 @@ fn draw_bracketed_word_token_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>, tokens: &[S
     ctx.pal.inset_frame().show(ui, |ui| {
         ui.set_min_width(ui.available_width());
         ui.horizontal_wrapped(|ui| {
+<<<<<<< HEAD
             ui.spacing_mut().item_spacing.x = 3.5;
             ui.spacing_mut().item_spacing.y = 3.0;
             ui.label(RichText::new("[").monospace().size(12.0).strong().color(ctx.pal.accent_emerald));
@@ -597,6 +786,23 @@ fn draw_bracketed_word_token_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>, tokens: &[S
                     ctx.pal,
                     BtnSpec::label_only(&btn_id, &label, "Click to select word on stage & scrub to its beat").selected(sel),
                 );
+=======
+            ui.spacing_mut().item_spacing.x = 4.0;
+            ui.spacing_mut().item_spacing.y = 3.0;
+            ui.label(RichText::new("WORDS:").monospace().size(9.0).color(ctx.pal.text_muted));
+            for (idx, tok) in tokens.iter().enumerate() {
+                let sel = active_wid.as_deref() == Some(tok.id.as_str());
+                let has_fx = ctx.state.lyrics.word_effects.contains_key(&tok.id);
+                let btn_id = format!("words-token-pill-{idx}");
+                let spec = if has_fx {
+                    BtnSpec::new(&btn_id, "sparkles", &tok.text, "Select word on stage & scrub to beat").selected(sel)
+                } else if tok.emphasis {
+                    BtnSpec::new(&btn_id, "music", &tok.text, "Select emphasized word on stage").selected(sel)
+                } else {
+                    BtnSpec::label_only(&btn_id, &tok.text, "Select word on stage & scrub to beat").selected(sel)
+                };
+                let resp = action_button(ui, ctx.reg, ctx.pal, spec);
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
                 if sel {
                     anchors.token_pill_top = Some(Pos2::new(resp.rect.center().x, resp.rect.min.y));
                 }
@@ -605,11 +811,15 @@ fn draw_bracketed_word_token_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>, tokens: &[S
                     ctx.state.lyrics.scrub_seconds = tok.start_sec;
                     ctx.push(UiAction::SeekAudio(tok.start_sec));
                 }
+<<<<<<< HEAD
                 if idx + 1 < tokens.len() {
                     ui.label(RichText::new("·").monospace().color(ctx.pal.text_muted));
                 }
             }
             ui.label(RichText::new("]").monospace().size(12.0).strong().color(ctx.pal.accent_emerald));
+=======
+            }
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         });
     });
 }
@@ -618,6 +828,7 @@ fn choreography_base_pos(choreo: &str, idx: usize, total: usize, emphasis: bool)
     let n = total.max(1) as f32;
     let t = if total <= 1 { 0.5 } else { (idx as f32) / ((total - 1) as f32) };
     match choreo {
+<<<<<<< HEAD
         "cascade" => {
             let nx = 0.18 + t * 0.64;
             let ny = 0.24 + t * 0.52;
@@ -629,6 +840,13 @@ fn choreography_base_pos(choreo: &str, idx: usize, total: usize, emphasis: bool)
             let ny = 0.26 + row * 0.22;
             let rot = if idx.is_multiple_of(2) { -6.0 } else { 5.5 };
             (nx, ny, rot)
+=======
+        "cascade" => (0.18 + t * 0.64, 0.24 + t * 0.52, if emphasis { -4.0 } else { 0.0 }),
+        "scatter" => {
+            let row = (idx % 3) as f32;
+            let rot = if idx.is_multiple_of(2) { -6.0 } else { 5.5 };
+            (0.17 + t * 0.66, 0.26 + row * 0.22, rot)
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         }
         "stack" => {
             let col = (idx % 2) as f32;
@@ -644,7 +862,10 @@ fn choreography_base_pos(choreo: &str, idx: usize, total: usize, emphasis: bool)
             (nx, ny, 0.0)
         }
         _ => {
+<<<<<<< HEAD
             // "poster" — Storybook poster layout matching Pterodactyl Song (`All the pterodactyls were / sleeping / very still.`)
+=======
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             if total >= 5 {
                 let hero_idx = total / 2;
                 if idx < hero_idx {
@@ -673,6 +894,7 @@ fn draw_interactive_lyrics_stage_card(
     anchors: &mut LyricsTetherAnchors,
 ) {
     let panel = fill_card(ui, ctx.pal, true, |ui| {
+<<<<<<< HEAD
         draw_stage_header_bar(ui, ctx, active);
 
         let captions_extra = if ctx.state.lyrics.draw_enabled { 56.0 } else { 0.0 };
@@ -682,6 +904,19 @@ fn draw_interactive_lyrics_stage_card(
         let max_stage_h = (avail.y - reserved_below).clamp(132.0, 252.0);
         let stage_h = ((avail.x - 8.0) * 9.0 / 16.0).min(max_stage_h).max(126.0);
         let stage_w = (stage_h * 16.0 / 9.0).min((avail.x - 4.0).max(180.0));
+=======
+        let captions_extra = if ctx.state.lyrics.draw_enabled { 46.0 } else { 0.0 };
+        let avail = ui.available_size();
+        let reserved_below = 62.0 + captions_extra;
+        let max_h = (avail.y - reserved_below).max(164.0);
+        let max_w = (avail.x - 4.0).max(220.0);
+        let mut stage_w = max_w;
+        let mut stage_h = stage_w * 9.0 / 16.0;
+        if stage_h > max_h {
+            stage_h = max_h;
+            stage_w = (stage_h * 16.0 / 9.0).min(max_w);
+        }
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 
         ui.vertical_centered(|ui| {
             let (outer_stage, stage_resp) = ui.allocate_exact_size(Vec2::new(stage_w, stage_h), Sense::click());
@@ -699,7 +934,11 @@ fn draw_interactive_lyrics_stage_card(
             ctx.reg.record("words-stage", "Lyrics Interactive Stage", &stage_resp, None);
 
             let film_bg = ctx.state.film_frame_at_time(ctx.state.lyrics.scrub_seconds);
+<<<<<<< HEAD
             let scene_bg = active.and_then(|a| a["background_path"].as_str()).or(film_bg.as_deref());
+=======
+            let scene_bg = active.and_then(|a| a["background_path"].as_str()).filter(|p| !p.is_empty()).or(film_bg.as_deref());
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             let rendered_frame =
                 ctx.state.cache.last_words_frame.as_deref().or_else(|| active.and_then(|a| a["preview_frame"].as_str().or_else(|| a["lyrics_frame"].as_str())));
             let bg = if ctx.state.lyrics.backdrop_mode == "paper" { ctx.pal.stage_paper } else { ctx.pal.bg_stage };
@@ -720,12 +959,18 @@ fn draw_interactive_lyrics_stage_card(
                     ui.painter().rect_filled(stage_rect, CornerRadius::same(4), bg);
                 }
             } else {
+<<<<<<< HEAD
                 // Interactive Stage Mode (default): draw clean scene backdrop (NOT baked text PNG) + live editable words!
+=======
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
                 if ctx.state.lyrics.backdrop_mode == "scene" {
                     if !paint_local_image(ui, stage_rect, scene_bg, bg, 4) {
                         ui.painter().rect_filled(stage_rect, CornerRadius::same(4), bg);
                     }
+<<<<<<< HEAD
                     // Subtle cinematic scrim so interactive typography & handles pop clearly over bright scenes
+=======
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
                     ui.painter().rect_filled(stage_rect, CornerRadius::same(4), Color32::from_rgba_unmultiplied(7, 11, 18, 92));
                 } else {
                     ui.painter().rect_filled(stage_rect, CornerRadius::same(4), bg);
@@ -736,7 +981,11 @@ fn draw_interactive_lyrics_stage_card(
 
         ui.add_space(2.0);
         draw_compact_music_transport_bar(ui, ctx);
+<<<<<<< HEAD
         draw_bracketed_word_token_bar(ui, ctx, tokens, anchors);
+=======
+        draw_native_word_token_bar(ui, ctx, tokens, anchors);
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 
         if ctx.state.lyrics.draw_enabled {
             draw_captions_and_template_strip(ui, ctx);
@@ -751,7 +1000,10 @@ fn paint_interactive_stage_words(ui: &mut Ui, ctx: &mut ViewCtx<'_>, stage_rect:
         return;
     }
 
+<<<<<<< HEAD
     // Subtle rule-of-thirds stage guide
+=======
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     let guide_col = Color32::from_rgba_unmultiplied(140, 175, 210, 18);
     for frac in [1.0_f32 / 3.0, 2.0_f32 / 3.0] {
         let gx = stage_rect.min.x + stage_rect.width() * frac;
@@ -766,11 +1018,18 @@ fn paint_interactive_stage_words(ui: &mut Ui, ctx: &mut ViewCtx<'_>, stage_rect:
     }
 
     let choreo = ctx.state.lyrics.choreography.clone();
+<<<<<<< HEAD
     let base_font_scale = (ctx.state.lyrics.font_size as f32 / 56.0).clamp(0.55, 1.85);
     let mut centers: Vec<Pos2> = Vec::with_capacity(tokens.len());
     let mut boxes: Vec<Rect> = Vec::with_capacity(tokens.len());
 
     // First compute word centers & bounding rects so we can draw inter-word warp arcs underneath glyphs
+=======
+    let base_font_scale = (ctx.state.lyrics.font_size as f32 / 56.0).clamp(0.55, 1.95);
+    let mut centers: Vec<Pos2> = Vec::with_capacity(tokens.len());
+    let mut boxes: Vec<Rect> = Vec::with_capacity(tokens.len());
+
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     for (idx, tok) in tokens.iter().enumerate() {
         let (bx, by, _) = choreography_base_pos(&choreo, idx, tokens.len(), tok.emphasis);
         let [dx, dy] = ctx.state.lyrics.word_offsets.get(&tok.id).copied().unwrap_or([0.0, 0.0]);
@@ -778,28 +1037,43 @@ fn paint_interactive_stage_words(ui: &mut Ui, ctx: &mut ViewCtx<'_>, stage_rect:
         let cx = stage_rect.min.x + ((bx + dx).clamp(0.08, 0.92)) * stage_rect.width();
         let cy = stage_rect.min.y + ((by + dy).clamp(0.12, 0.88)) * stage_rect.height();
 
+<<<<<<< HEAD
         let hero_mult = if tok.emphasis || (choreo == "poster" && idx == tokens.len() / 2) { 1.68 } else { 0.96 };
         let px = (19.0 * hero_mult * base_font_scale * w_scale * (stage_rect.height() / 210.0).clamp(0.75, 1.35)).clamp(12.0, 56.0);
         let galley = ui.painter().layout_no_wrap(tok.text.clone(), FontId::proportional(px), Color32::WHITE);
         let pad = Vec2::new(12.0, 6.0);
+=======
+        let hero_mult = if tok.emphasis || (choreo == "poster" && idx == tokens.len() / 2) { 1.72 } else { 0.98 };
+        let px = (20.0 * hero_mult * base_font_scale * w_scale * (stage_rect.height() / 230.0).clamp(0.80, 1.65)).clamp(13.0, 72.0);
+        let galley = ui.painter().layout_no_wrap(tok.text.clone(), FontId::proportional(px), Color32::WHITE);
+        let pad = Vec2::new(14.0, 7.0);
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         let wrect = Rect::from_center_size(Pos2::new(cx, cy), galley.size() + pad);
         centers.push(Pos2::new(cx, cy));
         boxes.push(wrect);
     }
 
+<<<<<<< HEAD
     // Draw curved inter-word kinetic warp paths (`Warp Arcs`) across the stage
+=======
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     if ctx.state.lyrics.show_warp_paths && centers.len() >= 2 {
         for i in 0..(centers.len() - 1) {
             let p0 = centers[i];
             let p3 = centers[i + 1];
             let mid_x = (p0.x + p3.x) * 0.5;
+<<<<<<< HEAD
             let arc_lift = if i % 2 == 0 { -22.0 } else { 18.0 };
+=======
+            let arc_lift = if i % 2 == 0 { -24.0 } else { 20.0 };
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             let c1 = Pos2::new(mid_x, p0.y.min(p3.y) + arc_lift);
             let c2 = Pos2::new(mid_x, p0.y.max(p3.y) + arc_lift * 0.5);
             ui.painter().add(CubicBezierShape::from_points_stroke(
                 [p0, c1, c2, p3],
                 false,
                 Color32::TRANSPARENT,
+<<<<<<< HEAD
                 Stroke::new(1.25, ctx.pal.accent_sky.gamma_multiply(0.42)),
             ));
             let mid_pt = cubic_point(p0, c1, c2, p3, 0.5);
@@ -808,6 +1082,15 @@ fn paint_interactive_stage_words(ui: &mut Ui, ctx: &mut ViewCtx<'_>, stage_rect:
     }
 
     // Now draw & interact with every stage word + transform handles on the selected word!
+=======
+                Stroke::new(1.3, ctx.pal.accent_sky.gamma_multiply(0.42)),
+            ));
+            let mid_pt = cubic_point(p0, c1, c2, p3, 0.5);
+            ui.painter().circle_filled(mid_pt, 2.3, ctx.pal.accent_amber.gamma_multiply(0.72));
+        }
+    }
+
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     let scrub_t = ctx.state.lyrics.scrub_seconds;
     for (idx, tok) in tokens.iter().enumerate() {
         let wrect = boxes[idx];
@@ -835,7 +1118,11 @@ fn paint_interactive_stage_words(ui: &mut Ui, ctx: &mut ViewCtx<'_>, stage_rect:
             }
         }
 
+<<<<<<< HEAD
         let font_px = (wrect.height() - 6.0).clamp(12.0, 56.0);
+=======
+        let font_px = (wrect.height() - 7.0).clamp(13.0, 72.0);
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         let fg = if is_sung_now {
             ctx.pal.accent_emerald
         } else if tok.emphasis || idx == tokens.len() / 2 {
@@ -846,12 +1133,19 @@ fn paint_interactive_stage_words(ui: &mut Ui, ctx: &mut ViewCtx<'_>, stage_rect:
             ctx.pal.text_primary
         };
 
+<<<<<<< HEAD
         // Soft glow / shadow behind stage lettering
+=======
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         if has_glow_or_emphasis(fx_opt.as_deref(), is_sel, is_sung_now) {
             ui.painter().rect_filled(wrect.expand(2.0), CornerRadius::same(6), fg.gamma_multiply(if is_sel { 0.14 } else { 0.08 }));
         }
         ui.painter().text(
+<<<<<<< HEAD
             wrect.center() + Vec2::new(1.8, 2.0),
+=======
+            wrect.center() + Vec2::new(2.0, 2.2),
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             Align2::CENTER_CENTER,
             &tok.text,
             FontId::proportional(font_px),
@@ -862,7 +1156,11 @@ fn paint_interactive_stage_words(ui: &mut Ui, ctx: &mut ViewCtx<'_>, stage_rect:
         if let Some(ref fx_id) = fx_opt {
             let short_fx = fx_id.rsplit('.').next().unwrap_or(fx_id);
             let tag_pos = Pos2::new(wrect.max.x, wrect.min.y - 5.0);
+<<<<<<< HEAD
             ui.painter().text(tag_pos, Align2::RIGHT_BOTTOM, format!("✨ {short_fx}"), FontId::monospace(8.2), ctx.pal.accent_emerald);
+=======
+            ui.painter().text(tag_pos, Align2::RIGHT_BOTTOM, short_fx, FontId::monospace(8.4), ctx.pal.accent_emerald);
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         }
 
         if is_sel {
@@ -913,8 +1211,12 @@ fn draw_selected_word_gizmo(
         ctx.state.dirty_drafts.insert("lyrics".into());
     }
 
+<<<<<<< HEAD
     let hud_txt =
         if rot_deg.abs() > 0.4 { format!("♪ {:.2}s · {:.0}°", tok.start_sec, rot_deg) } else { format!("♪ {:.2}s · drag to place", tok.start_sec) };
+=======
+    let hud_txt = if rot_deg.abs() > 0.4 { format!("{:.2}s · {:.0}°", tok.start_sec, rot_deg) } else { format!("{:.2}s · drag to place", tok.start_sec) };
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     ui.painter().text(
         Pos2::new(wrect.center().x, (wrect.max.y + 8.5).min(stage_rect.max.y - 5.0)),
         Align2::CENTER_CENTER,
@@ -923,14 +1225,19 @@ fn draw_selected_word_gizmo(
         sel_col,
     );
 
+<<<<<<< HEAD
     anchors.stage_word_left = Some(Pos2::new(wrect.min.x, wrect.center().y));
     anchors.stage_word_bottom = Some(Pos2::new(wrect.center().x, wrect.max.y));
     anchors.stage_word_right = Some(Pos2::new(wrect.max.x, wrect.center().y));
+=======
+    anchors.stage_word_bottom = Some(Pos2::new(wrect.center().x, wrect.max.y));
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 }
 
 fn has_glow_or_emphasis(fx_id: Option<&str>, is_sel: bool, is_sung_now: bool) -> bool {
     is_sel || is_sung_now || fx_id.is_some_and(|id| id.contains("glow") || id.contains("sweep") || id.contains("star"))
 }
+<<<<<<< HEAD
 
 /// Lower center dock: Choreography & Moves + Quick Craft Effects (`words.effects` API) + Interactive Bezier Easing + Compact Beat Strip.
 fn draw_choreography_fx_and_beat_dock(
@@ -1200,3 +1507,5 @@ fn draw_compact_beat_and_words_strip(ui: &mut Ui, ctx: &mut ViewCtx<'_>, anims: 
         ctx.push(UiAction::SeekAudio(scrub));
     }
 }
+=======
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)

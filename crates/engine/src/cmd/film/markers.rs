@@ -24,6 +24,10 @@ fn map_fc_color_to_ec_label(color: &str) -> &'static str {
     }
 }
 
+<<<<<<< HEAD
+=======
+#[allow(dead_code)]
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 fn map_ec_label_to_fc_color(label: &str) -> &'static str {
     match label.trim().to_ascii_lowercase().as_str() {
         "lavender" | "purple" => "Lavender",
@@ -37,7 +41,11 @@ fn map_ec_label_to_fc_color(label: &str) -> &'static str {
     }
 }
 
+<<<<<<< HEAD
 pub(crate) fn extract_synced_markers(dir: &Path, seq: Option<&Value>) -> Vec<Value> {
+=======
+pub(crate) fn extract_synced_markers(_dir: &Path, seq: Option<&Value>) -> Vec<Value> {
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     let mut out: Vec<Value> = Vec::new();
 
     if let Some(seq_val) = seq
@@ -70,6 +78,7 @@ pub(crate) fn extract_synced_markers(dir: &Path, seq: Option<&Value>) -> Vec<Val
         }
     }
 
+<<<<<<< HEAD
     let ec_sidecar = dir.join("lettering/.lyrics.ecproj.steps.json");
     if let Ok(raw) = std::fs::read_to_string(&ec_sidecar)
         && let Ok(val) = serde_json::from_str::<Value>(&raw)
@@ -96,6 +105,8 @@ pub(crate) fn extract_synced_markers(dir: &Path, seq: Option<&Value>) -> Vec<Val
         }));
     }
 
+=======
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     out.sort_by_key(|m| m["start_tick"].as_i64().unwrap_or(0));
     out
 }
@@ -173,7 +184,11 @@ fn markers_add(f: &super::Film, ecproj: &Path, p: &Value) -> Result<Value> {
                 ]
             }
         });
+<<<<<<< HEAD
         let _ = crate::native_media::write_staged_steps(ecproj, &json!({"id": "markers.set", "params": ec_params}));
+=======
+        let _ = crate::craft_api::execute_in_live_app("effectcraft", "markers.set", ec_params);
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     }
 
     let seq = if f.project.is_file() { execute(&f.project, "sequence.inspect", json!({})).ok() } else { None };
@@ -220,8 +235,36 @@ fn markers_export_csv(f: &super::Film, p: &Value) -> Result<Value> {
     if let Some(parent) = out.parent() {
         std::fs::create_dir_all(parent)?;
     }
+<<<<<<< HEAD
     craft_atomic::atomic_write(&out, b"Marker Name,Description,In,Out,Duration,Marker Type\n")?;
     let result = json!({"exported": out});
+=======
+    let doc = super::fcproj_doc::load_fcproj(&project);
+    let rate = crate::time::FrameRate::FPS_24;
+    let mut csv = String::from("Marker Name,Description,In,Out,Duration,Marker Type\n");
+    for m in doc["sequence"]["markers"].as_array().into_iter().flatten() {
+        let st = parse_raw_tick(&m["start"]).unwrap_or(Tick::ZERO);
+        let dur = parse_raw_tick(&m["duration"]).unwrap_or(Tick::ZERO);
+        let name = m["name"].as_str().unwrap_or("Marker").replace('"', "");
+        let desc = m["comment"].as_str().unwrap_or("").replace('"', "");
+        let kind = m["kind"].as_str().unwrap_or("Comment");
+        // TODO(agent): verify craft-timeline README for SMPTE formatting; d23f5f3 uses format_timecode_frames(frame, rate, drop_frame)
+        let st_frame = rate.frame_at(st);
+        let out_frame = rate.frame_at(st + dur);
+        let dur_frame = rate.frame_at(dur);
+        csv.push_str(&format!(
+            "\"{}\",\"{}\",{},{},{},{}\n",
+            name.replace('"', ""),
+            desc.replace('"', ""),
+            craft_timeline::time::format_timecode_frames(st_frame, rate, false),
+            craft_timeline::time::format_timecode_frames(out_frame, rate, false),
+            craft_timeline::time::format_timecode_frames(dur_frame, rate, false),
+            kind,
+        ));
+    }
+    craft_atomic::atomic_write(&out, csv.as_bytes())?;
+    let result = json!({"exported": out, "bytes": csv.len()});
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     Ok(json!({
         "ok": true,
         "csv_path": out,
@@ -387,9 +430,15 @@ fn markers_delete(f: &super::Film, ecproj: &Path, action: &str, p: &Value) -> Re
         }
         if ecproj.is_file() {
             if let Some(ec_idx) = p.get("ec_index").or_else(|| p.get("index")).and_then(Value::as_u64) {
+<<<<<<< HEAD
                 let _ = crate::native_media::write_staged_steps(ecproj, &json!({"id": "markers.delete", "params": {"index": ec_idx}}));
             } else if let Some(at_sec) = p.get("time_sec").or_else(|| p.get("seconds")).and_then(Value::as_f64) {
                 let _ = crate::native_media::write_staged_steps(ecproj, &json!({"id": "markers.delete", "params": {"at": at_sec}}));
+=======
+                let _ = crate::craft_api::execute_in_live_app("effectcraft", "markers.delete", json!({"index": ec_idx}));
+            } else if let Some(at_sec) = p.get("time_sec").or_else(|| p.get("seconds")).and_then(Value::as_f64) {
+                let _ = crate::craft_api::execute_in_live_app("effectcraft", "markers.delete", json!({"at": at_sec}));
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             }
         }
     }
@@ -398,6 +447,7 @@ fn markers_delete(f: &super::Film, ecproj: &Path, action: &str, p: &Value) -> Re
     Ok(json!({"ok": true, "markers": markers}))
 }
 
+<<<<<<< HEAD
 fn markers_interchange(f: &super::Film, default_ecproj: &Path, p: &Value) -> Result<Value> {
     let format = p["format"].as_str().unwrap_or("otio");
     let raw_dir = p["direction"].as_str().unwrap_or("film_to_effect");
@@ -451,6 +501,8 @@ fn markers_interchange(f: &super::Film, default_ecproj: &Path, p: &Value) -> Res
     }))
 }
 
+=======
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 pub fn cmd_video_markers(s: &mut Session, p: &Value) -> Result<Value> {
     let f = film(s)?;
     let ecproj = f.dir.join("lettering/lyrics.ecproj");
@@ -474,7 +526,11 @@ pub fn cmd_video_markers(s: &mut Session, p: &Value) -> Result<Value> {
         "export_csv" | "csv" => markers_export_csv(&f, p),
         "seed" | "seed_from_lyrics" => markers_seed(&f, &ecproj, p),
         "delete" | "clear" => markers_delete(&f, &ecproj, action, p),
+<<<<<<< HEAD
         "interchange" => markers_interchange(&f, &ecproj, p),
+=======
+        "interchange" => super::timeline_interchange::run_markers_interchange(s, &f, &ecproj, p),
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         other => Err(EngineError::InvalidParams(format!(
             "unknown video.markers action `{other}`; expected list, add, edit, palette, export_csv, seed, delete, clear, or interchange"
         ))),

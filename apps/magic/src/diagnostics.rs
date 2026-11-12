@@ -4,7 +4,11 @@
 
 use std::path::PathBuf;
 
+<<<<<<< HEAD
 use magic::Session;
+=======
+use magic_engine::Session;
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 use magic_ui_egui::{AccentChoice, InterfaceStyle, ThemeMode, UiShellState};
 use serde_json::{Value, json};
 
@@ -46,7 +50,11 @@ pub fn build_sanitized_diagnostics(session: &mut Session, ui_state: &mut UiShell
         "version": env!("CARGO_PKG_VERSION"),
         "os": std::env::consts::OS,
         "arch": std::env::consts::ARCH,
+<<<<<<< HEAD
         "renderer": "eframe-wgpu (storytold/egui 0.37)",
+=======
+        "renderer": "eframe-wgpu (storytold/egui)",
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         "last_render_ms": last_render_ms,
         "view": ui_state.effective_view().as_id(),
         "interface_style": ui_state.interface_style.as_str(),
@@ -95,6 +103,12 @@ pub fn hydrate_prefs_and_ai(session: &mut Session, ui_state: &mut UiShellState) 
             ui_state.lyrics.font_dir_extra = fdirs.to_owned();
             apply_app_font_dirs(fdirs);
         }
+<<<<<<< HEAD
+=======
+        if let Some(fp_url) = p.pointer("/fonts/preview_service_url").and_then(Value::as_str).filter(|u| !u.trim().is_empty()) {
+            ui_state.font_preview_url = fp_url.to_owned();
+        }
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     }
     if let Ok(ai) = session.execute("ai.status", json!({})) {
         sync_ai_ui_from_status(ui_state, &ai);
@@ -158,6 +172,12 @@ fn hydrate_open_project_caches(session: &mut Session, ui_state: &mut UiShellStat
     if let Ok(lyr) = session.execute("song.lyrics", json!({})) {
         ui_state.cache.song_lyrics = lyr;
     }
+<<<<<<< HEAD
+=======
+    if let Ok(wf) = session.execute("song.waveform", json!({"bins": 240})) {
+        ui_state.cache.song_waveform = wf;
+    }
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     if let Ok(pages) = session.execute("storyboard.pages", json!({"full": true})) {
         ui_state.cache.storyboard_pages = pages;
     }
@@ -229,8 +249,14 @@ pub fn refresh_cached_state(session: &mut Session, ui_state: &mut UiShellState, 
 }
 
 pub fn open_https_url(ctx: &egui::Context, url: &str) {
+<<<<<<< HEAD
     if url.starts_with("https://") {
         ctx.open_url(egui::OpenUrl::new_tab(url));
+=======
+    let trimmed = url.trim();
+    if trimmed.starts_with("https://") && !trimmed.chars().any(char::is_control) {
+        ctx.open_url(egui::OpenUrl::new_tab(trimmed));
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     }
 }
 

@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 //! Exact rational time base (`254_016_000_000` ticks per second) shared across ArtCraft timelines.
 //!
 //! Matches `2^10 * 3^4 * 5^6 * 7^2 * 11 = 254_016_000_000` ticks/s without linking sibling
@@ -216,6 +217,17 @@ impl TimeRange {
     }
 }
 
+=======
+//! Exact rational time base (`254_016_000_000` ticks per second), broadcast frame-rate snapping,
+//! and SMPTE / feet+frames timecode helpers re-exported directly from [`craft_timeline::time`]
+//! and [`craft_timeline::rate`].
+
+pub use craft_timeline::rate;
+pub use craft_timeline::time::*;
+
+use serde_json::{Value, json};
+
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 pub fn parse_tick(v: &Value) -> Option<Tick> {
     if let Some(t) = v.get("ticks").and_then(Value::as_i64) {
         return Some(Tick(t));
@@ -256,7 +268,11 @@ pub fn parse_frame_rate(v: &Value) -> Option<FrameRate> {
             "60" => Some(FrameRate::FPS_60),
             "119.88" => Some(FrameRate::FPS_119_88),
             "120" => Some(FrameRate::FPS_120),
+<<<<<<< HEAD
             _ => trimmed.parse::<i64>().ok().filter(|&n| n > 0).map(|n| FrameRate::new(n, 1)),
+=======
+            _ => trimmed.parse::<f64>().ok().filter(|&f| f.is_finite() && f > 0.0).map(FrameRate::from_f64),
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         };
     }
     if let Some(n) = v.as_i64() {

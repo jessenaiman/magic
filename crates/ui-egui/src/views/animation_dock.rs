@@ -1,12 +1,22 @@
+<<<<<<< HEAD
 //! `04 Animations` bottom Theatre, Property-Reveal Keys, & Value/Speed Cubic Bezier Graph Editor
 //! dock (`Sheet 08` Zone B — `T19` & `T20`), with live `EffectCraft` ↔ `FilmCraft` track lane sync.
+=======
+//! `02 Animations` bottom Theatre, Property-Reveal Keys, & Value/Speed Cubic Bezier Graph Editor
+//! dock (`Sheet 08` Zone B — `T19` & `T20`), built on the shared `draw_standard_timeline`
+//! (`TimelineFlavor::EffectCraft`).
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 
 use egui::{Align, Align2, Color32, CornerRadius, FontId, Layout, Pos2, RichText, Sense, Stroke, StrokeKind, Ui, Vec2};
 use serde_json::{Value, json};
 
 use crate::controls::{ScalarSpec, fill_card, paint_cubic_bezier, ring_slider_h};
 use crate::state::{UiAction, ViewCtx};
+<<<<<<< HEAD
 use crate::timeline::{CraftTimelineLane, CraftTimelineSpan, draw_craft_timeline};
+=======
+use crate::timeline::{CraftTimelineLane, CraftTimelineSpan, StandardTimelineSpec, TimelineFlavor, draw_standard_timeline};
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 use crate::widgets::{BtnSpec, action_button};
 
 /// Bottom dock (`[Theatre] [Keys / Props] [Graph Editor]`) covering `T19` & `T20`.
@@ -26,12 +36,16 @@ pub fn draw_theatre_dock(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str) {
                 }
             }
             let dur = active_timeline_span(ctx);
+<<<<<<< HEAD
             ui.label(
                 RichText::new(format!("RANGE 0.0s–{dur:.1}s · {}", ctx.state.animation.track_source.to_ascii_uppercase()))
                     .monospace()
                     .size(9.5)
                     .color(ctx.pal.text_muted),
             );
+=======
+            ui.label(RichText::new(format!("RANGE 0.0s–{dur:.1}s · EFFECTCRAFT")).monospace().size(9.5).color(ctx.pal.text_muted));
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 if action_button(
                     ui,
@@ -125,15 +139,25 @@ fn draw_theatre_clips_and_timeline(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str
     if show_fc {
         lanes.push(CraftTimelineLane {
             code: "V1",
+<<<<<<< HEAD
             title: "FC V1 / AUDIO",
             color: ctx.pal.accent_emerald,
             filmbar: true,
+=======
+            title: "SCENE REF",
+            color: ctx.pal.accent_emerald,
+            filmbar: false,
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             waveform: has_audio,
             dirty: false,
             spans: Vec::new(),
             keyframes: &[],
             frames: &film_frames,
+<<<<<<< HEAD
             empty_hint: "FilmCraft V1 sequence + underlying song audio",
+=======
+            empty_hint: "Scene reference + song audio",
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         });
     }
     lanes.push(CraftTimelineLane {
@@ -143,7 +167,11 @@ fn draw_theatre_clips_and_timeline(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str
         filmbar: false,
         waveform: !show_fc && has_audio,
         dirty: ctx.state.dirty_tracks.contains("V2"),
+<<<<<<< HEAD
         spans: vec![CraftTimelineSpan { start_sec: 0.0, end_sec: cyc_dur, label: act_lbl }],
+=======
+        spans: vec![CraftTimelineSpan::new(0.0, cyc_dur, act_lbl)],
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         keyframes: &motion_keys,
         frames: &[],
         empty_hint: "",
@@ -155,14 +183,32 @@ fn draw_theatre_clips_and_timeline(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str
         filmbar: false,
         waveform: false,
         dirty: false,
+<<<<<<< HEAD
         spans: vec![CraftTimelineSpan { start_sec: 0.0, end_sec: cyc_dur, label: part_lbl }],
+=======
+        spans: vec![CraftTimelineSpan::new(0.0, cyc_dur, part_lbl)],
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         keyframes: &pose_keys,
         frames: &[],
         empty_hint: "",
     });
 
     let mut scrub = ctx.state.animation.scrub_seconds;
+<<<<<<< HEAD
     if draw_craft_timeline(ui, ctx, "anim-theatre", dur, &mut scrub, &lanes) {
+=======
+    let tl_out = draw_standard_timeline(
+        ui,
+        ctx,
+        StandardTimelineSpec { id_prefix: "anim-theatre", flavor: TimelineFlavor::EffectCraft, total_dur_sec: dur, fps: 24.0, in_out: None },
+        &mut scrub,
+        &lanes,
+    );
+    if tl_out.toggled_play {
+        ctx.push(UiAction::ToggleAudio);
+    }
+    if tl_out.scrubbed {
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         ctx.state.animation.scrub_seconds = scrub;
         ctx.push(UiAction::SeekAudio(scrub));
     }
@@ -224,7 +270,21 @@ fn draw_property_reveal_dock(ui: &mut Ui, ctx: &mut ViewCtx<'_>, _cid: &str) {
         },
     ];
     let mut scrub = ctx.state.animation.scrub_seconds;
+<<<<<<< HEAD
     if draw_craft_timeline(ui, ctx, "anim-keys", dur, &mut scrub, &lanes) {
+=======
+    let tl_out = draw_standard_timeline(
+        ui,
+        ctx,
+        StandardTimelineSpec { id_prefix: "anim-keys", flavor: TimelineFlavor::EffectCraft, total_dur_sec: dur, fps: 24.0, in_out: None },
+        &mut scrub,
+        &lanes,
+    );
+    if tl_out.toggled_play {
+        ctx.push(UiAction::ToggleAudio);
+    }
+    if tl_out.scrubbed {
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         ctx.state.animation.scrub_seconds = scrub;
         ctx.push(UiAction::SeekAudio(scrub));
     }
@@ -298,11 +358,16 @@ fn draw_bezier_graph_editor_dock(ui: &mut Ui, ctx: &mut ViewCtx<'_>, _cid: &str)
         let fx = (step as f32) * 0.25;
         let x = pad.min.x + fx * pad.width();
         painter.line_segment([Pos2::new(x, pad.min.y), Pos2::new(x, pad.max.y)], gstroke);
+<<<<<<< HEAD
         painter.text(Pos2::new(x, rect.max.y - 7.0), Align2::CENTER_CENTER, format!("{:.1}s", (fx as f64) * dur), FontId::monospace(8.5), ctx.pal.text_muted);
+=======
+        painter.text(Pos2::new(x, pad.min.y - 9.0), Align2::CENTER_CENTER, format!("{:.1}s", (fx as f64) * dur), FontId::monospace(8.5), ctx.pal.text_muted);
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     }
 
     let p0 = Pos2::new(pad.min.x, pad.max.y);
     let p3 = Pos2::new(pad.max.x, pad.min.y);
+<<<<<<< HEAD
     let mut h_out = ctx.state.animation.curve_handle_out;
     let mut h_in = ctx.state.animation.curve_handle_in;
     let p1 = Pos2::new(pad.min.x + h_out[0] * pad.width(), pad.max.y - h_out[1] * pad.height());
@@ -357,4 +422,36 @@ fn draw_bezier_graph_editor_dock(ui: &mut Ui, ctx: &mut ViewCtx<'_>, _cid: &str)
         ctx.pal.text_secondary,
     );
     ctx.reg.record("anim-bezier-graph", "Graph Editor Canvas", &resp, None);
+=======
+    let hout = ctx.state.animation.curve_handle_out;
+    let hin = ctx.state.animation.curve_handle_in;
+    let p1 = Pos2::new(pad.min.x + hout[0].clamp(0.0, 1.0) * pad.width(), pad.max.y - hout[1].clamp(0.0, 1.0) * pad.height());
+    let p2 = Pos2::new(pad.min.x + hin[0].clamp(0.0, 1.0) * pad.width(), pad.max.y - hin[1].clamp(0.0, 1.0) * pad.height());
+
+    if resp.dragged()
+        && let Some(ptr) = resp.interact_pointer_pos()
+    {
+        let nx = ((ptr.x - pad.min.x) / pad.width().max(1.0)).clamp(0.02, 0.98);
+        let ny = ((pad.max.y - ptr.y) / pad.height().max(1.0)).clamp(0.0, 1.0);
+        if ptr.distance(p1) <= ptr.distance(p2) {
+            ctx.state.animation.curve_handle_out = [nx, ny];
+        } else {
+            ctx.state.animation.curve_handle_in = [nx, ny];
+        }
+    }
+
+    painter.line_segment([p0, p1], Stroke::new(1.2, ctx.pal.accent_amber));
+    painter.line_segment([p3, p2], Stroke::new(1.2, ctx.pal.accent_amber));
+    // TODO(agent): verify filmbar README for paint_cubic_bezier signature; d23f5f3 takes 3 args not 4
+    paint_cubic_bezier(&painter, [p0, p1, p2, p3], Stroke::new(2.2, ctx.pal.accent_sky));
+
+    for kp in [p0, p3] {
+        painter.circle_filled(kp, 4.2, ctx.pal.accent_emerald);
+    }
+    for hp in [p1, p2] {
+        painter.circle_filled(hp, 4.8, ctx.pal.bg_input);
+        painter.circle_stroke(hp, 4.8, Stroke::new(1.8, ctx.pal.accent_amber));
+    }
+    ctx.reg.record("anim-bezier-graph", "Bezier Graph Editor", &resp, None);
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 }

@@ -198,7 +198,11 @@ fn file_kind(path: &Path) -> Option<&'static str> {
 }
 
 fn asset_kind<'a>(requested: &'a str, path: &Path) -> Result<&'a str> {
+<<<<<<< HEAD
     let found = magic_util::media::is_craft_doc_path(path).then(|| file_kind(path)).flatten();
+=======
+    let found = magic_util::media::is_file_or_pcraft_bundle(path).then(|| file_kind(path)).flatten();
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     match (requested, found) {
         ("auto", Some(kind)) => Ok(kind),
         ("image", Some("image")) | ("model_3d", Some("model_3d")) => Ok(requested),

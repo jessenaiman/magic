@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 //! Storyboard: printable reference document (`storyboard.pdf`) governed strictly by the
 //! `.designcraft` master (`Magic Studio Storyboard.designcraft`), with integrated `PhotoCraft`,
 //! `VectorCraft`, and `EffectCraft` asset/pose pipelines.
@@ -14,6 +15,22 @@
 pub mod barnyard;
 pub mod crud;
 pub mod slides;
+=======
+//! Storyboard: modifiable `DesignCraft` layout document (`storyboard.designcraft`) governed
+//! directly by `document.json` (read within bounded limits via [`craft_zip`]) and edited or
+//! exported through the host `DesignCraft` application (`designcraft --control 7979` /
+//! `designcraft-cli`), with `PhotoCraft`, `VectorCraft`, and `EffectCraft` artwork links.
+//!
+//! Storyboard Principles:
+//! 1. `storyboard.designcraft` is the complete design document (`doc["sections"]` defines section
+//!    names and `item["locked"]` defines editable vs master-layout items).
+//! 2. Users and agents can modify spreads, typography, frames, and placed graphics directly in
+//!    `DesignCraft` or update unlocked slots from Magic Studio (`storyboard.set`).
+//! 3. Storyboard supplies the canonical style & visual references for downstream animation,
+//!    lyric, and motion scenes.
+
+pub mod crud;
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 pub mod workflow;
 
 pub use crud::{
@@ -23,18 +40,32 @@ pub use crud::{
 pub use workflow::{cmd_storyboard_bulk_generate, cmd_storyboard_check, cmd_storyboard_grade, cmd_storyboard_wizard};
 
 use std::collections::BTreeMap;
+<<<<<<< HEAD
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
 use flate2::read::DeflateDecoder;
+=======
+use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
+
+use craft_zip::{Archive, Limits};
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 use crate::{EngineError, Result, Session};
 
+<<<<<<< HEAD
 const MASTER_DESIGNCRAFT: &[u8] = include_bytes!("../../../templates/storyboard.designcraft");
 pub(crate) const PDF_TEMPLATE: &[u8] = include_bytes!("../../../templates/storyboard-template.pdf");
+=======
+pub(crate) const MASTER_DESIGNCRAFT: &[u8] = include_bytes!("../../../templates/storyboard.designcraft");
+
+const DESIGNCRAFT_ZIP_LIMITS: Limits = Limits { max_entries: 4_096, max_total_bytes: 128 << 20 };
+const DESIGNCRAFT_PART_MAX: u64 = 64 << 20;
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct ImageLinkMeta {
@@ -52,6 +83,11 @@ pub struct ImageLinkMeta {
 pub struct FieldState {
     pub text: BTreeMap<String, String>,
     pub images: BTreeMap<String, ImageLinkMeta>,
+<<<<<<< HEAD
+=======
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font_family: Option<String>,
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 }
 
 pub(crate) fn bad(msg: &str) -> EngineError {
@@ -65,16 +101,23 @@ pub(crate) fn fail(e: impl std::fmt::Display) -> EngineError {
 pub(crate) fn doc_path(s: &Session, p: &Value) -> Result<PathBuf> {
     if let Some(raw) = p.get("path").and_then(Value::as_str).filter(|r| !r.trim().is_empty()) {
         let mut path = crate::workspace::resolve_workspace_path(s, raw);
+<<<<<<< HEAD
         let has_known_ext = path
             .extension()
             .and_then(|e| e.to_str())
             .is_some_and(|e| e.eq_ignore_ascii_case("pptx") || e.eq_ignore_ascii_case("deckcraft") || e.eq_ignore_ascii_case("pdf"));
         if !has_known_ext {
             path.set_extension("pptx");
+=======
+        let has_dc_ext = path.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("designcraft"));
+        if !has_dc_ext {
+            path.set_extension("designcraft");
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         }
         return Ok(path);
     }
     let project = s.project_path.as_ref().ok_or_else(|| bad("give `path`, or open a .magic project"))?;
+<<<<<<< HEAD
     for candidate in ["storyboard.pptx", "storyboard.deckcraft"] {
         let cand = project.with_file_name(candidate);
         if cand.is_file() {
@@ -94,6 +137,29 @@ pub(crate) fn load_field_state(pdf_path: &Path) -> FieldState {
 
 pub(crate) fn save_field_state(pdf_path: &Path, state: &FieldState) -> Result<()> {
     let path = fields_state_path(pdf_path);
+=======
+    Ok(project.with_file_name("storyboard.designcraft"))
+}
+
+pub(crate) fn designcraft_path_for(path: &Path) -> PathBuf {
+    if path.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("designcraft")) {
+        path.to_path_buf()
+    } else {
+        path.with_file_name("storyboard.designcraft")
+    }
+}
+
+pub(crate) fn fields_state_path(dc_path: &Path) -> PathBuf {
+    dc_path.with_file_name("storyboard").join("fields.json")
+}
+
+pub(crate) fn load_field_state(dc_path: &Path) -> FieldState {
+    std::fs::read_to_string(fields_state_path(dc_path)).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default()
+}
+
+pub(crate) fn save_field_state(dc_path: &Path, state: &FieldState) -> Result<()> {
+    let path = fields_state_path(dc_path);
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }
@@ -142,17 +208,29 @@ pub(crate) fn slot_is_filled(kind: &str, text: Option<&str>, image: Option<&str>
     }
 }
 
+<<<<<<< HEAD
 fn u16_at(bytes: &[u8], at: usize) -> usize {
     u16::from_le_bytes([bytes[at], bytes[at + 1]]) as usize
 }
 
 fn u32_at(bytes: &[u8], at: usize) -> usize {
     u32::from_le_bytes([bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]]) as usize
+=======
+/// Read a named entry (`document.json`, `preview.png`, etc.) from a `.designcraft` ZIP package
+/// within bounded untrusted-archive limits via [`craft_zip::Archive`].
+pub(crate) fn read_zip_entry(bytes: &[u8], entry_name: &str) -> Option<Vec<u8>> {
+    let mut zip = Archive::open(bytes, DESIGNCRAFT_ZIP_LIMITS).ok()?;
+    if zip.has_duplicate_names() {
+        return None;
+    }
+    zip.read(entry_name, DESIGNCRAFT_PART_MAX).ok().flatten()
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 }
 
 /// Read `document.json` from the embedded `.designcraft` master once in memory.
 pub(crate) fn master_template_doc() -> &'static Value {
     static DOC: OnceLock<Value> = OnceLock::new();
+<<<<<<< HEAD
     DOC.get_or_init(|| {
         let bytes = MASTER_DESIGNCRAFT;
         let eocd = (0..=bytes.len().saturating_sub(22)).rev().find(|&i| &bytes[i..i + 4] == b"PK\x05\x06").unwrap_or(0);
@@ -186,6 +264,33 @@ pub(crate) fn master_sections() -> Vec<String> {
     doc["sections"].as_array().into_iter().flatten().filter_map(|s| s["marker"].as_str().map(str::trim).filter(|m| !m.is_empty()).map(str::to_owned)).collect()
 }
 
+=======
+    DOC.get_or_init(|| read_zip_entry(MASTER_DESIGNCRAFT, "document.json").and_then(|raw| serde_json::from_slice(&raw).ok()).unwrap_or_else(|| json!({})))
+}
+
+/// Read `document.json` directly from the project's on-disk `storyboard.designcraft` when present,
+/// or from the embedded `MASTER_DESIGNCRAFT` template before initialization.
+pub(crate) fn load_designcraft_doc(path: &Path) -> Value {
+    let dc_path = designcraft_path_for(path);
+    if let Ok(bytes) = std::fs::read(&dc_path)
+        && let Some(raw_doc) = read_zip_entry(&bytes, "document.json")
+        && let Ok(parsed) = serde_json::from_slice::<Value>(&raw_doc)
+    {
+        return parsed;
+    }
+    master_template_doc().clone()
+}
+
+pub(crate) fn sections_for_doc(doc: &Value) -> Vec<String> {
+    doc["sections"].as_array().into_iter().flatten().filter_map(|s| s["marker"].as_str().map(str::trim).filter(|m| !m.is_empty()).map(str::to_owned)).collect()
+}
+
+#[allow(dead_code)]
+pub(crate) fn master_sections() -> Vec<String> {
+    sections_for_doc(master_template_doc())
+}
+
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 fn item_bounds(item: &Value) -> Option<[f64; 4]> {
     if let Some(b) = item["bounds"].as_array().filter(|b| b.len() == 4)
         && let (Some(x0), Some(y0), Some(x1), Some(y1)) = (b[0].as_f64(), b[1].as_f64(), b[2].as_f64(), b[3].as_f64())
@@ -238,6 +343,13 @@ fn section_for_doc_page(doc: &Value, page_idx: usize) -> String {
     matched.unwrap_or("Storyboard").to_owned()
 }
 
+<<<<<<< HEAD
+=======
+fn is_section_start_page(doc: &Value, page_idx: usize) -> bool {
+    doc["sections"].as_array().into_iter().flatten().any(|sec| sec["start"].as_u64() == Some(page_idx as u64))
+}
+
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 #[derive(Clone)]
 pub(crate) struct Slot {
     pub label: String,
@@ -323,14 +435,21 @@ impl PageInfo {
     }
 }
 
+<<<<<<< HEAD
 /// Rule 4: Sync connected project assets (`s.project_assets`) into the Storyboard's `Assets`
 /// inventory slots (`assets_thumb_N`, `assets_name_N`, `assets_details_N`) using each asset's
 /// flat project image + linked-file metadata.
+=======
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 pub(crate) fn sync_assets_into_state(s: &Session, state: &mut FieldState) {
     let Some(project_dir) = s.project_path.as_deref().and_then(Path::parent) else {
         return;
     };
+<<<<<<< HEAD
     let doc = master_template_doc();
+=======
+    let doc = load_designcraft_doc(&project_dir.join("storyboard.designcraft"));
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     let mut assets_page_idx: Option<usize> = None;
     let mut doc_pg = 0usize;
     for spread in doc["spreads"].as_array().into_iter().flatten() {
@@ -371,6 +490,7 @@ pub(crate) fn sync_assets_into_state(s: &Session, state: &mut FieldState) {
     }
 }
 
+<<<<<<< HEAD
 /// Rule 1: Parse Storyboard pages strictly from the `.designcraft` master (`doc["sections"]` + `item["locked"]`).
 pub(crate) fn parse_storyboard_pages(s: Option<&Session>, pdf_path: &Path) -> Vec<PageInfo> {
     if !pdf_path.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.contains("legacy")) {
@@ -381,6 +501,11 @@ pub(crate) fn parse_storyboard_pages(s: Option<&Session>, pdf_path: &Path) -> Ve
     }
     let doc = master_template_doc();
     let mut state = load_field_state(pdf_path);
+=======
+pub(crate) fn parse_storyboard_pages(s: Option<&Session>, dc_path: &Path) -> Vec<PageInfo> {
+    let doc = load_designcraft_doc(dc_path);
+    let mut state = load_field_state(dc_path);
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     if let Some(sess) = s {
         sync_assets_into_state(sess, &mut state);
     }
@@ -431,7 +556,11 @@ pub(crate) fn parse_storyboard_pages(s: Option<&Session>, pdf_path: &Path) -> Ve
             let story_obj = story_id.and_then(|sid| doc["stories"].get(sid.to_string()));
             let fkey = label_opt.map(|lbl| field_key(target_page_idx, lbl));
             let text = fkey.as_ref().and_then(|k| state.text.get(k).cloned()).or_else(|| story_obj.and_then(|st| st["text"].as_str()).map(str::to_owned));
+<<<<<<< HEAD
             let base_dir = pdf_path.parent().unwrap_or_else(|| Path::new("."));
+=======
+            let base_dir = dc_path.parent().unwrap_or_else(|| Path::new("."));
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             let img_meta = fkey.as_ref().and_then(|k| state.images.get(k)).cloned().map(|mut m| {
                 if !m.image.trim().is_empty() && !Path::new(&m.image).is_absolute() {
                     let cand = base_dir.join(&m.image);
@@ -481,6 +610,10 @@ pub(crate) fn parse_storyboard_pages(s: Option<&Session>, pdf_path: &Path) -> Ve
                     "stroke": item["stroke"]["swatch"].as_str().unwrap_or("[None]"),
                     "stroke_weight": item["stroke"]["weight"].as_f64().unwrap_or(0.0),
                     "text": text,
+<<<<<<< HEAD
+=======
+                    "font_family": state.font_family.as_deref().or_else(|| over.and_then(|o| o["fontFamily"].as_str())),
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
                     "font_size": over.and_then(|o| o["size"].as_f64()).unwrap_or(9.5),
                     "font_style": over.and_then(|o| o["fontStyle"].as_str()).unwrap_or("Regular"),
                     "text_fill": over.and_then(|o| o["fill"].as_str()).unwrap_or("Ink"),
@@ -520,13 +653,28 @@ pub(crate) fn parse_storyboard_pages(s: Option<&Session>, pdf_path: &Path) -> Ve
             spread_pages.into_iter().zip(per_page_slots).zip(per_page_layout.into_iter().zip(per_page_headings)).enumerate()
         {
             let index = doc_page_idx + p_in_sp;
+<<<<<<< HEAD
+=======
+            let role = if index == 0 {
+                "cover"
+            } else if is_section_start_page(&doc, index) {
+                "section_title"
+            } else {
+                "subpage"
+            };
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             pages.push(PageInfo {
                 index,
                 spread_index: spread_idx,
                 page_in_spread: p_in_sp,
                 spread_page_count: sp_count,
+<<<<<<< HEAD
                 section: section_for_doc_page(doc, index),
                 page_role: if index == 0 { "cover" } else { "subpage" },
+=======
+                section: section_for_doc_page(&doc, index),
+                page_role: role,
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
                 sub_code: format!("P{:02}", index + 1),
                 bounds: [0.0, 0.0, pw, ph],
                 heading,
@@ -539,6 +687,7 @@ pub(crate) fn parse_storyboard_pages(s: Option<&Session>, pdf_path: &Path) -> Ve
     pages
 }
 
+<<<<<<< HEAD
 /// Rule 3: Gather Storyboard visual design prompts and placed reference images, optionally
 /// prioritizing `Characters` prompts and character images for character sheet/rig generation.
 pub(crate) fn storyboard_media_references_for(s: &Session, prefer_character: bool) -> (Option<String>, Vec<PathBuf>) {
@@ -546,6 +695,13 @@ pub(crate) fn storyboard_media_references_for(s: &Session, prefer_character: boo
         return (None, Vec::new());
     };
     let pages = parse_storyboard_pages(Some(s), &pdf_path);
+=======
+pub(crate) fn storyboard_media_references_for(s: &Session, prefer_character: bool) -> (Option<String>, Vec<PathBuf>) {
+    let Ok(sb_path) = doc_path(s, &json!({})) else {
+        return (None, Vec::new());
+    };
+    let pages = parse_storyboard_pages(Some(s), &sb_path);
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     let keys: &[&str] = if prefer_character {
         &["char_exact_prompt", "cover_overall_design", "world_location_prompt"]
     } else {

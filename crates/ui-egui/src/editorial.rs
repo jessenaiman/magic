@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 //! Shared anti-slop editorial layout & UI primitives reused across `Storyboard`, `Lyrics`,
 //! `Motion`, and the top workstation shell (`#menu-bar` persisted style controls).
 //!
@@ -13,11 +14,22 @@ use egui::{Align, Align2, Color32, CornerRadius, FontFamily, FontId, Layout, Pai
 use serde_json::json;
 
 use crate::controls::child_pane;
+=======
+//! Shared editorial typography, header kickers, playhead scrubber, and persisted style controls
+//! reused across `Storyboard`, `Lyrics`, `Motion`, and the top workstation shell (`#menu-bar`).
+//!
+//! Panel layout and docking are owned exclusively by [`crate::docking`] (`craft_ui::docking`).
+
+use egui::{Align, Align2, Color32, CornerRadius, FontFamily, FontId, Layout, Painter, Pos2, Rect, RichText, Sense, Stroke, Ui, Vec2};
+use serde_json::json;
+
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 use crate::state::ViewCtx;
 use crate::theme::{MagicPalette, ThemeMode};
 use crate::widgets::AutomationRegistry;
 use crate::widgets::{BtnSpec, action_button, status_pill};
 
+<<<<<<< HEAD
 pub struct ThreePaneSpec<'a> {
     pub id_prefix: &'a str,
     pub left_width: f32,
@@ -70,6 +82,8 @@ pub fn draw_three_pane_workspace<T>(
     body
 }
 
+=======
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 /// Crisp editorial header strip with a vertical accent bar, tracked monospace kicker, and right pill.
 pub fn draw_pane_kicker_header(ui: &mut Ui, pal: &MagicPalette, kicker: &str, title: &str, accent: Color32, badge: Option<(&str, Color32)>) {
     ui.horizontal(|ui| {
@@ -157,6 +171,7 @@ pub fn paint_wrapped_editorial_text(painter: &Painter, spec: WrappedTextSpec<'_>
 }
 
 fn wrap_paragraph(para: &str, max_chars: usize) -> Vec<String> {
+<<<<<<< HEAD
     let trimmed = para.trim();
     if trimmed.is_empty() {
         return vec![String::new()];
@@ -179,10 +194,15 @@ fn wrap_paragraph(para: &str, max_chars: usize) -> Vec<String> {
         out.push(cur);
     }
     out
+=======
+    let _ = magic_util::text::is_paragraph_rtl(para, false);
+    magic_util::text::wrap_paragraph_uax14(para, max_chars)
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 }
 
 /// Top-bar style preset & colour-mode pills that persist immediately to disk via `prefs.set`.
 pub fn draw_persisted_style_controls(ui: &mut Ui, ctx: &mut ViewCtx<'_>, wide: bool) {
+<<<<<<< HEAD
     let mode_lbl = match ctx.state.theme_mode {
         ThemeMode::Dark => "Dark",
         ThemeMode::Light => "Light",
@@ -194,6 +214,14 @@ pub fn draw_persisted_style_controls(ui: &mut Ui, ctx: &mut ViewCtx<'_>, wide: b
         BtnSpec::icon_only("menu-theme-mode", "eye", "Toggle Dark / Light studio mode (persisted)")
     };
     if action_button(ui, ctx.reg, ctx.pal, mode_spec).clicked() {
+=======
+    let mode_icon = match ctx.state.theme_mode {
+        ThemeMode::Dark => "moon",
+        ThemeMode::Light => "sun",
+        ThemeMode::System => "eye",
+    };
+    if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("menu-theme-mode", mode_icon, "Toggle Dark / Light studio mode (persisted)")).clicked() {
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         let next_mode = if ctx.pal.dark { ThemeMode::Light } else { ThemeMode::Dark };
         ctx.state.theme_mode = next_mode;
         ctx.exec("prefs.set", json!({"key": "appearance.theme", "value": next_mode.as_str()}), Some("Saved colour mode"));
@@ -201,9 +229,15 @@ pub fn draw_persisted_style_controls(ui: &mut Ui, ctx: &mut ViewCtx<'_>, wide: b
 
     let style_lbl = ctx.state.interface_style.label();
     let style_spec = if wide {
+<<<<<<< HEAD
         BtnSpec::new("menu-style-cycle", "sliders", style_lbl, "Cycle studio interface style preset (Aurora · Editorial · Modern … — persisted)")
     } else {
         BtnSpec::label_only("menu-style-cycle", style_lbl, "Cycle studio interface style preset")
+=======
+        BtnSpec::new("menu-style-cycle", "colorWheel", style_lbl, "Cycle studio interface style preset (Aurora · Editorial · Modern … — persisted)")
+    } else {
+        BtnSpec::icon_only("menu-style-cycle", "colorWheel", "Cycle studio interface style preset")
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     };
     if action_button(ui, ctx.reg, ctx.pal, style_spec).clicked() {
         let next_style = ctx.state.interface_style.next();

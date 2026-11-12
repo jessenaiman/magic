@@ -39,6 +39,10 @@ pub fn draw_options_window(egui_ctx: &egui::Context, ctx: &mut ViewCtx<'_>) -> b
             ui.horizontal(|ui| {
                 for (tab_id, label, icon) in [
                     ("general", "General & Style", "sliders"),
+<<<<<<< HEAD
+=======
+                    ("fonts", "Fonts (Font Store)", "type"),
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
                     ("ai", "AI & LLM (Craft AI)", "sparkles"),
                     ("autosave", "Project & AutoSave", "save"),
                     ("history", "History & Control", "wand"),
@@ -61,8 +65,18 @@ pub fn draw_options_window(egui_ctx: &egui::Context, ctx: &mut ViewCtx<'_>) -> b
             ScrollArea::vertical().id_salt("options_body_scroll").auto_shrink([false, false]).max_height(440.0).show(ui, |ui| {
                 match ctx.state.ai.options_tab.as_str() {
                     "general" => draw_general_tab(ui, ctx),
+<<<<<<< HEAD
                     "autosave" => draw_autosave_tab(ui, ctx),
                     "history" => crate::shell_bridge::draw_options_history_tab(ui, ctx),
+=======
+                    "fonts" => {
+                        crate::fonts_ui::draw_font_manager_body(ui, ctx);
+                        ui.separator();
+                        crate::fonts_ui::draw_font_sources_settings(ui);
+                    }
+                    "autosave" => draw_autosave_tab(ui, ctx),
+                    "history" => crate::modals::draw_options_history_tab(ui, ctx),
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
                     _ => draw_ai_llm_tab(ui, ctx),
                 }
             });
@@ -396,7 +410,11 @@ fn draw_register_connection_box(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                     .color(ctx.pal.accent_amber),
             );
             ui.horizontal_wrapped(|ui| {
+<<<<<<< HEAD
                 for &(pid, plabel) in magic::craft_ai::STANDARD_PROVIDERS {
+=======
+                for &(pid, plabel) in magic_engine::craft_ai::STANDARD_PROVIDERS {
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
                     let btn_id = format!("ai-prov-{pid}");
                     let sel = ctx.state.ai.new_conn_provider == pid;
                     if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&btn_id, pid, plabel).selected(sel)).clicked() {
@@ -509,6 +527,7 @@ fn draw_autosave_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     }
 }
 
+<<<<<<< HEAD
 /// Fidget & Scribbles Prompt Stager (`#fidget-panel`) powered strictly by `fidget.prepare`, `fidget.stage`, and `scribbles.generate`.
 pub fn draw_fidget_stager_window(egui_ctx: &egui::Context, ctx: &mut ViewCtx<'_>) {
     let mut open = ctx.state.fidget_open;
@@ -633,6 +652,115 @@ pub fn draw_fidget_stager_window(egui_ctx: &egui::Context, ctx: &mut ViewCtx<'_>
     if !open {
         ctx.state.fidget_open = false;
     }
+=======
+/// Dockable `Fidget & Scribbles` prompt stager body (`PanelId::Fidget`) powered by `fidget.prepare`, `fidget.stage`, and `scribbles.generate`.
+pub fn draw_fidget_panel_body(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
+    crate::controls::fill_card(ui, ctx.pal, true, |ui| {
+        ui.horizontal(|ui| {
+            ui.add(companion_image("fidget_work", 26.0));
+            ui.add(companion_image("scribbles_work", 26.0));
+            let (st_lbl, st_col) = role_status_summary(ctx, "fidget");
+            status_pill(ui, ctx.pal, &st_lbl, st_col);
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("fidget-open-ai-prefs", "settings", "Configure Fidget & Scribbles AI models"))
+                    .clicked()
+                {
+                    ctx.state.ai.options_tab = "ai".into();
+                    ctx.push(UiAction::OpenPreferences);
+                }
+            });
+        });
+
+        ui.horizontal_wrapped(|ui| {
+            for &(tpl, lbl) in SCRIBBLES_TEMPLATES {
+                let id = format!("fidget-tpl-{tpl}");
+                let sel = ctx.state.ai.scribbles_template == tpl;
+                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, lbl, "Select Scribbles template").selected(sel)).clicked() {
+                    ctx.state.ai.scribbles_template = tpl.into();
+                }
+            }
+        });
+
+        text_input(
+            ui,
+            ctx.reg,
+            "fidget-prompt",
+            "Rough idea for Fidget",
+            &mut ctx.state.fidget_prompt,
+            "Describe character, puppet parts sheet, or scene…",
+            ui.available_width().max(220.0),
+        );
+
+        if pill_toggle(
+            ui,
+            ctx.reg,
+            ctx.pal,
+            "fidget-seamless-inline",
+            "Seamless handoff straight to Scribbles",
+            &mut ctx.state.ai.fidget_seamless,
+            ctx.pal.accent_sky,
+        )
+        .changed()
+        {
+            ctx.exec("ai.configure", json!({"fidget_seamless": ctx.state.ai.fidget_seamless}), None);
+        }
+
+        ui.horizontal_wrapped(|ui| {
+            let has_text = !ctx.state.fidget_prompt.trim().is_empty();
+            if action_button(
+                ui,
+                ctx.reg,
+                ctx.pal,
+                BtnSpec::new("fidget-prepare", "eye", "Preview", "Compose deterministic template prompt offline").enabled(has_text),
+            )
+            .clicked()
+            {
+                let tpl = ctx.state.ai.scribbles_template.clone();
+                let prompt = ctx.state.fidget_prompt.trim().to_owned();
+                let cid = ctx.state.selected_character_id.clone();
+                ctx.exec("fidget.prepare", json!({"kind": tpl, "prompt": prompt, "character": cid}), Some("Prepared template brief"));
+            }
+            if action_button(
+                ui,
+                ctx.reg,
+                ctx.pal,
+                BtnSpec::new("fidget-stage-btn", "sparkles", "Stage", "Rephrase into structured prompt via Fidget (text.complete)").primary().enabled(has_text),
+            )
+            .clicked()
+            {
+                let tpl = ctx.state.ai.scribbles_template.clone();
+                let prompt = ctx.state.fidget_prompt.trim().to_owned();
+                let seamless = ctx.state.ai.fidget_seamless;
+                let cid = ctx.state.selected_character_id.clone();
+                ctx.exec(
+                    "fidget.stage",
+                    json!({"kind": tpl, "prompt": prompt, "seamless": seamless, "character": cid}),
+                    Some(if seamless { "Fidget staged & handed off to Scribbles" } else { "Staged structured prompt via Fidget" }),
+                );
+            }
+        });
+
+        if !ctx.state.ai.staged_prompt.is_empty() {
+            ui.separator();
+            ui.label(RichText::new("Staged Scribbles Prompt:").size(11.0).color(ctx.pal.accent_amber));
+            let edit_resp = ui.add_sized([ui.available_width().max(220.0), 82.0], egui::TextEdit::multiline(&mut ctx.state.ai.staged_prompt));
+            ctx.reg.record("fidget-staged-prompt", "Staged Prompt", &edit_resp, Some(ctx.state.ai.staged_prompt.clone()));
+            if action_button(
+                ui,
+                ctx.reg,
+                ctx.pal,
+                BtnSpec::new("scribbles-run-staged", "wand", "Generate with Scribbles", "Run image.generate via configured Scribbles model").primary(),
+            )
+            .clicked()
+            {
+                let tpl = ctx.state.ai.scribbles_template.clone();
+                let final_p = ctx.state.ai.staged_prompt.trim().to_owned();
+                let cid = ctx.state.selected_character_id.clone();
+                ctx.exec("scribbles.generate", json!({"kind": tpl, "prompt": final_p, "character": cid}), Some("Generated asset via Scribbles"));
+            }
+        }
+    });
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 }
 
 pub fn draw_report_problem_window(egui_ctx: &egui::Context, ctx: &mut ViewCtx<'_>) -> bool {
@@ -685,7 +813,11 @@ pub fn draw_command_palette_popup(egui_ctx: &egui::Context, ctx: &mut ViewCtx<'_
     if q.is_empty() || !anchor.is_positive() {
         return;
     }
+<<<<<<< HEAD
     let matches: Vec<&magic::CommandSpec> = magic::command_specs()
+=======
+    let matches: Vec<&magic_engine::CommandSpec> = magic_engine::command_specs()
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         .iter()
         .filter(|spec| {
             let id_lc = spec.id.to_ascii_lowercase();

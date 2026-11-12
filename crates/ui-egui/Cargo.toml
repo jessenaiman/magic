@@ -1,6 +1,10 @@
 [package]
 name = "magic-ui-egui"
+<<<<<<< HEAD
 description = "Pure-Rust egui 0.37 + craft-ui + craft-menu workstation UI for Magic Studio"
+=======
+description = "egui + craft-ui + craft-menu + craft-font-manager workstation UI for Magic Studio"
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -11,15 +15,30 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
+<<<<<<< HEAD
 craft-keymap = { workspace = true }
 craft-menu = { workspace = true }
 craft-ui = { workspace = true }
 magic-util = { workspace = true }
+=======
+craft-font-catalog = { workspace = true }
+craft-font-manager = { workspace = true }
+craft-font-store = { workspace = true }
+craft-keymap = { workspace = true }
+craft-menu = { workspace = true }
+craft-text = { workspace = true }
+craft-ui = { workspace = true }
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 craft-window = { workspace = true }
 egui = { workspace = true }
 egui_extras = { workspace = true }
 image = { workspace = true }
 log = { workspace = true }
+<<<<<<< HEAD
 magic = { workspace = true }
+=======
+magic-engine = { workspace = true }
+magic-util = { workspace = true }
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 serde = { workspace = true }
 serde_json = { workspace = true }

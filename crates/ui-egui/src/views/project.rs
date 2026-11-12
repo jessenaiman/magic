@@ -1,5 +1,6 @@
 //! `Project` overview & Craft file trunk (`#view-project`): precision match for
 //! `02-project-craft-files.jpg` (`166374e1.jpeg`) plus `Sheet 08` Zone A `FilmCraft` × `EffectCraft`
+<<<<<<< HEAD
 //! bridge drawers (`project_bridge.rs`: `T01`–`T05`, `T08`, `T10`).
 
 use craft_ui::layout::{SplitAxis, SplitSize, split_rect};
@@ -26,6 +27,45 @@ pub fn show(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     } else {
         draw_stage_stack(ui, ctx);
     }
+=======
+//! interchange drawers (`project_interchange.rs`: `T01`–`T05`, `T08`, `T10`).
+
+use egui::{Align, Align2, Color32, CornerRadius, FontId, Layout, Pos2, Rect, RichText, ScrollArea, Sense, Stroke, StrokeKind, Ui, Vec2};
+use serde_json::{Value, json};
+
+use crate::controls::{fill_card, paint_craft_badge, paint_local_image, paint_readiness_light};
+use crate::icons::icon_image;
+use crate::state::{PickerTarget, UiAction, ViewCtx, ViewMode};
+use crate::views::project_interchange::{draw_offline_and_source_guard_card, draw_trunk_bridge_buttons, draw_trunk_bridge_drawers};
+use crate::widgets::{BtnSpec, action_button, status_pill, text_input};
+
+pub fn draw_navigator_panel(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
+    draw_stage_stack(ui, ctx);
+}
+
+pub fn draw_canvas_panel(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
+    draw_files_trunk(ui, ctx);
+}
+
+pub fn draw_inspector_panel(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
+    crate::views::project_interchange::draw_inspector_panel(ui, ctx);
+}
+
+pub fn draw_timeline_panel(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
+    let song_path = ctx.state.song_audio_path().unwrap_or_default();
+    let has_song = !song_path.is_empty();
+    let song_file = song_path.rsplit('/').next().filter(|s| !s.is_empty()).unwrap_or("No audio linked");
+    fill_card(ui, ctx.pal, true, |ui| {
+        ui.horizontal_wrapped(|ui| {
+            let (ir, _) = ui.allocate_exact_size(Vec2::splat(15.0), Sense::hover());
+            icon_image("waveform", 14.0, ctx.pal.accent_emerald).paint_at(ui, ir);
+            ui.label(RichText::new(format!("Song Master · {song_file}")).size(11.5).strong());
+            status_pill(ui, ctx.pal, &format!("{:.1}s", ctx.state.audio_duration_sec), ctx.pal.accent_sky);
+        });
+        ui.add_space(4.0);
+        draw_song_waveform(ui, ctx, song_file, has_song);
+    });
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 }
 
 fn collect_lyric_lines(ctx: &ViewCtx<'_>) -> Vec<String> {
@@ -72,6 +112,7 @@ fn draw_stage_stack(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     });
 }
 
+<<<<<<< HEAD
 fn draw_song_waveform(ui: &mut Ui, ctx: &mut ViewCtx<'_>, song_file: &str, has_song: bool) {
     let w = (ui.available_width() - 2.0).max(140.0);
     let (rect, resp) = ui.allocate_exact_size(Vec2::new(w, 18.0), Sense::click());
@@ -102,6 +143,40 @@ fn draw_song_waveform(ui: &mut Ui, ctx: &mut ViewCtx<'_>, song_file: &str, has_s
         {
             let next_f = ((pos.x - rect.min.x) / rect.width()).clamp(0.0, 1.0) as f64;
             ctx.state.audio_time_sec = next_f * dur;
+=======
+fn draw_song_waveform(ui: &mut Ui, ctx: &mut ViewCtx<'_>, _song_file: &str, has_song: bool) {
+    let w = (ui.available_width() - 2.0).max(140.0);
+    let (rect, resp) = ui.allocate_exact_size(Vec2::new(w, 22.0), Sense::click());
+    let mid_y = rect.center().y;
+    ui.painter().line_segment([Pos2::new(rect.min.x, mid_y), Pos2::new(rect.max.x, mid_y)], Stroke::new(1.0, ctx.pal.border));
+    if has_song {
+        let dur = ctx.state.audio_duration_sec.max(1.0);
+        let play_frac = (ctx.state.audio_time_sec / dur).clamp(0.0, 1.0) as f32;
+        if let Some(peaks) = ctx.state.cache.song_waveform["peaks"].as_array().filter(|a| !a.is_empty()) {
+            let bars = ((w / 3.0) as usize).clamp(24, 128);
+            let n_bins = peaks.len();
+            let half_h = (rect.height() * 0.44).max(2.0);
+            for i in 0..bars {
+                let frac = (i as f32 + 0.5) / (bars as f32);
+                let bin_idx = ((frac as usize * (n_bins - 1)) / bars.max(1)).min(n_bins - 1);
+                let pair = &peaks[bin_idx];
+                let mn = pair.get(0).and_then(Value::as_f64).unwrap_or(0.0).clamp(-1.0, 1.0) as f32;
+                let mx = pair.get(1).and_then(Value::as_f64).unwrap_or(0.0).clamp(-1.0, 1.0) as f32;
+                let x = rect.min.x + frac * rect.width();
+                let col = if frac >= play_frac { ctx.pal.accent_emerald.gamma_multiply(0.84) } else { ctx.pal.accent_emerald.gamma_multiply(0.38) };
+                ui.painter().line_segment([Pos2::new(x, mid_y - mx.max(0.06) * half_h), Pos2::new(x, mid_y - mn.min(-0.06) * half_h)], Stroke::new(1.7, col));
+            }
+        }
+        let px = rect.min.x + play_frac * rect.width();
+        ui.painter().line_segment([Pos2::new(px, rect.min.y + 1.0), Pos2::new(px, rect.max.y - 1.0)], Stroke::new(1.6, Color32::WHITE));
+        if resp.clicked()
+            && let Some(pos) = resp.interact_pointer_pos()
+        {
+            let next_f = ((pos.x - rect.min.x) / rect.width().max(1.0)).clamp(0.0, 1.0) as f64;
+            let sec = next_f * dur;
+            ctx.state.audio_time_sec = sec;
+            ctx.push(UiAction::SeekAudio(sec));
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         }
     }
 }
@@ -168,7 +243,11 @@ fn draw_song_and_lyrics_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                             ctx.push(UiAction::PickFile {
                                 target: PickerTarget::SetSongAudio,
                                 title: "Select Song Audio".into(),
+<<<<<<< HEAD
                                 extensions: vec!["wav".into(), "flac".into(), "mp3".into(), "m4a".into(), "ogg".into()],
+=======
+                                extensions: magic_util::media::decode_audio_extensions().iter().map(|s| (*s).to_owned()).collect(),
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
                                 directory: false,
                                 save: false,
                             });
@@ -218,7 +297,11 @@ fn draw_song_and_lyrics_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                     ctx.push(UiAction::PickFile {
                         target: PickerTarget::ImportTranscript,
                         title: "Import Timed Transcript".into(),
+<<<<<<< HEAD
                         extensions: vec!["json".into(), "srt".into(), "vtt".into()],
+=======
+                        extensions: vec!["json".into(), "srt".into(), "vtt".into(), "ttml".into(), "dfxp".into(), "scc".into(), "mcc".into()],
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
                         directory: false,
                         save: false,
                     });
@@ -373,7 +456,10 @@ fn draw_files_trunk(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                             "ecproj".into(),
                             "designcraft".into(),
                             "fcproj".into(),
+<<<<<<< HEAD
                             "anicraft".into(),
+=======
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
                             "png".into(),
                             "mov".into(),
                             "mp4".into(),
@@ -392,7 +478,10 @@ fn draw_files_trunk(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                             "vectorcraft".into(),
                             "svg".into(),
                             "ecproj".into(),
+<<<<<<< HEAD
                             "anicraft".into(),
+=======
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
                             "png".into(),
                             "jpg".into(),
                             "jpeg".into(),
@@ -414,8 +503,12 @@ fn draw_files_trunk(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
 }
 
 fn is_craft_doc_path(path: &str) -> bool {
+<<<<<<< HEAD
     let lower = path.to_ascii_lowercase();
     [".fcproj", ".designcraft", ".ecproj", ".pcraft", ".psd", ".vectorcraft", ".svg", ".anicraft"].iter().any(|ext| lower.ends_with(ext))
+=======
+    magic_util::media::has_craft_doc_extension(std::path::Path::new(path))
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 }
 
 fn normalize_domain_heading(raw: &str) -> &str {
@@ -621,9 +714,15 @@ fn craft_app_for_path(path: &str) -> &'static str {
     let lower = path.to_ascii_lowercase();
     if lower.ends_with(".vectorcraft") || lower.ends_with(".svg") {
         "vectorcraft"
+<<<<<<< HEAD
     } else if lower.ends_with(".designcraft") || lower.ends_with(".pdf") {
         "designcraft"
     } else if lower.ends_with(".ecproj") || lower.ends_with(".anicraft") {
+=======
+    } else if lower.ends_with(".designcraft") || lower.ends_with(".idml") {
+        "designcraft"
+    } else if lower.ends_with(".ecproj") {
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         "effectcraft"
     } else if lower.ends_with(".fcproj") || lower.ends_with(".mp4") || lower.ends_with(".mov") {
         "filmcraft"

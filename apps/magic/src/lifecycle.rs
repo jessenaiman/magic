@@ -3,7 +3,11 @@
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
+<<<<<<< HEAD
 use magic::Session;
+=======
+use magic_engine::Session;
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 use magic_ui_egui::UiShellState;
 
 #[derive(Default)]
@@ -44,7 +48,11 @@ pub fn verify_clean(session: &Session, ui_state: &UiShellState) -> Result<(), St
         if !saved.is_object() || saved["format"] != "magic.project" {
             return Err("Cannot verify saved project format; save the project before continuing".into());
         }
+<<<<<<< HEAD
         if magic::project::project_is_dirty(session, &saved) {
+=======
+        if magic_engine::project::project_is_dirty(session, &saved) {
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             return Err("Save project changes before closing, restarting, or switching projects".into());
         }
     }

@@ -11,7 +11,11 @@
 use egui::{Align, Align2, Color32, CornerRadius, FontId, Layout, Pos2, Rect, Response, Sense, Shape, Stroke, StrokeKind, Ui, Vec2};
 
 pub use crate::filmbar::{
+<<<<<<< HEAD
     FilmbarOrientation, FilmbarStyle, cached_image_aspect, child_pane, fill_card, local_image_uri, paint_craft_badge, paint_craft_doc_card, paint_cubic_bezier,
+=======
+    FilmbarOrientation, FilmbarStyle, cached_image_aspect, fill_card, local_image_uri, paint_craft_badge, paint_craft_doc_card, paint_cubic_bezier,
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     paint_dashed_rect, paint_filmbar_frame, paint_local_image, paint_readiness_light, paint_svg_path_preview, paint_timecode_pill,
 };
 use crate::theme::MagicPalette;
@@ -480,7 +484,11 @@ pub fn craft_swatch_button(ui: &mut Ui, reg: &mut AutomationRegistry, id: &str, 
 /// Color-coded ArtCraft badge color (`EC` violet, `VC` amber, `PC` sky, `FC` emerald, `DC` pink).
 pub fn badge_accent_color(pal: &MagicPalette, badge: &str) -> Color32 {
     match badge.to_ascii_uppercase().trim_start_matches('.') {
+<<<<<<< HEAD
         "EC" | "ECPROJ" | "ANICRAFT" => pal.accent_violet,
+=======
+        "EC" | "ECPROJ" => pal.accent_violet,
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         "VC" | "VCRAFT" | "VECTORCRAFT" | "SVG" => pal.accent_amber,
         "PC" | "PCRAFT" | "PSD" | "PNG" | "JPG" | "WEBP" => pal.accent_sky,
         "FC" | "FCPROJ" | "MP4" | "MOV" => pal.accent_emerald,

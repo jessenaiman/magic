@@ -13,13 +13,18 @@ members = [
 ]
 
 [workspace.package]
+<<<<<<< HEAD
 version = "0.17.0"
+=======
+version = "0.19.0"
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 edition = "2024"
 license = "LicenseRef-Magic-Studio-NonResale"
 rust-version = "1.95"
 repository = "https://github.com/jessenaiman/magic"
 
 [workspace.dependencies]
+<<<<<<< HEAD
 # Magic's own workspace crates
 magic-util = { path = "crates/util" }
 magic-scribbles = { path = "crates/scribbles" }
@@ -29,6 +34,17 @@ magic-ui-egui = { path = "crates/ui-egui" }
 
 # Pure-Rust desktop UI stack (`storytold/egui` 0.37 suite fork)
 egui = { version = "0.37", features = ["default_fonts"] }
+=======
+# Internal workspace crates (distinct package names; `magic` is exclusively `apps/magic`)
+magic-util = { path = "crates/util" }
+magic-scribbles = { path = "crates/scribbles" }
+magic-engine = { path = "crates/engine" }
+magic-mcp = { path = "crates/mcp" }
+magic-ui-egui = { path = "crates/ui-egui" }
+
+# UI toolkit (`storytold/egui` 0.37 family — patched in `[patch.crates-io]` below)
+egui = { version = "0.37", default-features = false }
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 eframe = { version = "0.37", default-features = false, features = [
     "accesskit",
     "default_fonts",
@@ -40,6 +56,7 @@ eframe = { version = "0.37", default-features = false, features = [
 ] }
 egui_extras = { version = "0.37", default-features = false, features = ["svg", "image", "file"] }
 
+<<<<<<< HEAD
 # Shared Craft foundation libraries (`storytold/craft-libs`) — Magic reads and writes native
 # Craft project envelopes directly on disk without linking sibling app crates or wrapping their CLIs.
 craft-atomic = { git = "https://github.com/storytold/craft-libs", rev = "1ee01a4c58729d781638b8afbd8982726dbdefcb" }
@@ -71,6 +88,48 @@ arboard = { version = "3", features = ["wayland-data-control"] }
 clap = { version = "4", features = ["derive", "env"] }
 flate2 = "1"
 glam = "0.24"
+=======
+# Shared Craft foundation libraries (`storytold/craft-libs`)
+# Optional embedded font & locale checkouts (`CRAFT_FONTS_DIR` and `CRAFT_I18N_DIR`) are read by `crates/util/build.rs`.
+craft-atomic = { git = "https://github.com/storytold/craft-libs", branch = "main" }
+craft-audio = { git = "https://github.com/storytold/craft-libs", branch = "main", features = ["decode", "encode", "peaks", "serde"] }
+craft-captions = { git = "https://github.com/storytold/craft-libs", branch = "main" }
+craft-dialogs = { git = "https://github.com/storytold/craft-libs", branch = "main" }
+craft-doc = { git = "https://github.com/storytold/craft-libs", branch = "main" }
+craft-docpath = { git = "https://github.com/storytold/craft-libs", branch = "main" }
+craft-drawingml = { git = "https://github.com/storytold/craft-libs", branch = "main" }
+craft-font-catalog = { git = "https://github.com/storytold/craft-libs", branch = "main", features = ["system"] }
+craft-font-manager = { git = "https://github.com/storytold/craft-libs", branch = "main", features = ["egui"] }
+craft-font-store = { git = "https://github.com/storytold/craft-libs", branch = "main", features = ["bundled-index"] }
+craft-fonts-build = { git = "https://github.com/storytold/craft-libs", branch = "main" }
+craft-i18n = { git = "https://github.com/storytold/craft-libs", branch = "main" }
+craft-keymap = { git = "https://github.com/storytold/craft-libs", branch = "main", features = ["egui"] }
+craft-media = { git = "https://github.com/storytold/craft-libs", branch = "main", default-features = false, features = ["isobmff", "matroska", "ogg", "serde"] }
+craft-menu = { git = "https://github.com/storytold/craft-libs", branch = "main" }
+craft-mesh = { git = "https://github.com/storytold/craft-libs", branch = "main" }
+craft-quit = { git = "https://github.com/storytold/craft-libs", branch = "main", features = ["egui"] }
+craft-settings = { git = "https://github.com/storytold/craft-libs", branch = "main" }
+craft-text = { git = "https://github.com/storytold/craft-libs", branch = "main" }
+craft-timeline = { git = "https://github.com/storytold/craft-libs", branch = "main", features = ["serde", "xml", "otio"] }
+craft-ui = { git = "https://github.com/storytold/craft-libs", branch = "main", features = ["serde", "color_fonts", "native-windows"] }
+craft-update = { git = "https://github.com/storytold/craft-libs", branch = "main" }
+craft-window = { git = "https://github.com/storytold/craft-libs", branch = "main", features = ["egui"] }
+craft-zip = { git = "https://github.com/storytold/craft-libs", branch = "main" }
+
+# Shared Craft App Suite extensions store (`storytold/craft-extensions` — `third-party` stays off)
+craft-ext-core = { git = "https://github.com/storytold/craft-extensions", branch = "main", default-features = false }
+craft-ext-store = { git = "https://github.com/storytold/craft-extensions", branch = "main", default-features = false }
+
+# Shared Craft AI runtime (`storytold/craft-ai-integrations` — single `craft-ai-core` identity)
+craft-ai-client = { git = "https://github.com/storytold/craft-ai-integrations", rev = "0e553407716e958c6281d5b6df0a9554fc5632b7" }
+craft-ai-core = { git = "https://github.com/storytold/craft-ai-integrations", rev = "0e553407716e958c6281d5b6df0a9554fc5632b7" }
+craft-ai-features = { git = "https://github.com/storytold/craft-ai-integrations", rev = "0e553407716e958c6281d5b6df0a9554fc5632b7" }
+craft-ai-native = { git = "https://github.com/storytold/craft-ai-integrations", rev = "0e553407716e958c6281d5b6df0a9554fc5632b7" }
+
+# System, serialization, and CLI foundations
+arboard = { version = "3", features = ["wayland-data-control"] }
+clap = { version = "4", features = ["derive", "env"] }
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
 log = "0.4"
 rustix = { version = "1", features = ["fs", "net", "process"] }
@@ -80,12 +139,16 @@ sha2 = "0.10"
 subtle = "2.6"
 thiserror = "2"
 
+<<<<<<< HEAD
 # Unified ArtCraft suite patches (`storytold/egui` 0.37 & `storytold/winit` 0.30.13, matching
 # `storytold/craft-ai-integrations` & `UCS-Care-Group/mailcraft`).
 # `storytold/egui` Fork E2+E3 (`egui-wgpu` on `wgpu 30.0.1`) clamps oversized swapchain surfaces to
 # `max_texture_dimension_2d` and returns `WgpuError::ConfigureSurface` instead of panicking.
 # When adopting custom shader patches from `storytold/wgpu` (`trunk` rev `b672a540043b7177cdd53858340d7aca7ff8eb68`),
 # add `wgpu`, `wgpu-core`, `wgpu-hal`, `wgpu-types`, and `naga` redirects here and run `cargo update -p wgpu`.
+=======
+# Reviewed ArtCraft `storytold/egui` and `storytold/winit` commits
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 [patch.crates-io]
 ecolor = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
 eframe = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }

@@ -1,0 +1,13 @@
+# `magic-util` (`crates/util`, Layer 4)
+
+Headless, UI-free media, timing, typography, embedded font/locale build hooks, and `craft-doc` document inspection primitives shared by `magic-engine` (`L5`), `magic-ui-egui` (`L6`), and the `L7` binaries. Nothing in `magic-util` may depend on `egui`, windowing crates, or sibling ArtCraft app crates (enforced by [`xtask/src/policy.rs`](../../xtask/src/policy.rs)).
+
+## Where & Why to Explore Code
+
+| Module | Upstream `storytold` Docs | Why You Explore This File |
+| :--- | :--- | :--- |
+| **[`src/lib.rs`](src/lib.rs)** & **[`build.rs`](build.rs)** | [`craft-libs/README.md`](../../docs/craft-reference/craft-libs/README.md) | Crate entrypoint re-exporting `anim`, `media`, `text`, `time`, `CRAFT_FONTS` (`CRAFT_FONTS_DIR` via `craft-fonts-build`), and `I18N` (`CRAFT_I18N_DIR` via `craft-i18n`) with `#![forbid(unsafe_code)]`. |
+| **[`src/time.rs`](src/time.rs)** | [`craft-timeline`](../../docs/craft-reference/craft-libs/crates/craft-timeline/README.md) · [`storytold/craft-libs`](https://github.com/storytold/craft-libs) | Explore when working on exact `craft-timeline` `Tick` math (`TICKS_PER_SECOND`), rational `FrameRate` presets (`23.976`, `24`, `25`, `29.97` DF/NDF, `30`, `50`, `59.94`, `60`), SMPTE `Timecode` parsing/formatting, or timeline quantization. |
+| **[`src/media.rs`](src/media.rs)** | [`craft-audio`](../../docs/craft-reference/craft-libs/crates/craft-audio/README.md) · [`craft-media`](../../docs/craft-reference/craft-libs/crates/craft-media/README.md) · [`craft-doc`](../../docs/craft-reference/craft-libs/crates/craft-doc/README.md) | Explore when probing audio/video containers (`isobmff`, `matroska`, `ogg`, `wav`, `aiff`, `flac`), decoding multi-bin PCM waveform peaks via `craft_audio::io::decode_file`, or inspecting `.designcraft`, `.ecproj`, `.pcraft`, `.vectorcraft`, and `.fcproj` previews via `craft_doc::{sniff, info, outline, rendition}`. |
+| **[`src/text.rs`](src/text.rs)** | [`craft-font-catalog`](../../docs/craft-reference/craft-libs/crates/craft-font-catalog/README.md) · [`craft-text`](../../docs/craft-reference/craft-libs/crates/craft-text/README.md) | Explore when resolving font families via `craft_font_catalog::Catalog::global()` or breaking lyric lines and storyboard captions with Unicode UAX #14 line-break opportunities, CJK kinsoku rules, and UAX #9 BiDi paragraph directionality. |
+| **[`src/anim.rs`](src/anim.rs)** | [`EffectCraft` animation docs](../../docs/craft-reference/core-craft-apps/effectcraft/docs/agents.md) | Explore when evaluating cubic-Bézier keyframe easing curves (`linear`, `easeIn`, `easeOut`, `easeInOut`, `snappy`) shared between timeline previews and `EffectCraft` keyframe export. |

@@ -1,9 +1,17 @@
 #!/usr/bin/env bash
+<<<<<<< HEAD
 # Magic Studio installer (`magic`, `magic-cli`, `magic-mcp`, desktop launcher, icon, and `.magic` MIME type).
 #
 # Usage:
 #   ./install.sh                              # Install release binaries or build from source into ~/.local
 #   ./install.sh --from-source                # Build pure-Rust `magic`, `magic-cli`, and `magic-mcp` via Cargo
+=======
+# Magic Studio installer (`magic`, `magic-cli`, `magic-mcp`, `magic-tui`, desktop launcher, icon, and `.magic` MIME type).
+#
+# Usage:
+#   ./install.sh                              # Install release binaries or build from source into ~/.local
+#   ./install.sh --from-source                # Build pure-Rust `magic`, `magic-cli`, `magic-mcp`, and `magic-tui` via Cargo
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 #   sudo ./install.sh --prefix /usr/local     # System-wide installation
 #   ./install.sh --uninstall                  # Cleanly remove installed binaries, desktop entry, and MIME registration
 
@@ -63,7 +71,11 @@ refresh_desktop_caches() {
 }
 
 if [[ "$UNINSTALL" -eq 1 ]]; then
+<<<<<<< HEAD
   rm -f "$BIN_DIR/magic" "$BIN_DIR/magic-cli" "$BIN_DIR/magic-mcp"
+=======
+  rm -f "$BIN_DIR/magic" "$BIN_DIR/magic-cli" "$BIN_DIR/magic-mcp" "$BIN_DIR/magic-tui"
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
   rm -f "$APPS_DIR/$APP_ID.desktop" "$APPS_DIR/magic.desktop"
   rm -f "$MIME_DIR/$APP_ID.xml"
   rm -f "$ICON_DIR/$APP_ID.png"
@@ -72,11 +84,14 @@ if [[ "$UNINSTALL" -eq 1 ]]; then
   exit 0
 fi
 
+<<<<<<< HEAD
 if [[ "$FROM_SOURCE" -eq 1 ]] || [[ ! -x "$SCRIPT_DIR/target/release/magic-cli" && ! -x "$SCRIPT_DIR/bin/magic-cli" ]]; then
   echo "Building Magic Studio pure-Rust workspace (magic, magic-cli, magic-mcp)..."
   (cd "$SCRIPT_DIR" && cargo build --release -p magic-cli -p magic)
 fi
 
+=======
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 resolve_bin() {
   local name="$1"
   if [[ -x "$SCRIPT_DIR/bin/$name" ]]; then
@@ -88,6 +103,7 @@ resolve_bin() {
   fi
 }
 
+<<<<<<< HEAD
 mkdir -p "$BIN_DIR" "$APPS_DIR" "$MIME_DIR" "$ICON_DIR"
 
 for bin_name in magic-cli magic-mcp magic; do
@@ -95,6 +111,20 @@ for bin_name in magic-cli magic-mcp magic; do
     install -m 0755 "$src_bin" "$BIN_DIR/$bin_name"
     echo "Installed $BIN_DIR/$bin_name"
   elif [[ "$bin_name" != "magic" ]]; then
+=======
+if [[ "$FROM_SOURCE" -eq 1 ]] || ! resolve_bin "magic-cli" >/dev/null || ! resolve_bin "magic-mcp" >/dev/null; then
+  echo "Building Magic Studio pure-Rust workspace (magic, magic-cli, magic-mcp, magic-tui)..."
+  (cd "$SCRIPT_DIR" && cargo build --release -p magic-cli --bins -p magic -p magic-tui)
+fi
+
+mkdir -p "$BIN_DIR" "$APPS_DIR" "$MIME_DIR" "$ICON_DIR"
+
+for bin_name in magic-cli magic-mcp magic magic-tui; do
+  if src_bin="$(resolve_bin "$bin_name")"; then
+    install -m 0755 "$src_bin" "$BIN_DIR/$bin_name"
+    echo "Installed $BIN_DIR/$bin_name"
+  elif [[ "$bin_name" == "magic-cli" || "$bin_name" == "magic-mcp" ]]; then
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     echo "install.sh: missing required binary '$bin_name' (run ./install.sh --from-source)" >&2
     exit 1
   fi
@@ -118,5 +148,9 @@ refresh_desktop_caches
 echo ""
 echo "Magic Studio installed to $PREFIX"
 echo "  Live Studio + MCP:  $BIN_DIR/magic --control 9875"
+<<<<<<< HEAD
+=======
+echo "  Backstage TUI:      $BIN_DIR/magic-tui --connect 127.0.0.1:9875"
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 echo "  Register MCP:       claude mcp add magic -- $BIN_DIR/magic-cli mcp"
 echo "  Suite Diagnostics:  $BIN_DIR/magic-cli exec app.doctor"

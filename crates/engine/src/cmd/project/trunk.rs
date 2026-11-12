@@ -91,14 +91,20 @@ fn classify_file(path: &Path) -> Option<FileClass> {
             is_craft_project: true,
         }),
         "designcraft" | "idml" => Some(FileClass {
+<<<<<<< HEAD
             group: "design_pdf",
             group_label: "DesignCraft (.designcraft)",
+=======
+            group: "designcraft",
+            group_label: "DesignCraft Storyboard (.designcraft)",
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             group_order: 1,
             craft_priority: 1,
             badge: "DC",
             open_label: "Open in DesignCraft",
             is_craft_project: true,
         }),
+<<<<<<< HEAD
         "pdf" => Some(FileClass {
             group: "design_pdf",
             group_label: "PDFCraft Storyboard (.pdf)",
@@ -108,6 +114,8 @@ fn classify_file(path: &Path) -> Option<FileClass> {
             open_label: "Open in PDFCraft",
             is_craft_project: true,
         }),
+=======
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         "fcproj" => Some(FileClass {
             group: "filmcraft",
             group_label: "FilmCraft (.fcproj)",
@@ -117,7 +125,11 @@ fn classify_file(path: &Path) -> Option<FileClass> {
             open_label: "Open in FilmCraft",
             is_craft_project: true,
         }),
+<<<<<<< HEAD
         "ecproj" | "anicraft" => Some(FileClass {
+=======
+        "ecproj" => Some(FileClass {
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             group: "effect_film",
             group_label: "EffectCraft (.ecproj)",
             group_order: 2,

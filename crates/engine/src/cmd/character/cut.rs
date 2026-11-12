@@ -1,5 +1,10 @@
+<<<<<<< HEAD
 //! `character.cut`: pure-Rust background isolation, part cutout cropping, and silhouette SVG
 //! extraction built on `image` and `craft-atomic` (`crate::native_media`).
+=======
+//! `character.cut`: subject isolation, part cutout cropping, and silhouette contour tracing
+//! delegated to host `PhotoCraft` and `VectorCraft` via `crate::craft_api` and `crate::native_media`.
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 
 use std::path::{Path, PathBuf};
 
@@ -8,9 +13,21 @@ use serde_json::{Value, json};
 use super::{View, bad, part_list, root_part};
 use crate::{Result, Session};
 
+<<<<<<< HEAD
 /// Pure-Rust in-process image step runner (`layer.removeBackground`, `image.imageSize`,
 /// `file.export.layersToFiles`, `file.saveACopy`) replacing legacy `photocraft-cli` spawning.
 pub(crate) fn photocraft_run(src: &Path, steps: &[(&str, Value)], out_pcraft: Option<&Path>) -> Result<()> {
+=======
+/// Execute PhotoCraft layer/image steps via host `PhotoCraft` (`--control` / `photocraft-cli`),
+/// keeping local RGBA buffer sync for immediate character preview cutouts.
+pub(crate) fn photocraft_run(src: &Path, steps: &[(&str, Value)], out_pcraft: Option<&Path>) -> Result<()> {
+    for (op, params) in steps {
+        let _ = crate::craft_api::execute_on_host_app("photocraft", Some(src), op, params.clone());
+    }
+    if let Some(pcraft) = out_pcraft {
+        let _ = crate::craft_api::execute_on_host_app("photocraft", Some(src), "file.saveAs", json!({"path": pcraft}));
+    }
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     let mut current = crate::native_media::load_rgba(src)?;
     for (op, params) in steps {
         match *op {
@@ -48,8 +65,12 @@ pub(crate) fn photocraft_run(src: &Path, steps: &[(&str, Value)], out_pcraft: Op
     }
     if let Some(pcraft) = out_pcraft {
         crate::native_media::encode_png_atomic(&current, pcraft)?;
+<<<<<<< HEAD
         let step_list: Vec<Value> = steps.iter().map(|(id, p)| json!({"id": id, "params": p})).collect();
         let _ = crate::native_media::write_staged_steps(pcraft, &json!({"source": src, "steps": step_list}))?;
+=======
+        let _ = (src, steps);
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     }
     Ok(())
 }

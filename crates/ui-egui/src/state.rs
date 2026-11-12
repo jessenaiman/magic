@@ -1,6 +1,11 @@
 //! Shared UI state, view routing (`Home`, `Project`, `Storyboard`, `Animations`, `Lyrics`,
+<<<<<<< HEAD
 //! `Motion`, `Studio`), `InterfaceStyle` & `AccentChoice` appearance state, `CachedPayloads`,
 //! dirty-track invalidation, and shell action queue.
+=======
+//! `Motion`, `Studio`), `DockWorkspaceState` (`craft_ui::docking`), `InterfaceStyle` &
+//! `AccentChoice` appearance state, `CachedPayloads`, dirty-track invalidation, and action queue.
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;
@@ -8,6 +13,10 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
+<<<<<<< HEAD
+=======
+use crate::docking::DockWorkspaceState;
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 pub use crate::state_views::{
     AiUiState, AnimationViewState, HomeFormState, LyricsViewState, MotionViewState, ProjectViewState, StoryboardViewState, StudioViewState,
 };
@@ -73,9 +82,15 @@ impl ViewMode {
             Self::Home => "home",
             Self::Project => "folder",
             Self::Storyboard => "book",
+<<<<<<< HEAD
             Self::Animation => "user",
             Self::Design => "type",
             Self::Motion => "sparkles",
+=======
+            Self::Animation => "puppetPin",
+            Self::Design => "type",
+            Self::Motion => "bezierSpline",
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             Self::Studio => "film",
         }
     }
@@ -97,6 +112,10 @@ impl ViewMode {
 #[derive(Clone, Debug)]
 pub enum PickerTarget {
     OpenProject,
+<<<<<<< HEAD
+=======
+    ArchiveProjectFolder,
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     SaveProjectAs,
     NewProjectRoot,
     NewProjectAudio,
@@ -121,11 +140,19 @@ pub enum UiAction {
     NavigateAuthoring { view: ViewMode, seconds: f64 },
     SelectCharacter { id: String, jump_animation: bool },
     Execute { id: String, params: Value, toast: Option<String> },
+<<<<<<< HEAD
+=======
+    DockCommand { id: String, params: Value },
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     PickFile { target: PickerTarget, title: String, extensions: Vec<String>, directory: bool, save: bool },
     ToggleAudio,
     SeekAudio(f64),
     SnapWindow,
     OpenPreferences,
+<<<<<<< HEAD
+=======
+    OpenFontManager,
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     OpenDoctor,
     OpenReportProblem,
     CopyDiagnostics,
@@ -139,6 +166,10 @@ pub enum UiAction {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ActiveModal {
     Preferences,
+<<<<<<< HEAD
+=======
+    FontManager,
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     Doctor,
     ReportProblem,
     About,
@@ -150,6 +181,10 @@ pub struct CachedPayloads {
     pub snapshot: Value,
     pub catalog: Value,
     pub song_lyrics: Value,
+<<<<<<< HEAD
+=======
+    pub song_waveform: Value,
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     pub storyboard_pages: Value,
     pub storyboard_check: Value,
     pub characters: Value,
@@ -176,6 +211,10 @@ pub struct CachedPayloads {
 #[derive(Clone, Debug)]
 pub struct UiShellState {
     pub view: ViewMode,
+<<<<<<< HEAD
+=======
+    pub docking: DockWorkspaceState,
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     pub theme_mode: ThemeMode,
     pub interface_style: InterfaceStyle,
     pub accent_choice: AccentChoice,
@@ -187,18 +226,25 @@ pub struct UiShellState {
     pub project_path: Option<PathBuf>,
     pub selected_character_id: Option<String>,
     pub ribbon_collapsed: bool,
+<<<<<<< HEAD
     pub show_nav_rail: bool,
     pub show_bottom_dock: bool,
     pub show_right_inspector: bool,
     pub assets_drawer_open: bool,
     pub assets_drawer_pinned: bool,
+=======
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     pub assets_drawer_tab: String,
     pub global_search: String,
     pub command_search: String,
     pub update_banner_dismissed: bool,
+<<<<<<< HEAD
     pub fidget_open: bool,
     pub fidget_prompt: String,
     pub history_popup_open: bool,
+=======
+    pub fidget_prompt: String,
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     pub active_modal: Option<ActiveModal>,
     pub busy: bool,
     pub saving: bool,
@@ -210,6 +256,16 @@ pub struct UiShellState {
     pub audio_time_sec: f64,
     pub audio_duration_sec: f64,
     pub window_snapped_right: bool,
+<<<<<<< HEAD
+=======
+    pub control_port: Option<u16>,
+    pub available_fonts: Vec<String>,
+    pub font_picker_filter: String,
+    pub font_store_query: String,
+    pub font_store_style: String,
+    pub font_preview_url: String,
+    pub font_preview_sample: String,
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     pub ai: AiUiState,
     pub home: HomeFormState,
     pub project: ProjectViewState,
@@ -225,6 +281,10 @@ impl Default for UiShellState {
     fn default() -> Self {
         Self {
             view: ViewMode::Home,
+<<<<<<< HEAD
+=======
+            docking: DockWorkspaceState::default(),
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             theme_mode: ThemeMode::Dark,
             interface_style: InterfaceStyle::Aurora,
             accent_choice: AccentChoice::Teal,
@@ -232,6 +292,7 @@ impl Default for UiShellState {
             ui_scale_pct: 100,
             autosave_enabled: true,
             autosave_minutes: 5.0,
+<<<<<<< HEAD
             focused_panel: String::new(),
             project_path: None,
             selected_character_id: None,
@@ -241,13 +302,23 @@ impl Default for UiShellState {
             show_right_inspector: true,
             assets_drawer_open: false,
             assets_drawer_pinned: false,
+=======
+            focused_panel: "canvas".into(),
+            project_path: None,
+            selected_character_id: None,
+            ribbon_collapsed: false,
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             assets_drawer_tab: "characters".into(),
             global_search: String::new(),
             command_search: String::new(),
             update_banner_dismissed: false,
+<<<<<<< HEAD
             fidget_open: false,
             fidget_prompt: String::new(),
             history_popup_open: false,
+=======
+            fidget_prompt: String::new(),
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             active_modal: None,
             busy: false,
             saving: false,
@@ -259,6 +330,16 @@ impl Default for UiShellState {
             audio_time_sec: 0.0,
             audio_duration_sec: 0.0,
             window_snapped_right: false,
+<<<<<<< HEAD
+=======
+            control_port: None,
+            available_fonts: Vec::new(),
+            font_picker_filter: String::new(),
+            font_store_query: "Fraunces".into(),
+            font_store_style: "Regular".into(),
+            font_preview_url: std::env::var("MAGIC_FONT_PREVIEW_URL").unwrap_or_else(|_| "http://127.0.0.1:8000".into()),
+            font_preview_sample: "All the pterodactyls were sleeping very still".into(),
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             ai: AiUiState::default(),
             home: HomeFormState::default(),
             project: ProjectViewState::default(),
@@ -340,10 +421,39 @@ impl UiShellState {
                 }
             }
         }
+<<<<<<< HEAD
         if out.is_empty()
             && let Some(bg) = self.cache.snapshot.pointer("/data/drawer/backgrounds/0/thumb").and_then(Value::as_str).filter(|s| !s.is_empty())
         {
             out.push(bg.to_owned());
+=======
+        if let Some(bgs) = self.cache.snapshot.pointer("/data/drawer/backgrounds").and_then(Value::as_array) {
+            for item in bgs {
+                if let Some(bg) = item["thumb"].as_str().or_else(|| item["path"].as_str()).filter(|s| !s.is_empty())
+                    && !out.iter().any(|x| x == bg)
+                {
+                    out.push(bg.to_owned());
+                }
+            }
+        }
+        if let Some(anims) = self.cache.words_doc.pointer("/document/animations").and_then(Value::as_array) {
+            for a in anims {
+                if let Some(bg) = a["background_path"].as_str().or_else(|| a["preview_frame"].as_str()).filter(|s| !s.is_empty())
+                    && !out.iter().any(|x| x == bg)
+                {
+                    out.push(bg.to_owned());
+                }
+            }
+        }
+        if let Some(cues) = self.cache.motion_doc.pointer("/document/cues").and_then(Value::as_array) {
+            for c in cues {
+                if let Some(bg) = c["backdrop_path"].as_str().filter(|s| !s.is_empty())
+                    && !out.iter().any(|x| x == bg)
+                {
+                    out.push(bg.to_owned());
+                }
+            }
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         }
         out
     }

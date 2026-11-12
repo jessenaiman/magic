@@ -127,6 +127,10 @@ pub struct StoryboardViewState {
     pub editing_slot: Option<String>,
     pub draft_text: String,
     pub focus_requested: bool,
+<<<<<<< HEAD
+=======
+    pub font_family: String,
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 }
 
 impl Default for StoryboardViewState {
@@ -141,6 +145,10 @@ impl Default for StoryboardViewState {
             editing_slot: None,
             draft_text: String::new(),
             focus_requested: false,
+<<<<<<< HEAD
+=======
+            font_family: "Fraunces".into(),
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         }
     }
 }
@@ -259,7 +267,11 @@ impl Default for LyricsViewState {
             caption_format: "srt".into(),
             caption_standard: "Subtitle".into(),
             template_name: "chorus-lower-third".into(),
+<<<<<<< HEAD
             expr_code: "wiggle(2.5, 8)".into(),
+=======
+            expr_code: "spring_pop".into(),
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             color_hex: "#f0f4fc".into(),
             outline_hex: "#0e141e".into(),
             teaching_mode: "sing_along".into(),
@@ -283,12 +295,44 @@ impl Default for LyricsViewState {
 }
 
 #[derive(Clone, Debug)]
+<<<<<<< HEAD
 pub struct MotionViewState {
     pub inspector_tab: String,
+=======
+pub struct MotionSegmentEdit {
+    pub cue_id: String,
+    pub word_id: String,
+    pub title: String,
+    pub preset: String,
+    pub d: String,
+    pub pos_x: f64,
+    pub pos_y: f64,
+    pub width: f64,
+    pub height: f64,
+    pub arc_bend_deg: f64,
+    pub tangent_in: [f32; 2],
+    pub tangent_out: [f32; 2],
+    pub start_sec: f64,
+    pub end_sec: f64,
+    pub effect_id: String,
+    pub backdrop_path: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+pub struct MotionViewState {
+    pub inspector_tab: String,
+    pub selected_cue_id: Option<String>,
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     pub selected_word_id: Option<String>,
     pub selected_preset: String,
     pub selected_effect_id: String,
     pub cue_name: String,
+<<<<<<< HEAD
+=======
+    pub font_family: String,
+    pub active_d: String,
+    pub active_backdrop: Option<String>,
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     pub start_sec: f64,
     pub end_sec: f64,
     pub draw_duration: f64,
@@ -324,16 +368,31 @@ pub struct MotionViewState {
     pub flat_preview_only: bool,
     pub tangent_in: [f32; 2],
     pub tangent_out: [f32; 2],
+<<<<<<< HEAD
+=======
+    pub segments: BTreeMap<String, MotionSegmentEdit>,
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 }
 
 impl Default for MotionViewState {
     fn default() -> Self {
         Self {
             inspector_tab: "shapes".into(),
+<<<<<<< HEAD
             selected_word_id: None,
             selected_preset: "wave".into(),
             selected_effect_id: "ec.shape.trim_paths".into(),
             cue_name: "Flight Arc".into(),
+=======
+            selected_cue_id: None,
+            selected_word_id: None,
+            selected_preset: "wing_glide".into(),
+            selected_effect_id: "ec.shape.trim_paths".into(),
+            cue_name: "Flight Arc".into(),
+            font_family: "Space Grotesk".into(),
+            active_d: String::new(),
+            active_backdrop: None,
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             start_sec: 0.0,
             end_sec: 2.05,
             draw_duration: 0.85,
@@ -369,6 +428,10 @@ impl Default for MotionViewState {
             flat_preview_only: false,
             tangent_in: [-120.0, -54.0],
             tangent_out: [120.0, -54.0],
+<<<<<<< HEAD
+=======
+            segments: BTreeMap::new(),
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         }
     }
 }
@@ -386,6 +449,11 @@ pub struct AnimationViewState {
     pub show_grid: bool,
     pub show_marks: bool,
     pub show_path_hud: bool,
+<<<<<<< HEAD
+=======
+    pub onion_skin: bool,
+    pub checkerboard_bg: bool,
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     pub bone_rotation: f64,
     pub jaw_open_deg: f64,
     pub wing_bank_deg: f64,
@@ -441,6 +509,10 @@ pub struct AnimationViewState {
     pub prop_filter: String,
     pub track_source: String,
     pub audio_source: String,
+<<<<<<< HEAD
+=======
+    pub font_family: String,
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 }
 
 impl Default for AnimationViewState {
@@ -457,6 +529,11 @@ impl Default for AnimationViewState {
             show_grid: true,
             show_marks: true,
             show_path_hud: true,
+<<<<<<< HEAD
+=======
+            onion_skin: true,
+            checkerboard_bg: true,
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             bone_rotation: -6.0,
             jaw_open_deg: 18.0,
             wing_bank_deg: 12.0,
@@ -504,7 +581,11 @@ impl Default for AnimationViewState {
             roto_stroke_kind: "fg".into(),
             sam2_feather: 2.5,
             sam2_decontaminate: true,
+<<<<<<< HEAD
             expr_code: "loopOut(\"cycle\")".into(),
+=======
+            expr_code: "cycle_loop".into(),
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             key_interp: "bezier".into(),
             key_velocity_pct: 66.0,
             curve_handle_in: [0.33, 0.15],
@@ -512,6 +593,10 @@ impl Default for AnimationViewState {
             prop_filter: "U".into(),
             track_source: "effectcraft".into(),
             audio_source: "filmcraft".into(),
+<<<<<<< HEAD
+=======
+            font_family: "Inter".into(),
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         }
     }
 }
@@ -521,10 +606,26 @@ pub struct StudioViewState {
     pub inspector_tab: String,
     pub workspace_preset: String,
     pub selected_scene: usize,
+<<<<<<< HEAD
+=======
+    pub selected_clip_id: Option<u64>,
+    pub selected_clip_track: String,
+    pub selected_clip_name: String,
+    pub selected_clip_start: f64,
+    pub selected_clip_end: f64,
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     pub seek_seconds: f64,
     pub zoom_pct: f64,
     pub volume: f64,
     pub proxies_enabled: bool,
+<<<<<<< HEAD
+=======
+    pub safe_margins: bool,
+    pub snap_enabled: bool,
+    pub monitor_fit: bool,
+    pub solo_track: Option<String>,
+    pub muted_tracks: [bool; 5],
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     pub show_export_settings: bool,
     pub export_format: String,
     pub export_container: String,
@@ -572,6 +673,10 @@ pub struct StudioViewState {
     pub mixer_gains_db: [f64; 3],
     pub mixer_mutes: [bool; 3],
     pub title_text: String,
+<<<<<<< HEAD
+=======
+    pub title_font: String,
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     pub title_vertical: bool,
     pub title_pin_edge: String,
     pub title_roll_crawl: String,
@@ -587,10 +692,26 @@ impl Default for StudioViewState {
             inspector_tab: "matrix".into(),
             workspace_preset: "Assembly".into(),
             selected_scene: 0,
+<<<<<<< HEAD
+=======
+            selected_clip_id: None,
+            selected_clip_track: "V1".into(),
+            selected_clip_name: String::new(),
+            selected_clip_start: 0.0,
+            selected_clip_end: 3.0,
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             seek_seconds: 0.0,
             zoom_pct: 100.0,
             volume: 100.0,
             proxies_enabled: false,
+<<<<<<< HEAD
+=======
+            safe_margins: false,
+            snap_enabled: true,
+            monitor_fit: true,
+            solo_track: None,
+            muted_tracks: [false; 5],
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             show_export_settings: false,
             export_format: "h264".into(),
             export_container: "mp4".into(),
@@ -638,6 +759,10 @@ impl Default for StudioViewState {
             mixer_gains_db: [0.0, -3.0, 0.0],
             mixer_mutes: [false; 3],
             title_text: String::new(),
+<<<<<<< HEAD
+=======
+            title_font: "Inter".into(),
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             title_vertical: false,
             title_pin_edge: "bottom-left".into(),
             title_roll_crawl: "static".into(),

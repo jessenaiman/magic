@@ -1,8 +1,13 @@
 //! Workspace path resolution and OS file handoff (`workspace.open`).
 //!
 //! Following the ArtCraft cross-editor file pattern (`photocraft/docs/embedded-vector-editing.md`),
+<<<<<<< HEAD
 //! Magic Studio hands project files to external editors on disk without opening cross-app `--control`
 //! sockets or generating sibling token files, and watches saved file changes via `link_watch`.
+=======
+//! Magic Studio hands project files to external editors on disk without passing cross-app `--control`
+//! or `--bridge` flags, and watches saved file changes via `link_watch`.
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -113,11 +118,36 @@ pub fn resolve_tool(name: &str) -> String {
     resolve_executable_path(name).map(|p| p.to_string_lossy().into_owned()).unwrap_or_else(|| name.to_string())
 }
 
+<<<<<<< HEAD
+=======
+fn spawn_detached(mut cmd: Command, label: &str) -> Result<()> {
+    let mut child =
+        cmd.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().map_err(|e| EngineError::ExternalTool(label.to_owned(), e.to_string()))?;
+    std::thread::spawn(move || {
+        let _ = child.wait();
+    });
+    Ok(())
+}
+
+/// Launch an installed Craft desktop application without a document path.
+pub fn launch_app_only(app: &str) -> Result<()> {
+    let trimmed = app.trim();
+    let Some(exe) = resolve_executable_path(trimmed) else {
+        return Err(EngineError::InvalidParams(format!("`{trimmed}` is not installed on PATH (configure `[tools]` in config.toml or open a project file)")));
+    };
+    spawn_detached(Command::new(exe), trimmed)
+}
+
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 /// Open a document on disk using an optional app binary or the platform default file opener,
 /// without passing any `--control` or `--bridge` flags.
 pub fn open_editor(app: &str, document: &Path) -> Result<()> {
     let trimmed = app.trim();
+<<<<<<< HEAD
     let mut cmd = if !trimmed.is_empty() && trimmed != "system" && resolve_executable_path(trimmed).is_some() {
+=======
+    let cmd = if !trimmed.is_empty() && trimmed != "system" && resolve_executable_path(trimmed).is_some() {
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         let mut c = Command::new(resolve_tool(trimmed));
         c.arg(document);
         c
@@ -134,6 +164,7 @@ pub fn open_editor(app: &str, document: &Path) -> Result<()> {
         c.arg(document);
         c
     };
+<<<<<<< HEAD
     let mut child = cmd
         .stdin(Stdio::null())
         .stdout(Stdio::null())
@@ -164,6 +195,89 @@ pub fn cmd_workspace_open(s: &mut crate::Session, params: &Value) -> Result<Valu
         "path": path,
         "document": {"app": app, "file": path}
     }))
+=======
+    spawn_detached(cmd, trimmed)
+}
+
+fn infer_project_doc_for_app(s: &crate::Session, app: &str, domain: Option<&str>) -> Option<PathBuf> {
+    let proj_dir = s.project_path.as_deref()?.parent()?;
+    let candidates: Vec<PathBuf> = match (domain.unwrap_or_default(), app) {
+        ("lyrics", _) => vec![proj_dir.join("lettering/lyrics.ecproj")],
+        ("motion", _) => vec![proj_dir.join("motion/actions.ecproj")],
+        (_, "filmcraft") => {
+            let mut v = Vec::new();
+            if let Some(fc) = &s.video_project_path {
+                v.push(fc.clone());
+            }
+            if let Ok(rd) = std::fs::read_dir(proj_dir.join("film")) {
+                v.extend(rd.flatten().map(|e| e.path()).filter(|p| has_extension(p, &["fcproj"])));
+            }
+            v
+        }
+        (_, "effectcraft") => vec![proj_dir.join("lettering/lyrics.ecproj"), proj_dir.join("motion/actions.ecproj")],
+        (_, "designcraft") => vec![proj_dir.join("storyboard.designcraft")],
+        (_, "vectorcraft") => {
+            let mut v = Vec::new();
+            for sub in ["motion", "motion/svg", "assets/vectors"] {
+                if let Ok(rd) = std::fs::read_dir(proj_dir.join(sub)) {
+                    v.extend(rd.flatten().map(|e| e.path()).filter(|p| has_extension(p, &["vectorcraft", "svg"])));
+                }
+            }
+            v
+        }
+        (_, "photocraft") => {
+            let mut v = Vec::new();
+            if let Ok(rd) = std::fs::read_dir(proj_dir.join("assets/characters")) {
+                for ch in rd.flatten().map(|e| e.path()) {
+                    if let Ok(sub) = std::fs::read_dir(&ch) {
+                        v.extend(sub.flatten().map(|e| e.path()).filter(|p| has_extension(p, &["pcraft", "psd", "png"])));
+                    }
+                }
+            }
+            v
+        }
+        _ => Vec::new(),
+    };
+    candidates.into_iter().find(|p| p.exists())
+}
+
+/// Open a project file in its native desktop editor on disk (`workspace.open`), or launch a Craft editor.
+pub fn cmd_workspace_open(s: &mut crate::Session, params: &Value) -> Result<Value> {
+    let app = params.get("app").and_then(Value::as_str).map(str::trim).filter(|a| !a.is_empty()).unwrap_or("system");
+    let domain = params.get("domain").and_then(Value::as_str).map(str::trim).filter(|d| !d.is_empty());
+    let explicit_raw = params.get("path").and_then(Value::as_str).map(str::trim).filter(|p| !p.is_empty());
+
+    if let Some(raw) = explicit_raw {
+        let path = resolve_workspace_path(s, raw);
+        if !path.exists() && !magic_util::media::is_file_or_pcraft_bundle(&path) {
+            return Err(EngineError::InvalidParams(format!("file does not exist: {}", path.display())));
+        }
+        open_editor(app, &path)?;
+        return Ok(json!({
+            "ok": true,
+            "app": app,
+            "path": path,
+            "document": {"app": app, "file": path}
+        }));
+    }
+
+    if let Some(inferred) = infer_project_doc_for_app(s, app, domain) {
+        open_editor(app, &inferred)?;
+        return Ok(json!({
+            "ok": true,
+            "app": app,
+            "path": inferred,
+            "document": {"app": app, "file": inferred}
+        }));
+    }
+
+    if app != "system" {
+        launch_app_only(app)?;
+        return Ok(json!({ "ok": true, "app": app, "launched": true }));
+    }
+
+    Err(EngineError::InvalidParams("missing `path` or `app` for workspace.open".into()))
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 }
 
 pub(crate) const AUDIO_EXTENSIONS: &[&str] = &["wav", "mp3", "flac", "m4a", "aac", "ogg"];

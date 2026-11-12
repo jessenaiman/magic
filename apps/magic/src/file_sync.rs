@@ -10,7 +10,11 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, UNIX_EPOCH};
 
+<<<<<<< HEAD
 use magic::Session;
+=======
+use magic_engine::Session;
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 use magic_ui_egui::{UiShellState, ViewMode};
 use serde_json::{Value, json};
 
@@ -97,6 +101,10 @@ impl FileSyncMonitor {
 
         if regained_focus {
             self.check_disk_ecprojs(session, ui_state);
+<<<<<<< HEAD
+=======
+            craft_font_catalog::Catalog::global().rescan_if_changed();
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         }
 
         if let Some(since) = self.pending_autosave_since {

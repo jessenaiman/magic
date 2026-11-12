@@ -1,13 +1,22 @@
 //! Bounded IPv4 loopback JSON-lines `--control` transport (`127.0.0.1:<port>`) and UI-thread
 //! control dispatch (`ui.*`, `engine.*`, `document.inspect`, `perf.stats`, `app.*`), aligned with
+<<<<<<< HEAD
 //! upstream ArtCraft `--control` channels (`EffectCraft`, `FilmCraft`, `VectorCraft`, `DeckCraft`).
+=======
+//! upstream ArtCraft `--control` channels (`EffectCraft`, `FilmCraft`, `VectorCraft`, `DesignCraft`).
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 //!
 //! Security & architecture properties:
 //! - Binds strictly to `127.0.0.1` (`Ipv4Addr::LOCALHOST`, never `::1` or `0.0.0.0`); port `0` picks a free OS port.
 //! - Enforces constant-time bearer check when `MAGIC_CONTROL_TOKEN` is set, bounds each request line
 //!   to `16 MiB` (`take(MAX_LINE + 1).read_until`), and closes immediately on non-JSON or oversized lines.
+<<<<<<< HEAD
 //! - Keeps zero duplicate Craft render shims (`rpc.rs` removed): Magic controls its own coordinator UI
 //!   here while querying/saving open sibling Craft apps via `magic::craft_api` over their own `--control` ports.
+=======
+//! - Direct single-binary control listener: Magic controls its own coordinator UI
+//!   here while querying/saving open sibling Craft apps via `magic_engine::craft_api` over their own `--control` ports.
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener};
@@ -20,7 +29,11 @@ use std::time::{Duration, Instant};
 
 use craft_keymap::CommandRef;
 use egui::{Event, ViewportCommand};
+<<<<<<< HEAD
 use magic::time::TICKS_PER_SECOND;
+=======
+use magic_engine::time::TICKS_PER_SECOND;
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
 use magic_ui_egui::{AccentChoice, InterfaceStyle, ThemeMode, UiAction, ViewMode};
 use serde_json::{Value, json};
 use subtle::ConstantTimeEq;
@@ -257,19 +270,48 @@ impl MagicDesktopApp {
         if self.control_input_only
             && !id.starts_with("ui.")
             && !matches!(id, "engine.commands" | "document.inspect" | "perf.stats" | "app.quit" | "app.restart" | "app.hide" | "window.snap")
+<<<<<<< HEAD
             && !magic::commands::is_read_only_command(id, &params)
+=======
+            && !magic_ui_egui::docking::is_dock_command_id(id)
+            && !magic_engine::commands::is_read_only_command(id, &params)
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         {
             return Err("session started with --control-input-only: mutating engine commands are disabled; drive controls via ui.*".into());
         }
         match id {
+<<<<<<< HEAD
             "engine.execute" => {
                 let cmd = params["command"].as_str().or_else(|| params["id"].as_str()).ok_or("engine.execute requires `command`")?;
                 if matches!(cmd, "engine.execute" | "ui.menu.invoke") {
+=======
+            "engine.execute" | "command" => {
+                let cmd = params["command"].as_str().or_else(|| params["id"].as_str()).ok_or("engine.execute requires `command` or `id`")?;
+                if matches!(cmd, "engine.execute" | "command" | "ui.menu.invoke") {
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
                     return Err("nested dispatch is not supported".into());
                 }
                 let inner = params.get("params").cloned().unwrap_or_else(|| json!({}));
                 self.dispatch_immediate_control(ctx, cmd, inner)
             }
+<<<<<<< HEAD
+=======
+            "app.open" => self.execute_engine(ctx, "file.open", params),
+            "app.save" => {
+                let has_path = params.get("path").and_then(Value::as_str).is_some_and(|s| !s.trim().is_empty());
+                self.execute_engine(ctx, if has_path { "file.saveAs" } else { "file.save" }, params)
+            }
+            "render.frame" => {
+                let sec = params.get("time").or_else(|| params.get("seconds")).and_then(Value::as_f64).unwrap_or(self.ui_state.audio_time_sec);
+                match params.get("stage").and_then(Value::as_str).unwrap_or("studio") {
+                    "storyboard" => self.execute_engine(ctx, "storyboard.thumbnail", json!({"page": params["page"].as_u64().unwrap_or(0), "scale": 1.0})),
+                    "lyrics" | "design" => self.execute_engine(ctx, "words.preview_frame", json!({"time": sec})),
+                    "motion" => self.execute_engine(ctx, "motion.preview_frame", json!({"time": sec})),
+                    "animation" | "animations" => self.execute_engine(ctx, "character.frame", json!({"time": sec})),
+                    _ => self.execute_engine(ctx, "video.frame", json!({"seconds": sec, "path": params.get("path")})),
+                }
+            }
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             "ui.menu.invoke" => {
                 if self.control_input_only {
                     return Err("ui.menu.invoke is disabled under --control-input-only".into());
@@ -296,13 +338,29 @@ impl MagicDesktopApp {
                 only_keys(&params, id, &[])?;
                 let session_ref = &self.session;
                 Ok(magic_ui_egui::menus::serialize_menu_list(&self.ui_state, |cid| {
+<<<<<<< HEAD
                     magic::find_command(cid).is_some_and(|spec| (spec.enabled)(session_ref).is_ok())
+=======
+                    magic_engine::find_command(cid).is_some_and(|spec| (spec.enabled)(session_ref).is_ok())
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
                 }))
             }
             "ui.inspect" | "ui.state" => {
                 only_keys(&params, id, &[])?;
                 Ok(self.inspect_state(ctx))
             }
+<<<<<<< HEAD
+=======
+            "ui.docking" => {
+                only_keys(&params, id, &[])?;
+                Ok(magic_ui_egui::docking::inspect_docking(ctx, &self.ui_state))
+            }
+            dock_cmd if magic_ui_egui::docking::is_dock_command_id(dock_cmd) => {
+                let res = magic_ui_egui::docking::execute_dock_command(ctx, &mut self.ui_state, dock_cmd, &params)?;
+                ctx.request_repaint();
+                Ok(res)
+            }
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             "ui.drafts" => {
                 only_keys(&params, id, &[])?;
                 Ok(self.ui_state.drafts_report())
@@ -362,7 +420,11 @@ impl MagicDesktopApp {
                 match target {
                     "project" => Ok(status),
                     "storyboard" => self.session.execute("storyboard.check", json!({})).map_err(|e| e.to_string()),
+<<<<<<< HEAD
                     "timeline" => self.session.execute("video.status", json!({})).map_err(|e| e.to_string()),
+=======
+                    "timeline" => self.session.execute("video.timeline", json!({})).map_err(|e| e.to_string()),
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
                     _ => Ok(json!({
                         "ok": true,
                         "view": self.ui_state.effective_view().as_id(),
@@ -370,7 +432,11 @@ impl MagicDesktopApp {
                         "dirty": crate::lifecycle::verify_clean(&self.session, &self.ui_state).is_err(),
                         "workshop": status,
                         "storyboard": self.session.execute("storyboard.check", json!({})).ok(),
+<<<<<<< HEAD
                         "timeline": self.session.execute("video.status", json!({})).ok(),
+=======
+                        "timeline": self.session.execute("video.timeline", json!({})).ok(),
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
                     })),
                 }
             }
@@ -407,10 +473,17 @@ impl MagicDesktopApp {
     fn active_stage_element_id(&self, override_stage: Option<&str>) -> &'static str {
         match override_stage.and_then(ViewMode::parse).unwrap_or_else(|| self.ui_state.effective_view()) {
             ViewMode::Storyboard => "storyboard-spread-canvas",
+<<<<<<< HEAD
             ViewMode::Animation => "animation-stage-canvas",
             ViewMode::Design => "words-stage",
             ViewMode::Motion => "motion-canvas",
             ViewMode::Studio => "film-preview",
+=======
+            ViewMode::Animation => "motion-canvas",
+            ViewMode::Design => "words-stage",
+            ViewMode::Motion => "motion-canvas",
+            ViewMode::Studio => "film-player",
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             ViewMode::Project => "view-project",
             ViewMode::Home => "view-home",
         }
@@ -460,7 +533,11 @@ impl MagicDesktopApp {
         match self.ui_state.effective_view() {
             ViewMode::Design => "words-timeline",
             ViewMode::Motion => "motion-timeline",
+<<<<<<< HEAD
             ViewMode::Animation => "animation-theatre-dock",
+=======
+            ViewMode::Animation => "anim-theatre-timeline",
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             _ => "studio-timeline",
         }
     }
@@ -542,16 +619,31 @@ impl MagicDesktopApp {
                 "nativeWindowFocused": win_focused,
                 "effectiveWindowFocused": win_focused,
             },
+<<<<<<< HEAD
             "panels": {
                 "studioWorkspace": self.ui_state.studio.inspector_tab,
                 "studioScopes": self.ui_state.studio.scopes_visible,
+=======
+            "docking": magic_ui_egui::docking::inspect_docking(ctx, &self.ui_state),
+            "panels": {
+                "workspace": self.ui_state.docking.active_name,
+                "studioWorkspace": self.ui_state.studio.inspector_tab,
+                "studioScopes": self.ui_state.docking.is_panel_visible(magic_ui_egui::PanelId::Scopes) || self.ui_state.studio.scopes_visible,
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
                 "animTab": self.ui_state.animation.inspector_tab,
                 "theatreTab": self.ui_state.animation.dock_tab,
                 "lyricsTab": self.ui_state.lyrics.inspector_tab,
                 "motionTab": self.ui_state.motion.inspector_tab,
                 "ribbonCollapsed": self.ui_state.ribbon_collapsed,
+<<<<<<< HEAD
                 "assetsOpen": self.ui_state.assets_drawer_open,
                 "fidgetOpen": self.ui_state.fidget_open,
+=======
+                "assetsOpen": self.ui_state.docking.is_panel_visible(magic_ui_egui::PanelId::Assets),
+                "fidgetOpen": self.ui_state.docking.is_panel_visible(magic_ui_egui::PanelId::Fidget),
+                "historyOpen": self.ui_state.docking.is_panel_visible(magic_ui_egui::PanelId::History),
+                "fontsOpen": self.ui_state.docking.is_panel_visible(magic_ui_egui::PanelId::Fonts),
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             },
             "viewport": {
                 "width": screen.width(),
@@ -570,6 +662,13 @@ impl MagicDesktopApp {
                 "playing": self.ui_state.audio_playing,
                 "currentTime": self.ui_state.audio_time_sec,
                 "duration": self.ui_state.audio_duration_sec,
+<<<<<<< HEAD
+=======
+            "rmsDbfs": self.ui_state.cache.song_waveform.get("rms_dbfs"),
+            "peakDbfs": self.ui_state.cache.song_waveform.get("peak_dbfs"),
+                "rmsDbfs": self.ui_state.cache.song_waveform.get("rms_dbfs"),
+                "peakDbfs": self.ui_state.cache.song_waveform.get("peak_dbfs"),
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             },
         })
     }
@@ -611,8 +710,16 @@ impl MagicDesktopApp {
                 "lyricsTab",
                 "motionTab",
                 "ribbonCollapsed",
+<<<<<<< HEAD
                 "assetsOpen",
                 "fidgetOpen",
+=======
+                "workspace",
+                "assetsOpen",
+                "fidgetOpen",
+                "historyOpen",
+                "fontsOpen",
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
             ],
         )?;
         self.apply_shell_ui_fields(params)?;
@@ -684,11 +791,28 @@ impl MagicDesktopApp {
         if let Some(rc) = params.get("ribbonCollapsed").and_then(Value::as_bool) {
             self.ui_state.ribbon_collapsed = rc;
         }
+<<<<<<< HEAD
         if let Some(ao) = params.get("assetsOpen").and_then(Value::as_bool) {
             self.ui_state.assets_drawer_open = ao;
         }
         if let Some(fo) = params.get("fidgetOpen").and_then(Value::as_bool) {
             self.ui_state.fidget_open = fo;
+=======
+        if let Some(ws_name) = params.get("workspace").and_then(Value::as_str) {
+            self.ui_state.docking.switch_workspace(ws_name)?;
+        }
+        if let Some(ao) = params.get("assetsOpen").and_then(Value::as_bool) {
+            self.ui_state.docking.set_panel_visible(magic_ui_egui::PanelId::Assets, ao);
+        }
+        if let Some(fo) = params.get("fidgetOpen").and_then(Value::as_bool) {
+            self.ui_state.docking.set_panel_visible(magic_ui_egui::PanelId::Fidget, fo);
+        }
+        if let Some(ho) = params.get("historyOpen").and_then(Value::as_bool) {
+            self.ui_state.docking.set_panel_visible(magic_ui_egui::PanelId::History, ho);
+        }
+        if let Some(fmo) = params.get("fontsOpen").and_then(Value::as_bool) {
+            self.ui_state.docking.set_panel_visible(magic_ui_egui::PanelId::Fonts, fmo);
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
         }
         Ok(())
     }

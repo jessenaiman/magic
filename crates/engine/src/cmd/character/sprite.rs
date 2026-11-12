@@ -50,9 +50,12 @@ pub fn cmd_character_sprite(s: &mut Session, p: &Value) -> Result<Value> {
     std::fs::create_dir_all(&dir)?;
 
     let lock_baseline = !matches!(action, "jump" | "fly");
+<<<<<<< HEAD
     if sheet.extension().is_some_and(|e| e.eq_ignore_ascii_case("anicraft") || e.eq_ignore_ascii_case("ani")) {
         return Err(bad("render `.anicraft` frame sequences directly with `anicraft-cli render-seq`, then pass the exported PNG sheet"));
     }
+=======
+>>>>>>> 9055759 (Fix craft-libs d23f5f3 API migration and get Magic Studio compiling and running)
     let target_sheet = dir.join("sheet.png");
     if sheet.canonicalize().ok() != target_sheet.canonicalize().ok() {
         std::fs::copy(&sheet, &target_sheet)?;
