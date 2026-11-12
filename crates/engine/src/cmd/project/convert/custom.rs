@@ -52,7 +52,8 @@ impl LegacyConverter for CustomConverter {
                                 concat!(
                                     "Legacy `.magic` referenced missing custom asset `{rel}`; ",
                                     "save via `magic-cli exec project.save_asset path=<file>`"
-                                )
+                                ),
+                                rel = rel
                             ),
                         });
                     }

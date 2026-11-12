@@ -86,7 +86,7 @@ pub fn cmd_character_sprite(s: &mut Session, p: &Value) -> Result<Value> {
         step("layer.quickSetAnchor", json!({"layers": [1], "point": if lock_baseline { "bottomCenter" } else { "center" }})),
         step("layer.enableTimeRemap", json!({"layers": [1], "value": true})),
         step("layer.timing", json!({"layers": [1], "out": duration})),
-        step("prop.setExpression", json!({"layer": 1, "path": "timeRemap", "expression": "loopOut(\\"cycle\\")"})),
+        step("prop.setExpression", json!({"layer": 1, "path": "timeRemap", "expression": r#"loopOut("cycle")"#})),
     ];
     if p["mirror"] == true {
         steps.push(step("layer.setTransform", json!({"layers": [1], "prop": "scale", "value": [-100, 100]})));
