@@ -1,8 +1,8 @@
-//! Sprite-sheet cell geometry and `plush-9` part-slot schema metadata (`craft-scribbles`, Layer 4).
+//! Sprite-sheet cell geometry and `plush-9` part-slot schema metadata (`magic-scribbles`, Layer 4).
 //!
 //! All raster background removal, chroma keying, subject isolation, edge refinement, and vector
 //! silhouette tracing are delegated to `PhotoCraft`, `VectorCraft`, and `EffectCraft` via
-//! `CraftHub` in `crates/engine` — never hand-rolled pixel matting loops.
+//! `native_media` in `crates/engine` using `image` and `craft-atomic`.
 
 use std::path::PathBuf;
 

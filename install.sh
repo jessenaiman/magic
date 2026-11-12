@@ -117,6 +117,6 @@ refresh_desktop_caches
 
 echo ""
 echo "Magic Studio installed to $PREFIX"
-echo "  Live Studio + MCP:  $BIN_DIR/magic --control 9876"
+echo "  Live Studio + MCP:  $BIN_DIR/magic --control 9875"
 echo "  Register MCP:       claude mcp add magic -- $BIN_DIR/magic-cli mcp"
 echo "  Suite Diagnostics:  $BIN_DIR/magic-cli exec app.doctor"

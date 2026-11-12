@@ -1,8 +1,21 @@
-//! Typed application preferences persisted in `config.toml` via [`craft_settings::SettingsStore`].
+//! Typed coordinator preferences persisted in `config.toml` via [`craft_settings::SettingsStore`].
+//!
+//! Follows the `craft-settings` contract:
+//! - One in-memory [`SettingsStore<MagicPrefs>`] per [`crate::Session`] (`Location::Memory` for
+//!   isolated/test sessions so tests never touch user profiles; `Location::Auto` for user sessions,
+//!   retaining `LoadReport` diagnostics).
+//! - Every struct carries `#[serde(default)]` without `#[serde(deny_unknown_fields)]` so unknown or
+//!   newer keys in `config.toml` survive untouched.
+//! - Desktop frames call [`SessionSettings::tick`] (`500 ms` debounced atomic save with retry) and
+//!   [`SessionSettings::flush`] on exit; headless CLI commands flush on mutation.
 
 use std::collections::BTreeMap;
+use std::fmt;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
-use craft_settings::{Location, Settings, SettingsStore};
+use craft_settings::{Location, SaveStatus, Settings, SettingsStore};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -26,7 +39,12 @@ pub struct FidgetPrefs {
 
 impl Default for FidgetPrefs {
     fn default() -> Self {
-        Self { enabled: true, seamless: false, connection: None, model: None }
+        Self {
+            enabled: true,
+            seamless: false,
+            connection: None,
+            model: None,
+        }
     }
 }
 
@@ -42,7 +60,13 @@ pub struct ScribblesPrefs {
 
 impl Default for ScribblesPrefs {
     fn default() -> Self {
-        Self { enabled: true, connection: None, model: None, endpoint: None, template: Some("new".into()) }
+        Self {
+            enabled: true,
+            connection: None,
+            model: None,
+            endpoint: None,
+            template: Some("new".into()),
+        }
     }
 }
 
@@ -58,7 +82,13 @@ pub struct ProjectPrefs {
 
 impl Default for ProjectPrefs {
     fn default() -> Self {
-        Self { root: None, characters_root: None, storyboard_template: "magic".into(), storyboard_format: "pdfcraft".into(), storyboard_locked: true }
+        Self {
+            root: None,
+            characters_root: None,
+            storyboard_template: "magic".into(),
+            storyboard_format: "pdfcraft".into(),
+            storyboard_locked: true,
+        }
     }
 }
 
@@ -72,22 +102,11 @@ pub struct LyricsPrefs {
 
 impl Default for LyricsPrefs {
     fn default() -> Self {
-        Self { default_size: 72, outline: true, font_dirs: None }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct CraftBridgePrefs {
-    pub filmcraft_port: i64,
-    pub effectcraft_port: i64,
-    pub prefer_live_bridge: bool,
-    pub effectcraft_mcp_autosave: bool,
-}
-
-impl Default for CraftBridgePrefs {
-    fn default() -> Self {
-        Self { filmcraft_port: 9876, effectcraft_port: 9877, prefer_live_bridge: true, effectcraft_mcp_autosave: true }
+        Self {
+            default_size: 72,
+            outline: true,
+            font_dirs: None,
+        }
     }
 }
 
@@ -116,7 +135,13 @@ pub struct AppearancePrefs {
 
 impl Default for AppearancePrefs {
     fn default() -> Self {
-        Self { interface_style: "aurora".into(), theme: "dark".into(), accessible_contrast: false, accent: "teal".into(), ui_scale: 1.0 }
+        Self {
+            interface_style: "aurora".into(),
+            theme: "dark".into(),
+            accessible_contrast: false,
+            accent: "teal".into(),
+            ui_scale: 1.0,
+        }
     }
 }
 
@@ -155,76 +180,6 @@ impl Default for AutosavePrefs {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct MediaCachePrefs {
-    pub max_mb: i64,
-    pub location: Option<String>,
-}
-
-impl Default for MediaCachePrefs {
-    fn default() -> Self {
-        Self { max_mb: 4096, location: None }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct PlaybackPrefs {
-    pub resolution: String,
-    pub draft_decode: bool,
-}
-
-impl Default for PlaybackPrefs {
-    fn default() -> Self {
-        Self { resolution: "half".into(), draft_decode: true }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct TimelinePrefs {
-    pub still_image_duration: f64,
-    pub transition_duration: f64,
-}
-
-impl Default for TimelinePrefs {
-    fn default() -> Self {
-        Self { still_image_duration: 5.0, transition_duration: 1.0 }
-    }
-}
-
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct AudioPrefs {
-    pub edit_location: Option<String>,
-    pub output_device: String,
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct LabelsPrefs {
-    pub preset: String,
-}
-
-impl Default for LabelsPrefs {
-    fn default() -> Self {
-        Self { preset: "Default".into() }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct MediaPrefs {
-    pub analyze_on_import: bool,
-}
-
-impl Default for MediaPrefs {
-    fn default() -> Self {
-        Self { analyze_on_import: true }
-    }
-}
-
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct MagicPrefs {
@@ -233,18 +188,10 @@ pub struct MagicPrefs {
     pub scribbles: ScribblesPrefs,
     pub project: ProjectPrefs,
     pub lyrics: LyricsPrefs,
-    pub craft: CraftBridgePrefs,
     pub animation: AnimationPrefs,
     pub appearance: AppearancePrefs,
     pub general: GeneralPrefs,
     pub autosave: AutosavePrefs,
-    #[serde(rename = "mediaCache")]
-    pub media_cache: MediaCachePrefs,
-    pub playback: PlaybackPrefs,
-    pub timeline: TimelinePrefs,
-    pub audio: AudioPrefs,
-    pub labels: LabelsPrefs,
-    pub media: MediaPrefs,
     pub tools: BTreeMap<String, String>,
 }
 
@@ -265,7 +212,10 @@ fn bad(msg: impl Into<String>) -> EngineError {
 }
 
 fn validate_schema_value(key: &str, value: &Value) -> Result<()> {
-    let (_, field) = fields_with_cat().into_iter().find(|(_, f)| f.key == key).ok_or_else(|| bad(format!("unknown setting `{key}`; see prefs.schema")))?;
+    let (_, field) = fields_with_cat()
+        .into_iter()
+        .find(|(_, f)| f.key == key)
+        .ok_or_else(|| bad(format!("unknown setting `{key}`; see prefs.schema")))?;
     match field.kind {
         Kind::Bool => {
             if !value.is_boolean() {
@@ -329,10 +279,6 @@ impl MagicPrefs {
             "lyrics.default_size" => json!(self.lyrics.default_size),
             "lyrics.outline" => json!(self.lyrics.outline),
             "lyrics.font_dirs" => opt_str_json(&self.lyrics.font_dirs),
-            "craft.filmcraft_port" => json!(self.craft.filmcraft_port),
-            "craft.effectcraft_port" => json!(self.craft.effectcraft_port),
-            "craft.prefer_live_bridge" => json!(self.craft.prefer_live_bridge),
-            "craft.effectcraft_mcp_autosave" => json!(self.craft.effectcraft_mcp_autosave),
             "animation.loop_preview" => json!(self.animation.loop_preview),
             "animation.duration" => json!(self.animation.duration),
             "general.at_startup" => json!(self.general.at_startup),
@@ -342,16 +288,6 @@ impl MagicPrefs {
             "general.recent_projects" => json!(self.general.recent_projects),
             "autosave.enabled" => json!(self.autosave.enabled),
             "autosave.interval_minutes" => json!(self.autosave.interval_minutes),
-            "mediaCache.max_mb" => json!(self.media_cache.max_mb),
-            "mediaCache.location" => opt_str_json(&self.media_cache.location),
-            "playback.resolution" => json!(self.playback.resolution),
-            "playback.draft_decode" => json!(self.playback.draft_decode),
-            "timeline.still_image_duration" => json!(self.timeline.still_image_duration),
-            "timeline.transition_duration" => json!(self.timeline.transition_duration),
-            "audio.edit_location" => opt_str_json(&self.audio.edit_location),
-            "audio.output_device" => json!(self.audio.output_device),
-            "labels.preset" => json!(self.labels.preset),
-            "media.analyze_on_import" => json!(self.media.analyze_on_import),
             _ => Value::Null,
         }
     }
@@ -382,10 +318,6 @@ impl MagicPrefs {
             "lyrics.default_size" => self.lyrics.default_size = value.as_i64().unwrap_or(72),
             "lyrics.outline" => self.lyrics.outline = value.as_bool().unwrap_or(true),
             "lyrics.font_dirs" => self.lyrics.font_dirs = opt_str_from_value(value),
-            "craft.filmcraft_port" => self.craft.filmcraft_port = value.as_i64().unwrap_or(9876),
-            "craft.effectcraft_port" => self.craft.effectcraft_port = value.as_i64().unwrap_or(9877),
-            "craft.prefer_live_bridge" => self.craft.prefer_live_bridge = value.as_bool().unwrap_or(true),
-            "craft.effectcraft_mcp_autosave" => self.craft.effectcraft_mcp_autosave = value.as_bool().unwrap_or(true),
             "animation.loop_preview" => self.animation.loop_preview = value.as_bool().unwrap_or(true),
             "animation.duration" => self.animation.duration = value.as_f64().unwrap_or(4.0),
             "general.at_startup" => self.general.at_startup = value.as_str().unwrap_or("showHome").to_owned(),
@@ -395,45 +327,177 @@ impl MagicPrefs {
             "general.recent_projects" => self.general.recent_projects = value.as_str().unwrap_or_default().to_owned(),
             "autosave.enabled" => self.autosave.enabled = value.as_bool().unwrap_or(true),
             "autosave.interval_minutes" => self.autosave.interval_minutes = value.as_i64().unwrap_or(5),
-            "mediaCache.max_mb" => self.media_cache.max_mb = value.as_i64().unwrap_or(4096),
-            "mediaCache.location" => self.media_cache.location = opt_str_from_value(value),
-            "playback.resolution" => self.playback.resolution = value.as_str().unwrap_or("half").to_owned(),
-            "playback.draft_decode" => self.playback.draft_decode = value.as_str().is_none() && value.as_bool().unwrap_or(true),
-            "timeline.still_image_duration" => self.timeline.still_image_duration = value.as_f64().unwrap_or(5.0),
-            "timeline.transition_duration" => self.timeline.transition_duration = value.as_f64().unwrap_or(1.0),
-            "audio.edit_location" => self.audio.edit_location = opt_str_from_value(value),
-            "audio.output_device" => self.audio.output_device = value.as_str().unwrap_or_default().to_owned(),
-            "labels.preset" => self.labels.preset = value.as_str().unwrap_or("Default").to_owned(),
-            "media.analyze_on_import" => self.media.analyze_on_import = value.as_bool().unwrap_or(true),
             _ => return Err(bad(format!("unknown setting `{key}`; see prefs.schema"))),
         }
         Ok(())
     }
 }
 
+struct SettingsInner {
+    store: SettingsStore<MagicPrefs>,
+    has_problems: bool,
+    read_only: bool,
+    broken_moved_to: Option<PathBuf>,
+    last_save_error: Option<String>,
+}
+
+/// Long-lived in-memory [`SettingsStore<MagicPrefs>`] handle owned by a [`crate::Session`].
+#[derive(Clone)]
+pub struct SessionSettings {
+    inner: Arc<Mutex<SettingsInner>>,
+}
+
+impl fmt::Debug for SessionSettings {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SessionSettings")
+            .field("path", &self.path())
+            .field("persistent", &self.is_persistent())
+            .finish()
+    }
+}
+
+impl Default for SessionSettings {
+    fn default() -> Self {
+        Self::memory()
+    }
+}
+
+impl SessionSettings {
+    pub fn open_at(loc: Location) -> Self {
+        let (store, report) = SettingsStore::<MagicPrefs>::open(loc);
+        Self {
+            inner: Arc::new(Mutex::new(SettingsInner {
+                store,
+                has_problems: report.has_problems(),
+                read_only: report.read_only,
+                broken_moved_to: report.broken_moved_to,
+                last_save_error: None,
+            })),
+        }
+    }
+
+    /// In-memory store (`Location::Memory`) for tests and isolated headless sessions.
+    pub fn memory() -> Self {
+        Self::open_at(Location::Memory)
+    }
+
+    /// Platform/portable persistent store (`Location::Auto`) opened once per user session.
+    pub fn auto() -> Self {
+        Self::open_at(Location::Auto)
+    }
+
+    pub fn prefs(&self) -> MagicPrefs {
+        match self.inner.lock() {
+            Ok(guard) => guard.store.get().clone(),
+            Err(p) => p.into_inner().store.get().clone(),
+        }
+    }
+
+    pub fn path(&self) -> Option<PathBuf> {
+        match self.inner.lock() {
+            Ok(guard) => guard.store.path().map(Path::to_path_buf),
+            Err(p) => p.into_inner().store.path().map(Path::to_path_buf),
+        }
+    }
+
+    pub fn is_persistent(&self) -> bool {
+        match self.inner.lock() {
+            Ok(guard) => guard.store.is_persistent(),
+            Err(p) => p.into_inner().store.is_persistent(),
+        }
+    }
+
+    pub fn report_json(&self) -> Value {
+        let guard = match self.inner.lock() {
+            Ok(g) => g,
+            Err(p) => p.into_inner(),
+        };
+        json!({
+            "persistent": guard.store.is_persistent(),
+            "path": guard.store.path(),
+            "has_problems": guard.has_problems,
+            "read_only": guard.read_only,
+            "broken_moved_to": guard.broken_moved_to,
+            "last_save_error": guard.last_save_error,
+        })
+    }
+
+    pub fn get_value(&self, key: &str) -> Value {
+        self.prefs().get_value(key)
+    }
+
+    pub fn mutate(&self, f: impl FnOnce(&mut MagicPrefs), flush_now: bool) -> Result<()> {
+        let mut guard = match self.inner.lock() {
+            Ok(g) => g,
+            Err(p) => p.into_inner(),
+        };
+        guard.store.update(f);
+        if flush_now {
+            guard.store.flush().map_err(|e| {
+                guard.last_save_error = Some(e.to_string());
+                bad(format!("failed to save config.toml: {e}"))
+            })?;
+            guard.last_save_error = None;
+        }
+        Ok(())
+    }
+
+    pub fn set_value(&self, key: &str, value: &Value, flush_now: bool) -> Result<Value> {
+        validate_schema_value(key, value)?;
+        let mut guard = match self.inner.lock() {
+            Ok(g) => g,
+            Err(p) => p.into_inner(),
+        };
+        let mut err = None;
+        guard.store.update(|prefs| {
+            if let Err(e) = prefs.set_value(key, value) {
+                err = Some(e);
+            }
+        });
+        if let Some(e) = err {
+            return Err(e);
+        }
+        if flush_now {
+            guard.store.flush().map_err(|e| {
+                guard.last_save_error = Some(e.to_string());
+                bad(format!("failed to save config.toml: {e}"))
+            })?;
+            guard.last_save_error = None;
+        }
+        Ok(guard.store.get().get_value(key))
+    }
+
+    /// Drive debounced `craft-settings` persistence from the desktop event loop (`500 ms` after
+    /// the last change), returning `next_deadline` so `eframe` schedules a repaint when idle.
+    pub fn tick(&self, now: Instant) -> Option<Instant> {
+        let mut guard = match self.inner.lock() {
+            Ok(g) => g,
+            Err(p) => p.into_inner(),
+        };
+        let res = guard.store.tick(now);
+        if let SaveStatus::Failed(err) = &res.status {
+            guard.last_save_error = Some(err.to_string());
+        } else {
+            guard.last_save_error = None;
+        }
+        res.next_deadline
+    }
+
+    pub fn flush(&self) -> Result<()> {
+        let mut guard = match self.inner.lock() {
+            Ok(g) => g,
+            Err(p) => p.into_inner(),
+        };
+        guard.store.flush().map_err(|e| {
+            guard.last_save_error = Some(e.to_string());
+            bad(format!("failed to save config.toml: {e}"))
+        })?;
+        guard.last_save_error = None;
+        Ok(())
+    }
+}
+
+/// Process-level compatibility accessor for stateless callers outside a [`crate::Session`].
 pub fn open_store() -> SettingsStore<MagicPrefs> {
     SettingsStore::<MagicPrefs>::open(Location::Auto).0
-}
-
-pub fn open_store_at(loc: Location) -> SettingsStore<MagicPrefs> {
-    SettingsStore::<MagicPrefs>::open(loc).0
-}
-
-pub fn get(key: &str) -> Value {
-    open_store().get().get_value(key)
-}
-
-pub fn set(key: &str, value: &Value) -> Result<Value> {
-    let mut store = open_store();
-    let mut err = None;
-    store.update(|prefs| {
-        if let Err(e) = prefs.set_value(key, value) {
-            err = Some(e);
-        }
-    });
-    if let Some(e) = err {
-        return Err(e);
-    }
-    store.flush().map_err(|e| EngineError::InvalidParams(format!("failed to save config.toml: {e}")))?;
-    Ok(store.get().get_value(key))
 }

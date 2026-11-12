@@ -2,7 +2,7 @@
 
 **Magic Studio** (`magic`, `magic-cli`, `magic-mcp`) is a pure-Rust song-to-video coordinator application (`eframe` + `egui` 0.37 + [`storytold/craft-libs`](https://github.com/storytold/craft-libs)) for the [ArtCraft](https://github.com/storytold) desktop creative suite.
 
-Like [`PhotoCraft`](https://github.com/storytold/photocraft), [`VectorCraft`](https://github.com/storytold/vectorcraft), [`DesignCraft`](https://github.com/storytold/designcraft), [`EffectCraft`](https://github.com/storytold/effectcraft), and [`FilmCraft`](https://github.com/storytold/filmcraft), Magic Studio separates a clean Rust coordinator engine (`crates/engine`), a shared `egui` 0.37 shell crate (`crates/ui-egui`), a headless CLI (`magic-cli`), a stdio [Model Context Protocol](https://modelcontextprotocol.io) server (`magic-cli mcp` / `magic-mcp`), and a native `eframe` desktop app (`magic --control 9876`) with zero Tauri, Electron, or webview dependencies.
+Like [`PhotoCraft`](https://github.com/storytold/photocraft), [`VectorCraft`](https://github.com/storytold/vectorcraft), [`DesignCraft`](https://github.com/storytold/designcraft), [`EffectCraft`](https://github.com/storytold/effectcraft), and [`FilmCraft`](https://github.com/storytold/filmcraft), Magic Studio separates a clean Rust coordinator engine (`crates/engine`), a shared `egui` 0.37 shell crate (`crates/ui-egui`), a headless CLI (`magic-cli`), a stdio [Model Context Protocol](https://modelcontextprotocol.io) server (`magic-cli mcp` / `magic-mcp`), and a native `eframe` desktop app (`magic --control 9875`) with zero Tauri, Electron, or webview dependencies.
 
 ## What Magic Studio Coordinates
 

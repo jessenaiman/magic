@@ -1,6 +1,5 @@
-//! `magic-cli`: headless CLI and MCP server over `magic::Session` and live `--control`
-//! (`magic --control 9875`), plus sibling bridges to `FilmCraft` (`:9876` +
-//! `FILMCRAFT_CONTROL_TOKEN`) and `EffectCraft` (`:9877` + `mcp --autosave`).
+//! `magic-cli`: headless CLI, live `app` control client, and stdio MCP server over `magic::Session`
+//! (`magic --control 9875`), plus deterministic 3-line signposts for sibling ArtCraft products.
 
 #![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable))]
 
@@ -10,19 +9,26 @@ use std::io::{BufRead, Write};
 
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use serde_json::{Value, json};
-use subcommands::{BridgeCmd, CaptionsArgs, ControlsArgs, ExportArgs, FinishArgs, ImportAepArgs, InterchangeArgs, LottieArgs, MarkersArgs};
+use subcommands::{
+    CaptionsArgs, ControlsArgs, ConvertArgs, ExportArgs, FinishArgs,
+    InterchangeArgs, MarkersArgs,
+};
 
 const AFTER_HELP: &str = "\
 CREATE:   magic-cli new --audio song.wav --name \"My Song\" [--wizard]
+CONVERT:  magic-cli convert <hyperframes|remotion|custom|auto> <legacy_dir> [--magic-root ./magic]
 CONTROLS: magic-cli controls [filter] [--stage studio] [--live]
-BRIDGE:   magic-cli bridge status | preflight | sync | link <p.ecproj> | fc <cmd> | ec <cmd>
 FINISH:   magic-cli finish <op> [key=val ...] | magic-cli export [out.mp4] --codec prores
 INTEROP:  magic-cli interchange export --format otio | magic-cli lottie export | magic-cli import-aep in.aep
 MCP:      magic-cli mcp [--connect 127.0.0.1:9875 | --headless]
-LIVE:     magic --control 9875, then magic-cli --connect 127.0.0.1:9875 ui inspect";
+LIVE:     magic --control 9875, then magic-cli app --port 9875 ui.inspect";
 
 #[derive(Parser)]
-#[command(name = "magic-cli", about = "Drive Magic Studio, FilmCraft (:9876), and EffectCraft (:9877) headlessly or over live `--control`", after_help = AFTER_HELP)]
+#[command(
+    name = "magic-cli",
+    about = "Drive Magic Studio headlessly or over live `--control 9875`",
+    after_help = AFTER_HELP
+)]
 pub struct Cli {
     /// Open this `.magic` project first (headless)
     #[arg(long, global = true)]
@@ -36,12 +42,6 @@ pub struct Cli {
     /// Connect to a running `magic --control <PORT>` window (`127.0.0.1:9875` or `9875`)
     #[arg(long, visible_aliases = ["bridge", "control"], global = true)]
     pub connect: Option<String>,
-    /// Override FilmCraft `--control` port (`FILMCRAFT_CONTROL_PORT`, default `9876`)
-    #[arg(long, global = true)]
-    pub filmcraft_port: Option<u16>,
-    /// Override EffectCraft `--control` port (`EFFECTCRAFT_CONTROL_PORT`, default `9877`)
-    #[arg(long, global = true)]
-    pub effectcraft_port: Option<u16>,
     /// Extra font directories forwarded as `EFFECTCRAFT_FONT_DIRS`
     #[arg(long, global = true)]
     pub font_dirs: Option<String>,
@@ -100,23 +100,18 @@ struct NewArgs {
 enum Cmd {
     /// Create a new song project (`--audio` transcribes timestamps, syncs FilmCraft lyrics, and initializes printable `storyboard.pdf`)
     New(NewArgs),
+    /// Convert a HyperFrames, Remotion, or Custom legacy project into `magic/projects/<slug>/` (archiving `magic/originals/`)
+    Convert(ConvertArgs),
     /// List engine commands (`id` and `label`; `describe` shows one in full)
     Commands { filter: Option<String> },
-    /// List all `--control` RPC methods, ports (`:9875`, `:9876`, `:9877`), and stage commands
+    /// List all `--control` RPC methods (`:9875`) and stage commands
     Controls(ControlsArgs),
     /// Describe one command as JSON
     Describe { id: String },
-    /// Inspect project, storyboard, timeline, bridge (`:9876`/`:9877`), preflight, history, or doctor state as JSON
+    /// Inspect project, storyboard, timeline, or doctor state as JSON
     Inspect { target: Option<String> },
-    /// Cross-app `FilmCraft` (`:9876`) × `EffectCraft` (`:9877`) Dynamic Link, preflight, history, templates, and `--control` bridge
-    #[command(subcommand)]
-    Bridge(BridgeCmd),
     /// Bidirectional `OTIO` / `FCPXML` / `XML` / `EDL` / `AAF` / `OMF` / `ALE` sequence interchange (`T03`)
     Interchange(InterchangeArgs),
-    /// Two-way Lottie (`.json`) and dotLottie (`.lottie`) export & import (`T04`)
-    Lottie(LottieArgs),
-    /// Clean-room After Effects `.aep` / `.aepx` import with dry-run loss preview (`T05`)
-    ImportAep(ImportAepArgs),
     /// Execute a FilmCraft Studio finishing operation (`T32`–`T42`: edit, trim, color, FX, audio, mixer, titles)
     Finish(FinishArgs),
     /// Export master film via FilmCraft's pure-Rust codecs (`H.264`, `HEVC`, `ProRes`, `DNxHR`, `APV`, `AV1`, `MXF`, `EXR`, `Opus`) (`T42`)
@@ -144,6 +139,19 @@ enum Cmd {
     Mcp {
         #[arg(long)]
         headless: bool,
+    },
+    /// Call a running `magic --control <PORT>` window directly (RFC-0012 `app` subcommand)
+    App {
+        /// Control port or `127.0.0.1:PORT` (defaults to `--connect` or `127.0.0.1:9875`)
+        #[arg(long)]
+        port: Option<String>,
+        /// Explicit control-protocol method name (e.g. `ui.inspect`, `ui.screenshot`)
+        #[arg(long)]
+        method: Option<String>,
+        /// Command ID or control method when `--method` is omitted
+        target: Option<String>,
+        /// Optional JSON parameters or `key=value` pairs
+        arguments: Vec<String>,
     },
     /// Control a live desktop window through `--connect 127.0.0.1:9875`
     Ui {
@@ -286,7 +294,10 @@ fn run_new(target: &mut Target, args: NewArgs) -> Result<(), String> {
     let is_anim = params.get("mode").and_then(Value::as_str) == Some("animation");
     if !is_anim && params.get("audio").and_then(Value::as_str).is_none_or(|s| s.trim().is_empty()) {
         return Err(
-            "magic-cli new requires --audio <SONG_FILE> (or audio=<SONG_FILE>) so Magic can transcribe timestamps, sync the FilmCraft lyric track, and start the storyboard.".into(),
+            concat!(
+                "magic-cli new requires --audio <SONG_FILE> (or audio=<SONG_FILE>) so Magic can transcribe ",
+                "timestamps, sync the FilmCraft lyric track, and start the storyboard."
+            ).into(),
         );
     }
     let wiz = build_wizard_params(params.get("wizard").cloned(), &args);
@@ -310,9 +321,6 @@ fn inspect(target: &mut Target, what: Option<String>) -> Result<(), String> {
         "project" => target.call("workshop.status", json!({}))?,
         "storyboard" => target.call("storyboard.check", json!({}))?,
         "timeline" | "sequence" => target.call("video.timeline", json!({}))?,
-        "bridge" => target.call("bridge.status", json!({}))?,
-        "preflight" => target.call("bridge.preflight", json!({"action": "check"}))?,
-        "history" => target.call("bridge.history", json!({"op": "list"}))?,
         "doctor" => target.call("app.doctor", json!({}))?,
         "effects" => json!({
             "words": target.call("words.effects", json!({})).unwrap_or(Value::Null),
@@ -322,7 +330,6 @@ fn inspect(target: &mut Target, what: Option<String>) -> Result<(), String> {
             "project": target.call("workshop.status", json!({}))?,
             "storyboard": target.call("storyboard.check", json!({})).unwrap_or(Value::Null),
             "timeline": target.call("video.timeline", json!({})).unwrap_or(Value::Null),
-            "bridge": target.call("bridge.status", json!({})).unwrap_or(Value::Null),
         }),
         other => return Err(format!("inspect: unknown `{other}` (all | project | storyboard | timeline | bridge | preflight | history | effects | doctor)")),
     };
@@ -384,9 +391,6 @@ fn ui_action(action: &str, target: Option<String>, mut args: Vec<String>, raw: O
         "timeline-locate" => "ui.timeline.locate".to_owned(),
         "timeline-hit" => "ui.timeline.hit".to_owned(),
         "render-frame" => "render.frame".to_owned(),
-        "filmcraft" | "fc" => "ui.filmcraft".to_owned(),
-        "effectcraft" | "ec" => "ui.effectcraft".to_owned(),
-        "craft" => "ui.craft".to_owned(),
         "menu" => "ui.menu.list".to_owned(),
         "keymap" => "ui.keymap.press".to_owned(),
         "playback" => "ui.playback".to_owned(),
@@ -401,8 +405,6 @@ fn ui_action(action: &str, target: Option<String>, mut args: Vec<String>, raw: O
             ("workspace", _) => Some("studioWorkspace"),
             ("keymap", _) => Some("chord"),
             ("elements", _) => Some("prefix"),
-            ("filmcraft" | "fc" | "effectcraft" | "ec", _) => Some("method"),
-            ("craft", _) => Some("app"),
             (_, "ui.focus" | "ui.click") => Some("id"),
             (_, "ui.playback") => Some("action"),
             (_, "ui.key") => Some("key"),
@@ -426,6 +428,180 @@ fn run_ui(target: &mut Target, action: &str, value: Option<String>, params: Opti
     Ok(())
 }
 
+
+struct SiblingProductSpec {
+    slug: &'static str,
+    title: &'static str,
+    mcp_cmd: &'static str,
+    open_cmd: &'static str,
+    auth_note: &'static str,
+}
+
+const SIBLING_PRODUCTS: &[SiblingProductSpec] = &[
+    SiblingProductSpec {
+        slug: "deckcraft",
+        title: "DeckCraft",
+        mcp_cmd: "deckcraft-cli mcp --connect 7990  (or headless: deckcraft-cli mcp)",
+        open_cmd: "deckcraft --control 7990",
+        auth_note: "macOS ships deckcraft-cli in a separate release zip; Windows MSI installs to %LOCALAPPDATA%\\Programs\\ArtCraft\\DeckCraft\\",
+    },
+    SiblingProductSpec {
+        slug: "designcraft",
+        title: "DesignCraft",
+        mcp_cmd: "designcraft-cli mcp --connect 7979  (or headless: designcraft-cli mcp)",
+        open_cmd: "designcraft --control 7979",
+        auth_note: "Port 7979 is shared in examples with VectorCraft/CADCraft/GridCraft; pick a free port if busy",
+    },
+    SiblingProductSpec {
+        slug: "filmcraft",
+        title: "FilmCraft",
+        mcp_cmd: "filmcraft-cli mcp --bridge 127.0.0.1:9876  (or headless: filmcraft-cli mcp --project <p.fcproj>)",
+        open_cmd: "export FILMCRAFT_CONTROL_TOKEN=$(64-hex-chars) && filmcraft --control 9876",
+        auth_note: "FilmCraft uses `--bridge` (not `--connect`) and leaves port 9876 closed unless FILMCRAFT_CONTROL_TOKEN (64 hex chars) is set",
+    },
+    SiblingProductSpec {
+        slug: "effectcraft",
+        title: "EffectCraft",
+        mcp_cmd: "effectcraft-cli mcp --bridge 9877  (or headless: effectcraft-cli mcp)",
+        open_cmd: "effectcraft --control 9877",
+        auth_note: "EffectCraft uses `--bridge 9877` for live windows",
+    },
+    SiblingProductSpec {
+        slug: "photocraft",
+        title: "PhotoCraft",
+        mcp_cmd: "photocraft-cli mcp --bridge 127.0.0.1:7878 --control-token-file <token_file>",
+        open_cmd: "photocraft --control 7878 --control-token-file <token_file>",
+        auth_note: "PhotoCraft requires matching same-release CLI + app (`auth.challenge` HMAC) and `--control-token-file` (AppImage: `--cli mcp`)",
+    },
+    SiblingProductSpec {
+        slug: "vectorcraft",
+        title: "VectorCraft",
+        mcp_cmd: "vectorcraft-cli mcp --connect 127.0.0.1:7979  (or headless: vectorcraft-cli mcp)",
+        open_cmd: "vectorcraft --control 7979",
+        auth_note: "Pick a free port if 7979 is already bound by DesignCraft/CADCraft/GridCraft",
+    },
+    SiblingProductSpec {
+        slug: "wordcraft",
+        title: "WordCraft",
+        mcp_cmd: "wordcraft-cli mcp --connect 127.0.0.1:7981  (or headless: wordcraft-cli mcp)",
+        open_cmd: "wordcraft --control 7981",
+        auth_note: "Auto-reads ~/.config/wordcraft/control-key.local-7981 or WORDCRAFT_CONTROL_KEY",
+    },
+    SiblingProductSpec {
+        slug: "soundcraft",
+        title: "SoundCraft",
+        mcp_cmd: "soundcraft-cli mcp --connect 7801  (or headless: soundcraft-cli mcp)",
+        open_cmd: "soundcraft --control 7801  (`--control 0` prints a free port)",
+        auth_note: "Follows RFC-0012 (`soundcraft-cli app --port 7801` for single calls)",
+    },
+    SiblingProductSpec {
+        slug: "cadcraft",
+        title: "CADCraft",
+        mcp_cmd: "cadcraft-cli mcp --connect 127.0.0.1:7979  (or headless: cadcraft-cli mcp)",
+        open_cmd: "cadcraft --control 7979",
+        auth_note: "Reads per-session cadcraft-control-<port>.token automatically",
+    },
+    SiblingProductSpec {
+        slug: "gridcraft",
+        title: "GridCraft",
+        mcp_cmd: "gridcraft-cli mcp --connect 7979  (or headless: gridcraft-cli mcp)",
+        open_cmd: "gridcraft --control 7979",
+        auth_note: "Reads GridCraft's per-launch token file or GRIDCRAFT_CONTROL_TOKEN",
+    },
+    SiblingProductSpec {
+        slug: "lightcraft",
+        title: "LightCraft",
+        mcp_cmd: "lightcraft-cli mcp --connect 127.0.0.1:7980",
+        open_cmd: "lightcraft --control 7980",
+        auth_note: "IPv4 loopback 127.0.0.1 JSON-lines control channel",
+    },
+    SiblingProductSpec {
+        slug: "texturecraft",
+        title: "TextureCraft",
+        mcp_cmd: "texturecraft-cli mcp --bridge 7878",
+        open_cmd: "texturecraft --control 7878",
+        auth_note: "Uses `--bridge` (set TEXTURECRAFT_CONTROL_TOKEN if authentication is enabled)",
+    },
+    SiblingProductSpec {
+        slug: "materialcraft",
+        title: "MaterialCraft",
+        mcp_cmd: "materialcraft-cli mcp --bridge 7878",
+        open_cmd: "materialcraft --control 7878",
+        auth_note: "Uses `--bridge` on 127.0.0.1",
+    },
+    SiblingProductSpec {
+        slug: "pdfcraft",
+        title: "PdfCraft",
+        mcp_cmd: "pdfcraft-cli mcp  (headless in-process only; no `--connect`/`--bridge` on mcp)",
+        open_cmd: "pdfcraft --control ~/.pdfcraft-control.json  (drive UI via `pdfcraft-cli ui --control ~/.pdfcraft-control.json`)",
+        auth_note: "PdfCraft MCP is always headless; live window control uses `pdfcraft-cli ui --control <file>`",
+    },
+    SiblingProductSpec {
+        slug: "anicraft",
+        title: "AniCraft",
+        mcp_cmd: "anicraft-cli mcp [scene.anicraft]  (headless stdio only)",
+        open_cmd: "anicraft-cli render / run  (early-alpha; do not drive live GUI)",
+        auth_note: "AniCraft is early-alpha; use headless `anicraft-cli` / `anicraft-cli mcp` only",
+    },
+];
+
+fn lookup_sibling_signpost(first_token: &str) -> Option<&'static SiblingProductSpec> {
+    let norm = first_token.trim().to_ascii_lowercase();
+    let stem = norm.strip_suffix("-cli").unwrap_or(&norm);
+    SIBLING_PRODUCTS.iter().find(|p| p.slug == stem)
+}
+
+fn format_sibling_signpost(spec: &SiblingProductSpec, attempted: &[String]) -> String {
+    let call_str = attempted.join(" ");
+    format!(
+        concat!(
+            "magic-cli does not proxy {title} (`magic-cli {call_str}`). Use {title}'s own CLI/MCP directly:\n",
+            "1. Install/register `{slug}-cli mcp`: `{mcp}` ({note})\n",
+            "2. Open or connect to {title} using `--control`: `{open}`\n",
+            "3. PAUSE and ask the user if you are unable to connect — DO NOT invent workarounds, shell hacks, or direct file mutations — and provide: target=`{title}`, intended_call=`{call_str}`, cli_check=`command -v {slug}-cli`, endpoint_tried, and exact_stderr.",
+        ),
+        title = spec.title,
+        slug = spec.slug,
+        mcp = spec.mcp_cmd,
+        note = spec.auth_note,
+        open = spec.open_cmd,
+    )
+}
+
+fn run_app_call(
+    target: &mut Target,
+    port: Option<String>,
+    method: Option<String>,
+    positional: Option<String>,
+    arguments: Vec<String>,
+) -> Result<(), String> {
+    let endpoint = port
+        .or_else(|| target.connect.clone())
+        .unwrap_or_else(|| magic_mcp::DEFAULT_CONTROL_ADDR.to_owned());
+    let chosen = method
+        .or(positional.clone())
+        .ok_or("magic-cli app requires `--method <METHOD>` or `<COMMAND_OR_METHOD>`")?;
+    let mut tokens = arguments;
+    if method.is_some()
+        && let Some(pos_json) = positional
+    {
+        tokens.insert(0, pos_json);
+    }
+    let raw_json = if tokens.len() == 1 && tokens[0].trim_start().starts_with('{') {
+        Some(tokens.remove(0))
+    } else {
+        None
+    };
+    let params = parse_params(&tokens, raw_json.as_deref())?;
+    let result = if target.dry {
+        dry_result(&chosen, &params)
+    } else {
+        call_live_control(Some(&endpoint), &chosen, params)?
+    };
+    emit(&result);
+    Ok(())
+}
+
 fn resolve_shorthand(tokens: &[String]) -> Result<(String, Vec<String>), String> {
     let known: Vec<&str> = magic::command_specs().iter().map(|c| c.id).collect();
     let words: Vec<&String> = tokens.iter().take_while(|t| !t.contains('=') && !t.starts_with('-') && !t.starts_with('{')).collect();
@@ -443,6 +619,12 @@ fn resolve_shorthand(tokens: &[String]) -> Result<(String, Vec<String>), String>
 }
 
 fn run_shorthand(target: &mut Target, tokens: &[String]) -> Result<(), String> {
+    if let Some(first) = tokens.first()
+        && let Some(spec) = lookup_sibling_signpost(first)
+    {
+        let _ = writeln!(std::io::stderr(), "{}", format_sibling_signpost(spec, tokens));
+        std::process::exit(2);
+    }
     let (id, rest) = resolve_shorthand(tokens)?;
     if rest.iter().any(|t| t == "--help" || t == "-h")
         && let Some(command) = magic::find_command(&id)
@@ -472,21 +654,20 @@ fn describe(id: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn apply_port_overrides(cli: &Cli, session: &mut Option<magic::Session>) {
-    if let Some(s) = session.as_mut() {
-        if let Some(fp) = cli.filmcraft_port {
-            let _ = s.execute("prefs.set", json!({"key": "craft.filmcraft_port", "value": fp}));
-        }
-        if let Some(ep) = cli.effectcraft_port {
-            let _ = s.execute("prefs.set", json!({"key": "craft.effectcraft_port", "value": ep}));
-        }
-        if let Some(ref dirs) = cli.font_dirs {
-            let _ = s.execute("prefs.set", json!({"key": "lyrics.font_dirs", "value": dirs}));
-        }
+fn apply_font_overrides(cli: &Cli, session: &mut Option<magic::Session>) {
+    if let (Some(s), Some(dirs)) = (session.as_mut(), cli.font_dirs.as_ref()) {
+        let _ = s.execute("prefs.set", json!({"key": "lyrics.font_dirs", "value": dirs}));
     }
 }
 
 fn run(cli: Cli) -> Result<(), String> {
+    if let (None, Some(Cmd::Registry(tokens))) = (&cli.command_id, &cli.command)
+        && let Some(first) = tokens.first()
+        && let Some(spec) = lookup_sibling_signpost(first)
+    {
+        let _ = writeln!(std::io::stderr(), "{}", format_sibling_signpost(spec, tokens));
+        std::process::exit(2);
+    }
     if let (None, Some(Cmd::Mcp { headless })) = (&cli.command_id, &cli.command) {
         return magic_mcp::run_mcp_server(
             "magic-cli",
@@ -505,11 +686,18 @@ fn run(cli: Cli) -> Result<(), String> {
     let roots = magic::AutomationRoots::from_args(&cli.automation_read_roots, &cli.automation_write_roots)?;
     let live = cli.connect.is_some();
     let mut session = (!live).then(|| magic::Session::user_session().with_automation_roots(roots));
-    apply_port_overrides(&cli, &mut session);
+    apply_font_overrides(&cli, &mut session);
     if let (Some(path), Some(session)) = (cli.project.as_deref(), session.as_mut()) {
         session.execute("file.open", json!({ "path": path })).map_err(|e| e.to_string())?;
     }
-    let mut target = Target { session, connect: cli.connect, project: cli.project, save: cli.save, save_as: cli.save_as, dry: cli.dry_run };
+    let mut target = Target {
+        session,
+        connect: cli.connect,
+        project: cli.project,
+        save: cli.save,
+        save_as: cli.save_as,
+        dry: cli.dry_run,
+    };
     match (cli.command_id, cli.command) {
         (Some(_), Some(_)) => Err("Use --command or a subcommand, not both.".into()),
         (Some(id), None) => {
@@ -518,14 +706,12 @@ fn run(cli: Cli) -> Result<(), String> {
         }
         (None, Some(command)) => match command {
             Cmd::New(args) => run_new(&mut target, args),
+            Cmd::Convert(args) => subcommands::run_convert(&mut target, args),
             Cmd::Commands { filter } => list_commands(&mut target, filter),
             Cmd::Controls(args) => subcommands::run_controls(&mut target, args),
             Cmd::Describe { id } => describe(&id),
             Cmd::Inspect { target: what } => inspect(&mut target, what),
-            Cmd::Bridge(b) => subcommands::run_bridge(&mut target, b),
             Cmd::Interchange(args) => subcommands::run_interchange(&mut target, args),
-            Cmd::Lottie(args) => subcommands::run_lottie(&mut target, args),
-            Cmd::ImportAep(args) => subcommands::run_import_aep(&mut target, args),
             Cmd::Finish(args) => subcommands::run_finish(&mut target, args),
             Cmd::Export(args) => subcommands::run_export(&mut target, args),
             Cmd::Captions(args) => subcommands::run_captions(&mut target, args),
@@ -536,6 +722,7 @@ fn run(cli: Cli) -> Result<(), String> {
             }
             Cmd::Run { file, keep_going } => run_file(&mut target, &file, keep_going),
             Cmd::Mcp { .. } => Ok(()),
+            Cmd::App { port, method, target: pos, arguments } => run_app_call(&mut target, port, method, pos, arguments),
             Cmd::Ui { action, target: value, params, arguments } => run_ui(&mut target, &action, value, params.as_deref(), arguments),
             Cmd::Registry(tokens) => run_shorthand(&mut target, &tokens),
         },
@@ -550,7 +737,10 @@ fn run(cli: Cli) -> Result<(), String> {
 fn main() {
     let cli = Cli::parse();
     if cli.connect.is_some() && cli.project.is_some() {
-        let _ = writeln!(std::io::stderr(), "Use --connect or --project, not both: --connect uses the project open in the live window.");
+        let _ = writeln!(
+            std::io::stderr(),
+            "Use --connect or --project, not both: --connect uses the project open in the live window."
+        );
         std::process::exit(2);
     }
     if let Err(err) = run(cli) {

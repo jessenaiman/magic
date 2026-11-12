@@ -16,7 +16,7 @@ description: Storyboard overlays, PhotoCraft subject isolation, EffectCraft pupp
 
 ## Facial Expressions & Mouth Lip-Sync (`EffectCraft` Puppet Controls)
 
-In the **Animation** view (or via `magic-cli`), use [EffectCraft's Puppet Controls](https://github.com/storytold/effectcraft/blob/main/docs/animation-and-expressions.md) for expressive faces and mouth movements:
+In the **Animation** view (or via `magic-cli`), use [EffectCraft's Puppet Controls](https://github.com/storytold/effectcraft/blob/main/docs/agents.md) for expressive faces and mouth movements:
 
 1. Click **Mark**, **Cut**, and **Rig** (`character.mark`, `character.cut`, `character.rig`).
 2. Open the **Puppet** drawer and click **Face** (`character.puppet.rig_face`) to install the 11-pin facial mesh.

@@ -9,7 +9,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 pub use crate::state_views::{
-    AiUiState, AnimationViewState, HomeFormState, LyricsViewState, MotionViewState, ProjectViewState, StoryboardViewState, StudioViewState,
+    AiUiState, AnimationViewState, HomeFormState, LyricsViewState, MotionViewState,
+    ProjectViewState, StoryboardViewState, StudioViewState,
 };
 use crate::theme::{AccentChoice, InterfaceStyle, MagicPalette, ThemeMode};
 use crate::widgets::AutomationRegistry;
@@ -30,7 +31,14 @@ pub enum ViewMode {
 }
 
 impl ViewMode {
-    pub const STAGE_TABS: [Self; 6] = [Self::Project, Self::Storyboard, Self::Animation, Self::Design, Self::Motion, Self::Studio];
+    pub const STAGE_TABS: [Self; 6] = [
+        Self::Project,
+        Self::Storyboard,
+        Self::Animation,
+        Self::Design,
+        Self::Motion,
+        Self::Studio,
+    ];
 
     pub fn as_id(self) -> &'static str {
         match self {
@@ -121,7 +129,13 @@ pub enum UiAction {
     NavigateAuthoring { view: ViewMode, seconds: f64 },
     SelectCharacter { id: String, jump_animation: bool },
     Execute { id: String, params: Value, toast: Option<String> },
-    PickFile { target: PickerTarget, title: String, extensions: Vec<String>, directory: bool, save: bool },
+    PickFile {
+        target: PickerTarget,
+        title: String,
+        extensions: Vec<String>,
+        directory: bool,
+        save: bool,
+    },
     ToggleAudio,
     SeekAudio(f64),
     SnapWindow,
@@ -163,9 +177,6 @@ pub struct CachedPayloads {
     pub film_status: Value,
     pub doctor: Value,
     pub ai_status: Value,
-    pub bridge_status: Value,
-    pub bridge_preflight: Value,
-    pub bridge_history: Value,
     pub ec_comps: Value,
     pub lottie_last: Value,
     pub aep_report: Value,
@@ -277,7 +288,11 @@ impl Default for UiShellState {
 
 impl UiShellState {
     pub fn effective_view(&self) -> ViewMode {
-        if self.project_path.is_some() { self.view } else { ViewMode::Home }
+        if self.project_path.is_some() {
+            self.view
+        } else {
+            ViewMode::Home
+        }
     }
 
     pub fn project_name(&self) -> String {
@@ -294,7 +309,10 @@ impl UiShellState {
                 return name.to_owned();
             }
         }
-        self.project_path.as_ref().and_then(|p| p.file_stem()).map_or_else(|| "No project".into(), |s| prettify_slug(&s.to_string_lossy()))
+        self.project_path
+            .as_ref()
+            .and_then(|p| p.file_stem())
+            .map_or_else(|| "No project".into(), |s| prettify_slug(&s.to_string_lossy()))
     }
 
     pub fn song_audio_path(&self) -> Option<String> {
@@ -335,7 +353,11 @@ impl UiShellState {
                 let img = page["preview_png"]
                     .as_str()
                     .filter(|s| !s.is_empty())
-                    .or_else(|| page["slots"].as_array().and_then(|slots| slots.iter().find_map(|sl| sl["image"].as_str().filter(|s| !s.is_empty()))));
+                    .or_else(|| {
+                        page["slots"].as_array().and_then(|slots| {
+                            slots.iter().find_map(|sl| sl["image"].as_str().filter(|s| !s.is_empty()))
+                        })
+                    });
                 if let Some(s) = img
                     && !out.iter().any(|x| x == s)
                 {
@@ -344,7 +366,12 @@ impl UiShellState {
             }
         }
         if out.is_empty()
-            && let Some(bg) = self.cache.snapshot.pointer("/data/drawer/backgrounds/0/thumb").and_then(Value::as_str).filter(|s| !s.is_empty())
+            && let Some(bg) = self
+                .cache
+                .snapshot
+                .pointer("/data/drawer/backgrounds/0/thumb")
+                .and_then(Value::as_str)
+                .filter(|s| !s.is_empty())
         {
             out.push(bg.to_owned());
         }
@@ -414,6 +441,10 @@ impl<'a> ViewCtx<'a> {
     }
 
     pub fn exec(&mut self, id: &str, params: Value, toast: Option<&str>) {
-        self.actions.push(UiAction::Execute { id: id.to_owned(), params, toast: toast.map(str::to_owned) });
+        self.actions.push(UiAction::Execute {
+            id: id.to_owned(),
+            params,
+            toast: toast.map(str::to_owned),
+        });
     }
 }

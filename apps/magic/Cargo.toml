@@ -25,7 +25,7 @@ craft-menu = { workspace = true }
 craft-platform = { workspace = true }
 craft-quit = { workspace = true }
 craft-ui = { workspace = true }
-craft-util = { workspace = true }
+magic-util = { workspace = true }
 craft-window = { workspace = true }
 eframe = { workspace = true }
 egui = { workspace = true }

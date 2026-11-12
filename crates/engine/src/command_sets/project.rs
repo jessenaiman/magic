@@ -4,8 +4,9 @@
 use super::{cmd_spec, query_spec};
 use crate::commands::{CommandSpec, always};
 use crate::project::{
-    cmd_file_save_as, cmd_project_add_asset, cmd_project_autosave, cmd_project_close, cmd_project_import_file, cmd_project_list_assets, cmd_project_load_asset,
-    cmd_project_new, cmd_project_open, cmd_project_remove_asset, cmd_project_save, cmd_project_trunk, cmd_project_update_asset,
+    cmd_file_save_as, cmd_project_add_asset, cmd_project_autosave, cmd_project_close, cmd_project_convert, cmd_project_import_file,
+    cmd_project_list_assets, cmd_project_load_asset, cmd_project_new, cmd_project_open, cmd_project_remove_asset, cmd_project_save,
+    cmd_project_save_asset, cmd_project_trunk, cmd_project_update_asset, cmd_workspace_init,
 };
 use crate::workshop::{
     cmd_audio_analyze, cmd_project_search, cmd_workshop_add, cmd_workshop_approve_draft, cmd_workshop_files, cmd_workshop_import_transcript,
@@ -94,6 +95,33 @@ fn specs_project() -> Vec<CommandSpec> {
             "{\"paths\":[\"file\"],\"path\":\"optional single file\",\"overwrite\":false}",
             always,
             cmd_project_import_file
+        ),
+        cmd_spec!(
+            "project.save_asset",
+            "Save Asset Into Project assets/ Directory (Optional Workspace Promotion)",
+            ["Project Assets"],
+            None,
+            "{\"path\":\"file\",\"workspace_asset\":\"optional catalog id\",\"name\":\"optional\",\"character\":\"optional\",\"background\":\"optional\",\"image\":\"optional\",\"promote_to_workspace\":false,\"overwrite\":false}",
+            always,
+            cmd_project_save_asset
+        ),
+        cmd_spec!(
+            "project.workspace_init",
+            "Initialize Canonical magic/ Workspace (projects, assets, animations)",
+            ["File"],
+            None,
+            "{\"path\":\"optional magic workspace folder\",\"set_default\":false}",
+            always,
+            cmd_workspace_init
+        ),
+        cmd_spec!(
+            "project.convert",
+            "Convert Legacy Project (HyperFrames, Remotion, or Custom) Into magic/projects/<slug>",
+            ["File"],
+            None,
+            "{\"kind\":\"hyperframes|remotion|custom|auto\",\"source\":\"legacy project directory\",\"magic_root\":\"optional magic workspace folder\",\"name\":\"optional project title\",\"overwrite\":false}",
+            always,
+            cmd_project_convert
         ),
     ]
 }
@@ -188,119 +216,19 @@ fn specs_workshop() -> Vec<CommandSpec> {
 
 fn specs_storyboard() -> Vec<CommandSpec> {
     vec![
-        cmd_spec!(
-            "storyboard.open",
-            "Open Storyboard PDF in PDFCraft (--control)",
-            ["Storyboard"],
-            None,
-            "{\"path\":\"optional storyboard.pdf\",\"page\":0}",
-            always,
-            crate::cmd::storyboard::cmd_storyboard_open
-        ),
-        cmd_spec!(
-            "storyboard.new",
-            "Initialize storyboard.pdf from Read-Only Master Template",
-            ["Storyboard"],
-            None,
-            "{\"path\":\"optional storyboard.pdf\",\"overwrite\":false}",
-            always,
-            crate::cmd::storyboard::cmd_storyboard_new
-        ),
-        query_spec!(
-            "storyboard.pages",
-            "Inspect 17-Page Storyboard PDF Sections, Fields & Previews",
-            "{\"path\":\"optional storyboard.pdf\",\"page\":\"optional index\",\"label\":\"optional field\",\"full\":false}",
-            crate::cmd::storyboard::cmd_storyboard_pages
-        ),
-        query_spec!(
-            "storyboard.check",
-            "Red/Green Required-Field Readiness Across Storyboard Sections",
-            "{\"path\":\"optional storyboard.pdf\"}",
-            crate::cmd::storyboard::cmd_storyboard_check
-        ),
-        cmd_spec!(
-            "storyboard.wizard",
-            "Populate Core Storyboard PDF Fields (Title, Style, World, Character, Motion)",
-            ["Storyboard"],
-            None,
-            "{\"title\":\"optional\",\"style\":\"optional\",\"world\":\"optional\",\"character\":\"optional\",\"motion\":\"optional\"}",
-            always,
-            crate::cmd::storyboard::cmd_storyboard_wizard
-        ),
-        cmd_spec!(
-            "storyboard.bulk_generate",
-            "Plan Bulk Scene Still Generation From Storyboard References",
-            ["Storyboard"],
-            None,
-            "{\"overwrite\":false}",
-            always,
-            crate::cmd::storyboard::cmd_storyboard_bulk_generate
-        ),
-        cmd_spec!(
-            "storyboard.set",
-            "Edit Storyboard PDF Text Field or Place PhotoCraft / VectorCraft / EffectCraft Artwork",
-            ["Storyboard"],
-            None,
-            "{\"page\":0,\"label\":\"optional field\",\"text\":\"optional text\",\"image\":\"optional .png/.pcraft/.psd/.vectorcraft/.ecproj\",\"character\":\"optional id\",\"time\":0.0,\"remove_background\":false,\"lut\":\"optional .cube\",\"vectorize\":false,\"fields\":{},\"images\":{}}",
-            always,
-            crate::cmd::storyboard::cmd_storyboard_set
-        ),
-        cmd_spec!(
-            "storyboard.grade",
-            "Batch Grade Placed Storyboard Images via PhotoCraft (photocraft-cli batch --actions)",
-            ["Storyboard"],
-            None,
-            "{\"section\":\"optional Scenes|Backgrounds\",\"lut\":\"optional .cube/.3dl/.look\",\"vibrance\":15,\"curves\":[[0,0],[255,255]],\"sharpen\":40,\"auto_tone\":false,\"actions\":[]}",
-            always,
-            crate::cmd::storyboard::cmd_storyboard_grade
-        ),
-        cmd_spec!(
-            "storyboard.add",
-            "Read-Only Guard (Master Storyboard Layout Is Immutable)",
-            ["Storyboard"],
-            None,
-            "{}",
-            always,
-            crate::cmd::storyboard::cmd_storyboard_add
-        ),
-        cmd_spec!(
-            "storyboard.remove",
-            "Read-Only Guard (Master Storyboard Layout Is Immutable)",
-            ["Storyboard"],
-            None,
-            "{}",
-            always,
-            crate::cmd::storyboard::cmd_storyboard_remove
-        ),
-        cmd_spec!(
-            "storyboard.section",
-            "Read-Only Guard (Master Storyboard Sections Are Immutable)",
-            ["Storyboard"],
-            None,
-            "{}",
-            always,
-            crate::cmd::storyboard::cmd_storyboard_section
-        ),
-        cmd_spec!(
-            "storyboard.locations",
-            "Inspect or Update Storyboard Backgrounds Fields",
-            ["Storyboard"],
-            None,
-            "{\"page\":\"optional page\",\"fields\":{},\"images\":{}}",
-            always,
-            crate::cmd::storyboard::cmd_storyboard_locations
-        ),
-        query_spec!(
-            "storyboard.thumbnail",
-            "Render storyboard.pdf Pages to PNG via PDFCraft",
-            "{\"page\":0,\"rail\":true,\"scale\":1.5}",
-            crate::cmd::storyboard::cmd_storyboard_thumbnail
-        ),
-        query_spec!(
-            "storyboard.export",
-            "Export storyboard.pdf Copy or PNG Page Directory",
-            "{\"pdf\":\"optional path\",\"png_dir\":\"optional dir\",\"scale\":1.0}",
-            crate::cmd::storyboard::cmd_storyboard_export
-        ),
+        cmd_spec!("storyboard.open", "Open Storyboard PDF in PDFCraft (--control)", ["Storyboard"], None, "{\"path\":\"optional storyboard.pdf\",\"page\":0}", always, crate::cmd::storyboard::cmd_storyboard_open),
+        cmd_spec!("storyboard.new", "Initialize storyboard.pdf from Read-Only Master Template", ["Storyboard"], None, "{\"path\":\"optional storyboard.pdf\",\"overwrite\":false}", always, crate::cmd::storyboard::cmd_storyboard_new),
+        query_spec!("storyboard.pages", "Inspect 17-Page Storyboard PDF Sections, Fields & Previews", "{\"path\":\"optional storyboard.pdf\",\"page\":\"optional index\",\"label\":\"optional field\",\"full\":false}", crate::cmd::storyboard::cmd_storyboard_pages),
+        query_spec!("storyboard.check", "Red/Green Required-Field Readiness Across Storyboard Sections", "{\"path\":\"optional storyboard.pdf\"}", crate::cmd::storyboard::cmd_storyboard_check),
+        cmd_spec!("storyboard.wizard", "Populate Core Storyboard PDF Fields (Title, Style, World, Character, Motion)", ["Storyboard"], None, "{\"title\":\"optional\",\"style\":\"optional\",\"world\":\"optional\",\"character\":\"optional\",\"motion\":\"optional\"}", always, crate::cmd::storyboard::cmd_storyboard_wizard),
+        cmd_spec!("storyboard.bulk_generate", "Plan Bulk Scene Still Generation From Storyboard References", ["Storyboard"], None, "{\"overwrite\":false}", always, crate::cmd::storyboard::cmd_storyboard_bulk_generate),
+        cmd_spec!("storyboard.set", "Edit Storyboard PDF Text Field or Place PhotoCraft / VectorCraft / EffectCraft Artwork", ["Storyboard"], None, "{\"page\":0,\"label\":\"optional field\",\"text\":\"optional text\",\"image\":\"optional .png/.pcraft/.psd/.vectorcraft/.ecproj\",\"character\":\"optional id\",\"time\":0.0,\"remove_background\":false,\"lut\":\"optional .cube\",\"vectorize\":false,\"fields\":{},\"images\":{}}", always, crate::cmd::storyboard::cmd_storyboard_set),
+        cmd_spec!("storyboard.grade", "Batch Grade Placed Storyboard Images via PhotoCraft (photocraft-cli batch --actions)", ["Storyboard"], None, "{\"section\":\"optional Scenes|Backgrounds\",\"lut\":\"optional .cube/.3dl/.look\",\"vibrance\":15,\"curves\":[[0,0],[255,255]],\"sharpen\":40,\"auto_tone\":false,\"actions\":[]}", always, crate::cmd::storyboard::cmd_storyboard_grade),
+        cmd_spec!("storyboard.add", "Read-Only Guard (Master Storyboard Layout Is Immutable)", ["Storyboard"], None, "{}", always, crate::cmd::storyboard::cmd_storyboard_add),
+        cmd_spec!("storyboard.remove", "Read-Only Guard (Master Storyboard Layout Is Immutable)", ["Storyboard"], None, "{}", always, crate::cmd::storyboard::cmd_storyboard_remove),
+        cmd_spec!("storyboard.section", "Read-Only Guard (Master Storyboard Sections Are Immutable)", ["Storyboard"], None, "{}", always, crate::cmd::storyboard::cmd_storyboard_section),
+        cmd_spec!("storyboard.locations", "Inspect or Update Storyboard Backgrounds Fields", ["Storyboard"], None, "{\"page\":\"optional page\",\"fields\":{},\"images\":{}}", always, crate::cmd::storyboard::cmd_storyboard_locations),
+        query_spec!("storyboard.thumbnail", "Render storyboard.pdf Pages to PNG via PDFCraft", "{\"page\":0,\"rail\":true,\"scale\":1.5}", crate::cmd::storyboard::cmd_storyboard_thumbnail),
+        query_spec!("storyboard.export", "Export storyboard.pdf Copy or PNG Page Directory", "{\"pdf\":\"optional path\",\"png_dir\":\"optional dir\",\"scale\":1.0}", crate::cmd::storyboard::cmd_storyboard_export),
     ]
 }

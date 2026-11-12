@@ -3,7 +3,10 @@
 //! respective view ribbons (`Storyboard`, `Animations`, `Lyrics`, `Motion`, `Studio`).
 
 use craft_keymap::{CommandRef, Keymap};
-use craft_menu::{Gate, Item, ItemRole, ItemState, LayoutOptions, MenuBar, MenuBarUi, MenuRole, Row, Target, apply_keymap, apply_state, from_items, layout};
+use craft_menu::{
+    Gate, Item, ItemRole, ItemState, LayoutOptions, MenuBar, MenuBarUi, MenuRole, Row, Target,
+    apply_keymap, apply_state, from_items, layout,
+};
 use serde_json::{Value, json};
 
 use crate::state::{UiAction, UiShellState, ViewMode};
@@ -15,12 +18,26 @@ pub const MENU_ORDER: &[&str] = &["File", "Edit", "View", "Window", "Help"];
 
 fn plain_row(path: &[&str], cmd: CommandRef, label: &str) -> Row {
     let kind = Item::new(cmd.clone(), label).kind;
-    Row { path: path.iter().map(|s| (*s).to_owned()).collect(), command: cmd, label: label.to_owned(), shortcut: None, enabled: true, kind }
+    Row {
+        path: path.iter().map(|s| (*s).to_owned()).collect(),
+        command: cmd,
+        label: label.to_owned(),
+        shortcut: None,
+        enabled: true,
+        kind,
+    }
 }
 
 fn radio_row(path: &[&str], cmd: CommandRef, label: &str, selected: bool) -> Row {
     let kind = Item::new(cmd.clone(), label).radio(selected).kind;
-    Row { path: path.iter().map(|s| (*s).to_owned()).collect(), command: cmd, label: label.to_owned(), shortcut: None, enabled: true, kind }
+    Row {
+        path: path.iter().map(|s| (*s).to_owned()).collect(),
+        command: cmd,
+        label: label.to_owned(),
+        shortcut: None,
+        enabled: true,
+        kind,
+    }
 }
 
 fn sep_row(menu: &str) -> Row {
@@ -60,14 +77,28 @@ fn build_rows(state: &UiShellState) -> Vec<Row> {
         (ViewMode::Motion, "Action Motion"),
         (ViewMode::Studio, "FilmCraft Studio"),
     ] {
-        rows.push(radio_row(&["View"], CommandRef::with_params("ui.set", json!({"view": view.as_id()})), title, state.effective_view() == view));
+        rows.push(radio_row(
+            &["View"],
+            CommandRef::with_params("ui.set", json!({"view": view.as_id()})),
+            title,
+            state.effective_view() == view,
+        ));
     }
     rows.push(sep_row("View"));
     rows.push(plain_row(&["View"], CommandRef::from("ui.toggle_ribbon"), "Command Ribbon"));
     rows.push(plain_row(&["View"], CommandRef::from("ui.toggle_assets"), "Stage Assets Shelf"));
     rows.push(plain_row(&["View"], CommandRef::from("ui.toggle_fidget"), "Fidget & Scribbles Stager"));
-    for (mode, label) in [(ThemeMode::Dark, "Dark Workstation"), (ThemeMode::Light, "Light Paper"), (ThemeMode::System, "Match System")] {
-        rows.push(radio_row(&["View", "Theme"], CommandRef::with_params("ui.set", json!({"theme": mode.as_str()})), label, state.theme_mode == mode));
+    for (mode, label) in [
+        (ThemeMode::Dark, "Dark Workstation"),
+        (ThemeMode::Light, "Light Paper"),
+        (ThemeMode::System, "Match System"),
+    ] {
+        rows.push(radio_row(
+            &["View", "Theme"],
+            CommandRef::with_params("ui.set", json!({"theme": mode.as_str()})),
+            label,
+            state.theme_mode == mode,
+        ));
     }
 
     // Window (ArtCraft Suite Launchers)
@@ -80,7 +111,11 @@ fn build_rows(state: &UiShellState) -> Vec<Row> {
         ("effectcraft", "Launch EffectCraft"),
         ("filmcraft", "Launch FilmCraft"),
     ] {
-        rows.push(plain_row(&["Window"], CommandRef::with_params("workspace.open", json!({"app": app})), title));
+        rows.push(plain_row(
+            &["Window"],
+            CommandRef::with_params("workspace.open", json!({"app": app})),
+            title,
+        ));
     }
 
     // Help
@@ -116,7 +151,11 @@ pub fn build_menu_bar(state: &UiShellState, keymap: &Keymap, is_enabled: impl Fn
                 if let Some(v) = cmd.params.get("view").and_then(Value::as_str).and_then(ViewMode::parse) {
                     Some(state.effective_view() == v)
                 } else {
-                    cmd.params.get("theme").and_then(Value::as_str).and_then(ThemeMode::parse).map(|m| state.theme_mode == m)
+                    cmd.params
+                        .get("theme")
+                        .and_then(Value::as_str)
+                        .and_then(ThemeMode::parse)
+                        .map(|m| state.theme_mode == m)
                 }
             }
             _ => None,
@@ -149,9 +188,18 @@ fn command_enabled(state: &UiShellState, id: &str, engine_enabled: &impl Fn(&str
     }
 }
 
-pub fn draw_in_window_bar(ui: &mut egui::Ui, bar: &MenuBar, modal_open: bool, reg: &mut AutomationRegistry) -> Vec<CommandRef> {
+pub fn draw_in_window_bar(
+    ui: &mut egui::Ui,
+    bar: &MenuBar,
+    modal_open: bool,
+    reg: &mut AutomationRegistry,
+) -> Vec<CommandRef> {
     let laid_out = layout(bar, Target::current(), &LayoutOptions::new("Magic Studio")).bar;
-    let gate = Gate { modal: modal_open, recording_shortcut: false, text_editing: ui.ctx().egui_wants_keyboard_input() };
+    let gate = Gate {
+        modal: modal_open,
+        recording_shortcut: false,
+        text_editing: ui.ctx().egui_wants_keyboard_input(),
+    };
     let bar_resp = ui.scope_builder(egui::UiBuilder::new(), |ui| MenuBarUi::new(&laid_out).gate(gate).show(ui));
     reg.record("menu-bar", "System Menu Bar", &bar_resp.response, None);
     bar_resp.inner
@@ -237,6 +285,10 @@ pub fn translate_menu_command(cmd: &CommandRef, state: &mut UiShellState) -> Opt
             }
             None
         }
-        other => Some(UiAction::Execute { id: other.to_owned(), params: cmd.params.clone(), toast: None }),
+        other => Some(UiAction::Execute {
+            id: other.to_owned(),
+            params: cmd.params.clone(),
+            toast: None,
+        }),
     }
 }

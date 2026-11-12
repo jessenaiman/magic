@@ -13,7 +13,7 @@ cargo xtask ci
 `cargo xtask ci` runs:
 1. `SETS` workspace crate coverage check (`xtask/src/ci.rs`)
 2. `cargo fmt --check`
-3. `cargo xtask layers` (enforcing `craft-util` / `craft-scribbles` L4 -> `magic-engine` L5 -> `magic-mcp` / `magic-ui-egui` L6 -> `magic` / `magic-cli` / `magic-tui` L7, and forbidding sibling app crate imports)
+3. `cargo xtask layers` (enforcing `magic-util` / `magic-scribbles` L4 -> `magic-engine` L5 -> `magic-mcp` / `magic-ui-egui` L6 -> `magic` / `magic-cli` / `magic-tui` L7, and forbidding sibling app crate imports)
 4. `cargo clippy --workspace --all-targets -- -D warnings` (with `unwrap_used`, `expect_used`, `panic`, `todo`, `unimplemented`, and `unreachable` denied in production code)
 5. `cargo test --workspace --no-run`
 

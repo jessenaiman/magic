@@ -44,11 +44,7 @@ pub fn is_read_only_command(id: &str, params: &Value) -> bool {
     match id {
         "project.catalog" | "file.recent" => params.get("forget").is_none_or(Value::is_null) && params["clear"] != true,
         "video.sync_links" => params.get("render").and_then(Value::as_bool) != Some(true),
-        "bridge.history" => params["op"].as_str().or_else(|| params["action"].as_str()).unwrap_or("list") == "list",
-        "bridge.control" => matches!(params["action"].as_str().unwrap_or("status"), "status" | "focus"),
         "video.finish" => matches!(params["op"].as_str().unwrap_or_default(), "jobs_list" | "scopes" | "workspace"),
-        "effect.import_aep" => params["dry_run"].as_bool().or_else(|| params["dryRun"].as_bool()).unwrap_or(true),
-        "bridge.templates" => params["action"].as_str().unwrap_or("list") == "list",
         "storyboard.locations" => {
             params.get("fields").is_none()
                 && params.get("images").is_none()
@@ -58,7 +54,6 @@ pub fn is_read_only_command(id: &str, params: &Value) -> bool {
         }
         "project.attach"
         | "project.autosave"
-        | "workspace.close_opened"
         | "file.list"
         | "backstage.changes"
         | "backstage.events"
@@ -87,8 +82,6 @@ pub fn is_read_only_command(id: &str, params: &Value) -> bool {
         | "video.film"
         | "video.timeline"
         | "video.list_ec_comps"
-        | "bridge.status"
-        | "bridge.preflight"
         | "ai.status"
         | "fidget.prepare"
         | "scribbles.templates"

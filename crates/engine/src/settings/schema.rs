@@ -1,5 +1,9 @@
 //! Settings schema for Magic Studio (`prefs.schema`, `prefs.get`, `prefs.set`).
-//! One schema drives the Options UI, CLI (`magic-cli`), MCP (`magic-mcp`), and `--control`.
+//!
+//! Scoped strictly to Magic Studio's coordinator responsibilities (AI roles via
+//! `storytold/craft-ai-integrations`, appearance, project root,
+//! lyrics font paths, character preview, and `.magic` autosave) — NLE playback, media-cache, and
+//! track-label settings belong to `FilmCraft` and `EffectCraft`, not Magic.
 
 #[derive(Clone, Copy, Debug)]
 pub enum Kind {
@@ -28,23 +32,25 @@ pub struct Category {
 pub const CATEGORIES: &[Category] = &[
     Category { id: "ai", title: "AI & LLM (craft-ai-integrations)" },
     Category { id: "appearance", title: "Appearance & Interface Style" },
-    Category { id: "bridge", title: "Craft Bridge & --control (:9876 / :9877)" },
     Category { id: "general", title: "General" },
-    Category { id: "project", title: "Project" },
+    Category { id: "project", title: "Project Workspace" },
     Category { id: "lyrics", title: "Lyrics & Fonts" },
-    Category { id: "animation", title: "Animation" },
+    Category { id: "animation", title: "Animation Preview" },
     Category { id: "autosave", title: "AutoSave" },
-    Category { id: "mediaCache", title: "Media Cache" },
-    Category { id: "playback", title: "Playback" },
-    Category { id: "timeline", title: "Timeline" },
-    Category { id: "audio", title: "Audio" },
-    Category { id: "media", title: "Media" },
-    Category { id: "labels", title: "Labels" },
 ];
 
 pub fn fields_with_cat() -> Vec<(&'static str, Field)> {
     vec![
-        ("ai", Field { key: "ai.enabled", label: "Enable AI Integrations (storytold/craft-ai-integrations)", kind: Kind::Bool, wired: true, enabled_by: None }),
+        (
+            "ai",
+            Field {
+                key: "ai.enabled",
+                label: "Enable AI Integrations (storytold/craft-ai-integrations)",
+                kind: Kind::Bool,
+                wired: true,
+                enabled_by: None,
+            },
+        ),
         (
             "ai",
             Field {
@@ -67,9 +73,24 @@ pub fn fields_with_cat() -> Vec<(&'static str, Field)> {
         ),
         (
             "ai",
-            Field { key: "fidget.connection", label: "Fidget SharedStore Connection ID", kind: Kind::Text, wired: true, enabled_by: Some("fidget.enabled") },
+            Field {
+                key: "fidget.connection",
+                label: "Fidget SharedStore Connection ID",
+                kind: Kind::Text,
+                wired: true,
+                enabled_by: Some("fidget.enabled"),
+            },
         ),
-        ("ai", Field { key: "fidget.model", label: "Fidget Model ID", kind: Kind::Text, wired: true, enabled_by: Some("fidget.enabled") }),
+        (
+            "ai",
+            Field {
+                key: "fidget.model",
+                label: "Fidget Model ID",
+                kind: Kind::Text,
+                wired: true,
+                enabled_by: Some("fidget.enabled"),
+            },
+        ),
         (
             "ai",
             Field {
@@ -90,7 +111,16 @@ pub fn fields_with_cat() -> Vec<(&'static str, Field)> {
                 enabled_by: Some("scribbles.enabled"),
             },
         ),
-        ("ai", Field { key: "scribbles.model", label: "Scribbles Model ID", kind: Kind::Text, wired: true, enabled_by: Some("scribbles.enabled") }),
+        (
+            "ai",
+            Field {
+                key: "scribbles.model",
+                label: "Scribbles Model ID",
+                kind: Kind::Text,
+                wired: true,
+                enabled_by: Some("scribbles.enabled"),
+            },
+        ),
         (
             "ai",
             Field {
@@ -101,7 +131,16 @@ pub fn fields_with_cat() -> Vec<(&'static str, Field)> {
                 enabled_by: Some("scribbles.enabled"),
             },
         ),
-        ("ai", Field { key: "scribbles.template", label: "Default Scribbles Drawing Template", kind: Kind::Text, wired: true, enabled_by: None }),
+        (
+            "ai",
+            Field {
+                key: "scribbles.template",
+                label: "Default Scribbles Drawing Template",
+                kind: Kind::Text,
+                wired: true,
+                enabled_by: None,
+            },
+        ),
         (
             "appearance",
             Field {
@@ -131,13 +170,28 @@ pub fn fields_with_cat() -> Vec<(&'static str, Field)> {
                 enabled_by: None,
             },
         ),
-        ("appearance", Field { key: "appearance.accessible_contrast", label: "High contrast", kind: Kind::Bool, wired: true, enabled_by: None }),
+        (
+            "appearance",
+            Field {
+                key: "appearance.accessible_contrast",
+                label: "High contrast",
+                kind: Kind::Bool,
+                wired: true,
+                enabled_by: None,
+            },
+        ),
         (
             "appearance",
             Field {
                 key: "appearance.accent",
                 label: "Accent",
-                kind: Kind::Choice(&[("teal", "Teal (Mint)"), ("blue", "Blue"), ("violet", "Violet"), ("amber", "Amber"), ("graphite", "Graphite")]),
+                kind: Kind::Choice(&[
+                    ("teal", "Teal (Mint)"),
+                    ("blue", "Blue"),
+                    ("violet", "Violet"),
+                    ("amber", "Amber"),
+                    ("graphite", "Graphite"),
+                ]),
                 wired: true,
                 enabled_by: None,
             },
@@ -146,94 +200,8 @@ pub fn fields_with_cat() -> Vec<(&'static str, Field)> {
             "appearance",
             Field {
                 key: "appearance.ui_scale",
-                label: "Interface size",
+                label: "Interface scale",
                 kind: Kind::Float { min: 0.8, max: 2.0, decimals: 2, unit: "x" },
-                wired: true,
-                enabled_by: None,
-            },
-        ),
-        (
-            "bridge",
-            Field {
-                key: "craft.filmcraft_port",
-                label: "FilmCraft --control Loopback Port (FILMCRAFT_CONTROL_PORT)",
-                kind: Kind::Int { min: 1024.0, max: 65535.0, unit: "" },
-                wired: true,
-                enabled_by: None,
-            },
-        ),
-        (
-            "bridge",
-            Field {
-                key: "craft.effectcraft_port",
-                label: "EffectCraft --control Loopback Port (EFFECTCRAFT_CONTROL_PORT)",
-                kind: Kind::Int { min: 1024.0, max: 65535.0, unit: "" },
-                wired: true,
-                enabled_by: None,
-            },
-        ),
-        (
-            "bridge",
-            Field {
-                key: "craft.prefer_live_bridge",
-                label: "Route Engine Commands Through Live --control Window When Open",
-                kind: Kind::Bool,
-                wired: true,
-                enabled_by: None,
-            },
-        ),
-        (
-            "bridge",
-            Field {
-                key: "craft.effectcraft_mcp_autosave",
-                label: "Enable Headless EffectCraft MCP Checkpoints (effectcraft-cli mcp --autosave)",
-                kind: Kind::Bool,
-                wired: true,
-                enabled_by: None,
-            },
-        ),
-        ("project", Field { key: "project.root", label: "Production project root", kind: Kind::Path, wired: true, enabled_by: None }),
-        ("project", Field { key: "project.characters_root", label: "Characters root", kind: Kind::Path, wired: true, enabled_by: None }),
-        (
-            "project",
-            Field {
-                key: "project.storyboard_template",
-                label: "Storyboard template",
-                kind: Kind::Choice(&[("magic", "Magic Studio Canonical Storyboard")]),
-                wired: true,
-                enabled_by: None,
-            },
-        ),
-        (
-            "project",
-            Field {
-                key: "project.storyboard_format",
-                label: "Storyboard document format",
-                kind: Kind::Choice(&[("pdfcraft", "PDFCraft (storyboard.pdf from read-only .designcraft master)")]),
-                wired: true,
-                enabled_by: None,
-            },
-        ),
-        ("project", Field { key: "project.storyboard_locked", label: "Lock canonical storyboard template", kind: Kind::Bool, wired: true, enabled_by: None }),
-        (
-            "lyrics",
-            Field {
-                key: "lyrics.default_size",
-                label: "Default lyric size",
-                kind: Kind::Int { min: 8.0, max: 600.0, unit: "px" },
-                wired: true,
-                enabled_by: None,
-            },
-        ),
-        ("lyrics", Field { key: "lyrics.outline", label: "Lyric outline", kind: Kind::Bool, wired: true, enabled_by: None }),
-        ("lyrics", Field { key: "lyrics.font_dirs", label: "Extra Font Folders (EFFECTCRAFT_FONT_DIRS)", kind: Kind::Text, wired: true, enabled_by: None }),
-        ("animation", Field { key: "animation.loop_preview", label: "Loop preview", kind: Kind::Bool, wired: true, enabled_by: None }),
-        (
-            "animation",
-            Field {
-                key: "animation.duration",
-                label: "Default clip duration",
-                kind: Kind::Float { min: 0.1, max: 30.0, decimals: 1, unit: "s" },
                 wired: true,
                 enabled_by: None,
             },
@@ -243,7 +211,7 @@ pub fn fields_with_cat() -> Vec<(&'static str, Field)> {
             Field {
                 key: "general.at_startup",
                 label: "At Startup",
-                kind: Kind::Choice(&[("showHome", "Show Home"), ("openMostRecent", "Open Most Recent"), ("emptyProject", "Empty Project")]),
+                kind: Kind::Choice(&[("showHome", "Show Home"), ("openLast", "Open Most Recent Project")]),
                 wired: true,
                 enabled_by: None,
             },
@@ -252,18 +220,77 @@ pub fn fields_with_cat() -> Vec<(&'static str, Field)> {
             "general",
             Field {
                 key: "general.when_opening_project",
-                label: "When Opening a Project",
-                kind: Kind::Choice(&[("showOpenDialog", "Show Open Dialog"), ("showHome", "Show Home")]),
+                label: "When Opening Project",
+                kind: Kind::Choice(&[("showOpenDialog", "Show File Dialog"), ("showProjectView", "Open Project Trunk")]),
                 wired: true,
                 enabled_by: None,
             },
         ),
-        ("general", Field { key: "general.show_tooltips", label: "Show Tool Tips", kind: Kind::Bool, wired: true, enabled_by: None }),
+        ("general", Field { key: "general.show_tooltips", label: "Show Tooltips", kind: Kind::Bool, wired: true, enabled_by: None }),
+        ("general", Field { key: "general.show_rich_tooltips", label: "Show Rich Tooltips", kind: Kind::Bool, wired: true, enabled_by: None }),
+        ("general", Field { key: "general.recent_projects", label: "Recent Projects", kind: Kind::Text, wired: true, enabled_by: None }),
+        ("project", Field { key: "project.root", label: "Production Projects Folder (magic/projects)", kind: Kind::Path, wired: true, enabled_by: None }),
         (
-            "general",
-            Field { key: "general.show_rich_tooltips", label: "Show Rich Tool Tips", kind: Kind::Bool, wired: true, enabled_by: Some("general.show_tooltips") },
+            "project",
+            Field {
+                key: "project.characters_root",
+                label: "Shared Animations / Characters Folder (magic/animations)",
+                kind: Kind::Path,
+                wired: true,
+                enabled_by: None,
+            },
         ),
-        ("autosave", Field { key: "autosave.enabled", label: "AutoSave Enabled", kind: Kind::Bool, wired: true, enabled_by: None }),
+        (
+            "project",
+            Field { key: "project.storyboard_template", label: "Storyboard Master Template", kind: Kind::Text, wired: true, enabled_by: None },
+        ),
+        (
+            "project",
+            Field { key: "project.storyboard_format", label: "Storyboard Reference Format", kind: Kind::Text, wired: true, enabled_by: None },
+        ),
+        (
+            "project",
+            Field {
+                key: "project.storyboard_locked",
+                label: "Enforce Read-Only Master Storyboard Layout",
+                kind: Kind::Bool,
+                wired: true,
+                enabled_by: None,
+            },
+        ),
+        (
+            "lyrics",
+            Field {
+                key: "lyrics.default_size",
+                label: "Default Lyric Font Size",
+                kind: Kind::Int { min: 16.0, max: 300.0, unit: "px" },
+                wired: true,
+                enabled_by: None,
+            },
+        ),
+        ("lyrics", Field { key: "lyrics.outline", label: "Default Lyric Stroke Outline", kind: Kind::Bool, wired: true, enabled_by: None }),
+        ("lyrics", Field { key: "lyrics.font_dirs", label: "Additional Font Folders", kind: Kind::Path, wired: true, enabled_by: None }),
+        ("animation", Field { key: "animation.loop_preview", label: "Loop Character Preview", kind: Kind::Bool, wired: true, enabled_by: None }),
+        (
+            "animation",
+            Field {
+                key: "animation.duration",
+                label: "Default Character Study Duration",
+                kind: Kind::Float { min: 0.5, max: 60.0, decimals: 1, unit: "s" },
+                wired: true,
+                enabled_by: None,
+            },
+        ),
+        (
+            "autosave",
+            Field {
+                key: "autosave.enabled",
+                label: "Enable Crash-Recovery Journal (.history/*.autosave)",
+                kind: Kind::Bool,
+                wired: true,
+                enabled_by: None,
+            },
+        ),
         (
             "autosave",
             Field {
@@ -274,52 +301,5 @@ pub fn fields_with_cat() -> Vec<(&'static str, Field)> {
                 enabled_by: Some("autosave.enabled"),
             },
         ),
-        (
-            "mediaCache",
-            Field {
-                key: "mediaCache.max_mb",
-                label: "Media Cache Max",
-                kind: Kind::Int { min: 100.0, max: 100000.0, unit: "MB" },
-                wired: true,
-                enabled_by: None,
-            },
-        ),
-        ("mediaCache", Field { key: "mediaCache.location", label: "Media Cache Location", kind: Kind::Path, wired: true, enabled_by: None }),
-        (
-            "playback",
-            Field {
-                key: "playback.resolution",
-                label: "Playback Resolution",
-                kind: Kind::Choice(&[("full", "Full"), ("half", "Half"), ("quarter", "Quarter")]),
-                wired: true,
-                enabled_by: None,
-            },
-        ),
-        ("playback", Field { key: "playback.draft_decode", label: "Draft Decode", kind: Kind::Bool, wired: true, enabled_by: None }),
-        (
-            "timeline",
-            Field {
-                key: "timeline.still_image_duration",
-                label: "Still Image Duration",
-                kind: Kind::Float { min: 0.5, max: 30.0, decimals: 1, unit: "s" },
-                wired: true,
-                enabled_by: None,
-            },
-        ),
-        (
-            "timeline",
-            Field {
-                key: "timeline.transition_duration",
-                label: "Transition Duration",
-                kind: Kind::Float { min: 0.0, max: 10.0, decimals: 2, unit: "s" },
-                wired: true,
-                enabled_by: None,
-            },
-        ),
-        ("audio", Field { key: "audio.edit_location", label: "Edit in SoundCraft Location", kind: Kind::Path, wired: false, enabled_by: None }),
-        ("audio", Field { key: "audio.output_device", label: "Audio Output Device", kind: Kind::Text, wired: false, enabled_by: None }),
-        ("labels", Field { key: "labels.preset", label: "Label Preset", kind: Kind::Text, wired: true, enabled_by: None }),
-        ("media", Field { key: "media.analyze_on_import", label: "Analyze Imported Media", kind: Kind::Bool, wired: true, enabled_by: None }),
-        ("general", Field { key: "general.recent_projects", label: "Recent Projects", kind: Kind::Text, wired: false, enabled_by: None }),
     ]
 }

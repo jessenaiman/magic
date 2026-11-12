@@ -33,14 +33,19 @@ pub fn verify_clean(session: &Session, ui_state: &UiShellState) -> Result<(), St
     }
     if !ui_state.dirty_drafts.is_empty() {
         let names: Vec<&str> = ui_state.dirty_drafts.iter().map(String::as_str).collect();
-        return Err(format!("Save the editor changes before closing, restarting, or switching projects: {}", names.join(", ")));
+        return Err(format!(
+            "Save the editor changes before closing, restarting, or switching projects: {}",
+            names.join(", ")
+        ));
     }
     if session.docs.iter().any(|doc| doc.dirty) {
         return Err("Save the edited project documents before closing, restarting, or switching projects".into());
     }
     if let Some(path) = &session.project_path {
-        let bytes = std::fs::read(path).map_err(|e| format!("Cannot verify saved project {}: {e}; save it before continuing", path.display()))?;
-        let saved: serde_json::Value = serde_json::from_slice(&bytes).map_err(|e| format!("Cannot verify saved project: {e}; save it before continuing"))?;
+        let bytes = std::fs::read(path)
+            .map_err(|e| format!("Cannot verify saved project {}: {e}; save it before continuing", path.display()))?;
+        let saved: serde_json::Value = serde_json::from_slice(&bytes)
+            .map_err(|e| format!("Cannot verify saved project: {e}; save it before continuing"))?;
         if !saved.is_object() || saved["format"] != "magic.project" {
             return Err("Cannot verify saved project format; save the project before continuing".into());
         }

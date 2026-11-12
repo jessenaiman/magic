@@ -31,116 +31,28 @@ fn specs_ui_and_craft_exec() -> Vec<CommandSpec> {
         query_spec!("ui.timeline.locate", "Locate Timeline Time/Track in Window Pixels", "{\"time\":2.5,\"track\":\"optional V3\"}", requires_ui),
         query_spec!("ui.timeline.hit", "Hit-Test Window Coordinates on Timeline", "{\"x\":500,\"y\":780}", requires_ui),
         query_spec!("perf.stats", "Live eframe/wgpu Frame & Render Telemetry", "{}", requires_ui),
-        cmd_spec!(
-            "render.frame",
-            "Render Stage Frame PNG Headless or Over --control",
-            [],
-            None,
-            "{\"stage\":\"studio|lyrics|motion|animation|storyboard\",\"time\":0.0,\"path\":\"optional /abs/out.png\"}",
-            always,
-            requires_ui
-        ),
+        cmd_spec!("render.frame", "Render Stage Frame PNG Headless or Over --control", [], None, "{\"stage\":\"studio|lyrics|motion|animation|storyboard\",\"time\":0.0,\"path\":\"optional /abs/out.png\"}", always, requires_ui),
         cmd_spec!("ui.playback", "Control or Inspect Live Audio/Video Transport", [], None, "{\"action\":\"play|stop|toggle|status\"}", always, requires_ui),
         cmd_spec!("ui.click", "Click a Control", [], None, "{\"id\":\"element ID\"}", always, requires_ui),
-        cmd_spec!(
-            "ui.set",
-            "Set a Control, Stage Tab, Studio Workspace, or View",
-            [],
-            None,
-            "{\"view\":\"optional\",\"studioWorkspace\":\"optional matrix|edit|color|fx|audio|titles|export\",\"id\":\"optional\",\"value\":\"optional\"}",
-            always,
-            requires_ui
-        ),
+        cmd_spec!("ui.set", "Set a Control, Stage Tab, Studio Workspace, or View", [], None, "{\"view\":\"optional\",\"studioWorkspace\":\"optional matrix|edit|color|fx|audio|titles|export\",\"id\":\"optional\",\"value\":\"optional\"}", always, requires_ui),
         cmd_spec!("ui.key", "Press a Key", [], None, "{\"key\":\"key name\"}", always, requires_ui),
         cmd_spec!("ui.keymap.press", "Trigger a craft-keymap Chord", [], None, "{\"chord\":\"Cmd+Z\"}", always, requires_ui),
         cmd_spec!("ui.type", "Type Into Focused or Named Control", [], None, "{\"text\":\"text\",\"id\":\"optional\"}", always, requires_ui),
         cmd_spec!("ui.drag", "Drag Between Two Targets", [], None, "{\"from\":{\"id\":\"a\"},\"to\":{\"id\":\"b\"}}", always, requires_ui),
         cmd_spec!("ui.scroll", "Scroll a Control or Viewport", [], None, "{\"id\":\"element ID\",\"dy\":120}", always, requires_ui),
-        cmd_spec!(
-            "ui.screenshot",
-            "Capture Window or Panel PNG",
-            [],
-            None,
-            "{\"path\":\"optional /abs/out.png\",\"panel\":\"optional\",\"id\":\"optional\"}",
-            always,
-            requires_ui
-        ),
+        cmd_spec!("ui.screenshot", "Capture Window or Panel PNG", [], None, "{\"path\":\"optional /abs/out.png\",\"panel\":\"optional\",\"id\":\"optional\"}", always, requires_ui),
         cmd_spec!("ui.resize", "Resize Window", [], None, "{\"width\":1440,\"height\":900}", always, requires_ui),
         cmd_spec!("ui.focus", "Focus Window or Control", [], None, "{\"id\":\"optional\"}", always, requires_ui),
-        cmd_spec!(
-            "ui.filmcraft",
-            "Forward --control Method or Command to FilmCraft (:9876)",
-            [],
-            None,
-            "{\"method\":\"optional ui.inspect\",\"command\":\"optional sequence.inspect\",\"params\":{},\"port\":9876}",
-            always,
-            requires_ui
-        ),
-        cmd_spec!(
-            "ui.effectcraft",
-            "Forward --control Method or Command to EffectCraft (:9877)",
-            [],
-            None,
-            "{\"method\":\"optional ui.inspect\",\"command\":\"optional comp.info\",\"params\":{},\"port\":9877}",
-            always,
-            requires_ui
-        ),
-        cmd_spec!(
-            "ui.craft",
-            "Forward --control Method or Command to Any ArtCraft App",
-            [],
-            None,
-            "{\"app\":\"filmcraft|effectcraft|designcraft|photocraft|vectorcraft\",\"method\":\"ui.inspect\",\"params\":{}}",
-            always,
-            requires_ui
-        ),
         cmd_spec!("clipboard.import_image", "Paste Clipboard Artwork", [], None, "{\"expected_project\":\"path\"}", always, requires_ui),
         cmd_spec!("app.quit", "Guarded Window Close", [], None, "{\"force\":false}", always, requires_ui),
         cmd_spec!(
             "workspace.open",
-            "Open File in Its ArtCraft Editor (--control)",
+            "Open File in Native Desktop Editor",
             ["File"],
             None,
             "{\"path\":\"file path\"}",
             always,
             crate::workspace::cmd_workspace_open
-        ),
-        cmd_spec!("workspace.close_opened", "Close Apps Opened by Magic", ["File"], None, "{}", always, crate::workspace::cmd_workspace_close_opened),
-        cmd_spec!(
-            "photo.exec",
-            "Run Native PhotoCraft CLI Command",
-            ["File"],
-            None,
-            "{\"path\":\"image or .pcraft/.psd\",\"id\":\"layer.removeBackground\",\"params\":{},\"save\":\"optional\"}",
-            always,
-            crate::workspace::cmd_photo_exec
-        ),
-        cmd_spec!(
-            "effect.exec",
-            "Run Native EffectCraft CLI Command",
-            ["Animation"],
-            None,
-            "{\"path\":\".ecproj\",\"id\":\"comp.info\",\"params\":{},\"save\":true}",
-            always,
-            crate::workspace::cmd_effect_exec
-        ),
-        cmd_spec!(
-            "vector.exec",
-            "Run Native VectorCraft CLI Command",
-            ["File"],
-            None,
-            "{\"path\":\"asset path\",\"mode\":\"info|convert|run\",\"out\":\"optional\"}",
-            always,
-            crate::workspace::cmd_vector_exec
-        ),
-        cmd_spec!(
-            "anicraft.exec",
-            "Run Headless AniCraft CLI Command (No GUI)",
-            ["Animation"],
-            None,
-            "{\"path\":\"optional .anicraft\",\"mode\":\"exec|render_frame|render_seq\",\"id\":\"info\",\"params\":{},\"out\":\"optional\"}",
-            always,
-            crate::cmd::photo_vector::cmd_anicraft_exec
         ),
     ]
 }

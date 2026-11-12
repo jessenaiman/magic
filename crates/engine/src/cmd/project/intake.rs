@@ -11,7 +11,7 @@ use crate::cmd::project::workshop::{
     workshop_asset_files, workshop_status,
 };
 use crate::workspace::{has_extension, resolve_workspace_path, song_audio_path};
-use crate::{CraftHub, CraftTarget, EngineError, Result, Session};
+use crate::{EngineError, Result, Session};
 
 fn numbered_prompts(text: &str) -> std::collections::BTreeMap<usize, String> {
     let mut out = std::collections::BTreeMap::new();
@@ -41,15 +41,18 @@ fn numbered_prompts(text: &str) -> std::collections::BTreeMap<usize, String> {
 }
 
 pub fn cmd_workshop_set_audio(s: &mut Session, params: &Value) -> Result<Value> {
-    project_dir(s)?;
+    let dir = project_dir(s)?;
     let raw = params.get("path").and_then(Value::as_str).ok_or_else(|| EngineError::InvalidParams("missing audio 'path'".into()))?;
-    let audio = song_audio_path(s, raw)?;
+    let source_audio = song_audio_path(s, raw)?;
+    let overwrite = params.get("overwrite").and_then(Value::as_bool).unwrap_or(false);
+    let (audio, copied) = crate::cmd::project::copy_audio_into_project(&dir, &source_audio, overwrite)?;
     s.song_audio = Some(audio.clone());
     s.video_target = "filmcraft".into();
     crate::cmd::project::write_project_file(s)?;
     crate::cmd::film::assembly::ensure_song_film(s, &audio)?;
     let mut status = workshop_status(s)?;
     status["audio"] = json!(audio);
+    status["copied_into_project"] = json!(copied);
     Ok(status)
 }
 
@@ -83,12 +86,12 @@ fn requested_paths(s: &Session, params: &Value) -> Result<Vec<PathBuf>> {
 }
 
 fn require_addable(path: &Path, only: Option<&[&str]>) -> Result<()> {
-    if !craft_util::media::is_craft_doc_path(path) {
+    if !magic_util::media::is_craft_doc_path(path) {
         return Err(EngineError::InvalidParams(format!("file not found: {}", path.display())));
     }
     if let Some(exts) = only
         && !has_extension(path, exts)
-        && CraftTarget::from_path(path).is_none()
+        && !magic_util::is_supported_craft_or_media_path(path)
     {
         return Err(EngineError::InvalidParams(format!("not an image or Craft artwork: {}", path.display())));
     }
@@ -110,14 +113,12 @@ fn place_file(path: &Path, dest: &Path) -> Result<()> {
     if dest == path {
         return Ok(());
     }
-    if dest.is_file() && path.is_file() && std::fs::read(dest)? != std::fs::read(path)? {
-        return Err(EngineError::InvalidParams(format!(
-            "Material destination exists with different bytes: {}. Rename or explicitly resolve the collision; original retained.",
-            dest.display()
-        )));
+    if path.is_dir() && path.extension().is_some_and(|e| e.eq_ignore_ascii_case("pcraft")) {
+        crate::doc_state::atomic_copy_dir(path, dest, false)?;
+        return Ok(());
     }
-    if !dest.exists() && path.is_file() {
-        std::fs::copy(path, dest)?;
+    if path.is_file() {
+        crate::doc_state::atomic_copy_file(path, dest, false)?;
     }
     Ok(())
 }
@@ -189,8 +190,8 @@ fn crop_panels(image: &Path, out_dir: &Path, columns: u32, rows: u32, inset: u32
             let y = r * ch + inset;
             let w = cw - 2 * inset;
             let h = ch - 2 * inset;
-            let steps = [("image.crop", json!({"x": x, "y": y, "width": w, "height": h}))];
-            CraftHub::run_batch(CraftTarget::Photo, Some(image), Some(&out), &steps)?;
+            let src_rgba = crate::native_media::load_rgba(image)?;
+            crate::native_media::crop_and_anchor_cell(&src_rgba, [x, y, w, h], false, &out)?;
             panels.push(out);
         }
     }
@@ -233,19 +234,7 @@ pub fn cmd_workshop_split_panels(s: &mut Session, params: &Value) -> Result<Valu
     }
     let out_dir = dir.join(STORYBOARD_DIR);
     std::fs::create_dir_all(&out_dir)?;
-    let mut panels = crop_panels(&image, &out_dir, columns, rows, inset, (cw, ch))?;
-    if let Some(actions) = params.get("actions").filter(|v| v.is_array() || v.is_object()) {
-        let graded_dir = out_dir.join("graded");
-        if CraftHub::batch_grade_photo_folder(actions, &out_dir, &graded_dir).is_ok() {
-            panels = panels
-                .into_iter()
-                .map(|p| {
-                    let g = graded_dir.join(p.file_name().unwrap_or_default());
-                    if g.is_file() { g } else { p }
-                })
-                .collect();
-        }
-    }
+    let panels = crop_panels(&image, &out_dir, columns, rows, inset, (cw, ch))?;
     if params.get("place_in_storyboard").and_then(Value::as_bool).unwrap_or(false) {
         for (idx, panel_png) in panels.iter().enumerate() {
             let _ = crate::cmd::storyboard::cmd_storyboard_set(

@@ -1,7 +1,7 @@
 [workspace]
 resolver = "3"
 members = [
-    "crates/craft-util",
+    "crates/util",
     "crates/scribbles",
     "crates/engine",
     "crates/mcp",
@@ -21,8 +21,8 @@ repository = "https://github.com/jessenaiman/magic"
 
 [workspace.dependencies]
 # Magic's own workspace crates
-craft-util = { path = "crates/craft-util" }
-craft-scribbles = { path = "crates/scribbles" }
+magic-util = { path = "crates/util" }
+magic-scribbles = { path = "crates/scribbles" }
 magic = { package = "magic-engine", path = "crates/engine" }
 magic-mcp = { path = "crates/mcp" }
 magic-ui-egui = { path = "crates/ui-egui" }
@@ -40,10 +40,8 @@ eframe = { version = "0.37", default-features = false, features = [
 ] }
 egui_extras = { version = "0.37", default-features = false, features = ["svg", "image", "file"] }
 
-# Shared Craft foundation libraries (`storytold/craft-libs`) — sibling Craft apps (`filmcraft`,
-# `effectcraft`, `designcraft`, `photocraft`, `vectorcraft`, `deckcraft`, `anicraft`, `texturecraft`)
-# are never linked as Rust crates; Magic drives the system-installed binaries via `--control` and
-# `<product>-cli` through `crates/craft-util` and `crates/engine/src/craft_hub/`.
+# Shared Craft foundation libraries (`storytold/craft-libs`) — Magic reads and writes native
+# Craft project envelopes directly on disk without linking sibling app crates or wrapping their CLIs.
 craft-atomic = { git = "https://github.com/storytold/craft-libs", rev = "1ee01a4c58729d781638b8afbd8982726dbdefcb" }
 craft-audio = { git = "https://github.com/storytold/craft-libs", rev = "1ee01a4c58729d781638b8afbd8982726dbdefcb", features = ["decode", "peaks"] }
 craft-dialogs = { git = "https://github.com/storytold/craft-libs", rev = "1ee01a4c58729d781638b8afbd8982726dbdefcb" }

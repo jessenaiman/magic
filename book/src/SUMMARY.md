@@ -30,7 +30,6 @@
 
 - [Building & Quality Gates](development/building.md)
 - [Contributing & House Rules](development/contributing.md)
-- [Feature Gaps & Review Checklists](development/gaps.md)
 
 # Security
 

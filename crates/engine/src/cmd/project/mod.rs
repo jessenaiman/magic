@@ -1,19 +1,29 @@
-//! Project lifecycle: `.magic` create/open/save/close (`project.*` and ArtCraft `file.*` suite aliases)
-//! and sub-module re-exports.
+//! Project lifecycle: `.magic` open/save/saveAs/close/autosave (`project.*` and ArtCraft `file.*`
+//! suite aliases), delegating `project.new` / `file.new` to [`new_project`].
 //!
-//! Includes atomic writes (`craft_atomic::atomic_write`), rolling `.history/<stem>.magic.bak.{1..3}`
-//! backups (`storytold/filmcraft/docs/project-files.md`), and crash-recovery `.autosave` journals.
+//! Includes `craft_atomic::write_new` exclusive creation, private (`0600`) rolling
+//! `.history/<stem>.magic.bak.{1..3}` snapshots, and private `.autosave` crash-recovery journals.
 
 pub mod assets;
 pub mod catalog;
+pub mod convert;
 pub mod intake;
+pub mod new_project;
 pub mod settings;
 pub mod transcript;
 pub mod trunk;
 pub mod ui_state;
 pub mod workshop;
+pub mod workspace_layout;
 
-pub use assets::{cmd_project_add_asset, cmd_project_list_assets, cmd_project_load_asset, cmd_project_remove_asset, cmd_project_update_asset};
+pub use assets::{
+    cmd_project_add_asset, cmd_project_list_assets, cmd_project_load_asset, cmd_project_remove_asset,
+    cmd_project_save_asset, cmd_project_update_asset,
+};
+pub use convert::cmd_project_convert;
+pub use workspace_layout::cmd_workspace_init;
+pub(crate) use new_project::copy_audio_into_project;
+pub use new_project::cmd_project_new;
 pub use trunk::{cmd_project_import_file, cmd_project_trunk};
 pub use ui_state::{cmd_project_snapshot, save_theatre_state, theatre_state};
 
@@ -124,7 +134,8 @@ fn autosave_journal_path(project: &Path) -> PathBuf {
     history_dir(project).join(format!("{fname}.autosave"))
 }
 
-/// Rotate up to 3 rolling `.magic.bak.{1..3}` snapshots inside `<project_dir>/.history/` using `craft_atomic`.
+/// Rotate up to 3 rolling `.magic.bak.{1..3}` snapshots inside `<project_dir>/.history/` using
+/// private `craft-atomic` permissions (`0600` on Unix).
 fn rotate_project_backups(project: &Path) {
     if !project.is_file() {
         return;
@@ -141,12 +152,27 @@ fn rotate_project_backups(project: &Path) {
     let bak2 = hdir.join(format!("{fname}.bak.2"));
     let bak3 = hdir.join(format!("{fname}.bak.3"));
     if let Ok(b2) = std::fs::read(&bak2) {
-        let _ = craft_atomic::atomic_write(&bak3, &b2);
+        let _ = crate::doc_state::write_private_file(&bak3, &b2);
     }
     if let Ok(b1) = std::fs::read(&bak1) {
-        let _ = craft_atomic::atomic_write(&bak2, &b1);
+        let _ = crate::doc_state::write_private_file(&bak2, &b1);
     }
-    let _ = craft_atomic::atomic_write(&bak1, &existing_bytes);
+    let _ = crate::doc_state::write_private_file(&bak1, &existing_bytes);
+}
+
+fn finalize_project_write(s: &Session, path: &Path, stamp: Option<crate::doc_state::FileStamp>, written: usize) {
+    s.project_stamp.set(stamp);
+    let journal = autosave_journal_path(path);
+    if journal.is_file() {
+        let _ = std::fs::remove_file(&journal);
+    }
+    if s.record_user_state {
+        crate::change_marker::invalidate();
+    }
+    s.project_saves.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    if s.record_user_state {
+        crate::activity::stored(path, written);
+    }
 }
 
 pub fn write_project_file(s: &Session) -> Result<()> {
@@ -162,29 +188,39 @@ pub fn write_project_file(s: &Session) -> Result<()> {
     rotate_project_backups(path);
     let doc = merged_document(s, path);
     let (stamp, written) = crate::doc_state::write_json(path, &doc)?;
-    s.project_stamp.set(stamp);
-    let journal = autosave_journal_path(path);
-    if journal.is_file() {
-        let _ = std::fs::remove_file(&journal);
-    }
-    if s.record_user_state {
-        crate::change_marker::invalidate();
-    }
-    s.project_saves.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    if s.record_user_state {
-        crate::activity::stored(path, written);
-    }
+    finalize_project_write(s, path, stamp, written);
     Ok(())
 }
 
-/// Write crash-recovery `.autosave` journal (~1s debounce from UI) without overwriting the user's primary `.magic` file.
+pub(crate) fn create_initial_project_file(s: &Session, overwrite: bool) -> Result<()> {
+    if overwrite {
+        return write_project_file(s);
+    }
+    let Some(path) = &s.project_path else {
+        return Ok(());
+    };
+    let doc = project_document(s);
+    let (stamp, written) = match crate::doc_state::write_json_new(path, &doc) {
+        Ok(res) => res,
+        Err(EngineError::Io(e)) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+            return Err(EngineError::InvalidParams(format!(
+                "project already exists: {} (pass \"overwrite\": true to replace it)",
+                path.display()
+            )));
+        }
+        Err(e) => return Err(e),
+    };
+    finalize_project_write(s, path, stamp, written);
+    Ok(())
+}
+
 pub fn cmd_project_autosave(s: &mut Session, _: &Value) -> Result<Value> {
     let Some(path) = &s.project_path else {
         return Ok(json!({"ok": false, "reason": "no_project"}));
     };
     let journal = autosave_journal_path(path);
     let doc = merged_document(s, path);
-    let (_, bytes) = crate::doc_state::write_json(&journal, &doc)?;
+    let (_, bytes) = crate::doc_state::write_private_json(&journal, &doc)?;
     Ok(json!({
         "ok": true,
         "journal": journal,
@@ -192,7 +228,7 @@ pub fn cmd_project_autosave(s: &mut Session, _: &Value) -> Result<Value> {
     }))
 }
 
-fn project_slug(name: &str) -> String {
+pub(crate) fn project_slug(name: &str) -> String {
     let mut slug = String::new();
     for c in name.trim().chars() {
         if c.is_ascii_alphanumeric() {
@@ -204,25 +240,45 @@ fn project_slug(name: &str) -> String {
     slug.trim_end_matches('-').to_string()
 }
 
+pub(crate) fn validate_project_name(name: &str) -> Result<String> {
+    if name.contains(['/', '\\']) {
+        return Err(EngineError::InvalidParams("a project name cannot contain / or \\".into()));
+    }
+    let slug = project_slug(name);
+    if slug.is_empty() {
+        return Err(EngineError::InvalidParams("a project name needs at least one letter or digit".into()));
+    }
+    Ok(slug)
+}
+
 pub(crate) fn project_file_path(s: &Session, params: &Value) -> Result<PathBuf> {
     let text = |key: &str| params.get(key).and_then(Value::as_str).map(str::trim).filter(|v| !v.is_empty());
     let raw = match (text("path"), text("root"), text("name")) {
         (Some(path), _, _) => path.to_string(),
         (None, Some(root), Some(name)) => {
-            if name.contains(['/', '\\']) {
-                return Err(EngineError::InvalidParams("a project name cannot contain / or \\".into()));
-            }
-            let slug = project_slug(name);
-            if slug.is_empty() {
-                return Err(EngineError::InvalidParams("a project name needs at least one letter or digit".into()));
-            }
-            Path::new(root).join(slug).join(format!("{name}.magic")).to_string_lossy().into_owned()
+            let slug = validate_project_name(name)?;
+            crate::workspace::expand_tilde(root)
+                .join(slug)
+                .join(format!("{name}.magic"))
+                .to_string_lossy()
+                .into_owned()
         }
         (None, None, _) => return Err(EngineError::InvalidParams("give the project `path`, or a `root` folder and a `name`".into())),
         (None, Some(_), None) => return Err(EngineError::InvalidParams("give the project `name` to create it in `root`".into())),
     };
     let mut path = crate::workspace::resolve_workspace_path(s, &raw);
     if path.extension().is_none_or(|e| !e.eq_ignore_ascii_case("magic")) {
+        if path.is_dir()
+            && let Some(found) = std::fs::read_dir(&path)
+                .ok()
+                .into_iter()
+                .flatten()
+                .flatten()
+                .map(|e| e.path())
+                .find(|p| p.is_file() && p.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("magic")))
+        {
+            return std::fs::canonicalize(&found).map_err(EngineError::from);
+        }
         path.as_mut_os_string().push(".magic");
     }
     if path.exists() {
@@ -231,10 +287,11 @@ pub(crate) fn project_file_path(s: &Session, params: &Value) -> Result<PathBuf> 
     Ok(path)
 }
 
-fn reset_for_project(s: &mut Session, path: PathBuf, assets: Vec<crate::ProjectAsset>) {
+pub(crate) fn reset_for_project(s: &mut Session, path: PathBuf, assets: Vec<crate::ProjectAsset>) {
     let stamp = crate::link_watch::FileStamp::of(&path);
     *s = Session {
         cwd: s.cwd.clone(),
+        settings: s.settings.clone(),
         record_user_state: s.record_user_state,
         control_address: s.control_address,
         automation_roots: s.automation_roots.clone(),
@@ -245,16 +302,16 @@ fn reset_for_project(s: &mut Session, path: PathBuf, assets: Vec<crate::ProjectA
     };
 }
 
-fn recent_warning(s: &Session, path: &Path, requested: bool) -> Vec<Value> {
+pub(crate) fn recent_warning(s: &Session, path: &Path, requested: bool) -> Vec<Value> {
     if !s.record_user_state || !requested {
         return Vec::new();
     }
-    match crate::cmd::project::catalog::record(&path.to_string_lossy()) {
+    match crate::cmd::project::catalog::record_for(s, &path.to_string_lossy()) {
         Ok(()) => Vec::new(),
         Err(error) => vec![json!({
             "code": "recent_history_unavailable",
             "stage": "update_recent_projects",
-            "path": crate::cmd::project::catalog::file(),
+            "path": crate::cmd::project::catalog::file_for(s),
             "error": error,
             "project": path,
             "effect": "Project is available; Home recent history was not updated",
@@ -263,129 +320,12 @@ fn recent_warning(s: &Session, path: &Path, requested: bool) -> Vec<Value> {
     }
 }
 
-fn bootstrap_new_project_workshop(s: &mut Session, path: &Path, params: &Value) -> Vec<Value> {
-    let mut steps = Vec::new();
-    let project_title =
-        params.get("title").or_else(|| params.get("name")).and_then(Value::as_str).or_else(|| path.file_stem().and_then(|n| n.to_str())).unwrap_or("Untitled");
-
-    let sb = path.with_file_name("storyboard.pdf");
-    if !sb.is_file() || params["overwrite"] == true {
-        let mut sb_req = json!({
-            "path": sb,
-            "overwrite": params["overwrite"] == true,
-            "title": project_title,
-        });
-        if let Some(wiz) = params.get("wizard") {
-            sb_req["wizard"] = wiz.clone();
-        }
-        match crate::cmd::storyboard::cmd_storyboard_new(s, &sb_req) {
-            Ok(_) => steps.push(json!({"command": "storyboard.new", "status": "complete; storyboard.pdf initialized from read-only master template"})),
-            Err(e) => steps.push(json!({"command": "storyboard.new", "status": "failed", "error": e.to_string()})),
-        }
-    }
-
-    let Some(raw_audio) = params.get("audio").and_then(Value::as_str).filter(|v| !v.is_empty()) else {
-        return steps;
-    };
-    if params["skip_audio_setup"] == true {
-        return steps;
-    }
-    match crate::cmd::project::workshop::cmd_workshop_set_audio(s, &json!({"path": raw_audio, "resolve_video_cli": params["resolve_video_cli"]})) {
-        Ok(_) => steps.push(json!({"command": "workshop.set_audio", "status": "complete; audio linked into FilmCraft sequence"})),
-        Err(e) => {
-            steps.push(json!({"command": "workshop.set_audio", "status": "failed", "error": e.to_string()}));
-            return steps;
-        }
-    }
-    if let Some(t) = params.get("transcript").and_then(Value::as_str).filter(|v| !v.is_empty()) {
-        match crate::cmd::project::workshop::cmd_workshop_import_transcript(s, &json!({"path": t, "captions": params["captions"], "replace": true})) {
-            Ok(_) => {
-                steps.push(json!({"command": "workshop.import_transcript", "status": "complete; timing-reference.json + synced FilmCraft lyric track ready"}))
-            }
-            Err(e) => steps.push(json!({"command": "workshop.import_transcript", "status": "failed", "error": e.to_string()})),
-        }
-    } else if params.get("process_audio").and_then(Value::as_bool).unwrap_or(true) && params["prepare_only"] != true {
-        let model = params.get("model").and_then(Value::as_str).unwrap_or("large-v3");
-        match crate::cmd::project::workshop::cmd_audio_analyze(
-            s,
-            &json!({"analyze_beats": true, "model": model, "resolve_video_cli": params["resolve_video_cli"]}),
-        ) {
-            Ok(_) => steps.push(
-                json!({"command": "audio.analyze", "status": "complete; transcribed audio, wrote timing-reference.json, and synced FilmCraft lyric track"}),
-            ),
-            Err(e) => steps.push(json!({"command": "audio.analyze", "status": "failed", "error": e.to_string()})),
-        }
-    }
-    steps
-}
-
-fn check_overwrite(path: &Path, overwrite: bool) -> Result<()> {
-    if path.exists() && !overwrite {
-        return Err(EngineError::InvalidParams(format!("project already exists: {} (pass \"overwrite\": true to replace it)", path.display())));
-    }
-    Ok(())
-}
-
-fn project_audio_source(s: &Session, params: &Value, require_audio: bool) -> Result<Option<PathBuf>> {
-    match params.get("audio").and_then(Value::as_str).filter(|v| !v.trim().is_empty()) {
-        Some(raw) => Ok(Some(crate::workspace::song_audio_path(s, raw)?)),
-        None if require_audio => Err(EngineError::InvalidParams(
-            "project.new requires `audio` (<song file>) so Magic can transcribe timestamps (`timing-reference.json`), sync the FilmCraft lyric track, and initialize the storyboard (or pass mode=\"animation\" for a standalone character study)".into(),
-        )),
-        None => Ok(None),
-    }
-}
-
-fn project_mode(value: &Value) -> Result<Option<String>> {
+pub(crate) fn project_mode(value: &Value) -> Result<Option<String>> {
     match value.get("mode").and_then(Value::as_str) {
         None | Some("project") => Ok(None),
         Some("animation") => Ok(Some("animation".into())),
         Some(other) => Err(EngineError::InvalidParams(format!("mode must be animation or project, not {other}"))),
     }
-}
-
-/// Create a new `.magic` session (`magic-cli new` / `project.new` / `file.new`).
-pub fn cmd_project_new(s: &mut Session, params: &Value) -> Result<Value> {
-    let path = project_file_path(s, params)?;
-    let mode = project_mode(params)?;
-    let overwrite = params.get("overwrite").and_then(Value::as_bool).unwrap_or(false);
-    check_overwrite(&path, overwrite)?;
-    let is_isolated_scratch = params["allow_empty_audio"] == true;
-    let require_audio = mode.is_none() && !is_isolated_scratch;
-    let audio = project_audio_source(s, params, require_audio)?;
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    let path = match (path.parent().and_then(|p| std::fs::canonicalize(p).ok()), path.file_name()) {
-        (Some(parent), Some(name)) => parent.join(name),
-        _ => path,
-    };
-    reset_for_project(s, path.clone(), Vec::new());
-    s.song_audio = audio;
-    s.project_mode = mode;
-    write_project_file(s)?;
-    let steps = if s.project_mode.is_some() || is_isolated_scratch { Vec::new() } else { bootstrap_new_project_workshop(s, &path, params) };
-    write_project_file(s)?;
-    let warnings = recent_warning(s, &path, true);
-    let workshop = crate::cmd::project::workshop::workshop_status(s)?;
-    let storyboard = crate::cmd::storyboard::cmd_storyboard_check(s, &json!({})).unwrap_or(Value::Null);
-    Ok(json!({
-        "ok": true,
-        "project": path,
-        "mode": s.project_mode,
-        "warnings": warnings,
-        "steps": steps,
-        "assets": s.project_assets,
-        "workshop": workshop,
-        "storyboard": storyboard,
-        "workflow": [
-            "1. Audio transcribed -> FilmCraft project with synced lyric track + timing-reference.json",
-            "2. Storyboard created -> run `magic-cli storyboard wizard` or edit Main Section Title Pages",
-            "3. Complete Main Section Title Pages first (A-Cover, B-World, C-Character, D-Motion)",
-            "4. Generate bulk images from title-page references via `magic-cli storyboard bulk_generate`",
-            "5. Once all required Storyboard sections are Green, proceed to Video Production (Lyrics, Motion, Animation, Studio)"
-        ],
-    }))
 }
 
 pub(crate) fn read_project_document(path: &Path) -> Result<Value> {
@@ -412,7 +352,11 @@ fn apply_opened_state(s: &mut Session, path: &Path, doc: &Value, assets: Vec<cra
     s.song = song;
     s.song_audio = doc.pointer("/workshop/audio").and_then(Value::as_str).map(|source| opened_path(source, path));
     s.draft_approved = doc.pointer("/workshop/draft_approved").and_then(Value::as_bool).unwrap_or(false);
-    if let Some(target) = doc.pointer("/workshop/target").and_then(Value::as_str).filter(|t| crate::cmd::project::workshop::VIDEO_TARGETS.contains(t)) {
+    if let Some(target) = doc
+        .pointer("/workshop/target")
+        .and_then(Value::as_str)
+        .filter(|t| crate::cmd::project::workshop::VIDEO_TARGETS.contains(t))
+    {
         s.video_target = target.into();
     }
     s.video_project_path = doc.pointer("/workshop/video_project").and_then(Value::as_str).map(|source| opened_path(source, path));
@@ -424,16 +368,24 @@ pub fn cmd_project_open(s: &mut Session, params: &Value) -> Result<Value> {
     if params["read_only"] != true
         && let Some(project_dir) = path.parent()
     {
-        let _ = craft_util::media::sweep_orphan_craft_tmp(project_dir);
+        let _ = magic_util::media::sweep_orphan_craft_tmp(project_dir);
     }
     let journal = autosave_journal_path(&path);
     let use_journal = params["recover_autosave"] == true && journal.is_file();
-    let doc = if use_journal { read_project_document(&journal)? } else { read_project_document(&path)? };
+    let doc = if use_journal {
+        read_project_document(&journal)?
+    } else {
+        read_project_document(&path)?
+    };
     if doc.get("format").and_then(Value::as_str) != Some(PROJECT_FORMAT) {
         return Err(EngineError::InvalidParams(format!("{} is not a Magic Studio project", path.display())));
     }
     let assets = project_assets_from_doc(&path, &doc)?;
-    let missing: Vec<&str> = assets.iter().filter(|a| a.path.as_ref().is_some_and(|p| !p.exists())).map(|a| a.id.as_str()).collect::<Vec<_>>();
+    let missing: Vec<&str> = assets
+        .iter()
+        .filter(|a| a.path.as_ref().is_some_and(|p| !p.exists()))
+        .map(|a| a.id.as_str())
+        .collect::<Vec<_>>();
     let missing = json!(missing);
     apply_opened_state(s, &path, &doc, assets)?;
     if params["read_only"] != true
@@ -464,7 +416,11 @@ pub fn cmd_project_open(s: &mut Session, params: &Value) -> Result<Value> {
 }
 
 fn project_guard(s: &Session, p: &Value) -> Result<()> {
-    let selected = s.project_path.as_ref().ok_or_else(|| EngineError::InvalidParams("Select the intended project".into()))?.canonicalize()?;
+    let selected = s
+        .project_path
+        .as_ref()
+        .ok_or_else(|| EngineError::InvalidParams("Select the intended project".into()))?
+        .canonicalize()?;
     let expected = project_file_path(s, &json!({"path": p["expected_project"]}))?.canonicalize()?;
     if selected != expected {
         return Err(EngineError::InvalidParams("expected_project differs from selected project".into()));
@@ -519,7 +475,6 @@ pub fn cmd_project_save(s: &mut Session, params: &Value) -> Result<Value> {
     }
 }
 
-/// Explicit `file.saveAs` handler (`path` required), mirroring `FilmCraft` and `VectorCraft`.
 pub fn cmd_file_save_as(s: &mut Session, params: &Value) -> Result<Value> {
     if params.get("path").and_then(Value::as_str).map(str::trim).filter(|p| !p.is_empty()).is_none() {
         return Err(EngineError::InvalidParams("file.saveAs requires `path`".into()));
@@ -531,18 +486,69 @@ pub fn cmd_file_save_as(s: &mut Session, params: &Value) -> Result<Value> {
     save_as(s, target)
 }
 
-fn save_as(s: &mut Session, target: PathBuf) -> Result<Value> {
-    if let Some(parent) = target.parent() {
-        std::fs::create_dir_all(parent)?;
+fn copy_project_tree_on_save_as(old_dir: &Path, new_dir: &Path) -> Result<Vec<PathBuf>> {
+    if let (Ok(co), Ok(cn)) = (old_dir.canonicalize(), new_dir.canonicalize())
+        && co == cn
+    {
+        return Ok(Vec::new());
     }
+    let mut relinked = Vec::new();
+    let entries: Vec<PathBuf> = std::fs::read_dir(old_dir).into_iter().flatten().flatten().map(|e| e.path()).collect();
+    for entry in entries {
+        let Some(fname) = entry.file_name().and_then(|n| n.to_str()) else { continue };
+        if fname.starts_with('.') || entry.extension().is_some_and(|e| e.eq_ignore_ascii_case("magic")) {
+            continue;
+        }
+        let dst = new_dir.join(fname);
+        if entry.is_dir() {
+            crate::doc_state::atomic_copy_dir(&entry, &dst, false)?;
+            relinked.push(dst);
+        } else if entry.is_file() {
+            crate::doc_state::atomic_copy_file(&entry, &dst, false)?;
+            relinked.push(dst);
+        }
+    }
+    Ok(relinked)
+}
+
+fn save_as(s: &mut Session, target: PathBuf) -> Result<Value> {
+    let old_dir = s.project_path.as_deref().and_then(Path::parent).map(Path::to_path_buf);
+    let target_parent = target
+        .parent()
+        .ok_or_else(|| EngineError::InvalidParams("Save As target must reside in a directory".into()))?;
+    std::fs::create_dir_all(target_parent)?;
     if target.exists() && !target.is_file() {
         return Err(EngineError::InvalidParams("Project destination must be a regular file; no write performed".into()));
     }
-    let target = match (target.parent().and_then(|p| std::fs::canonicalize(p).ok()), target.file_name()) {
-        (Some(parent), Some(name)) => parent.join(name),
-        _ => target,
+    let target_dir = std::fs::canonicalize(target_parent).unwrap_or_else(|_| target_parent.to_path_buf());
+    let target = match target.file_name() {
+        Some(name) => target_dir.join(name),
+        None => target,
     };
     let documents = flush_dirty_documents(s)?;
+    let relinked = match old_dir {
+        Some(ref prev_dir) if prev_dir != target_dir => copy_project_tree_on_save_as(prev_dir, &target_dir)?,
+        _ => Vec::new(),
+    };
+    if let Some(ref prev_dir) = old_dir {
+        if let Some(ref audio) = s.song_audio
+            && let Ok(rel) = audio.strip_prefix(prev_dir)
+        {
+            s.song_audio = Some(target_dir.join(rel));
+        }
+        if let Some(ref vp) = s.video_project_path
+            && let Ok(rel) = vp.strip_prefix(prev_dir)
+        {
+            s.video_project_path = Some(target_dir.join(rel));
+        }
+        for asset in &mut s.project_assets {
+            if let Some(ref ap) = asset.path
+                && let Ok(rel) = ap.strip_prefix(prev_dir)
+            {
+                asset.path = Some(target_dir.join(rel));
+            }
+        }
+    }
     let previous_path = s.project_path.replace(target);
     let previous_stamp = s.project_stamp.replace(None);
     if let Err(error) = write_project_file(s) {
@@ -566,7 +572,7 @@ fn save_as(s: &mut Session, target: PathBuf) -> Result<Value> {
         "documents": documents,
         "native": [],
         "derivatives": [],
-        "relinked": [],
+        "relinked": relinked,
         "warnings": warnings,
     }))
 }
@@ -574,6 +580,7 @@ fn save_as(s: &mut Session, target: PathBuf) -> Result<Value> {
 pub fn cmd_project_close(s: &mut Session, _: &Value) -> Result<Value> {
     *s = Session {
         cwd: s.cwd.clone(),
+        settings: s.settings.clone(),
         record_user_state: s.record_user_state,
         control_address: s.control_address,
         automation_roots: s.automation_roots.clone(),
@@ -594,7 +601,9 @@ pub fn ensure_default_asset_project(s: &mut Session) -> Result<PathBuf> {
     } else {
         let _ = cmd_project_new(s, &json!({"path": default_proj, "overwrite": true, "allow_empty_audio": true}));
     }
-    s.project_path.clone().ok_or_else(|| EngineError::InvalidParams("could not initialize default asset project".into()))
+    s.project_path
+        .clone()
+        .ok_or_else(|| EngineError::InvalidParams("could not initialize default asset project".into()))
 }
 
 pub fn cmd_project_identity(s: &mut Session, p: &Value) -> Result<Value> {

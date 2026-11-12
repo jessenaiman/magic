@@ -1,30 +1,45 @@
 # Agent Instructions (`Magic Studio`)
 
-> **Notice on Legacy Repository**: Do NOT read, reference, or import code/patterns from the legacy prototype repository (`jessenaiman/magic-studio-app`) unless the user explicitly requests it, as historical churn and divergent iterations can introduce AI psychosis and regressions. Historical development, early prototypes, and past discussions are preserved for human record at https://github.com/jessenaiman/magic-studio-app.
+> **Notice on Legacy Repository**: Do NOT read, reference, or import code/patterns from the legacy prototype repository (`jessenaiman/magic-studio-app`) unless the user explicitly requests it, as historical churn and divergent iterations can introduce regressions. Historical development, early prototypes, and past discussions are preserved for human record at https://github.com/jessenaiman/magic-studio-app.
 
-Magic Studio is a pure-Rust ArtCraft coordinator application (`magic`, `magic-cli`, `magic-mcp`) built on `eframe` + `egui` 0.37 + [`storytold/craft-libs`](https://github.com/storytold/craft-libs) and governed by [`storytold/craft-contrib`](https://github.com/storytold/craft-contrib/blob/main/AGENTS.md).
+Magic Studio is a pure-Rust ArtCraft coordinator application (`magic`, `magic-cli`, `magic-mcp`, `magic-tui`) built on `eframe` + `egui` 0.37 + [`storytold/craft-libs`](https://github.com/storytold/craft-libs) and governed by [`storytold/craft-contrib`](https://github.com/storytold/craft-contrib/blob/main/AGENTS.md).
 
 ## 1. Drive Magic Through `magic-cli mcp` and Live `--control`
 
 Follow the exact ArtCraft MCP pattern in [`docs/mcp.md`](docs/mcp.md) (matching [DesignCraft MCP](https://github.com/storytold/designcraft/blob/main/docs/mcp.md) and VectorCraft):
 
-- **Live Watching (`--control`)**: When the user asks to watch the app live, start or connect to `magic --control 9876` via `magic-cli mcp --connect 127.0.0.1:9876` (or `magic-cli --connect 127.0.0.1:9876 <cmd>`, or `magic-mcp --connect 127.0.0.1:9876`).
+- **Live Watching (`--control`)**: Start or connect to `magic --control 9875` via `magic-cli mcp --connect 127.0.0.1:9875` (or `magic-cli app --port 9875 <cmd>`, or `magic-tui --connect 127.0.0.1:9875` Backstage, or `magic-mcp --connect 127.0.0.1:9875`). Connect to sibling ArtCraft apps directly through each app's own `<app>-cli mcp` server; Magic never proxies sibling `--control` sockets.
 - **Headless**: Use `magic-cli mcp --headless` (with `--automation-read-root` / `--automation-write-root` when confining file access) or `magic-cli --project <file.magic> exec <id>`.
 - Discover commands dynamically with `list_commands` or `magic-cli commands`, inspect schemas with `magic-cli describe <id>`, and execute via `run_command` or `run_batch`.
 
-## 2. Single-Responsibility ArtCraft Delegation (Never Reimplement Craft Engines)
+## 2. Single-Responsibility ArtCraft Delegation & Storyboard Rules
 
-- **Audio & Master NLE Timeline**: Delegate to `craft-audio` + [FilmCraft](https://github.com/storytold/filmcraft) ([CLI & automation](https://github.com/storytold/filmcraft/blob/main/docs/cli-and-automation.md), [captions & speech](https://github.com/storytold/filmcraft/blob/main/docs/captions-and-speech.md)).
-- **Animation (`V2`), Kinetic Lyrics (`V3`), and Song-Action Motion (`V4`)**: Author each domain as its own [EffectCraft](https://github.com/storytold/effectcraft) `.ecproj` composition ([EffectCraft CLI](https://github.com/storytold/effectcraft/blob/main/docs/cli.md), [animation & expressions](https://github.com/storytold/effectcraft/blob/main/docs/animation-and-expressions.md), [text & presets](https://github.com/storytold/effectcraft/blob/main/docs/text-and-presets.md), [masks, mattes & 3D](https://github.com/storytold/effectcraft/blob/main/docs/masks-mattes-and-3d.md)) that exports ProRes 4444 RGBA tracks into `FilmCraft`.
-- **Facial Expressions & Mouth Movements**: Always use EffectCraft Puppet Controls (`character.puppet.rig_face`, `character.puppet.expression`, `character.puppet.lipsync`, `character.puppet.follow`, `character.puppet.record`, `character.puppet.addPin`) — never hand-rolled pixel warps or external Blender scripts.
-- **Background & Subject Removal**: Always use [PhotoCraft](https://github.com/storytold/photocraft) (`photo.remove_background` -> `layer.removeBackground` + `select.refineEdge`) and [VectorCraft](https://github.com/storytold/vectorcraft) (`vector.trace` -> `imageTrace.make` with `ignoreWhite: true`).
-- **Storyboard Workflow**: Use [DesignCraft](https://github.com/storytold/designcraft) (`storyboard.*`). Complete the 4 Main Section Title Pages (`A-Cover`, `B-World`, `C-Character`, `D-Motion`) first, run `storyboard.bulk_generate`, and confirm `storyboard.check` is green before video production.
-- **AniCraft Safety Boundary**: [AniCraft](https://github.com/storytold/AniCraft) is early alpha. Use **only `EffectCraft` and `FilmCraft` UI components/windows** for live studio work, and invoke `anicraft-cli` **strictly headlessly** (`anicraft.exec`, `character.sprite` PNG sequence export into `EffectCraft`).
+- **Audio & Master NLE Timeline**: Delegate to `craft-audio` + [FilmCraft](https://github.com/storytold/filmcraft) on disk.
+- **Animation (`V2`), Kinetic Lyrics (`V3`), and Song-Action Motion (`V4`)**: Author each domain as its own [EffectCraft](https://github.com/storytold/effectcraft) (`.ecproj`) composition exporting ProRes 4444 RGBA tracks into `FilmCraft`, using EffectCraft Puppet Controls for facial expressions and mouth movements and [PhotoCraft](https://github.com/storytold/photocraft) / [VectorCraft](https://github.com/storytold/vectorcraft) for cutout prep and vector tracing.
+- **Storyboard Rules (Printable Reference — Never Drives Video)**:
+  1. `storyboard.designcraft` ([DesignCraft](https://github.com/storytold/designcraft)) is the read-only master template — no code checks PDF edit permissions or section-name locks.
+  2. `storyboard.pdf` ([PdfCraft](https://github.com/storytold/pdfcraft)) is a printable reference document.
+  3. The storyboard serves as the visual reference for new media creation; it never drives or mutates the video timeline.
+  4. Project assets display the canonical project image, stored in the storyboard as an image with metadata linking the underlying project files.
+- **Single Design Document (`figcraft/`)**: `figcraft/magic-studio-master.figcraft` is the sole UI design file (tracked in `ATTRIBUTION.md`). Never create extra `.figcraft`, `.fig`, `.html` mockups, or markdown logs in the repository.
+- **AniCraft Safety Boundary**: [AniCraft](https://github.com/storytold/AniCraft) is early alpha; invoke `anicraft-cli` strictly headlessly (never launch the pre-alpha AniCraft desktop UI).
 
-## 3. Repository Hygiene & House Rules (`storytold/craft-contrib`)
+## House rules
 
-- Do **not** create custom paraphrased animation skill files or markdown research/log dumps in the repository. Link directly to official outside ArtCraft documentation and verified tutorials.
-- Keep every source file focused on one responsibility and under 900 lines; leave a `// TODO:` comment (never a `todo!()` panic) when a headless CLI integration step needs follow-up verification on the host.
-- Never introduce Tauri, webviews, JavaScript, or TypeScript; all desktop UI lives in `crates/ui-egui` (`magic-ui-egui`) and `apps/magic`.
-- Run `cargo xtask ci` (fmt, layers, Clippy `-D warnings`, workspace tests) before opening a PR, and report honestly which checks ran vs which were skipped.
-- Never add `Co-Authored-By` agent trailers, `Generated with ...` footers, or session transcripts to commits, PRs, or issues ([Rule 15](https://github.com/storytold/craft-contrib/blob/main/docs/house-rules-core.md)).
+These apply in every Craft repository. A later rule may be stricter, not weaker. The source is `standards/house-rules-core.md` in `storytold/craft-contrib`. Propose changes there, not in a copy.
+
+1. **A person is accountable.** Whoever runs an agent answers for what it opens and for its review comments.
+2. **Check, then claim.** Before writing code, read the issue comments, search pull requests for `#N` and the keywords, and check recent commits on `main`. Comment on the issue first. Release a claim you will not finish.
+3. **Verify, don't guess.** Open a definition before using it. Confirm the cause in the code, even when someone names a location.
+4. **Keep fixes narrow and tested.** Fix what the issue describes, where the bug is. Add a test that fails without the fix.
+5. **Review the diff before opening a pull request.** Identifiers exist as used, the test fails without the fix, nothing unrelated changed, and the description is true.
+6. **Look for a better pull request.** If another fixes the same thing, close yours when it is better or equal, and say why.
+7. **Report only what ran.** Say what you tested and what you could not run. Without a local build or test, say so and rely on CI before marking ready.
+8. **`main` changes through a pull request.** Do not push to it. Branch protection enforces this. There is no exception.
+9. **Stop and ask only about** licensing outside the allowlist, publishing, releases, a new remote, secrets, spending money, destructive git, and anything else hard to undo. Otherwise keep working. `plan/` is a gitignored notebook, not rules. Without it, do not ask for it and do not stop.
+10. **Keep secrets and personal details out** of the repository, logs and requests.
+11. **CI stays shared.** Workflows call `storytold/craft-common-actions`. Do not change CI in a feature or fix pull request. If CI cannot cover a change, open an issue there.
+12. **Guards say why.** A check that looks removable says what it prevents. Read that before changing it.
+13. **Instructions must be readable by everyone.** No notes about one machine, and no links to files a reader cannot open. `craftrules` is retired. Do not link to it.
+14. **Keep pull requests moving.** Concurrent pull requests are fine; unanswered actionable feedback is not. Respond in 7 days, a reminder at 14, closure eligible at 30, from when an actionable request waits on the author. Suggestions and unconfirmed bot findings do not start the clock. A fix, explanation or agreed plan resets it; unrelated activity does not. Waiting on a reviewer or maintainer pauses it and does not count against the author. A maintainer decides closure; it is never automatic. Reuse search results, do not poll, and stop at a rate limit.
+15. **No agent attribution.** A pull request does not say an agent wrote it. A repository rule may not require that.

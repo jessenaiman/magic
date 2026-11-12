@@ -1,9 +1,5 @@
-//! Home project navigation history (`file.recent` / `project.catalog`) backed by `craft-settings`
-//! (`general.recent_projects` in `config.toml`), matching `storytold/filmcraft`.
-//!
-//! Reference:
-//! - <https://github.com/storytold/craft-libs/blob/main/crates/platform/README.md>
-//! - <https://github.com/storytold/filmcraft/blob/main/docs/project-files.md>
+//! Home project navigation history (`file.recent` / `project.catalog`) backed by
+//! [`crate::settings::SessionSettings`] (`general.recent_projects` in `config.toml`).
 
 use std::{
     collections::HashSet,
@@ -14,6 +10,10 @@ use std::{
 use serde_json::{Value, json};
 
 /// Active configuration file storing recent projects (`config.toml` via `craft-settings`).
+pub fn file_for(s: &crate::Session) -> Option<PathBuf> {
+    s.settings.path()
+}
+
 pub fn file() -> Option<PathBuf> {
     crate::settings::prefs::open_store().path().map(Path::to_path_buf)
 }
@@ -29,6 +29,10 @@ fn parse_recent_list(raw: &str) -> Vec<String> {
     trimmed.lines().map(str::trim).filter(|s| !s.is_empty()).map(str::to_owned).collect()
 }
 
+pub fn list_for(s: &crate::Session) -> Vec<String> {
+    parse_recent_list(&s.settings.prefs().general.recent_projects)
+}
+
 pub fn list() -> Vec<String> {
     let store = crate::settings::prefs::open_store();
     parse_recent_list(&store.get().general.recent_projects)
@@ -38,48 +42,75 @@ fn canonical(path: &str) -> String {
     fs::canonicalize(path).map(|p| p.to_string_lossy().into_owned()).unwrap_or_else(|_| path.to_string())
 }
 
-/// Never persist test/fixture or temp paths as the user's recent project.
+/// Never persist test/fixture or temp paths as the user's recent project when using a persistent user profile.
 fn is_transient(path: &str) -> bool {
     path.contains("/.agent/") || path.contains("/tmp/") || path.contains("/target/") || Path::new(path).starts_with(std::env::temp_dir())
 }
 
-fn update(path: &str, forget: bool) -> Result<(), String> {
+fn update_session(s: &crate::Session, path: &str, forget: bool) -> Result<(), String> {
     let path = canonical(path);
-    if is_transient(&path) && !forget {
+    if s.settings.is_persistent() && is_transient(&path) && !forget {
         return Ok(());
     }
-    let mut items = list();
+    let mut items = list_for(s);
     items.retain(|p| canonical(p) != path);
     if !forget {
         items.insert(0, path);
         items.truncate(10);
     }
     let encoded = serde_json::to_string(&items).map_err(|e| e.to_string())?;
-    let mut store = crate::settings::prefs::open_store();
-    store.update(|prefs| {
-        prefs.general.recent_projects = encoded;
-    });
-    store.flush().map_err(|e| format!("failed to save recent_projects in config.toml: {e}"))?;
-    crate::change_marker::invalidate();
+    let flush_now = s.control_address.is_none();
+    s.settings
+        .mutate(
+            |prefs| {
+                prefs.general.recent_projects = encoded;
+            },
+            flush_now,
+        )
+        .map_err(|e| e.to_string())?;
+    if s.record_user_state {
+        crate::change_marker::invalidate();
+    }
     Ok(())
+}
+
+pub fn record_for(s: &crate::Session, path: &str) -> Result<(), String> {
+    update_session(s, path, false)
 }
 
 pub fn record(path: &str) -> Result<(), String> {
-    update(path, false)
+    let s = crate::Session::user_session();
+    update_session(&s, path, false)
+}
+
+pub fn forget_for(s: &crate::Session, path: &str) -> Result<(), String> {
+    update_session(s, path, true)
 }
 
 pub fn forget(path: &str) -> Result<(), String> {
-    update(path, true)
+    let s = crate::Session::user_session();
+    update_session(&s, path, true)
+}
+
+pub fn clear_for(s: &crate::Session) -> Result<(), String> {
+    let flush_now = s.control_address.is_none();
+    s.settings
+        .mutate(
+            |prefs| {
+                prefs.general.recent_projects.clear();
+            },
+            flush_now,
+        )
+        .map_err(|e| e.to_string())?;
+    if s.record_user_state {
+        crate::change_marker::invalidate();
+    }
+    Ok(())
 }
 
 pub fn clear() -> Result<(), String> {
-    let mut store = crate::settings::prefs::open_store();
-    store.update(|prefs| {
-        prefs.general.recent_projects.clear();
-    });
-    store.flush().map_err(|e| format!("failed to clear recent_projects in config.toml: {e}"))?;
-    crate::change_marker::invalidate();
-    Ok(())
+    let s = crate::Session::user_session();
+    clear_for(&s)
 }
 
 fn is_image_file(path: &Path) -> bool {
@@ -132,8 +163,8 @@ fn has_ext_in_tree(dir: &Path, exts: &[&str], max_depth: usize) -> bool {
 
 fn discover_project_craft_badges(dir: &Path, doc: &Value) -> Vec<&'static str> {
     let mut badges = Vec::new();
-    let has_fcproj =
-        doc.pointer("/workshop/video_project").and_then(Value::as_str).is_some_and(|s| !s.is_empty()) || has_ext_in_tree(&dir.join("film"), &["fcproj"], 1);
+    let has_fcproj = doc.pointer("/workshop/video_project").and_then(Value::as_str).is_some_and(|s| !s.is_empty())
+        || has_ext_in_tree(&dir.join("film"), &["fcproj"], 1);
     if has_fcproj {
         badges.push(".fcproj");
     }
@@ -152,7 +183,9 @@ fn discover_project_craft_badges(dir: &Path, doc: &Value) -> Vec<&'static str> {
     } else if has_ext_in_tree(&dir.join("assets"), &["psd"], 4) {
         badges.push(".psd");
     }
-    if has_ext_in_tree(&dir.join("motion"), &["vectorcraft", "svg"], 2) || has_ext_in_tree(&dir.join("assets"), &["vectorcraft", "svg"], 3) {
+    if has_ext_in_tree(&dir.join("motion"), &["vectorcraft", "svg"], 2)
+        || has_ext_in_tree(&dir.join("assets"), &["vectorcraft", "svg", "emf", "wmf"], 3)
+    {
         badges.push(".svg");
     }
     badges
@@ -261,13 +294,13 @@ fn project_card(raw_path: &str) -> Value {
     })
 }
 
-pub fn catalog(_: &mut crate::Session, params: &Value) -> crate::Result<Value> {
+pub fn catalog(s: &mut crate::Session, params: &Value) -> crate::Result<Value> {
     if params["clear"] == true {
-        clear().map_err(crate::EngineError::InvalidParams)?;
-    } else if let Some(forget_path) = params["forget"].as_str().filter(|s| !s.trim().is_empty()) {
-        forget(forget_path).map_err(crate::EngineError::InvalidParams)?;
+        clear_for(s).map_err(crate::EngineError::InvalidParams)?;
+    } else if let Some(forget_path) = params["forget"].as_str().filter(|p| !p.trim().is_empty()) {
+        forget_for(s, forget_path).map_err(crate::EngineError::InvalidParams)?;
     }
-    let recent: Vec<Value> = list().iter().map(|p| project_card(p)).collect();
+    let recent: Vec<Value> = list_for(s).iter().map(|p| project_card(p)).collect();
     let mut seen_chars = HashSet::new();
     let mut characters = Vec::new();
     for card in &recent {
@@ -280,7 +313,7 @@ pub fn catalog(_: &mut crate::Session, params: &Value) -> crate::Result<Value> {
     }
     Ok(json!({
         "ok": true,
-        "config": file(),
+        "config": file_for(s),
         "count": recent.len(),
         "projects": recent,
         "recent": recent,

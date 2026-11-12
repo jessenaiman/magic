@@ -1,16 +1,15 @@
-//! Bounded loopback JSON-lines `--control` transport (`127.0.0.1:<port>`), matching
-//! `EffectCraft` and `FilmCraft` (`storytold/effectcraft`, `storytold/filmcraft`).
+//! Bounded IPv4 loopback JSON-lines `--control` transport (`127.0.0.1:<port>`), aligned with
+//! upstream ArtCraft control channels (`DeckCraft`, `DesignCraft`, `SoundCraft`, `CADCraft`).
 //!
-//! Security properties:
-//! - Binds strictly to a loopback address (`127.0.0.1` or `::1`) on port `1..=65535`.
-//! - Requires a constant-time 64-hex-character `MAGIC_CONTROL_TOKEN` check on every request.
-//! - Rejects any non-JSON, oversized, HTTP-smuggled, or unauthorized line with an error ending in
-//!   `"; closing the connection"` and immediately drops the TCP stream (preventing browser `fetch()`
-//!   line smuggling, `filmcraft#119`).
+//! Security & framing properties:
+//! - Binds strictly to `127.0.0.1` (`Ipv4Addr::LOCALHOST`, never `::1` or `0.0.0.0`); port `0` picks a free OS port.
+//! - Unauthenticated on loopback by default; enforces constant-time bearer check when `MAGIC_CONTROL_TOKEN` is set.
+//! - Bounds each request line to `16 MiB` (`take(MAX_LINE + 1).read_until`), skips blank lines, and immediately
+//!   closes the socket on any non-JSON, HTTP-smuggled, oversized, or unauthorized line (`filmcraft#119`).
 
 use serde_json::{Value, json};
 use std::io::{BufRead, BufReader, Read, Write};
-use std::net::{SocketAddr, TcpListener};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener};
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
@@ -18,31 +17,33 @@ use std::sync::{
 use std::time::Duration;
 use subtle::ConstantTimeEq;
 
-const MAX_LINE: usize = 4 * 1024 * 1024;
+const MAX_LINE: usize = 16 * 1024 * 1024;
 const MAX_CONNECTIONS: usize = 16;
 pub type Dispatch = Arc<dyn Fn(&str, Value) -> Result<Value, String> + Send + Sync>;
 
 pub fn parse_control_addr(spec: &str) -> Result<SocketAddr, String> {
     let trimmed = spec.trim();
-    let normalized = if trimmed.contains(':') { trimmed.to_owned() } else { format!("127.0.0.1:{trimmed}") };
-    let addr: SocketAddr = normalized.parse().map_err(|_| "--control requires a port (1..=65535) or loopback IP:port")?;
-    if !addr.ip().is_loopback() {
-        return Err("--control must bind to a loopback address (127.0.0.1 or ::1)".into());
-    }
-    if addr.port() == 0 {
-        return Err("--control port must be an integer from 1 to 65535".into());
+    let normalized = if let Some(port) = trimmed.strip_prefix("localhost:") {
+        format!("127.0.0.1:{port}")
+    } else if trimmed.contains(':') {
+        trimmed.to_owned()
+    } else {
+        format!("127.0.0.1:{trimmed}")
+    };
+    let addr: SocketAddr = normalized
+        .parse()
+        .map_err(|_| "--control requires a port (0..=65535) or 127.0.0.1:PORT")?;
+    if addr.ip() != IpAddr::V4(Ipv4Addr::LOCALHOST) {
+        return Err("--control must bind strictly to 127.0.0.1".into());
     }
     Ok(addr)
 }
 
-pub fn start(spec: &str, token: &str, dispatch: Dispatch) -> Result<SocketAddr, String> {
-    if token.len() != 64 || !token.bytes().all(|b| b.is_ascii_hexdigit()) {
-        return Err("MAGIC_CONTROL_TOKEN must contain 64 hexadecimal characters".into());
-    }
+pub fn start(spec: &str, token: Option<&str>, dispatch: Dispatch) -> Result<SocketAddr, String> {
+    let expected_token = token.map(str::trim).filter(|t| !t.is_empty()).map(str::to_owned);
     let addr = parse_control_addr(spec)?;
     let listener = TcpListener::bind(addr).map_err(|e| format!("control bind {addr}: {e}"))?;
     let bound = listener.local_addr().map_err(|e| e.to_string())?;
-    let token = token.to_owned();
     std::thread::Builder::new()
         .name("magic-control".into())
         .spawn(move || {
@@ -51,20 +52,29 @@ pub fn start(spec: &str, token: &str, dispatch: Dispatch) -> Result<SocketAddr, 
                 let Ok(mut stream) = stream else { continue };
                 let _ = stream.set_nodelay(true);
                 let _ = stream.set_read_timeout(Some(Duration::from_secs(120)));
-                let _ = stream.set_write_timeout(Some(Duration::from_secs(120)));
+                let _ = stream.set_write_timeout(Some(Duration::from_secs(30)));
                 if active.fetch_add(1, Ordering::SeqCst) >= MAX_CONNECTIONS {
                     active.fetch_sub(1, Ordering::SeqCst);
-                    let _ = writeln!(stream, "{}", json!({"id":null,"ok":false,"error":"control connection limit reached; closing the connection"}));
+                    let _ = writeln!(
+                        stream,
+                        "{}",
+                        json!({"id":null,"ok":false,"error":"busy: control connection limit reached; closing the connection"})
+                    );
                     continue;
                 }
                 let active_worker = active.clone();
-                let token = token.clone();
+                let expected = expected_token.clone();
                 let dispatch = dispatch.clone();
                 if std::thread::Builder::new()
                     .name("magic-control-client".into())
                     .spawn(move || {
                         if let Ok(reader) = stream.try_clone() {
-                            serve_lines(BufReader::new(reader), &mut stream, &token, |m, p| dispatch(m, p));
+                            serve_lines(
+                                BufReader::new(reader),
+                                &mut stream,
+                                expected.as_deref(),
+                                |m, p| dispatch(m, p),
+                            );
                         }
                         active_worker.fetch_sub(1, Ordering::SeqCst);
                     })
@@ -78,7 +88,12 @@ pub fn start(spec: &str, token: &str, dispatch: Dispatch) -> Result<SocketAddr, 
     Ok(bound)
 }
 
-fn serve_lines<R: BufRead, W: Write>(mut reader: R, mut writer: W, token: &str, dispatch: impl Fn(&str, Value) -> Result<Value, String>) {
+fn serve_lines<R: BufRead, W: Write>(
+    mut reader: R,
+    mut writer: W,
+    expected_token: Option<&str>,
+    dispatch: impl Fn(&str, Value) -> Result<Value, String>,
+) {
     loop {
         let mut line = Vec::new();
         let read = reader.by_ref().take((MAX_LINE + 1) as u64).read_until(b'\n', &mut line);
@@ -91,18 +106,23 @@ fn serve_lines<R: BufRead, W: Write>(mut reader: R, mut writer: W, token: &str, 
         } else if line.iter().all(u8::is_ascii_whitespace) {
             continue;
         } else {
-            serde_json::from_slice::<Value>(&line).map_err(|_| "invalid JSON request; closing the connection").and_then(|v| {
-                if !v.is_object() || v["method"].as_str().is_none() {
-                    return Err("request requires a method; closing the connection");
-                }
-                if !bool::from(v["token"].as_str().unwrap_or_default().as_bytes().ct_eq(token.as_bytes())) {
-                    return Err("unauthorized control token; closing the connection");
-                }
-                if v.get("params").is_some_and(|p| !p.is_object()) {
-                    return Err("params must be an object; closing the connection");
-                }
-                Ok(v)
-            })
+            serde_json::from_slice::<Value>(&line)
+                .map_err(|_| "invalid JSON request; closing the connection")
+                .and_then(|v| {
+                    if !v.is_object() || v["method"].as_str().is_none() {
+                        return Err("request requires a string `method`; closing the connection");
+                    }
+                    if let Some(expected) = expected_token {
+                        let given = v["token"].as_str().unwrap_or_default();
+                        if !bool::from(given.as_bytes().ct_eq(expected.as_bytes())) {
+                            return Err("unauthorized control token; closing the connection");
+                        }
+                    }
+                    if v.get("params").is_some_and(|p| !p.is_object()) {
+                        return Err("params must be an object; closing the connection");
+                    }
+                    Ok(v)
+                })
         };
         let request = match parsed {
             Ok(v) => v,
@@ -121,5 +141,21 @@ fn serve_lines<R: BufRead, W: Write>(mut reader: R, mut writer: W, token: &str, 
         if writeln!(writer, "{reply}").and_then(|_| writer.flush()).is_err() {
             break;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_control_addr;
+
+    #[test]
+    fn parses_strict_ipv4_loopback_and_ephemeral_zero() {
+        assert!(parse_control_addr("9875").is_ok());
+        assert!(parse_control_addr("0").is_ok());
+        assert!(parse_control_addr("localhost:9875").is_ok());
+        assert!(parse_control_addr("127.0.0.1:9875").is_ok());
+        assert!(parse_control_addr("[::1]:9875").is_err());
+        assert!(parse_control_addr("127.0.0.2:9875").is_err());
+        assert!(parse_control_addr("0.0.0.0:9875").is_err());
     }
 }

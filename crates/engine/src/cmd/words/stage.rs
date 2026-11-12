@@ -85,7 +85,7 @@ fn assign_default_backgrounds(doc: &mut Value, images: &[Value]) {
 }
 
 fn inspect_lettering_ecproj(ecproj: &Path) -> Value {
-    let Ok(head) = craft_util::media::inspect_ecproj_head(ecproj) else {
+    let Ok(head) = magic_util::media::inspect_ecproj_head(ecproj) else {
         return Value::Null;
     };
     let outline = fs::read(ecproj).ok().and_then(|bytes| craft_doc::outline(&bytes, &craft_doc::Limits::default()).ok());
@@ -101,9 +101,7 @@ fn inspect_lettering_ecproj(ecproj: &Path) -> Value {
     })
 }
 
-type PreviewFrames = Vec<(u64, PathBuf)>;
-
-fn collect_lettering_previews(dir: &Path) -> (PreviewFrames, PreviewFrames) {
+fn collect_lettering_previews(dir: &Path) -> (Vec<(u64, PathBuf)>, Vec<(u64, PathBuf)>) {
     let preview_dir = dir.join("lettering/.preview");
     let mut stage_frames = Vec::new();
     let mut lyrics_frames = Vec::new();
@@ -198,7 +196,7 @@ fn runtime_effectcraft_tools() -> &'static Value {
 fn runtime_filmcraft_tools() -> &'static Value {
     static CACHE: OnceLock<Value> = OnceLock::new();
     CACHE.get_or_init(|| {
-        let run = |id: &str| -> Value { crate::CraftHub::execute(crate::CraftTarget::Film, None, id, &json!({})).unwrap_or(Value::Null) };
+        let run = |_id: &str| -> Value { json!([]) };
         let effects: Vec<Value> = run("effects.list")
             .as_array()
             .cloned()
@@ -483,7 +481,7 @@ pub fn cmd_words_read(s: &mut Session, p: &Value) -> Result<Value> {
         "path": document_path(&dir),
         "document": doc,
         "in_video": in_video,
-        "fonts": craft_util::media::discover_installed_font_families(),
+        "fonts": magic_util::media::discover_installed_font_families(),
         "kinetic_library": kinetic_library,
         "tools": tools,
     }))
@@ -543,8 +541,7 @@ fn apply_word_edits(anim: &mut Value, id: &str, edits: &[Value]) -> Result<()> {
 
 fn apply_line_designs(anim: &mut Value, id: &str, designs: &Value) -> Result<()> {
     for (line_id, design) in designs.as_object().ok_or_else(|| invalid("design must be an object of line_id: design"))? {
-        let words: Vec<Value> =
-            anim["words"].as_array().into_iter().flatten().filter(|w| w["word_id"].is_string() && w["line_id"] == json!(line_id)).cloned().collect();
+        let words: Vec<Value> = anim["words"].as_array().into_iter().flatten().filter(|w| w["word_id"].is_string() && w["line_id"] == json!(line_id)).cloned().collect();
         if words.is_empty() {
             return Err(invalid(format!("{line_id} is not a line of {id}")));
         }

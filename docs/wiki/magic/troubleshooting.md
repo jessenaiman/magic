@@ -3,9 +3,9 @@ title: Troubleshooting
 description: Resolve missing ArtCraft binaries, --control connection errors, confinement blocks, and storyboard gates.
 ---
 
-## `cannot connect to 127.0.0.1:9876`
+## `cannot connect to 127.0.0.1:9875`
 
-`magic` does not open a TCP port when launched from the desktop menu without `--control`. Quit any running `magic` instance, start `magic --control 9876` in a terminal, wait for `magic: control listening on 127.0.0.1:9876`, and restart your MCP client or re-run `magic-cli --connect 127.0.0.1:9876 ui inspect`.
+`magic` does not open a TCP port when launched from the desktop menu without `--control`. Quit any running `magic` instance, start `magic --control 9875` in a terminal, wait for `magic: control listening on 127.0.0.1:9875`, and restart your MCP client or re-run `magic-cli --connect 127.0.0.1:9875 ui inspect`.
 
 ## Missing `<craft>-cli` Binary
 

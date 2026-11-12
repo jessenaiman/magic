@@ -168,12 +168,12 @@ fn classify_file(path: &Path) -> Option<FileClass> {
             open_label: "Open in VectorCraft",
             is_craft_project: true,
         }),
-        "svg" => Some(FileClass {
+        "svg" | "emf" | "wmf" | "dxf" => Some(FileClass {
             group: "photo_vector",
             group_label: "PhotoCraft & VectorCraft (.pcraft / .svg)",
             group_order: 3,
             craft_priority: 3,
-            badge: "SVG",
+            badge: if ext == "emf" { "EMF" } else if ext == "wmf" { "WMF" } else { "SVG" },
             open_label: "Open in VectorCraft",
             is_craft_project: true,
         }),
@@ -278,7 +278,13 @@ fn first_png_in_dir(dir: &Path) -> Option<PathBuf> {
     files.into_iter().next()
 }
 
-fn resolve_craft_preview(project_dir: &Path, path: &Path, badge: &str, modified_ms: u64, linked_comp: Option<&LinkedCompRecord>) -> Option<PathBuf> {
+fn resolve_craft_preview(
+    project_dir: &Path,
+    path: &Path,
+    badge: &str,
+    modified_ms: u64,
+    linked_comp: Option<&LinkedCompRecord>,
+) -> Option<PathBuf> {
     if let Some(lc) = linked_comp
         && lc.preview_png.is_file()
     {
@@ -294,13 +300,14 @@ fn resolve_craft_preview(project_dir: &Path, path: &Path, badge: &str, modified_
         if cache_png.is_file() {
             return Some(cache_png);
         }
-        if craft_util::media::extract_craft_preview(path, &cache_png).unwrap_or(false) && cache_png.is_file() {
+        if magic_util::media::extract_craft_preview(path, &cache_png).unwrap_or(false) && cache_png.is_file() {
             return Some(cache_png);
         }
     }
     match badge {
         "FC" => first_png_in_dir(&project_dir.join("film/frames")),
-        "DC" => first_png_in_dir(&project_dir.join("storyboard/.preview")).or_else(|| first_png_in_dir(&project_dir.join("storyboard/renders"))),
+        "DC" => first_png_in_dir(&project_dir.join("storyboard/.preview"))
+            .or_else(|| first_png_in_dir(&project_dir.join("storyboard/renders"))),
         "EC" => {
             let fname = path.file_name().and_then(|n| n.to_str()).unwrap_or_default();
             if fname == "lyrics.ecproj" {
@@ -308,7 +315,8 @@ fn resolve_craft_preview(project_dir: &Path, path: &Path, badge: &str, modified_
             } else if fname == "actions.ecproj" {
                 first_png_in_dir(&project_dir.join("motion/.preview"))
             } else {
-                path.parent().and_then(|p| first_png_in_dir(&p.join("frames")).or_else(|| first_png_in_dir(p)))
+                path.parent()
+                    .and_then(|p| first_png_in_dir(&p.join("frames")).or_else(|| first_png_in_dir(p)))
             }
         }
         _ => None,
@@ -418,7 +426,11 @@ fn walk_project_files(root: &Path, current: &Path, visited: &mut BTreeSet<PathBu
     let mut entries: Vec<PathBuf> = read_dir.flatten().map(|e| e.path()).collect();
     entries.sort();
     for entry in entries {
-        if entry.file_name().and_then(|n| n.to_str()).is_some_and(|n| n == ".git" || n == ".history" || (n == ".preview" && current == root)) {
+        if entry
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|n| n == ".git" || n == ".history" || (n == ".preview" && current == root))
+        {
             continue;
         }
         let Ok(canonical) = entry.canonicalize() else {
@@ -566,7 +578,7 @@ fn target_subfolder_for_ext(ext: &str) -> &'static str {
         "ecproj" => "animations",
         "fcproj" | "mp4" | "mov" | "webm" | "mkv" => "film",
         "pcraft" | "psd" => "assets/backgrounds",
-        "vectorcraft" | "vcraft" | "drawcraft" | "svg" => "assets/vectors",
+        "vectorcraft" | "vcraft" | "drawcraft" | "svg" | "emf" | "wmf" | "dxf" => "assets/vectors",
         "tcraft" | "mcraft" | "glb" | "gltf" | "blend" | "cadcraft" | "solidcraft" | "step" | "stp" => "assets/3d",
         _ if AUDIO_EXTENSIONS.contains(&ext) => "audio",
         "srt" | "lrc" | "txt" | "md" => "liner-notes",
@@ -617,20 +629,16 @@ pub fn cmd_project_import_file(s: &mut Session, params: &Value) -> Result<Value>
         let dest = dest_dir.join(file_name);
 
         if src.canonicalize().ok() != dest.canonicalize().ok() {
-            let bytes = std::fs::read(&src)?;
             if CRAFT_DOC_EXTS.contains(&ext.as_str())
                 && matches!(ext.as_str(), "pcraft" | "vectorcraft" | "ecproj")
+                && std::fs::metadata(&src).is_ok_and(|m| m.len() <= 64 * 1024 * 1024)
+                && let Ok(bytes) = std::fs::read(&src)
                 && let Ok(info) = craft_doc::info(&bytes, &craft_doc::Limits::default())
                 && !info.supported
             {
                 log::warn!("importing {} with newer craft-doc schema v{}", src.display(), info.version);
             }
-            if dest.is_file() && !overwrite && std::fs::read(&dest).ok().as_ref() != Some(&bytes) {
-                return Err(EngineError::InvalidParams(format!("destination already exists with different contents: {}", dest.display())));
-            }
-            if !dest.exists() || overwrite {
-                craft_atomic::atomic_write(&dest, &bytes)?;
-            }
+            crate::doc_state::atomic_copy_file(&src, &dest, overwrite)?;
         }
 
         if matches!(ext.as_str(), "glb" | "gltf") {

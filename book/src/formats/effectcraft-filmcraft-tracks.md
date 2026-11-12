@@ -2,7 +2,7 @@
 
 ## Puppet Controls for Facial Expressions & Mouth Lip-Sync (`V2`)
 
-Magic Studio delegates all character deformation and mouth visemes to [`EffectCraft` Puppet Controls](https://github.com/storytold/effectcraft/blob/main/docs/animation-and-expressions.md):
+Magic Studio delegates all character deformation and mouth visemes to [`EffectCraft` Puppet Controls](https://github.com/storytold/effectcraft/blob/main/docs/agents.md):
 
 - `character.puppet.rig_face` installs an 11-pin facial mesh (`head_crown` & `neck_anchor` starch pins + brow, lid, cheek, mouth-corner, upper-lip, and `jaw_lower` pins).
 - `character.puppet.lipsync` maps timed words from `timing-reference.json` onto mouth viseme pin keyframes.

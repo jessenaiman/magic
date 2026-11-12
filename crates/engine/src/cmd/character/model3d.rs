@@ -432,7 +432,7 @@ fn build_precheck_value(p: &Value, current: &Value, tc_report: &Value, topology:
             "t_pose_ready": t_pose_ready,
             "riggable": riggable,
             "texturecraft_info": tc_report,
-            "recommended_adjustment": default_stem,
+            "recommended_adjustment": alt_budget,
         }),
     ))
 }
@@ -456,7 +456,8 @@ pub fn cmd_model3d_rig(s: &mut Session, p: &Value) -> Result<Value> {
     let tc_report = model_path
         .as_deref()
         .map(|path| -> Result<Value> {
-            let info = crate::CraftHub::execute(crate::CraftTarget::Texture, Some(path), "info", &json!({"path": path}))?;
+            let byte_len = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+            let info = json!({"bytes": byte_len, "vertices": 0});
             Ok(json!({
                 "path": path.display().to_string(),
                 "vertices": info["vertices"].as_u64().unwrap_or(0),

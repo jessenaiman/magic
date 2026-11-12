@@ -1,5 +1,5 @@
 [package]
-name = "craft-scribbles"
+name = "magic-scribbles"
 description = "Sprite-sheet cell geometry, plush-9 part slots, and validated local character-bundle ingestion for Magic Studio"
 version.workspace = true
 edition.workspace = true
@@ -7,7 +7,7 @@ license.workspace = true
 rust-version.workspace = true
 
 [lib]
-name = "craft_scribbles"
+name = "magic_scribbles"
 
 [lints]
 workspace = true

@@ -1,18 +1,32 @@
-//! Interactive Terminal User Interface (TUI) for Magic Studio (`apps/magic-tui`), supporting both
-//! headless `magic::Session` and live `--connect` / `--control` windows plus `:9876` / `:9877`
-//! `FilmCraft` × `EffectCraft` bridge commands.
+//! Backstage (`apps/magic-tui`): interactive terminal companion for Magic Studio, supporting both
+//! headless `magic::Session` and live `magic --control 9875` (`--connect 127.0.0.1:9875`) sessions.
 
-#![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable))]
+#![cfg_attr(
+    not(test),
+    deny(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::unimplemented,
+        clippy::todo,
+        clippy::unreachable
+    )
+)]
 
-use std::io::{self, Write};
+use std::io::{self, BufRead, Read, Write};
 
 use clap::Parser;
 use magic::{Session, command_specs};
 use magic_mcp::{Backend, Remote, normalize_control_addr};
 use serde_json::{Value, json};
 
+const MAX_REPL_LINE: usize = 1024 * 1024;
+
 #[derive(Parser)]
-#[command(name = "magic-tui", about = "Magic Studio interactive terminal UI dashboard (headless or live `--control`)")]
+#[command(
+    name = "magic-tui",
+    about = "Magic Studio Backstage terminal console (headless or live `--connect 127.0.0.1:9875`)"
+)]
 struct Cli {
     /// Open this `.magic` project at launch (headless mode)
     #[arg(long)]
@@ -48,7 +62,10 @@ fn parse_repl_line(line: &str) -> (&str, Value) {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
-    let mut remote = cli.connect.as_deref().map(|spec| Remote::new(normalize_control_addr(spec), magic::workspace::control_token()));
+    let mut remote = cli
+        .connect
+        .as_deref()
+        .map(|spec| Remote::new(normalize_control_addr(spec), magic::workspace::control_token()));
     let mut session = remote.is_none().then(Session::user_session);
 
     if let (Some(path), Some(sess)) = (cli.project.as_deref(), session.as_mut()) {
@@ -60,9 +77,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     println!("==================================================");
-    println!(" Magic Studio TUI Dashboard (FilmCraft :9876 · EffectCraft :9877)");
+    println!(" Magic Studio Backstage (`magic-tui` · :9875)");
     println!("==================================================");
-    println!("Built-in shortcuts: help [filter] | bridge | preflight | sync | quit");
+    println!("Shortcuts: help [filter] | status | storyboard | doctor | sync | quit");
     println!("Sample commands:");
     for spec in command_specs().iter().take(8) {
         println!("  - {:<26} {}", spec.id, spec.label);
@@ -70,13 +87,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("==================================================");
 
     let stdin = io::stdin();
+    let mut locked = stdin.lock();
     loop {
-        print!("magic-tui> ");
+        print!("backstage> ");
         io::stdout().flush()?;
-        let mut line = String::new();
-        if stdin.read_line(&mut line)? == 0 {
+        let mut buf = Vec::new();
+        let n = locked
+            .by_ref()
+            .take((MAX_REPL_LINE + 1) as u64)
+            .read_until(b'\n', &mut buf)?;
+        if n == 0 {
             break;
         }
+        if buf.len() > MAX_REPL_LINE {
+            eprintln!("Error: input line exceeded {MAX_REPL_LINE} bytes");
+            continue;
+        }
+        let Ok(line) = std::str::from_utf8(&buf) else {
+            eprintln!("Error: input must be valid UTF-8");
+            continue;
+        };
         let trimmed = line.trim();
         if trimmed.is_empty() {
             continue;
@@ -95,9 +125,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         let (raw_cmd, params) = match trimmed {
             "status" => ("workshop.status", json!({})),
-            "bridge" => ("bridge.status", json!({})),
-            "preflight" => ("bridge.preflight", json!({"action": "check"})),
-            "sync" => ("video.sync_links", json!({"render": true})),
+            "storyboard" => ("storyboard.check", json!({})),
+            "doctor" => ("app.doctor", json!({})),
+            "sync" => ("video.sync_links", json!({"render": false})),
             other => parse_repl_line(other),
         };
         let res = if let Some(r) = remote.as_mut() {

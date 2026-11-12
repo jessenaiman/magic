@@ -1397,18 +1397,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "craft-scribbles"
-version = "0.17.0"
-dependencies = [
- "craft-atomic",
- "flate2",
- "image",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
-]
-
-[[package]]
 name = "craft-settings"
 version = "0.1.0"
 source = "git+https://github.com/storytold/craft-libs?rev=1ee01a4c58729d781638b8afbd8982726dbdefcb#1ee01a4c58729d781638b8afbd8982726dbdefcb"
@@ -1464,25 +1452,6 @@ dependencies = [
  "winreg",
  "winsafe",
  "zip",
-]
-
-[[package]]
-name = "craft-util"
-version = "0.17.0"
-dependencies = [
- "craft-atomic",
- "craft-audio",
- "craft-doc",
- "craft-docpath",
- "craft-ecproj-format",
- "craft-media",
- "craft-pcraft-format",
- "craft-settings",
- "craft-vectorcraft-format",
- "image",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -3160,7 +3129,6 @@ dependencies = [
  "craft-platform",
  "craft-quit",
  "craft-ui",
- "craft-util",
  "craft-window",
  "eframe",
  "egui",
@@ -3168,6 +3136,7 @@ dependencies = [
  "log",
  "magic-engine",
  "magic-ui-egui",
+ "magic-util",
  "serde",
  "serde_json",
  "subtle",
@@ -3198,14 +3167,14 @@ dependencies = [
  "craft-docpath",
  "craft-ecproj-format",
  "craft-media",
- "craft-scribbles",
  "craft-settings",
  "craft-update",
- "craft-util",
  "flate2",
  "glam",
  "image",
  "log",
+ "magic-scribbles",
+ "magic-util",
  "rustix 1.1.6",
  "serde",
  "serde_json",
@@ -3227,6 +3196,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "magic-scribbles"
+version = "0.17.0"
+dependencies = [
+ "craft-atomic",
+ "flate2",
+ "image",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "magic-tui"
 version = "0.17.0"
 dependencies = [
@@ -3244,15 +3225,34 @@ dependencies = [
  "craft-keymap",
  "craft-menu",
  "craft-ui",
- "craft-util",
  "craft-window",
  "egui",
  "egui_extras",
  "image",
  "log",
  "magic-engine",
+ "magic-util",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "magic-util"
+version = "0.17.0"
+dependencies = [
+ "craft-atomic",
+ "craft-audio",
+ "craft-doc",
+ "craft-docpath",
+ "craft-ecproj-format",
+ "craft-media",
+ "craft-pcraft-format",
+ "craft-settings",
+ "craft-vectorcraft-format",
+ "image",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
 ]
 
 [[package]]

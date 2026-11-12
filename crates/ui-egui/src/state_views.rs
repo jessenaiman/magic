@@ -1,6 +1,6 @@
 //! Per-stage view states (`HomeFormState`, `ProjectViewState`, `StoryboardViewState`,
 //! `LyricsViewState`, `MotionViewState`, `AnimationViewState`, `StudioViewState`) and
-//! `AiUiState` (`storytold/craft-ai-integrations` + `:9876`/`:9877` bridge state).
+//! `AiUiState` (`storytold/craft-ai-integrations`).
 
 #[derive(Clone, Debug)]
 pub struct AiUiState {
@@ -25,10 +25,6 @@ pub struct AiUiState {
     pub staged_markdown: String,
     pub options_tab: String,
     pub style_menu_open: bool,
-    pub prefer_live_bridge: bool,
-    pub ec_mcp_autosave: bool,
-    pub fc_port_str: String,
-    pub ec_port_str: String,
     pub problem_summary: String,
     pub problem_steps: String,
 }
@@ -57,10 +53,6 @@ impl Default for AiUiState {
             staged_markdown: String::new(),
             options_tab: "ai".into(),
             style_menu_open: false,
-            prefer_live_bridge: true,
-            ec_mcp_autosave: true,
-            fc_port_str: "9876".into(),
-            ec_port_str: "9877".into(),
             problem_summary: String::new(),
             problem_steps: String::new(),
         }

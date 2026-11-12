@@ -6,7 +6,7 @@
 
 - [ ] `cargo xtask layers`
 - [ ] `cargo xtask ci`
-- [ ] Live `--control` check (`magic --control 9876` + `magic-cli mcp --connect 127.0.0.1:9876`)
+- [ ] Live `--control` check (`magic --control 9875` + `magic-cli mcp --connect 127.0.0.1:9875`)
 
 ## Notes
 

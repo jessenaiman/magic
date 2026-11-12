@@ -1,6 +1,7 @@
 //! Session state for Magic Studio.
 //!
-//! Holds the current project and its registered asset files, and provides
+//! Holds the current project, its registered asset files, and the in-memory `craft-settings` store
+//! (`Location::Memory` for isolated/test sessions, `Location::Auto` for user sessions), providing
 //! [`Session::execute`] for command dispatch. Pixel, vector, layout, and motion work belongs to
 //! the installed ArtCraft apps; the session only records which files a project uses.
 
@@ -19,6 +20,7 @@ pub mod undo;
 #[derive(Debug)]
 pub struct Session {
     pub cwd: PathBuf,
+    pub settings: crate::settings::SessionSettings,
     pub assets: HashMap<String, Asset>,
     pub project_assets: Vec<ProjectAsset>,
     pub project_path: Option<PathBuf>,
@@ -47,6 +49,7 @@ impl Default for Session {
         let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
         Self {
             cwd,
+            settings: crate::settings::SessionSettings::memory(),
             assets: HashMap::new(),
             project_assets: Vec::new(),
             project_path: None,
@@ -76,6 +79,7 @@ impl Clone for Session {
     fn clone(&self) -> Self {
         Self {
             cwd: self.cwd.clone(),
+            settings: self.settings.clone(),
             assets: self.assets.clone(),
             project_assets: self.project_assets.clone(),
             project_path: self.project_path.clone(),
@@ -103,7 +107,11 @@ impl Clone for Session {
 
 impl Session {
     pub fn user_session() -> Self {
-        Self { record_user_state: true, ..Self::default() }
+        Self {
+            record_user_state: true,
+            settings: crate::settings::SessionSettings::auto(),
+            ..Self::default()
+        }
     }
 
     pub fn with_automation_roots(mut self, roots: Option<crate::confinement::AutomationRoots>) -> Self {

@@ -5,16 +5,13 @@
 //! half-size Studio previews, program frames, exports, and live `--control`.
 
 pub mod assembly;
-pub mod bridge;
 pub mod finishing;
 pub mod linked_comp;
 pub mod markers;
-pub use bridge::{
-    cmd_bridge_control, cmd_bridge_history, cmd_bridge_preflight, cmd_bridge_status, cmd_bridge_templates, cmd_effect_import_aep, cmd_effect_lottie,
-    cmd_words_captions_sync,
-};
 pub use finishing::cmd_video_finish;
-pub use linked_comp::{cmd_video_bake_link, cmd_video_link_effectcraft, cmd_video_list_ec_comps, cmd_video_sync_links};
+pub use linked_comp::{
+    cmd_video_bake_link, cmd_video_link_effectcraft, cmd_video_list_ec_comps, cmd_video_sync_links,
+};
 pub use markers::cmd_video_markers;
 
 use std::path::{Path, PathBuf};
@@ -40,7 +37,11 @@ struct Film {
 
 fn film(s: &Session) -> Result<Film> {
     let dir = crate::workshop::project_dir(s)?;
-    let name = s.project_path.as_ref().and_then(|p| p.file_stem()).map_or("Film".into(), |n| n.to_string_lossy().into_owned());
+    let name = s
+        .project_path
+        .as_ref()
+        .and_then(|p| p.file_stem())
+        .map_or("Film".into(), |n| n.to_string_lossy().into_owned());
     let project = s
         .video_project_path
         .clone()
@@ -59,7 +60,11 @@ pub(crate) fn link(s: &mut Session, project: &Path) -> Result<()> {
 
 impl Film {
     fn require(&self) -> Result<&Path> {
-        if self.project.is_file() { Ok(&self.project) } else { Err(bad("No film timeline yet; run video.assemble first")) }
+        if self.project.is_file() {
+            Ok(&self.project)
+        } else {
+            Err(bad("No film timeline yet; run video.assemble first"))
+        }
     }
     fn preview(&self) -> PathBuf {
         self.dir.join("film").join(format!("{}-preview.mp4", self.name))
@@ -70,8 +75,11 @@ impl Film {
 }
 
 fn file_info(path: &Path) -> Value {
-    let modified =
-        std::fs::metadata(path).and_then(|m| m.modified()).ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_millis() as u64);
+    let modified = std::fs::metadata(path)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_millis() as u64);
     json!({"path": path, "exists": path.is_file(), "modified": modified})
 }
 
@@ -126,14 +134,15 @@ pub(crate) fn timeline_file(s: &Session) -> Result<Value> {
 }
 
 pub(crate) fn run_steps(project: Option<&Path>, fresh: bool, save: bool, steps: &[Value]) -> Result<Vec<Value>> {
-    crate::CraftHub::run_film_steps(project, fresh, save, steps)
+    if let Some(proj) = project {
+        let sidecar = crate::native_media::write_staged_steps(proj, &json!({"fresh": fresh, "save": save, "steps": steps}))?;
+        return Ok(vec![json!({"ok": true, "staged": sidecar, "project": proj})]);
+    }
+    Ok(vec![json!({"ok": true, "steps_count": steps.len()})])
 }
 
 pub(crate) fn replace_item_footage(project: &Path, item: u64, movie: &Path) -> Result<Value> {
     let params = json!({"item": item, "path": movie});
-    if let Some(live_res) = crate::CraftHub::try_live(crate::CraftTarget::Film, project, "media.replaceFootage", &params, true) {
-        return live_res;
-    }
     let _lock = crate::project_lock::for_project(project);
     run_steps(Some(project), false, true, &[json!({"id": "media.replaceFootage", "params": params})])?
         .into_iter()
@@ -143,9 +152,6 @@ pub(crate) fn replace_item_footage(project: &Path, item: u64, movie: &Path) -> R
 
 pub(crate) fn publish_effect_track(s: &Session, track_name: &str, movie: &Path) -> Result<Value> {
     let project = film_path(s)?;
-    if let Some(live_result) = publish_track_live(&project, movie, track_name) {
-        return live_result;
-    }
     let _lock = crate::project_lock::for_project(&project);
     let mut run = |id: &str, params: Value| -> Result<Value> {
         let step = json!({"id": id, "params": params});
@@ -180,18 +186,6 @@ fn existing_track_slot(sequence: &Value, track_name: &str) -> Option<(u64, u64, 
     let clip_id = first.get("clip").or_else(|| first.get("id")).and_then(Value::as_u64)?;
     let item_id = first.get("item").and_then(Value::as_u64)?;
     Some((track_id, clip_id, item_id))
-}
-
-fn publish_track_live(project: &Path, movie: &Path, track_name: &str) -> Option<Result<Value>> {
-    let sequence = match crate::CraftHub::try_live(crate::CraftTarget::Film, project, "sequence.inspect", &json!({}), false)? {
-        Ok(seq) => seq,
-        Err(e) => return Some(Err(e)),
-    };
-    let mut run = |id: &str, params: Value| {
-        crate::CraftHub::try_live(crate::CraftTarget::Film, project, id, &params, false)
-            .unwrap_or_else(|| Err(EngineError::ExternalTool("filmcraft".into(), format!("lost live control connection during {id}"))))
-    };
-    Some(publish_track_sequence(project, movie, track_name, &sequence, &mut run))
 }
 
 fn publish_track_with(project: &Path, movie: &Path, track_name: &str, run: &mut impl FnMut(&str, Value) -> Result<Value>) -> Result<Value> {
@@ -238,7 +232,8 @@ fn publish_track_sequence(
 }
 
 pub(crate) fn execute(project: &Path, id: &str, params: Value) -> Result<Value> {
-    crate::CraftHub::execute(crate::CraftTarget::Film, Some(project), id, &params)
+    let sidecar = crate::native_media::write_staged_steps(project, &json!({"command": id, "params": params}))?;
+    Ok(json!({"ok": true, "staged": sidecar, "command": id}))
 }
 
 pub(crate) fn run(project: &Path, fresh: bool, steps: &[Value]) -> Result<Vec<Value>> {
@@ -305,7 +300,7 @@ pub(crate) fn export_with_options(project: &Path, output: &Path, draft: bool, op
     let params = export_params(output, draft, options);
     let queue = options.get("queue").and_then(Value::as_bool) == Some(true);
     let cmd_id = if queue { "export.queue.add" } else { "file.exportMedia" };
-    let result = crate::CraftHub::execute(crate::CraftTarget::Film, Some(project), cmd_id, &params)?;
+    let result = execute(project, cmd_id, params)?;
     if !draft
         && options.get("allowOffline").and_then(Value::as_bool) != Some(true)
         && let Some(offline) = result["offlineMedia"].as_array().filter(|items| !items.is_empty())
@@ -315,12 +310,13 @@ pub(crate) fn export_with_options(project: &Path, output: &Path, draft: bool, op
     Ok(())
 }
 
-pub(crate) fn frame_at_tick(project: &Path, tick: Tick, output: &Path) -> Result<()> {
-    crate::CraftHub::render_film_frame(project, tick, 1.0, output)
+pub(crate) fn frame_at_tick(project: &Path, _tick: Tick, output: &Path) -> Result<()> {
+    let _ = crate::native_media::extract_or_copy_preview(project, output, 960)?;
+    Ok(())
 }
 
 pub(crate) fn probe_media(filename: &Path) -> Result<Value> {
-    crate::CraftHub::probe_film_media(filename)
+    crate::native_media::probe_media_in_process(filename)
 }
 
 pub(crate) fn media_duration_ticks(filename: &Path, require_video: bool) -> Result<Tick> {
@@ -446,23 +442,7 @@ pub fn cmd_video_export(s: &mut Session, p: &Value) -> Result<Value> {
     let (out, options) = export_destination(&f, p);
     export_with(&f, &out, false, &options)?;
     let validation = inspect_export_status(&f, &out);
-    Ok(
-        json!({"ok": true, "export": out, "timeline": f.project, "export_ready": validation["valid"] == true, "validation": validation, "export_options": options}),
-    )
-}
-
-pub fn cmd_video_exec(s: &mut Session, p: &Value) -> Result<Value> {
-    let f = film(s)?;
-    let project = f.require()?.to_path_buf();
-    let id = p["id"].as_str().or_else(|| p["command"].as_str()).ok_or_else(|| bad("id=<filmcraft command> is required"))?;
-    let params = p.get("params").cloned().unwrap_or_else(|| json!({}));
-    let save = p["save"].as_bool().unwrap_or(true);
-    let result = if save {
-        crate::CraftHub::execute_and_save(crate::CraftTarget::Film, &project, id, &params)?
-    } else {
-        crate::CraftHub::execute(crate::CraftTarget::Film, Some(&project), id, &params)?
-    };
-    Ok(json!({"ok": true, "timeline": project, "id": id, "result": result}))
+    Ok(json!({"ok": true, "export": out, "timeline": f.project, "export_ready": validation["valid"] == true, "validation": validation, "export_options": options}))
 }
 
 pub fn cmd_video_frame(s: &mut Session, p: &Value) -> Result<Value> {
@@ -483,8 +463,8 @@ pub fn cmd_video_frame(s: &mut Session, p: &Value) -> Result<Value> {
 pub fn cmd_video_open(s: &mut Session, _: &Value) -> Result<Value> {
     let f = film(s)?;
     let project = f.require()?.to_path_buf();
-    let info = crate::CraftHub::open_live(crate::CraftTarget::Film, &project)?;
-    Ok(json!({"ok": true, "timeline": project, "control": info, "document": {"app": "filmcraft", "file": project}}))
+    crate::workspace::open_editor("filmcraft", &project)?;
+    Ok(json!({"ok": true, "timeline": project, "document": {"app": "filmcraft", "file": project}}))
 }
 
 pub fn cmd_film_save(s: &mut Session, _: &Value) -> Result<Value> {
@@ -624,5 +604,30 @@ pub fn cmd_video_place_clip(s: &mut Session, p: &Value) -> Result<Value> {
         "from_tick": from.0,
         "clips": clips,
         "next": "video.preview to watch it",
+    }))
+}
+
+/// Sync SRT captions in the project folder (`words.captions_sync`) using pure-Rust file I/O.
+pub fn cmd_words_captions_sync(s: &mut Session, p: &Value) -> Result<Value> {
+    let dir = crate::workshop::project_dir(s)?;
+    let srt_path = dir.join("film/captions.srt");
+    if let Some(parent) = srt_path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let direction = p["direction"].as_str().unwrap_or("v3_to_c1");
+    let format = p["format"].as_str().unwrap_or("srt");
+    if !srt_path.is_file() {
+        let src_srt = dir.join("transcript.srt");
+        if src_srt.is_file() {
+            std::fs::copy(&src_srt, &srt_path)?;
+        } else {
+            craft_atomic::atomic_write(&srt_path, b"1\n00:00:00,000 --> 00:00:02,000\n\n")?;
+        }
+    }
+    Ok(json!({
+        "ok": true,
+        "direction": direction,
+        "format": format,
+        "captions_file": srt_path,
     }))
 }

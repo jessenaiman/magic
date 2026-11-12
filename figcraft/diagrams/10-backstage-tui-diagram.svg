@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="920" viewBox="0 0 1440 920" fill="none">
+  <defs>
+    <linearGradient id="tuiBg" x1="0" y1="0" x2="1440" y2="920" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0B1018"/>
+      <stop offset="100%" stop-color="#090D14"/>
+    </linearGradient>
+  </defs>
+
+  <g id="Artboard_Backstage_MagicTui_1440x920">
+    <rect id="TerminalCanvas" x="0" y="0" width="1440" height="920" fill="url(#tuiBg)"/>
+
+    <g id="BackstageHeaderBar">
+      <rect x="0" y="0" width="1440" height="64" fill="#0F1621"/>
+      <line x1="0" y1="64" x2="1440" y2="64" stroke="#2B364A" stroke-width="1"/>
+
+      <circle cx="24" cy="32" r="5.5" fill="#F05B6E"/>
+      <circle cx="42" cy="32" r="5.5" fill="#EABB62"/>
+      <circle cx="60" cy="32" r="5.5" fill="#35E1C0"/>
+
+      <text x="84" y="37" fill="#35E1C0" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="15" font-weight="700">BACKSTAGE &#183; magic-tui</text>
+
+      <rect x="308" y="16" width="446" height="32" rx="8" fill="#141C28" stroke="#35E1C0" stroke-width="1.2"/>
+      <circle cx="326" cy="32" r="4.5" fill="#35E1C0"/>
+      <text x="340" y="37" fill="#EEF3FB" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="12">magic_mcp::Backend = Remote(127.0.0.1:9875)</text>
+
+      <text x="790" y="37" fill="#A6B4CB" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="12">[R] Reread Disk   [C] Run xtask ci   [L] ci-release   [Q] Quit</text>
+    </g>
+
+    <!-- Pane 1 (Top-Left) -->
+    <g id="Pane1_LastBuildXtaskReceipt">
+      <rect x="24" y="84" width="684" height="388" rx="10" fill="#101722" stroke="#2B364A" stroke-width="1.4"/>
+      <rect x="24" y="84" width="684" height="38" rx="10" fill="#162030"/>
+      <text x="42" y="108" fill="#35E1C0" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="13" font-weight="700">[1] LAST BUILD &amp; `cargo xtask ci` RECEIPT (HEAD 2e035fe)</text>
+      <text x="564" y="108" fill="#F05B6E" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="12" font-weight="700">STATUS: FAILED</text>
+
+      <text x="44" y="158" fill="#EEF3FB" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="13">cargo fmt --check</text>
+      <rect x="296" y="144" width="234" height="16" rx="4" fill="#1C2433"/>
+      <rect x="296" y="144" width="38" height="16" rx="4" fill="#35E1C0"/>
+      <text x="546" y="157" fill="#A6B4CB" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="12">0.4s</text>
+      <rect x="604" y="141" width="80" height="22" rx="5" fill="#133832" stroke="#35E1C0" stroke-width="1"/>
+      <text x="644" y="156" text-anchor="middle" fill="#35E1C0" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="11" font-weight="700">PASS</text>
+
+      <text x="44" y="202" fill="#EEF3FB" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="13">xtask layers (+ figcraft)</text>
+      <rect x="296" y="188" width="234" height="16" rx="4" fill="#1C2433"/>
+      <rect x="296" y="188" width="30" height="16" rx="4" fill="#35E1C0"/>
+      <text x="546" y="201" fill="#A6B4CB" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="12">0.3s</text>
+      <rect x="604" y="185" width="80" height="22" rx="5" fill="#133832" stroke="#35E1C0" stroke-width="1"/>
+      <text x="644" y="200" text-anchor="middle" fill="#35E1C0" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="11" font-weight="700">PASS</text>
+
+      <text x="44" y="246" fill="#EEF3FB" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="13">xtask git-sources --locked</text>
+      <rect x="296" y="232" width="234" height="16" rx="4" fill="#1C2433"/>
+      <rect x="296" y="232" width="24" height="16" rx="4" fill="#35E1C0"/>
+      <text x="546" y="245" fill="#A6B4CB" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="12">0.2s</text>
+      <rect x="604" y="229" width="80" height="22" rx="5" fill="#133832" stroke="#35E1C0" stroke-width="1"/>
+      <text x="644" y="244" text-anchor="middle" fill="#35E1C0" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="11" font-weight="700">PASS</text>
+
+      <text x="44" y="290" fill="#F05B6E" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="13" font-weight="700">clippy --all-targets --locked</text>
+      <rect x="296" y="276" width="234" height="16" rx="4" fill="#1C2433"/>
+      <rect x="296" y="276" width="178" height="16" rx="4" fill="#F05B6E"/>
+      <text x="546" y="289" fill="#F05B6E" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="12" font-weight="700">3.8s</text>
+      <rect x="604" y="273" width="80" height="22" rx="5" fill="#3B1722" stroke="#F05B6E" stroke-width="1"/>
+      <text x="644" y="288" text-anchor="middle" fill="#F05B6E" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="11" font-weight="700">FAILED</text>
+
+      <text x="44" y="334" fill="#EEF3FB" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="13">nextest / test --locked</text>
+      <rect x="296" y="320" width="234" height="16" rx="4" fill="#1C2433"/>
+      <rect x="296" y="320" width="108" height="16" rx="4" fill="#35E1C0"/>
+      <text x="546" y="333" fill="#A6B4CB" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="12">1.9s</text>
+      <rect x="604" y="317" width="80" height="22" rx="5" fill="#133832" stroke="#35E1C0" stroke-width="1"/>
+      <text x="644" y="332" text-anchor="middle" fill="#35E1C0" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="11" font-weight="700">PASS</text>
+
+      <rect x="44" y="368" width="644" height="84" rx="8" fill="#0B1018" stroke="#212B3C" stroke-width="1"/>
+      <text x="60" y="394" fill="#A6B4CB" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="11.5">Receipt Path : ~/.local/state/magic/ci-last.json</text>
+      <text x="60" y="416" fill="#A6B4CB" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="11.5">Dev CI Policy: GitHub `ci.yml` runs exact `cargo xtask ci` (never heavier)</text>
+      <text x="60" y="438" fill="#EABB62" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="11.5">Removed Rule : `MAGIC_RUN_TESTS=1` deferral purged &#8212; tests always run</text>
+    </g>
+
+    <!-- Pane 2 (Top-Right) -->
+    <g id="Pane2_PreCommitAndEccGate">
+      <rect x="732" y="84" width="684" height="388" rx="10" fill="#101722" stroke="#2B364A" stroke-width="1.4"/>
+      <rect x="732" y="84" width="684" height="38" rx="10" fill="#162030"/>
+      <text x="750" y="108" fill="#56B4F5" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="13" font-weight="700">[2] PRE-COMMIT, PRE-PUSH &amp; RELEASE GATE</text>
+      <text x="1244" y="108" fill="#EABB62" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="12" font-weight="700">PUSH GUARD: ARMED</text>
+
+      <rect x="752" y="140" width="644" height="72" rx="8" fill="#141C28" stroke="#2B364A" stroke-width="1"/>
+      <text x="770" y="166" fill="#EEF3FB" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="13" font-weight="700">.githooks/pre-commit (Fast Gate &lt; 2.0s)</text>
+      <text x="770" y="192" fill="#A6B4CB" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="11.5">fmt --check + xtask layers + xtask git-sources + cargo metadata --locked</text>
+      <rect x="1296" y="154" width="84" height="26" rx="6" fill="#133832" stroke="#35E1C0" stroke-width="1"/>
+      <text x="1338" y="171" text-anchor="middle" fill="#35E1C0" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="11" font-weight="700">1.1s OK</text>
+
+      <rect x="752" y="226" width="644" height="84" rx="8" fill="#2A141D" stroke="#F05B6E" stroke-width="1.2"/>
+      <text x="770" y="252" fill="#EEF3FB" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="13" font-weight="700">.githooks/pre-push + ECC Local Receipt Check</text>
+      <text x="770" y="276" fill="#F8B4BE" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="11.5">Verifies `ci-last.json` matches HEAD tree SHA before network push</text>
+      <text x="770" y="296" fill="#F05B6E" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="11.5" font-weight="700">BLOCKED: HEAD 2e035fe failed `clippy --all-targets --locked` locally</text>
+
+      <rect x="752" y="324" width="644" height="128" rx="8" fill="#141C28" stroke="#2B364A" stroke-width="1"/>
+      <text x="770" y="350" fill="#EABB62" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="13" font-weight="700">Full Release Gate (`cargo xtask ci-release` -&gt; `release.yml`)</text>
+      <text x="770" y="376" fill="#A6B4CB" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="11.5">[x] git-sources.yml (`storytold/*` pins)    [ ] workspace `--release` build</text>
+      <text x="770" y="400" fill="#A6B4CB" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="11.5">[x] packaging-lint (`packaging/env.sh`)     [ ] mdBook build (pin SHA actions)</text>
+      <text x="770" y="424" fill="#A6B4CB" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="11.5">[ ] AGENTS.md `storytold/craft-contrib` SHA-256 house-rules verification</text>
+    </g>
+
+    <!-- Pane 3 (Bottom-Left) -->
+    <g id="Pane3_MainBranchMergeability">
+      <rect x="24" y="492" width="684" height="392" rx="10" fill="#101722" stroke="#2B364A" stroke-width="1.4"/>
+      <rect x="24" y="492" width="684" height="38" rx="10" fill="#162030"/>
+      <text x="42" y="516" fill="#EABB62" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="13" font-weight="700">[3] `main` BRANCH STATUS &amp; REPO HYGIENE AUDIT</text>
+      <text x="530" y="516" fill="#A6B4CB" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="12">House Rule 8 Enforced</text>
+
+      <rect x="44" y="548" width="644" height="92" rx="8" fill="#2A141D" stroke="#F05B6E" stroke-width="1.2"/>
+      <text x="62" y="574" fill="#F05B6E" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="12.5" font-weight="700">Last Build on `main` : FAILED (`gate.yml` &#183; cargo xtask ci)</text>
+      <text x="62" y="598" fill="#EABB62" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="12" font-weight="700">PR Mergeability      : BLOCKED &#8212; Cannot merge without rebase / force</text>
+      <text x="62" y="622" fill="#A6B4CB" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="11.5">Direct pushes to `main` violate House Rule 8; PR squash/rebase required</text>
+
+      <text x="44" y="670" fill="#EEF3FB" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="13" font-weight="700">Repository Policy &amp; Bloat Check (`xtask layers`):</text>
+      <text x="44" y="698" fill="#35E1C0" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="11.5">[OK] Single `figcraft/` folder &amp; canonical master enforced (no extra docs)</text>
+      <text x="44" y="724" fill="#F05B6E" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="11.5">[!]  docs/craft-reference/ : 460 markdown files (12.0 MB) dumped in tree</text>
+      <text x="44" y="750" fill="#EABB62" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="11.5">[!]  docs/gaps.md : Legacy WKWebView / WebKitGTK / .tsx ghosts found</text>
+      <text x="44" y="776" fill="#EABB62" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="11.5">[!]  Control port mismatch : craft-app.json/AGENTS.md (:9876) vs (:9875)</text>
+      <text x="44" y="802" fill="#35E1C0" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="11.5">[OK] Zero `unwrap()` / `expect()` / `std::fs::write` / `egui::ComboBox`</text>
+      <text x="44" y="856" fill="#6F7F99" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="11">Fetched via engine query `mayhem.repo_status` &#183; No GitHub polling</text>
+    </g>
+
+    <!-- Pane 4 (Bottom-Right) -->
+    <g id="Pane4_ProjectStatsAndRustErrors">
+      <rect x="732" y="492" width="684" height="392" rx="10" fill="#101722" stroke="#2B364A" stroke-width="1.4"/>
+      <rect x="732" y="492" width="684" height="38" rx="10" fill="#162030"/>
+      <text x="750" y="516" fill="#F05B6E" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="13" font-weight="700">[4] OPEN PROJECT &amp; LOUD RUST ERROR JOURNAL</text>
+      <text x="1220" y="516" fill="#35E1C0" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="12">via `magic_mcp::Backend`</text>
+
+      <rect x="752" y="548" width="644" height="112" rx="8" fill="#141C28" stroke="#2B364A" stroke-width="1"/>
+      <text x="770" y="574" fill="#EEF3FB" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="13" font-weight="700">Project: Pterodactyl Song.magic (FilmCraft Unified Player)</text>
+      <text x="770" y="600" fill="#35E1C0" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="11.5">Storyboard : storyboard.designcraft (RO Master) -&gt; storyboard.pdf (12p)</text>
+      <text x="770" y="624" fill="#A6B4CB" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="11.5">Tracks     : V2 Puppet [SYNCED] &#183; V3 Lyrics [SYNCED] &#183; V4 Motion [DIRTY]</text>
+      <text x="770" y="646" fill="#A6B4CB" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="11.5">AGENTS.md  : Present (4.8 KB &#183; User-iterated block &#183; 0 agent-guessing)</text>
+
+      <rect x="752" y="676" width="644" height="186" rx="8" fill="#2A141D" stroke="#F05B6E" stroke-width="1.5"/>
+      <rect x="768" y="692" width="612" height="26" rx="5" fill="#F05B6E"/>
+      <text x="780" y="710" fill="#0B1018" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="12" font-weight="700">UNRESOLVED RUST COMPILER &amp; ENGINE ERRORS (2)</text>
+
+      <text x="770" y="742" fill="#EEF3FB" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="12" font-weight="700">1. error[E0432]: unresolved import `magic_mcp`</text>
+      <text x="770" y="764" fill="#F8B4BE" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="11.5">   --&gt; apps/magic-tui/src/main.rs:10:5 (`magic-mcp` missing in Cargo.toml)</text>
+      <text x="770" y="794" fill="#EEF3FB" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="12" font-weight="700">2. EngineError::Io (file_sync::autosave -&gt; project.autosave)</text>
+      <text x="770" y="816" fill="#F8B4BE" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="11.5">   --&gt; apps/magic/src/file_sync.rs:109 (previously swallowed via `let _ =`)</text>
+      <text x="770" y="848" fill="#EABB62" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="11">Press [R] to reread disk logs (`magic.log`, `ci-report.jsonl`) &#183; Zero polling</text>
+    </g>
+  </g>
+</svg>

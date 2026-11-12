@@ -3,10 +3,16 @@
 //! `+ START HERE — New Song Project` hero card, true `16:9` horizontal 35mm **filmbar** preview
 //! cards backed by real rendered Craft frames, and aspect-preserving character-rig cards.
 
-use egui::{Align, Align2, Color32, CornerRadius, FontId, Layout, Pos2, RichText, ScrollArea, Sense, Stroke, Ui, Vec2};
+use egui::{
+    Align, Align2, Color32, CornerRadius, FontId, Layout, Pos2, RichText, ScrollArea, Sense,
+    Stroke, Ui, Vec2,
+};
 use serde_json::{Value, json};
 
-use crate::controls::{FilmbarOrientation, FilmbarStyle, paint_craft_badge, paint_craft_doc_card, paint_dashed_rect, paint_filmbar_frame, paint_local_image};
+use crate::controls::{
+    FilmbarOrientation, FilmbarStyle, paint_craft_badge, paint_craft_doc_card, paint_dashed_rect,
+    paint_filmbar_frame, paint_local_image,
+};
 use crate::state::{PickerTarget, UiAction, ViewCtx, ViewMode};
 use crate::widgets::{BtnSpec, action_button, status_pill, text_input};
 
@@ -31,7 +37,12 @@ pub fn show(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             if ctx.state.home.filter == "character" {
                 draw_character_catalog(ui, ctx);
             } else {
-                ui.label(RichText::new("PROJECTS & RECENT PRODUCTIONS").monospace().size(10.5).color(ctx.pal.text_muted));
+                ui.label(
+                    RichText::new("PROJECTS & RECENT PRODUCTIONS")
+                        .monospace()
+                        .size(10.5)
+                        .color(ctx.pal.text_muted),
+                );
                 ui.add_space(6.0);
                 draw_project_grid(ui, ctx);
                 ui.add_space(16.0);
@@ -42,11 +53,24 @@ pub fn show(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
 }
 
 fn catalog_projects(ctx: &ViewCtx<'_>) -> Vec<Value> {
-    ctx.state.cache.catalog.get("projects").or_else(|| ctx.state.cache.catalog.get("recent")).and_then(Value::as_array).cloned().unwrap_or_default()
+    ctx.state
+        .cache
+        .catalog
+        .get("projects")
+        .or_else(|| ctx.state.cache.catalog.get("recent"))
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default()
 }
 
 fn catalog_characters(ctx: &ViewCtx<'_>) -> Vec<Value> {
-    ctx.state.cache.catalog.get("characters").and_then(Value::as_array).cloned().unwrap_or_default()
+    ctx.state
+        .cache
+        .catalog
+        .get("characters")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default()
 }
 
 fn humanize_slug(raw: &str) -> String {
@@ -81,7 +105,10 @@ fn clean_character_name(ch: &Value) -> String {
                 .filter(|s| {
                     !s.is_empty()
                         && !s.contains('.')
-                        && !matches!(s.to_ascii_lowercase().as_str(), "assets" | "characters" | "parts" | "sprites" | "frames" | "front" | "source")
+                        && !matches!(
+                            s.to_ascii_lowercase().as_str(),
+                            "assets" | "characters" | "parts" | "sprites" | "frames" | "front" | "source"
+                        )
                 })
                 .collect();
             if let Some(last) = segs.last() {
@@ -107,7 +134,11 @@ fn draw_filter_and_action_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     let projects_len = catalog_projects(ctx).len();
     let chars_len = catalog_characters(ctx).len();
     let all_lbl = format!("All Songs ({projects_len})");
-    let rigs_lbl = if chars_len > 0 { format!("Character Rigs ({chars_len})") } else { "Character Rigs".into() };
+    let rigs_lbl = if chars_len > 0 {
+        format!("Character Rigs ({chars_len})")
+    } else {
+        "Character Rigs".into()
+    };
 
     ui.horizontal_wrapped(|ui| {
         for (id, key, label, tip) in [
@@ -117,20 +148,46 @@ fn draw_filter_and_action_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             ("home-filter-character", "character", rigs_lbl.as_str(), "Browse PhotoCraft & EffectCraft character rigs"),
         ] {
             let active = ctx.state.home.filter == key;
-            let spec = if active { BtnSpec::label_only(id, label, tip).primary() } else { BtnSpec::label_only(id, label, tip) };
+            let spec = if active {
+                BtnSpec::label_only(id, label, tip).primary()
+            } else {
+                BtnSpec::label_only(id, label, tip)
+            };
             if action_button(ui, ctx.reg, ctx.pal, spec).clicked() {
                 ctx.state.home.filter = key.to_owned();
             }
         }
 
         let search_w = (ui.available_width() - 292.0).clamp(140.0, 560.0);
-        text_input(ui, ctx.reg, "home-search-input", "Search projects", &mut ctx.state.home.search, "Filter songs or Craft files…", search_w);
+        text_input(
+            ui,
+            ctx.reg,
+            "home-search-input",
+            "Search projects",
+            &mut ctx.state.home.search,
+            "Filter songs or Craft files…",
+            search_w,
+        );
 
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("home-refresh", "refresh", "Refresh project catalog")).clicked() {
+            if action_button(
+                ui,
+                ctx.reg,
+                ctx.pal,
+                BtnSpec::icon_only("home-refresh", "refresh", "Refresh project catalog"),
+            )
+            .clicked()
+            {
                 ctx.exec("project.catalog", json!({}), None);
             }
-            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("home-open", "Open .magic", "Open an existing .magic project")).clicked() {
+            if action_button(
+                ui,
+                ctx.reg,
+                ctx.pal,
+                BtnSpec::label_only("home-open", "Open .magic", "Open an existing .magic project"),
+            )
+            .clicked()
+            {
                 ctx.push(UiAction::PickFile {
                     target: PickerTarget::OpenProject,
                     title: "Open Magic Studio Project".into(),
@@ -139,7 +196,14 @@ fn draw_filter_and_action_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                     save: false,
                 });
             }
-            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("home-new", "plus", "New Song Project", "Create a new song project").primary()).clicked() {
+            if action_button(
+                ui,
+                ctx.reg,
+                ctx.pal,
+                BtnSpec::new("home-new", "plus", "New Song Project", "Create a new song project").primary(),
+            )
+            .clicked()
+            {
                 ctx.state.home.show_new_form = !ctx.state.home.show_new_form;
             }
         });
@@ -153,7 +217,11 @@ fn draw_new_project_form(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         ui.vertical(|ui| {
             ui.horizontal_wrapped(|ui| {
                 ui.label(RichText::new("Create Song Project").size(14.5).strong().color(ctx.pal.text_primary));
-                ui.label(RichText::new("Initializes .designcraft, .ecproj, and .fcproj Craft project files").size(11.0).color(ctx.pal.text_muted));
+                ui.label(
+                    RichText::new("Initializes .designcraft, .ecproj, and .fcproj Craft project files")
+                        .size(11.0)
+                        .color(ctx.pal.text_muted),
+                );
             });
             ui.add_space(4.0);
             ui.horizontal_wrapped(|ui| {
@@ -226,9 +294,11 @@ fn draw_new_project_form(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
 
 fn build_new_project_payload(form: &crate::state::HomeFormState) -> Value {
     let root = if form.new_root.trim().is_empty() {
-        std::env::var("HOME").map_or_else(|_| ".".into(), |h| format!("{h}/Magic"))
+        magic::project_settings::root()
+            .map(|p| p.to_string_lossy().into_owned())
+            .unwrap_or_else(|_| std::env::var("HOME").map_or_else(|_| ".".into(), |h| format!("{h}/.local/share/magic/projects")))
     } else {
-        form.new_root.trim().to_owned()
+        magic::workspace::expand_tilde(form.new_root.trim()).to_string_lossy().into_owned()
     };
     let mut wiz = json!({});
     if !form.wizard_style.trim().is_empty() {
@@ -274,11 +344,20 @@ fn draw_start_here_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>, col_w: f32) {
                 ui.vertical(|ui| {
                     let (hero, hresp) = ui.allocate_exact_size(Vec2::new(inner_w, hero_h - 18.0), Sense::click());
                     ui.painter().rect_filled(hero, CornerRadius::same(8), Color32::from_rgb(0x0b, 0x16, 0x18));
-                    paint_dashed_rect(ui, hero, Stroke::new(1.4, ctx.pal.accent_emerald.gamma_multiply(0.82)), 8.0, 5.0);
-                    ui.painter().circle_filled(hero.center(), 54.0, ctx.pal.accent_emerald.gamma_multiply(0.08));
+                    paint_dashed_rect(
+                        ui,
+                        hero,
+                        Stroke::new(1.4, ctx.pal.accent_emerald.gamma_multiply(0.82)),
+                        8.0,
+                        5.0,
+                    );
+                    ui.painter()
+                        .circle_filled(hero.center(), 54.0, ctx.pal.accent_emerald.gamma_multiply(0.08));
                     let plus_c = Pos2::new(hero.center().x, hero.center().y - 9.0);
-                    ui.painter().circle_stroke(plus_c, 22.0, Stroke::new(1.6, ctx.pal.accent_emerald));
-                    ui.painter().text(plus_c, Align2::CENTER_CENTER, "+", FontId::proportional(21.0), ctx.pal.accent_emerald);
+                    ui.painter()
+                        .circle_stroke(plus_c, 22.0, Stroke::new(1.6, ctx.pal.accent_emerald));
+                    ui.painter()
+                        .text(plus_c, Align2::CENTER_CENTER, "+", FontId::proportional(21.0), ctx.pal.accent_emerald);
                     ui.painter().text(
                         Pos2::new(hero.center().x, plus_c.y + 34.0),
                         Align2::CENTER_CENTER,
@@ -294,7 +373,11 @@ fn draw_start_here_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>, col_w: f32) {
                         ui.label(RichText::new("+ START HERE").size(13.0).strong().color(ctx.pal.accent_emerald));
                         ui.label(RichText::new("— New Song Project").size(13.5).strong().color(ctx.pal.text_primary));
                     });
-                    ui.label(RichText::new("Drop an .mp3/.wav track or start a blank song file").size(11.0).color(ctx.pal.text_muted));
+                    ui.label(
+                        RichText::new("Drop an .mp3/.wav track or start a blank song file")
+                            .size(11.0)
+                            .color(ctx.pal.text_muted),
+                    );
                     ui.add_space(4.0);
                     ui.horizontal_wrapped(|ui| {
                         ui.spacing_mut().item_spacing.x = 4.0;
@@ -306,7 +389,14 @@ fn draw_start_here_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>, col_w: f32) {
                     ui.horizontal(|ui| {
                         let half = ((inner_w - 6.0) * 0.5).max(80.0);
                         ui.allocate_ui_with_layout(Vec2::new(half, 28.0), Layout::top_down_justified(Align::Min), |ui| {
-                            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("home-choose-audio", "Choose Audio…", "Pick song audio")).clicked() {
+                            if action_button(
+                                ui,
+                                ctx.reg,
+                                ctx.pal,
+                                BtnSpec::label_only("home-choose-audio", "Choose Audio…", "Pick song audio"),
+                            )
+                            .clicked()
+                            {
                                 ctx.state.home.show_new_form = true;
                                 ctx.push(UiAction::PickFile {
                                     target: PickerTarget::NewProjectAudio,
@@ -338,9 +428,16 @@ fn draw_start_here_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>, col_w: f32) {
 fn draw_single_project_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>, col_w: f32, idx: usize, item: &Value) {
     let path = item["path"].as_str().unwrap_or_default();
     let dir_str = item["directory"].as_str().unwrap_or(path);
-    let name = item["name"].as_str().unwrap_or_else(|| path.rsplit('/').next().unwrap_or("Untitled"));
+    let name = item["name"]
+        .as_str()
+        .unwrap_or_else(|| path.rsplit('/').next().unwrap_or("Untitled"));
     let cover = item["cover"].as_str();
-    let badges: Vec<String> = item["craft_badges"].as_array().into_iter().flatten().filter_map(|b| b.as_str().map(str::to_owned)).collect();
+    let badges: Vec<String> = item["craft_badges"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|b| b.as_str().map(str::to_owned))
+        .collect();
 
     let (inner_w, hero_h, card_h) = project_card_dimensions(col_w);
     ui.allocate_ui_with_layout(Vec2::new(col_w, card_h), Layout::top_down(Align::Min), |ui| {
@@ -352,12 +449,24 @@ fn draw_single_project_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>, col_w: f32, idx:
                     ui,
                     thumb,
                     ctx.pal,
-                    FilmbarStyle { orientation: FilmbarOrientation::Horizontal, selected: false, hovered: tresp.hovered(), timecode: None },
+                    FilmbarStyle {
+                        orientation: FilmbarOrientation::Horizontal,
+                        selected: false,
+                        hovered: tresp.hovered(),
+                        timecode: None,
+                    },
                 );
                 if !paint_local_image(ui, inner, cover, ctx.pal.bg_stage, 3) {
                     let primary_badge = badges.first().map_or("MAGIC", String::as_str);
                     let file_name = path.rsplit('/').next().unwrap_or(name);
-                    paint_craft_doc_card(ui, inner, ctx.pal, primary_badge, file_name, "No rendered frame on disk yet — open project to render");
+                    paint_craft_doc_card(
+                        ui,
+                        inner,
+                        ctx.pal,
+                        primary_badge,
+                        file_name,
+                        "No rendered frame on disk yet — open project to render",
+                    );
                 }
                 if tresp.clicked() {
                     ctx.exec("file.open", json!({"path": path}), Some("Opened project"));
@@ -409,7 +518,8 @@ fn draw_single_project_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>, col_w: f32, idx:
                 });
             });
         });
-        ctx.reg.record(format!("home-card-{idx}"), name, &card_resp.response, Some(path.to_owned()));
+        ctx.reg
+            .record(format!("home-card-{idx}"), name, &card_resp.response, Some(path.to_owned()));
     });
 }
 
@@ -422,25 +532,24 @@ fn draw_project_grid(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     for (idx, item) in projects.iter().enumerate() {
         let path = item["path"].as_str().unwrap_or_default();
         let dir_str = item["directory"].as_str().unwrap_or(path);
-        let name = item["name"].as_str().unwrap_or_else(|| path.rsplit('/').next().unwrap_or("Untitled"));
+        let name = item["name"]
+            .as_str()
+            .unwrap_or_else(|| path.rsplit('/').next().unwrap_or("Untitled"));
         let has_video = item["video_project"].as_str().is_some();
         if filter == "render" && !has_video {
             continue;
         }
-        if !query.is_empty() && !name.to_ascii_lowercase().contains(&query) && !dir_str.to_ascii_lowercase().contains(&query) {
+        if !query.is_empty()
+            && !name.to_ascii_lowercase().contains(&query)
+            && !dir_str.to_ascii_lowercase().contains(&query)
+        {
             continue;
         }
         slots.push(GridSlot::Project(idx, item));
     }
 
     let avail = ui.available_width().max(300.0);
-    let cols: usize = if avail >= 1040.0 {
-        3
-    } else if avail >= 660.0 {
-        2
-    } else {
-        1
-    };
+    let cols: usize = if avail >= 1040.0 { 3 } else if avail >= 660.0 { 2 } else { 1 };
     let gap = 14.0_f32;
     let col_w = ((avail - ((cols.saturating_sub(1)) as f32) * gap) / (cols as f32)).clamp(260.0, 620.0);
 
@@ -485,7 +594,12 @@ fn draw_character_catalog(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         return;
     }
 
-    ui.label(RichText::new("CHARACTER CRAFT RIGS (.PCRAFT / .ECPROJ)").monospace().size(10.5).color(ctx.pal.text_muted));
+    ui.label(
+        RichText::new("CHARACTER CRAFT RIGS (.PCRAFT / .ECPROJ)")
+            .monospace()
+            .size(10.5)
+            .color(ctx.pal.text_muted),
+    );
     ui.add_space(6.0);
 
     let avail = ui.available_width().max(240.0);
@@ -538,13 +652,22 @@ fn draw_single_character_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>, card_w: f32, i
                 });
                 ui.add_space(4.0);
                 let btn_id = format!("home-char-animate-{idx}");
-                let open_clicked =
-                    action_button(ui, ctx.reg, ctx.pal, BtnSpec::new(&btn_id, "wand", "Open Rig", "Open character in Animations")).clicked() || iresp.clicked();
+                let open_clicked = action_button(
+                    ui,
+                    ctx.reg,
+                    ctx.pal,
+                    BtnSpec::new(&btn_id, "wand", "Open Rig", "Open character in Animations"),
+                )
+                .clicked()
+                    || iresp.clicked();
                 if open_clicked {
                     if !proj.is_empty() {
                         ctx.exec("file.open", json!({"path": proj}), None);
                     }
-                    ctx.push(UiAction::SelectCharacter { id: cid, jump_animation: true });
+                    ctx.push(UiAction::SelectCharacter {
+                        id: cid,
+                        jump_animation: true,
+                    });
                 }
             });
         });

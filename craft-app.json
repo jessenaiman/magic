@@ -3,19 +3,20 @@
   "id": "io.github.jessenaiman.magic",
   "name": "Magic Studio",
   "slug": "magic",
-  "description": "Song-driven storyboard, animation, kinetic lyrics, and FilmCraft studio coordinator over the ArtCraft suite",
+  "status": "pre-alpha",
+  "description": "Song-driven storyboard, puppet rig, and lyric timing studio built in pure Rust on storytold/craft-libs",
   "license": "LicenseRef-Magic-Studio-NonResale",
   "repository": "https://github.com/jessenaiman/magic",
   "binaries": {
     "desktop": "magic",
     "cli": "magic-cli",
-    "mcp": "magic-mcp"
+    "mcp": "magic-mcp",
+    "tui": "magic-tui"
   },
   "control": {
     "flag": "--control",
     "env": "MAGIC_CONTROL_PORT",
-    "default_port": 9876,
-    "token_env": "MAGIC_CONTROL_TOKEN",
+    "default_port": 9875,
     "mcp_command": [
       "magic-cli",
       "mcp"
@@ -24,7 +25,7 @@
       "magic-cli",
       "mcp",
       "--connect",
-      "127.0.0.1:9876"
+      "127.0.0.1:9875"
     ],
     "mcp_headless_command": [
       "magic-cli",
@@ -40,19 +41,6 @@
       ]
     }
   ],
-  "craft_dependencies": {
-    "ui_and_cli": [
-      "filmcraft",
-      "effectcraft",
-      "designcraft",
-      "photocraft",
-      "vectorcraft"
-    ],
-    "cli_headless_only": [
-      "anicraft-cli",
-      "texturecraft-cli"
-    ]
-  },
   "license_file": "LICENSE",
   "commercial_output_allowed": true,
   "software_resale_allowed": false

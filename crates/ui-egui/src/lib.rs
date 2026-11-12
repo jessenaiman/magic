@@ -2,8 +2,7 @@
 //!
 //! Built on `craft_ui::fonts::UiFonts`, `craft_ui::theme::WidgetPalette` (`docs/theme-infrastructure.md`),
 //! `craft-menu`, `craft-window`, shared Craft-document timelines (`timeline.rs`), MailCraft-inspired
-//! `Options` & quick diagnostics (`options_modal.rs`), `FilmCraft` × `EffectCraft` bridge chrome
-//! (`shell_bridge.rs`), and custom GPU `egui::Painter` controls (`controls.rs`, `filmbar.rs`).
+//! `Options` & quick diagnostics (`options_modal.rs`), workstation modals (`shell_bridge.rs`), and custom GPU `egui::Painter` controls (`controls.rs`, `filmbar.rs`).
 
 #![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable))]
 

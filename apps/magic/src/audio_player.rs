@@ -2,8 +2,7 @@
 //! `Motion`, `Project`, and `Studio` (`Storyboard` remains silent editorial print layout).
 //!
 //! Pure-Rust RIFF `.wav` seek-slicer + non-blocking OS audio child process (`afplay`, `pw-play`,
-//! `paplay`, `aplay`, `ffplay`, or `Media.SoundPlayer`) paired with live `:9876` / `:9877`
-//! `--control` transport sync via `CraftHub::try_live`.
+//! `paplay`, `aplay`, `ffplay`, or `Media.SoundPlayer`) with local transport sync
 
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom, Write};
@@ -11,7 +10,6 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 
 use craft_dialogs::Answer;
-use magic::{CraftHub, CraftTarget};
 use magic_ui_egui::{PickerTarget, UiShellState, ViewMode};
 use serde_json::{Value, json};
 
@@ -149,8 +147,7 @@ fn sync_stage_playheads(state: &mut UiShellState, song_sec: f64) {
                 for anim in anims {
                     let st = anim["song_anchor"].as_f64().unwrap_or(0.0);
                     let dur = anim["authored_duration"].as_f64().unwrap_or(3.0).max(0.25);
-                    if song_sec >= st
-                        && song_sec <= st + dur
+                    if song_sec >= st && song_sec <= st + dur
                         && let Some(aid) = anim["animation_id"].as_str()
                     {
                         state.lyrics.selected_anim_id = Some(aid.to_owned());
@@ -177,8 +174,16 @@ fn resolve_active_audio_file(state: &UiShellState) -> Option<PathBuf> {
         ViewMode::Studio => true,
         _ => false,
     };
-    if want_fc_mix && let Some(proj_dir) = &state.project_path {
-        for rel in ["film/audio.wav", "film/preview.wav", "film/mix.wav", "film/preview.mp4", "film/master.mp4"] {
+    if want_fc_mix
+        && let Some(proj_dir) = &state.project_path
+    {
+        for rel in [
+            "film/audio.wav",
+            "film/preview.wav",
+            "film/mix.wav",
+            "film/preview.mp4",
+            "film/master.mp4",
+        ] {
             let candidate = proj_dir.join(rel);
             if candidate.is_file() {
                 return Some(candidate);
@@ -214,7 +219,7 @@ fn slice_riff_wav_from(src: &Path, start_sec: f64) -> Option<PathBuf> {
         let cid = &ch_hdr[0..4];
         let clen = u32::from_le_bytes([ch_hdr[4], ch_hdr[5], ch_hdr[6], ch_hdr[7]]);
         let pos = file.stream_position().ok()?;
-        if cid == b"fmt " && (16..=256).contains(&clen) {
+        if cid == b"fmt " && clen >= 16 && clen <= 256 {
             let mut buf = vec![0_u8; clen as usize];
             file.read_exact(&mut buf).ok()?;
             sample_rate = u32::from_le_bytes([buf[4], buf[5], buf[6], buf[7]]);
@@ -246,7 +251,9 @@ fn slice_riff_wav_from(src: &Path, start_sec: f64) -> Option<PathBuf> {
 
     let out_path = std::env::temp_dir().join(format!("magic-scrub-{}.wav", std::process::id()));
     let mut out = File::create(&out_path).ok()?;
-    let riff_size = 4_u32.saturating_add(8 + fmt.len() as u32).saturating_add(8 + rem_len);
+    let riff_size = 4_u32
+        .saturating_add(8 + fmt.len() as u32)
+        .saturating_add(8 + rem_len);
     out.write_all(b"RIFF").ok()?;
     out.write_all(&riff_size.to_le_bytes()).ok()?;
     out.write_all(b"WAVEfmt ").ok()?;
@@ -263,14 +270,24 @@ fn spawn_os_audio_player(path: &Path, start_sec: f64) -> Option<Child> {
     #[cfg(target_os = "macos")]
     {
         let _ = start_sec;
-        return Command::new("afplay").arg(p_str).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().ok();
+        return Command::new("afplay")
+            .arg(p_str)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .ok();
     }
     #[cfg(target_os = "windows")]
     {
         let _ = start_sec;
         let escaped = p_str.replace('\'', "''");
         return Command::new("powershell")
-            .args(["-NoProfile", "-Command", &format!("(New-Object Media.SoundPlayer '{escaped}').PlaySync()")])
+            .args([
+                "-NoProfile",
+                "-Command",
+                &format!("(New-Object Media.SoundPlayer '{escaped}').PlaySync()"),
+            ])
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
@@ -280,7 +297,13 @@ fn spawn_os_audio_player(path: &Path, start_sec: f64) -> Option<Child> {
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
         for tool in ["pw-play", "paplay", "aplay"] {
-            if let Ok(child) = Command::new(tool).arg(p_str).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn() {
+            if let Ok(child) = Command::new(tool)
+                .arg(p_str)
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()
+            {
                 return Some(child);
             }
         }
@@ -294,41 +317,9 @@ fn spawn_os_audio_player(path: &Path, start_sec: f64) -> Option<Child> {
     }
 }
 
-fn sync_live_craft_play(state: &UiShellState, playing: bool, sec: f64) {
-    let Some(root) = &state.project_path else { return };
-    let track_mode = match state.effective_view() {
-        ViewMode::Animation => state.animation.track_source.as_str(),
-        ViewMode::Design => state.lyrics.track_source.as_str(),
-        ViewMode::Motion => state.motion.track_source.as_str(),
-        ViewMode::Studio => "filmcraft",
-        _ => return,
-    };
-    if let Some(fc_rel) = state.cache.film_status.pointer("/timeline/path").and_then(Value::as_str) {
-        let fc_doc = root.join(fc_rel);
-        let cmd = if playing { "transport.play" } else { "transport.pause" };
-        let _ = CraftHub::try_live(CraftTarget::Film, &fc_doc, cmd, &json!({"seconds": sec}), false);
-    }
-    if matches!(track_mode, "effectcraft" | "overlay") {
-        let ec_rel = match state.effective_view() {
-            ViewMode::Design => Some("lettering/lyrics.ecproj"),
-            ViewMode::Motion => Some("motion/actions.ecproj"),
-            _ => None,
-        };
-        if let Some(rel) = ec_rel {
-            let ec_doc = root.join(rel);
-            let cmd = if playing { "preview.play" } else { "preview.stop" };
-            let _ = CraftHub::try_live(CraftTarget::Effect, &ec_doc, cmd, &json!({"time": sec}), false);
-        }
-    }
-}
+fn sync_live_craft_play(_state: &UiShellState, _playing: bool, _sec: f64) {}
 
-fn sync_live_craft_seek(state: &UiShellState, sec: f64) {
-    let Some(root) = &state.project_path else { return };
-    if let Some(fc_rel) = state.cache.film_status.pointer("/timeline/path").and_then(Value::as_str) {
-        let fc_doc = root.join(fc_rel);
-        let _ = CraftHub::try_live(CraftTarget::Film, &fc_doc, "transport.seek", &json!({"seconds": sec}), false);
-    }
-}
+fn sync_live_craft_seek(_state: &UiShellState, _sec: f64) {}
 
 /// Extracted file-picker answer handler so `apps/magic/src/main.rs` stays well below 900 lines.
 pub(crate) fn dispatch_picker_answer(app: &mut MagicDesktopApp, ctx: &egui::Context, target: PickerTarget, answer: Answer) {
@@ -373,21 +364,21 @@ pub(crate) fn dispatch_picker_answer(app: &mut MagicDesktopApp, ctx: &egui::Cont
                     }
                 }
                 PickerTarget::MotionTraceImage => {
-                    let _ = app.execute_engine(ctx, "vector.trace", json!({"path": path_str, "ignore_white": true}));
+                    let _ = app.execute_engine(ctx, "project.add_asset", json!({"path": path_str, "kind": "image", "vectorize": true}));
                 }
                 PickerTarget::ImportLottie => {
                     app.ui_state.motion.lottie_show_warnings = true;
-                    let _ = app.execute_engine(ctx, "effect.lottie", json!({"mode": "import", "path": path_str, "ecproj": "motion/actions.ecproj"}));
+                    let _ = app.execute_engine(ctx, "project.import_file", json!({"path": path_str}));
                 }
                 PickerTarget::ImportAep => {
-                    let _ = app.execute_engine(ctx, "effect.import_aep", json!({"path": path_str, "dry_run": true}));
+                    let _ = app.execute_engine(ctx, "project.import_file", json!({"path": path_str}));
                 }
                 PickerTarget::ImportLut => {
                     let _ = app.execute_engine(ctx, "video.finish", json!({"op": "lut_import", "path": path_str}));
                     app.ui_state.set_toast(now, "Loaded 3D LUT (.cube / .3dl)");
                 }
                 PickerTarget::ImportFcgt => {
-                    let _ = app.execute_engine(ctx, "bridge.templates", json!({"action": "install", "path": path_str}));
+                    let _ = app.execute_engine(ctx, "project.import_file", json!({"path": path_str}));
                     app.ui_state.set_toast(now, "Installed native graphic template");
                 }
                 PickerTarget::ImportFontDir => {
@@ -397,11 +388,7 @@ pub(crate) fn dispatch_picker_answer(app: &mut MagicDesktopApp, ctx: &egui::Cont
                     app.ui_state.set_toast(now, "Saved EFFECTCRAFT_FONT_DIRS folder");
                 }
                 PickerTarget::ImportWasmPlugin => {
-                    let _ = app.execute_engine(
-                        ctx,
-                        "effect.exec",
-                        json!({"path": "motion/actions.ecproj", "id": "effect.plugins.load", "params": {"path": path_str}, "save": true}),
-                    );
+                    let _ = app.execute_engine(ctx, "project.import_file", json!({"path": path_str}));
                     app.ui_state.set_toast(now, "Loaded WebAssembly (.wasm) plug-in into EffectCraft");
                 }
                 PickerTarget::ImportModel3d => {

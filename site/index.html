@@ -48,8 +48,8 @@
             <span class="terminal-title">magic-cli · live --control &amp; MCP workflow</span>
           </div>
           <pre><code><span class="c"># 1. Watch Magic Studio live while your MCP client drives it</span>
-magic --control 9876 &amp;
-claude mcp add magic-app -- magic-cli mcp --connect 127.0.0.1:9876
+magic --control 9875 &amp;
+claude mcp add magic-app -- magic-cli mcp --connect 127.0.0.1:9875
 
 <span class="c"># 2. Start a song project (transcribes timing-reference.json + FilmCraft A1 + DesignCraft board)</span>
 magic-cli new --root ~/Videos/Magic --name "Rendered Yesterday" --audio song.wav --wizard
@@ -108,7 +108,7 @@ magic-cli --project "Rendered Yesterday.magic" --save exec character.puppet.lips
           <p class="eyebrow">Lightweight Shell · Real CLI Delegation</p>
           <h2>Built to watch live with <code>--control</code>.</h2>
           <p>
-            Start <code>magic --control 9876</code> and attach <code>magic-cli mcp --connect 127.0.0.1:9876</code>. Every tool call updates the pure-Rust egui workspace in real time while confining file access with <code>--automation-read-root</code> and <code>--automation-write-root</code>.
+            Start <code>magic --control 9875</code> and attach <code>magic-cli mcp --connect 127.0.0.1:9875</code>. Every tool call updates the pure-Rust egui workspace in real time while confining file access with <code>--automation-read-root</code> and <code>--automation-write-root</code>.
           </p>
           <ul class="check-list">
             <li>Native <code>egui</code> 0.37 + <code>craft-ui</code> + <code>craft-menu</code> control system enforcing crisp SVG icons and single-word buttons with zero baseline drift.</li>

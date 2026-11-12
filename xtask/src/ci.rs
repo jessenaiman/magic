@@ -1,18 +1,30 @@
-//! `cargo xtask ci`: build groups, fmt, architecture layers, and Clippy (`-D warnings`).
-//!
-//! Test execution is held off by default until visual design confirmation (`MAGIC_RUN_TESTS=1`
-//! opts into `cargo test --workspace --no-run`) so premature UI assertions never block or distort
-//! design iteration.
-use std::process::Command;
-use std::time::Instant;
+//! `cargo xtask ci`: fast-fail ArtCraft gates (`fmt` -> `layers` -> `assets` -> `clippy` -> `tests` with watchdog).
+
+use std::process::{Command, Stdio};
+use std::thread;
+use std::time::{Duration, Instant};
 
 use crate::Result;
 
-pub(crate) const SETS: &[(&str, &[&str])] =
-    &[("workspace", &["craft-util", "craft-scribbles", "magic-engine", "magic-mcp", "magic-ui-egui", "magic-cli", "magic", "magic-tui", "xtask"])];
+pub(crate) const SETS: &[(&str, &[&str])] = &[(
+    "workspace",
+    &[
+        "magic-util",
+        "magic-scribbles",
+        "magic-engine",
+        "magic-mcp",
+        "magic-ui-egui",
+        "magic-cli",
+        "magic",
+        "magic-tui",
+        "xtask",
+    ],
+)];
 
 pub(crate) fn packages(set: &[&str]) -> Vec<String> {
-    set.iter().flat_map(|name| ["-p".to_owned(), (*name).to_owned()]).collect()
+    set.iter()
+        .flat_map(|name| ["-p".to_owned(), (*name).to_owned()])
+        .collect()
 }
 
 fn check_sets() -> Result<()> {
@@ -27,28 +39,70 @@ fn check_sets() -> Result<()> {
             _ => errors.push(format!("{name}: in more than one build group")),
         }
     }
-    if errors.is_empty() { Ok(()) } else { Err(errors.join("\n")) }
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors.join("\n"))
+    }
 }
 
 fn report_path() -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../target/ci-report.jsonl")
 }
 
-fn run(cmd: &mut Command) -> Result<()> {
-    eprintln!("$ {cmd:?}");
-    let output = cmd.output().map_err(|e| e.to_string())?;
-    if output.status.success() {
-        return Ok(());
-    }
-    let text = format!("{}{}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
-    print!("{text}");
-    let tail = text.lines().rev().take(40).collect::<Vec<_>>().into_iter().rev().collect::<Vec<_>>().join("\n");
+fn record_failure(command_desc: &str, tail: &str) {
     let path = report_path();
     if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
         use std::io::Write as _;
-        let _ = writeln!(file, "{}", serde_json::json!({"command": format!("{cmd:?}"), "tail": tail}));
+        let _ = writeln!(
+            file,
+            "{}",
+            serde_json::json!({"command": command_desc, "tail": tail})
+        );
     }
-    Err(format!("failed ({}): {cmd:?}", output.status))
+}
+
+fn run_bounded(cmd: &mut Command, timeout: Duration) -> Result<()> {
+    let desc = format!("{cmd:?}");
+    eprintln!("$ {desc}");
+    cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+    let mut child = cmd.spawn().map_err(|e| e.to_string())?;
+    let started = Instant::now();
+    loop {
+        match child.try_wait().map_err(|e| e.to_string())? {
+            Some(_) => {
+                let output = child.wait_with_output().map_err(|e| e.to_string())?;
+                if output.status.success() {
+                    return Ok(());
+                }
+                let text = format!(
+                    "{}{}",
+                    String::from_utf8_lossy(&output.stdout),
+                    String::from_utf8_lossy(&output.stderr)
+                );
+                print!("{text}");
+                let tail = text
+                    .lines()
+                    .rev()
+                    .take(40)
+                    .collect::<Vec<_>>()
+                    .into_iter()
+                    .rev()
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                record_failure(&desc, &tail);
+                return Err(format!("failed ({}): {desc}", output.status));
+            }
+            None if started.elapsed() >= timeout => {
+                let _ = child.kill();
+                let _ = child.wait();
+                let msg = format!("timed out after {}s: {desc}", timeout.as_secs());
+                record_failure(&desc, &msg);
+                return Err(msg);
+            }
+            None => thread::sleep(Duration::from_millis(100)),
+        }
+    }
 }
 
 fn stage(name: &str, gate: impl FnOnce() -> Result<()>) -> Result<()> {
@@ -59,17 +113,36 @@ fn stage(name: &str, gate: impl FnOnce() -> Result<()>) -> Result<()> {
     outcome
 }
 
+fn test_timeout() -> Duration {
+    let mins = std::env::var("MAGIC_TEST_TIMEOUT_MINUTES")
+        .ok()
+        .and_then(|v| v.trim().parse::<u64>().ok())
+        .filter(|&m| m > 0)
+        .unwrap_or(20);
+    Duration::from_secs(mins * 60)
+}
+
 fn clippy() -> Result<()> {
     let cargo = env!("CARGO");
     for (_, set) in SETS {
-        run(Command::new(cargo).arg("clippy").args(packages(set)).args(["--lib", "--bins", "--", "-D", "warnings"]))?;
+        let mut cmd = Command::new(cargo);
+        cmd.arg("clippy")
+            .args(packages(set))
+            .args(["--all-targets", "--", "-D", "warnings"]);
+        run_bounded(&mut cmd, test_timeout())?;
     }
     Ok(())
 }
 
-fn tests() -> Result<()> {
+pub(crate) fn tests() -> Result<()> {
     let cargo = env!("CARGO");
-    run(Command::new(cargo).args(["test", "--workspace", "--no-run"]))
+    let threads = std::env::var("RUST_TEST_THREADS")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| "4".to_owned());
+    let mut cmd = Command::new(cargo);
+    cmd.args(["test", "--workspace", "--", "--test-threads", &threads]);
+    run_bounded(&mut cmd, test_timeout())
 }
 
 pub(crate) fn ci() -> Result<()> {
@@ -80,13 +153,14 @@ pub(crate) fn ci() -> Result<()> {
     }
     std::fs::File::create(path).map_err(|e| e.to_string())?;
     stage("build groups", check_sets)?;
-    stage("fmt", || run(Command::new(cargo).args(["fmt", "--check"])))?;
+    stage("fmt", || {
+        let mut cmd = Command::new(cargo);
+        cmd.args(["fmt", "--all", "--check"]);
+        run_bounded(&mut cmd, Duration::from_secs(120))
+    })?;
     stage("layers", crate::policy::layers)?;
+    stage("assets", crate::policy::assets)?;
     stage("clippy", clippy)?;
-    if std::env::var("MAGIC_RUN_TESTS").as_deref() == Ok("1") {
-        stage("tests", tests)?;
-    } else {
-        eprintln!("== tests: deferred until visual UI design confirmation (set MAGIC_RUN_TESTS=1 to enable)");
-    }
+    stage("tests", tests)?;
     Ok(())
 }

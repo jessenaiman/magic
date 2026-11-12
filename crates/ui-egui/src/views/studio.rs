@@ -3,18 +3,22 @@
 //! Finishing Deck (`[Assembly] [Edit] [Color] [FX] [Audio] [Titles] [Export]`).
 
 use craft_ui::layout::{SplitAxis, SplitSize, split_rect};
-use egui::{Align, Align2, Color32, CornerRadius, FontId, Layout, Pos2, Rect, RichText, ScrollArea, Sense, Stroke, StrokeKind, Ui, Vec2};
+use egui::{
+    Align, Align2, Color32, CornerRadius, FontId, Layout, Pos2, Rect, RichText, ScrollArea, Sense,
+    Stroke, StrokeKind, Ui, Vec2,
+};
 use serde_json::{Value, json};
 
 use crate::controls::{
-    FilmbarOrientation, FilmbarStyle, ScalarSpec, child_pane, fill_card, paint_craft_doc_card, paint_filmbar_frame, paint_local_image, pill_toggle,
-    ring_slider_h,
+    FilmbarOrientation, FilmbarStyle, ScalarSpec, child_pane, fill_card, paint_craft_doc_card,
+    paint_filmbar_frame, paint_local_image, pill_toggle, ring_slider_h,
 };
 use crate::state::{UiAction, ViewCtx, ViewMode};
 use crate::timeline::{CraftTimelineLane, CraftTimelineSpan, draw_craft_timeline};
 use crate::views::studio_audio_titles::{draw_audio_tab, draw_export_tab, draw_titles_tab};
 use crate::views::studio_finishing::{
-    count_offline_clips, draw_color_tab, draw_edit_tab, draw_fx_tab, draw_graded_scopes_strip, draw_program_trim_and_three_point_bar, draw_studio_mode_tabs,
+    count_offline_clips, draw_color_tab, draw_edit_tab, draw_fx_tab, draw_graded_scopes_strip,
+    draw_program_trim_and_three_point_bar, draw_studio_mode_tabs,
 };
 use crate::widgets::{BtnSpec, action_button, status_pill};
 
@@ -72,13 +76,30 @@ pub fn show(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
 }
 
 fn json_str_vec(val: &Value) -> Vec<String> {
-    val.as_array().into_iter().flatten().filter_map(|v| v.as_str().map(str::to_owned)).collect()
+    val.as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|v| v.as_str().map(str::to_owned))
+        .collect()
 }
 
 fn collect_craft_outputs(ctx: &ViewCtx<'_>) -> CraftOutputs {
     let co = &ctx.state.cache.film_status["craft_outputs"];
-    let fcproj_path = ctx.state.cache.film_status.pointer("/timeline/path").and_then(Value::as_str).unwrap_or("film/Song.fcproj").to_owned();
-    let fcproj_exists = ctx.state.cache.film_status.pointer("/timeline/exists").and_then(Value::as_bool).unwrap_or(false);
+    let fcproj_path = ctx
+        .state
+        .cache
+        .film_status
+        .pointer("/timeline/path")
+        .and_then(Value::as_str)
+        .unwrap_or("film/Song.fcproj")
+        .to_owned();
+    let fcproj_exists = ctx
+        .state
+        .cache
+        .film_status
+        .pointer("/timeline/exists")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
     let mut program_frames = json_str_vec(&co["program_frames"]);
     if let Some(last) = &ctx.state.cache.last_video_frame
         && !program_frames.contains(last)
@@ -104,25 +125,52 @@ fn collect_craft_outputs(ctx: &ViewCtx<'_>) -> CraftOutputs {
     {
         v4_frames.insert(0, last.clone());
     }
-    CraftOutputs { fcproj_path, fcproj_exists, program_frames, v1_frames, v2_frames, v3_frames, v4_frames }
+    CraftOutputs {
+        fcproj_path,
+        fcproj_exists,
+        program_frames,
+        v1_frames,
+        v2_frames,
+        v3_frames,
+        v4_frames,
+    }
 }
 
 fn collect_studio_scenes(ctx: &ViewCtx<'_>, outputs: &CraftOutputs) -> Vec<StudioSceneItem> {
-    let sb_pages = ctx.state.cache.storyboard_pages.get("pages").and_then(Value::as_array).cloned().unwrap_or_default();
+    let sb_pages = ctx
+        .state
+        .cache
+        .storyboard_pages
+        .get("pages")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
     let scene_pages: Vec<StudioSceneItem> = sb_pages
         .iter()
         .filter(|p| p["archetype"].as_str() == Some("scene"))
         .enumerate()
         .map(|(i, p)| {
-            let title = p["name"].as_str().or_else(|| p["title"].as_str()).map(str::to_owned).unwrap_or_else(|| format!("Scene {}", i + 1));
+            let title = p["name"]
+                .as_str()
+                .or_else(|| p["title"].as_str())
+                .map(str::to_owned)
+                .unwrap_or_else(|| format!("Scene {}", i + 1));
             let img = p["preview_png"]
                 .as_str()
                 .filter(|x| !x.is_empty())
                 .map(str::to_owned)
-                .or_else(|| p["slots"].as_array().and_then(|arr| arr.iter().find_map(|s| s["image"].as_str().filter(|x| !x.is_empty()).map(str::to_owned))))
+                .or_else(|| {
+                    p["slots"].as_array().and_then(|arr| {
+                        arr.iter().find_map(|s| s["image"].as_str().filter(|x| !x.is_empty()).map(str::to_owned))
+                    })
+                })
                 .or_else(|| outputs.program_frames.get(i).cloned())
                 .or_else(|| outputs.v1_frames.get(i).cloned());
-            StudioSceneItem { title, start_sec: (i as f64) * 5.0, image: img }
+            StudioSceneItem {
+                title,
+                start_sec: (i as f64) * 5.0,
+                image: img,
+            }
         })
         .collect();
 
@@ -142,14 +190,22 @@ fn collect_studio_scenes(ctx: &ViewCtx<'_>, outputs: &CraftOutputs) -> Vec<Studi
 }
 
 fn frame_at_index(frames: &[String], idx: usize) -> Option<&str> {
-    if frames.is_empty() { None } else { frames.get(idx % frames.len()).map(String::as_str) }
+    if frames.is_empty() {
+        None
+    } else {
+        frames.get(idx % frames.len()).map(String::as_str)
+    }
 }
 
 fn gold_outline_button(ui: &mut Ui, ctx: &mut ViewCtx<'_>, id: &str, label: &str, tooltip: &str) -> bool {
     let font = FontId::proportional(11.8);
     let galley = ui.painter().layout_no_wrap(label.to_owned(), font.clone(), ctx.pal.accent_amber);
     let (rect, resp) = ui.allocate_exact_size(Vec2::new(galley.size().x + 20.0, 26.0), Sense::click());
-    let fill = if resp.hovered() { Color32::from_rgba_unmultiplied(0x66, 0x4b, 0x1d, 190) } else { Color32::from_rgba_unmultiplied(0x4c, 0x38, 0x16, 165) };
+    let fill = if resp.hovered() {
+        Color32::from_rgba_unmultiplied(0x66, 0x4b, 0x1d, 190)
+    } else {
+        Color32::from_rgba_unmultiplied(0x4c, 0x38, 0x16, 165)
+    };
     ui.painter().rect(rect, CornerRadius::same(6), fill, Stroke::new(1.1, ctx.pal.accent_amber), StrokeKind::Inside);
     ui.painter().text(rect.center(), Align2::CENTER_CENTER, label, font, ctx.pal.accent_amber);
     let resp = resp.on_hover_text(tooltip);
@@ -159,7 +215,7 @@ fn gold_outline_button(ui: &mut Ui, ctx: &mut ViewCtx<'_>, id: &str, label: &str
 
 fn draw_studio_header(ui: &mut Ui, ctx: &mut ViewCtx<'_>, outputs: &CraftOutputs) {
     let ready = ctx.state.cache.film_status["export_ready"].as_bool().unwrap_or(false);
-    let fc_live = ctx.state.cache.bridge_status["filmcraft"]["listening"].as_bool() == Some(true);
+    let fc_live = ctx.state.project_path.is_some();
     let fc_short = outputs.fcproj_path.rsplit('/').next().unwrap_or("Song.fcproj");
     let offline_n = count_offline_clips(&ctx.state.cache.timeline);
 
@@ -172,35 +228,25 @@ fn draw_studio_header(ui: &mut Ui, ctx: &mut ViewCtx<'_>, outputs: &CraftOutputs
             status_pill(
                 ui,
                 ctx.pal,
-                if ready {
-                    "Export Ready"
-                } else if outputs.fcproj_exists {
-                    ".fcproj on Disk"
-                } else {
-                    "Unassembled"
-                },
+                if ready { "Export Ready" } else if outputs.fcproj_exists { ".fcproj on Disk" } else { "Unassembled" },
                 if ready { ctx.pal.accent_emerald } else { ctx.pal.accent_amber },
             );
             status_pill(
                 ui,
                 ctx.pal,
-                if fc_live { "FC :9876 Live" } else { "FC Disconnected" },
+                if fc_live { "Timeline Staged" } else { "No Project" },
                 if fc_live { ctx.pal.accent_emerald } else { ctx.pal.text_muted },
             );
             if offline_n > 0 {
                 status_pill(ui, ctx.pal, &format!("{offline_n} Offline"), ctx.pal.danger);
             }
-            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("film-assemble", "Assemble", "Assemble FilmCraft .fcproj from V1-V4 Craft outputs"))
-                .clicked()
-            {
+            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("film-assemble", "Assemble", "Assemble FilmCraft .fcproj from V1-V4 Craft outputs")).clicked() {
                 ctx.exec("video.assemble", json!({}), Some("Assembled FilmCraft .fcproj sequence"));
             }
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("film-preview", "play", "Preview", "Render half-scale FilmCraft preview").primary()).clicked() {
                 ctx.exec("video.preview", json!({}), Some("Rendered FilmCraft preview"));
             }
-            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("film-frame", "Grab Frame", "Render program PNG frame from .fcproj at playhead"))
-                .clicked()
-            {
+            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("film-frame", "Grab Frame", "Render program PNG frame from .fcproj at playhead")).clicked() {
                 let sec = ctx.state.studio.seek_seconds;
                 ctx.exec("video.frame", json!({"seconds": sec}), Some("Rendered program frame from .fcproj"));
             }
@@ -295,7 +341,7 @@ fn draw_film_scenes_rail(ui: &mut Ui, ctx: &mut ViewCtx<'_>, scenes: &[StudioSce
             ui.spacing_mut().item_spacing.x = 4.0;
             ui.label(RichText::new("Film / Scenes").size(12.5).strong());
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("studio-rail-relink", "link", "Relink offline clips (T08)")).clicked() {
-                ctx.exec("bridge.preflight", json!({"action": "relink"}), Some("Checked & relinked FilmCraft media"));
+                ctx.exec("video.sync_links", json!({"render": false}), Some("Checked linked track assets"));
             }
             let prox = ctx.state.studio.proxies_enabled;
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("studio-rail-proxy", "Proxy", "Toggle proxies (T35)").selected(prox)).clicked() {
@@ -307,48 +353,52 @@ fn draw_film_scenes_rail(ui: &mut Ui, ctx: &mut ViewCtx<'_>, scenes: &[StudioSce
             }
         });
         ui.add_space(4.0);
-        ScrollArea::vertical().id_salt("studio_film_scenes_scroll").auto_shrink([false, false]).show(ui, |ui| {
-            if scenes.is_empty() {
-                let w = (ui.available_width() - 4.0).max(140.0);
-                let (erect, _) = ui.allocate_exact_size(Vec2::new(w, 114.0), Sense::hover());
-                paint_craft_doc_card(
-                    ui,
-                    erect,
-                    ctx.pal,
-                    "FC",
-                    outputs.fcproj_path.rsplit('/').next().unwrap_or("Song.fcproj"),
-                    "Assemble FilmCraft timeline or add DesignCraft scenes",
-                );
-                return;
-            }
-            for (idx, sc) in scenes.iter().enumerate() {
-                let selected = ctx.state.studio.selected_scene == idx;
-                let w = (ui.available_width() - 4.0).max(140.0);
-                let (card_rect, resp) = ui.allocate_exact_size(Vec2::new(w, 108.0), Sense::click());
-                if resp.clicked() {
-                    ctx.state.studio.selected_scene = idx;
-                    ctx.state.studio.seek_seconds = sc.start_sec;
-                    ctx.push(UiAction::SeekAudio(sc.start_sec));
+        ScrollArea::vertical()
+            .id_salt("studio_film_scenes_scroll")
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                if scenes.is_empty() {
+                    let w = (ui.available_width() - 4.0).max(140.0);
+                    let (erect, _) = ui.allocate_exact_size(Vec2::new(w, 114.0), Sense::hover());
+                    paint_craft_doc_card(ui, erect, ctx.pal, "FC", outputs.fcproj_path.rsplit('/').next().unwrap_or("Song.fcproj"), "Assemble FilmCraft timeline or add DesignCraft scenes");
+                    return;
                 }
-                let inner = paint_filmbar_frame(
-                    ui,
-                    card_rect,
-                    ctx.pal,
-                    FilmbarStyle { orientation: FilmbarOrientation::Vertical, selected, hovered: resp.hovered(), timecode: None },
-                );
-                if !paint_local_image(ui, inner, sc.image.as_deref(), ctx.pal.bg_stage, 3) {
-                    paint_craft_doc_card(ui, inner, ctx.pal, "DC", &sc.title, "Unrendered scene");
+                for (idx, sc) in scenes.iter().enumerate() {
+                    let selected = ctx.state.studio.selected_scene == idx;
+                    let w = (ui.available_width() - 4.0).max(140.0);
+                    let (card_rect, resp) = ui.allocate_exact_size(Vec2::new(w, 108.0), Sense::click());
+                    if resp.clicked() {
+                        ctx.state.studio.selected_scene = idx;
+                        ctx.state.studio.seek_seconds = sc.start_sec;
+                        ctx.push(UiAction::SeekAudio(sc.start_sec));
+                    }
+                    let inner = paint_filmbar_frame(
+                        ui,
+                        card_rect,
+                        ctx.pal,
+                        FilmbarStyle {
+                            orientation: FilmbarOrientation::Vertical,
+                            selected,
+                            hovered: resp.hovered(),
+                            timecode: None,
+                        },
+                    );
+                    if !paint_local_image(ui, inner, sc.image.as_deref(), ctx.pal.bg_stage, 3) {
+                        paint_craft_doc_card(ui, inner, ctx.pal, "DC", &sc.title, "Unrendered scene");
+                    }
+                    ctx.reg.record(format!("studio-scene-{}", idx + 1), &sc.title, &resp, None);
+                    ui.add_space(6.0);
                 }
-                ctx.reg.record(format!("studio-scene-{}", idx + 1), &sc.title, &resp, None);
-                ui.add_space(6.0);
-            }
-        });
+            });
     });
     ctx.reg.record("studio-scenes-rail", "Film / Scenes", &panel.response, None);
 }
 
 fn draw_center_monitor_and_moment(ui: &mut Ui, ctx: &mut ViewCtx<'_>, scenes: &[StudioSceneItem], outputs: &CraftOutputs) {
-    let active_scene_img = scenes.get(ctx.state.studio.selected_scene).or_else(|| scenes.first()).and_then(|s| s.image.as_deref());
+    let active_scene_img = scenes
+        .get(ctx.state.studio.selected_scene)
+        .or_else(|| scenes.first())
+        .and_then(|s| s.image.as_deref());
     let program_img = outputs.program_frames.first().map(String::as_str).or(active_scene_img);
     let step_idx = ((ctx.state.studio.seek_seconds / 2.5).floor().max(0.0)) as usize;
 
@@ -382,15 +432,7 @@ fn draw_center_monitor_and_moment(ui: &mut Ui, ctx: &mut ViewCtx<'_>, scenes: &[
             let dur = ctx.state.audio_duration_sec.max(30.0);
             let scrub_w = (ui.available_width() - 94.0).clamp(96.0, 320.0);
             ui.allocate_ui_with_layout(Vec2::new(scrub_w, 28.0), Layout::top_down(Align::Min), |ui| {
-                if ring_slider_h(
-                    ui,
-                    ctx.reg,
-                    ctx.pal,
-                    ScalarSpec::new("film-seek", "Playhead", 0.0..=dur, "s", ctx.pal.accent_emerald),
-                    &mut ctx.state.studio.seek_seconds,
-                )
-                .changed()
-                {
+                if ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("film-seek", "Playhead", 0.0..=dur, "s", ctx.pal.accent_emerald), &mut ctx.state.studio.seek_seconds).changed() {
                     let s = ctx.state.studio.seek_seconds;
                     ctx.push(UiAction::SeekAudio(s));
                 }
@@ -414,48 +456,36 @@ fn draw_center_monitor_and_moment(ui: &mut Ui, ctx: &mut ViewCtx<'_>, scenes: &[
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 6.0;
             let card_w = ((ui.available_width() - 14.0) / 3.0).floor().max(82.0);
-            draw_moment_layer_card(
-                ui,
-                ctx,
-                MomentCardSpec {
-                    card_w,
-                    code: "V2",
-                    title: "V2 Animation",
-                    craft_badge: "EC",
-                    craft_doc: ".pcraft / .ecproj",
-                    frame: frame_at_index(&outputs.v2_frames, step_idx),
-                    selected: true,
-                    target: ViewMode::Animation,
-                },
-            );
-            draw_moment_layer_card(
-                ui,
-                ctx,
-                MomentCardSpec {
-                    card_w,
-                    code: "V3",
-                    title: "V3 Lyrics",
-                    craft_badge: "EC",
-                    craft_doc: "lyrics.ecproj",
-                    frame: frame_at_index(&outputs.v3_frames, step_idx),
-                    selected: false,
-                    target: ViewMode::Design,
-                },
-            );
-            draw_moment_layer_card(
-                ui,
-                ctx,
-                MomentCardSpec {
-                    card_w,
-                    code: "V4",
-                    title: "V4 Motion",
-                    craft_badge: "VCRAFT",
-                    craft_doc: "actions.ecproj",
-                    frame: frame_at_index(&outputs.v4_frames, step_idx),
-                    selected: false,
-                    target: ViewMode::Motion,
-                },
-            );
+            draw_moment_layer_card(ui, ctx, MomentCardSpec {
+                card_w,
+                code: "V2",
+                title: "V2 Animation",
+                craft_badge: "EC",
+                craft_doc: ".pcraft / .ecproj",
+                frame: frame_at_index(&outputs.v2_frames, step_idx),
+                selected: true,
+                target: ViewMode::Animation,
+            });
+            draw_moment_layer_card(ui, ctx, MomentCardSpec {
+                card_w,
+                code: "V3",
+                title: "V3 Lyrics",
+                craft_badge: "EC",
+                craft_doc: "lyrics.ecproj",
+                frame: frame_at_index(&outputs.v3_frames, step_idx),
+                selected: false,
+                target: ViewMode::Design,
+            });
+            draw_moment_layer_card(ui, ctx, MomentCardSpec {
+                card_w,
+                code: "V4",
+                title: "V4 Motion",
+                craft_badge: "VCRAFT",
+                craft_doc: "actions.ecproj",
+                frame: frame_at_index(&outputs.v4_frames, step_idx),
+                selected: false,
+                target: ViewMode::Motion,
+            });
         });
     });
 }
@@ -467,21 +497,17 @@ fn draw_moment_layer_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>, spec: MomentCardSp
         let (card_rect, resp) = ui.allocate_exact_size(Vec2::new(spec.card_w, total_h - 2.0), Sense::click());
         let border = if spec.selected { Stroke::new(1.5, ctx.pal.accent_emerald) } else { Stroke::new(1.0, ctx.pal.border) };
         ui.painter().rect(card_rect, CornerRadius::same(7), ctx.pal.bg_input, border, StrokeKind::Inside);
-        let img_rect =
-            Rect::from_min_max(Pos2::new(card_rect.min.x + 3.0, card_rect.min.y + 3.0), Pos2::new(card_rect.max.x - 3.0, card_rect.min.y + 3.0 + img_h));
+        let img_rect = Rect::from_min_max(
+            Pos2::new(card_rect.min.x + 3.0, card_rect.min.y + 3.0),
+            Pos2::new(card_rect.max.x - 3.0, card_rect.min.y + 3.0 + img_h),
+        );
         if !paint_local_image(ui, img_rect, spec.frame, ctx.pal.bg_stage, 5) {
             paint_craft_doc_card(ui, img_rect, ctx.pal, spec.craft_badge, spec.craft_doc, "");
         }
         let tag_r = Rect::from_min_size(Pos2::new(img_rect.min.x + 5.0, img_rect.min.y + 5.0), Vec2::new(28.0, 14.0));
         ui.painter().rect_filled(tag_r, CornerRadius::same(4), Color32::from_rgba_unmultiplied(10, 14, 21, 210));
         ui.painter().text(tag_r.center(), Align2::CENTER_CENTER, "16:9", FontId::monospace(8.2), ctx.pal.text_primary);
-        ui.painter().text(
-            Pos2::new(card_rect.min.x + 6.0, card_rect.max.y - 10.5),
-            Align2::LEFT_CENTER,
-            spec.title,
-            FontId::proportional(10.2),
-            ctx.pal.text_secondary,
-        );
+        ui.painter().text(Pos2::new(card_rect.min.x + 6.0, card_rect.max.y - 10.5), Align2::LEFT_CENTER, spec.title, FontId::proportional(10.2), ctx.pal.text_secondary);
         if resp.clicked() {
             ctx.push(UiAction::NavigateAuthoring { view: spec.target, seconds: ctx.state.studio.seek_seconds });
         }
@@ -497,8 +523,10 @@ fn draw_right_finishing_deck(ui: &mut Ui, ctx: &mut ViewCtx<'_>, scenes: &[Studi
         if ctx.state.studio.inspector_tab == "matrix" {
             draw_elements_matrix_body(ui, ctx, scenes, outputs);
         } else {
-            ScrollArea::vertical().id_salt("studio_finishing_deck_scroll").auto_shrink([false, false]).show(ui, |ui| {
-                match ctx.state.studio.inspector_tab.as_str() {
+            ScrollArea::vertical()
+                .id_salt("studio_finishing_deck_scroll")
+                .auto_shrink([false, false])
+                .show(ui, |ui| match ctx.state.studio.inspector_tab.as_str() {
                     "edit" => draw_edit_tab(ui, ctx),
                     "color" => draw_color_tab(ui, ctx),
                     "fx" => draw_fx_tab(ui, ctx),
@@ -506,32 +534,27 @@ fn draw_right_finishing_deck(ui: &mut Ui, ctx: &mut ViewCtx<'_>, scenes: &[Studi
                     "titles" => draw_titles_tab(ui, ctx),
                     "export" => draw_export_tab(ui, ctx),
                     _ => {}
-                }
-            });
+                });
         }
     });
     ctx.reg.record("studio-elements-matrix", "Elements Matrix", &panel.response, None);
 }
 
 fn draw_elements_matrix_body(ui: &mut Ui, ctx: &mut ViewCtx<'_>, scenes: &[StudioSceneItem], outputs: &CraftOutputs) {
-    let row_count = scenes.len().max(outputs.v2_frames.len()).max(outputs.v3_frames.len()).max(outputs.v4_frames.len()).clamp(1, 6);
+    let row_count = scenes
+        .len()
+        .max(outputs.v2_frames.len())
+        .max(outputs.v3_frames.len())
+        .max(outputs.v4_frames.len())
+        .clamp(1, 6);
 
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 5.0;
         ui.label(RichText::new("Elements Matrix").size(12.5).strong());
-        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("studio-matrix-sync", "refresh", "Sync Comps", "Re-render dirty linked .ecproj comps (T01)"))
-            .clicked()
-        {
+        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("studio-matrix-sync", "refresh", "Sync Comps", "Re-render dirty linked .ecproj comps (T01)")).clicked() {
             ctx.exec("video.sync_links", json!({}), Some("Synced linked EffectCraft compositions"));
         }
-        if action_button(
-            ui,
-            ctx.reg,
-            ctx.pal,
-            BtnSpec::label_only("studio-matrix-bake", "Bake V3", "Bake linked lettering/lyrics.ecproj to ProRes 4444 .mov (T01)"),
-        )
-        .clicked()
-        {
+        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("studio-matrix-bake", "Bake V3", "Bake linked lettering/lyrics.ecproj to ProRes 4444 .mov (T01)")).clicked() {
             ctx.exec("video.bake_link", json!({"project": "lettering/lyrics.ecproj", "track": "V3"}), Some("Baked linked V3 .ecproj to ProRes 4444"));
         }
     });
@@ -552,51 +575,54 @@ fn draw_elements_matrix_body(ui: &mut Ui, ctx: &mut ViewCtx<'_>, scenes: &[Studi
         }
     });
 
-    ScrollArea::vertical().id_salt("studio_elements_matrix_scroll").auto_shrink([false, false]).show(ui, |ui| {
-        for row in 0..row_count {
-            let row_sec = scenes.get(row).map_or((row as f64) * 2.7, |s| s.start_sec);
-            let active_row = (ctx.state.studio.seek_seconds - row_sec).abs() < 1.4;
+    ScrollArea::vertical()
+        .id_salt("studio_elements_matrix_scroll")
+        .auto_shrink([false, false])
+        .show(ui, |ui| {
+            for row in 0..row_count {
+                let row_sec = scenes.get(row).map_or((row as f64) * 2.7, |s| s.start_sec);
+                let active_row = (ctx.state.studio.seek_seconds - row_sec).abs() < 1.4;
 
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = gap;
-                let (tc_rect, _) = ui.allocate_exact_size(Vec2::new(tc_w, 58.0), Sense::hover());
-                ui.painter().text(
-                    tc_rect.center(),
-                    Align2::CENTER_CENTER,
-                    format!("0:{row_sec:04.1}"),
-                    FontId::monospace(8.5),
-                    if active_row { ctx.pal.accent_emerald } else { ctx.pal.text_muted },
-                );
-
-                for (col_idx, target, badge, doc, frame) in [
-                    (0usize, ViewMode::Animation, "EC", ".ecproj", outputs.v2_frames.get(row).map(String::as_str)),
-                    (1usize, ViewMode::Design, "EC", "lyrics", outputs.v3_frames.get(row).map(String::as_str)),
-                    (2usize, ViewMode::Motion, "VCRAFT", "actions", outputs.v4_frames.get(row).map(String::as_str)),
-                ] {
-                    let (cell_rect, cresp) = ui.allocate_exact_size(Vec2::new(col_w, 58.0), Sense::click());
-                    if cresp.clicked() {
-                        ctx.state.studio.seek_seconds = row_sec;
-                        ctx.push(UiAction::NavigateAuthoring { view: target, seconds: row_sec });
-                    }
-                    let inner = paint_filmbar_frame(
-                        ui,
-                        cell_rect,
-                        ctx.pal,
-                        FilmbarStyle {
-                            orientation: FilmbarOrientation::Horizontal,
-                            selected: active_row && col_idx == 0,
-                            hovered: cresp.hovered(),
-                            timecode: None,
-                        },
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = gap;
+                    let (tc_rect, _) = ui.allocate_exact_size(Vec2::new(tc_w, 58.0), Sense::hover());
+                    ui.painter().text(
+                        tc_rect.center(),
+                        Align2::CENTER_CENTER,
+                        format!("0:{row_sec:04.1}"),
+                        FontId::monospace(8.5),
+                        if active_row { ctx.pal.accent_emerald } else { ctx.pal.text_muted },
                     );
-                    if !paint_local_image(ui, inner, frame, ctx.pal.bg_stage, 2) {
-                        paint_craft_doc_card(ui, inner, ctx.pal, badge, doc, "");
+
+                    for (col_idx, target, badge, doc, frame) in [
+                        (0usize, ViewMode::Animation, "EC", ".ecproj", outputs.v2_frames.get(row).map(String::as_str)),
+                        (1usize, ViewMode::Design, "EC", "lyrics", outputs.v3_frames.get(row).map(String::as_str)),
+                        (2usize, ViewMode::Motion, "VCRAFT", "actions", outputs.v4_frames.get(row).map(String::as_str)),
+                    ] {
+                        let (cell_rect, cresp) = ui.allocate_exact_size(Vec2::new(col_w, 58.0), Sense::click());
+                        if cresp.clicked() {
+                            ctx.state.studio.seek_seconds = row_sec;
+                            ctx.push(UiAction::NavigateAuthoring { view: target, seconds: row_sec });
+                        }
+                        let inner = paint_filmbar_frame(
+                            ui,
+                            cell_rect,
+                            ctx.pal,
+                            FilmbarStyle {
+                                orientation: FilmbarOrientation::Horizontal,
+                                selected: active_row && col_idx == 0,
+                                hovered: cresp.hovered(),
+                                timecode: None,
+                            },
+                        );
+                        if !paint_local_image(ui, inner, frame, ctx.pal.bg_stage, 2) {
+                            paint_craft_doc_card(ui, inner, ctx.pal, badge, doc, "");
+                        }
                     }
-                }
-            });
-            ui.add_space(4.0);
-        }
-    });
+                });
+                ui.add_space(4.0);
+            }
+        });
 }
 
 fn draw_review_range_dock(ui: &mut Ui, ctx: &mut ViewCtx<'_>, scenes: &[StudioSceneItem], outputs: &CraftOutputs) {
@@ -622,7 +648,11 @@ fn draw_review_range_dock(ui: &mut Ui, ctx: &mut ViewCtx<'_>, scenes: &[StudioSc
             .collect()
     };
 
-    let mut film_strip_frames: Vec<String> = if !outputs.program_frames.is_empty() { outputs.program_frames.clone() } else { outputs.v1_frames.clone() };
+    let mut film_strip_frames: Vec<String> = if !outputs.program_frames.is_empty() {
+        outputs.program_frames.clone()
+    } else {
+        outputs.v1_frames.clone()
+    };
     if film_strip_frames.is_empty() {
         film_strip_frames = scenes.iter().filter_map(|s| s.image.clone()).collect();
     }
@@ -688,7 +718,12 @@ fn draw_review_range_dock(ui: &mut Ui, ctx: &mut ViewCtx<'_>, scenes: &[StudioSc
             ui.label(RichText::new("Review range").size(12.5).strong());
             ui.label(RichText::new("· 254,016,000,000 ticks/s exact frame math").monospace().size(9.5).color(ctx.pal.text_muted));
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                ui.label(RichText::new(format!("0:{:04.1}–0:{total_dur:04.1}", ctx.state.studio.range_start)).monospace().size(10.0).color(ctx.pal.text_muted));
+                ui.label(
+                    RichText::new(format!("0:{:04.1}–0:{total_dur:04.1}", ctx.state.studio.range_start))
+                        .monospace()
+                        .size(10.0)
+                        .color(ctx.pal.text_muted),
+                );
             });
         });
         let mut seek = ctx.state.studio.seek_seconds;

@@ -6,11 +6,11 @@ Magic Studio's workstation UI (`crates/ui-egui`, Layer 6) is written 100% in Rus
 
 | Crate | Role in `magic-ui-egui` & `apps/magic` |
 |---|---|
-| [`craft-ui`](https://github.com/storytold/craft-libs/blob/main/crates/ui/README.md) | `theme::WidgetPalette::apply_to`, `icons::SvgIconSet` (`bytes://magic/icons/`), `buttons::IconButton`, `tabs::Tab`, `layout::split_rect`, and `capture::CaptureSlot` (`wgpu` PNG screenshots). |
-| [`craft-menu`](https://github.com/storytold/craft-libs/blob/main/crates/menu/README.md) | Platform-aware 9-menu system bar (`File`, `Edit`, `View`, `Storyboard`, `Lyrics`, `Character`, `Film`, `Window`, `Help`) rendered via `MenuBarUi` on Linux/Windows/Web and `craft_menu::mac` on macOS. |
-| [`craft-window`](https://github.com/storytold/craft-libs/blob/main/crates/window/README.md) | Compositor decoration probing (`Choice::probe(Prefix::new("MAGIC"))`), `decorate(viewport, choice.frame())`, and `title_bar::empty_area` / `sync_movable`. |
-| [`craft-dialogs`](https://github.com/storytold/craft-libs/blob/main/crates/dialogs/README.md) | Non-blocking native file & folder pickers (`Dialogs::take_answers`, `Dialogs::show_pending(Some(frame))`, and `set_override` for `--control` tests). |
-| [`craft-keymap`](https://github.com/storytold/craft-libs/blob/main/crates/keymap/README.md) | Command shortcut catalog and per-frame `egui::Dispatcher` chord routing. |
+| [`craft-ui`](https://github.com/storytold/craft-libs/blob/main/crates/craft-ui/README.md) | `theme::WidgetPalette::apply_to`, `icons::SvgIconSet` (`bytes://magic/icons/`), `buttons::IconButton`, `tabs::Tab`, `layout::split_rect`, and `capture::CaptureSlot` (`wgpu` PNG screenshots). |
+| [`craft-menu`](https://github.com/storytold/craft-libs/blob/main/crates/craft-menu/README.md) | Platform-aware 9-menu system bar (`File`, `Edit`, `View`, `Storyboard`, `Lyrics`, `Character`, `Film`, `Window`, `Help`) rendered via `MenuBarUi` on Linux/Windows/Web and `craft_menu::mac` on macOS. |
+| [`craft-window`](https://github.com/storytold/craft-libs/blob/main/crates/craft-window/README.md) | Compositor decoration probing (`Choice::probe(Prefix::new("MAGIC"))`), `decorate(viewport, choice.frame())`, and `title_bar::empty_area` / `sync_movable`. |
+| [`craft-dialogs`](https://github.com/storytold/craft-libs/blob/main/crates/craft-dialogs/README.md) | Non-blocking native file & folder pickers (`Dialogs::take_answers`, `Dialogs::show_pending(Some(frame))`, and `set_override` for `--control` tests). |
+| [`craft-keymap`](https://github.com/storytold/craft-libs/blob/main/crates/craft-keymap/README.md) | Command shortcut catalog and per-frame `egui::Dispatcher` chord routing. |
 | [`craft-quit`](https://github.com/storytold/craft-libs) | Clean window-close and macOS Quit menu handling (`craft_quit::on_close_request(ctx)` after `ViewportCommand::CancelClose` unsaved-work guards). |
 
 ## Base Control Invariants
