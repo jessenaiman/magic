@@ -476,8 +476,6 @@ fn draw_stage_audio_and_track_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str,
             let sel = ctx.state.animation.track_source == src;
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, lbl, tip).selected(sel)).clicked() {
                 ctx.state.animation.track_source = src.into();
-                let solo = src == "effectcraft";
-                let enabled = src != "filmcraft";
                 ctx.exec("video.frame", json!({"seconds": ctx.state.animation.scrub_seconds}), None);
             }
         }

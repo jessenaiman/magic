@@ -369,7 +369,7 @@ impl SessionSettings {
             inner: Arc::new(Mutex::new(SettingsInner {
                 store,
                 has_problems: report.has_problems(),
-                read_only: report.read_only,
+                read_only: report.read_only.is_some(),
                 broken_moved_to: report.broken_moved_to,
                 last_save_error: None,
             })),

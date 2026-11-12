@@ -15,7 +15,7 @@ use super::{
     load_field_state, master_sections, parse_storyboard_pages, save_field_state,
     sync_assets_into_state,
 };
-use crate::{Result, Session};
+use crate::{EngineError, Result, Session};
 
 pub(crate) fn page_index(pages: &[PageInfo], p: &Value) -> Result<usize> {
     if let Some(n) = p.get("page").and_then(Value::as_u64) {

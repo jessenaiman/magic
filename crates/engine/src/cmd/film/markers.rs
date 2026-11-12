@@ -70,8 +70,31 @@ pub(crate) fn extract_synced_markers(dir: &Path, seq: Option<&Value>) -> Vec<Val
         }
     }
 
-    let ecproj = dir.join("lettering/lyrics.ecproj");
-    
+    let ec_sidecar = dir.join("lettering/.lyrics.ecproj.steps.json");
+    if let Ok(raw) = std::fs::read_to_string(&ec_sidecar)
+        && let Ok(val) = serde_json::from_str::<Value>(&raw)
+        && val["id"].as_str() == Some("markers.set")
+    {
+        let mp = &val["params"];
+        let time_sec = mp["time"].as_f64().unwrap_or(0.0);
+        let duration_sec = mp["duration"].as_f64().unwrap_or(0.0);
+        let start_tick = (time_sec * (TICKS_PER_SECOND as f64)).round() as i64;
+        let duration_tick = (duration_sec * (TICKS_PER_SECOND as f64)).round() as i64;
+        let label = mp["label"].as_str().unwrap_or("Blue");
+        let comment = mp["comment"].as_str().unwrap_or_default();
+        out.push(json!({
+            "id": Value::Null,
+            "index": out.len(),
+            "name": mp["cuePoint"]["name"].as_str().unwrap_or(comment),
+            "comment": comment,
+            "color": map_ec_label_to_fc_color(label),
+            "start_tick": start_tick,
+            "duration_tick": duration_tick,
+            "time_sec": time_sec,
+            "duration_sec": duration_sec,
+            "source": "effectcraft",
+        }));
+    }
 
     out.sort_by_key(|m| m["start_tick"].as_i64().unwrap_or(0));
     out
@@ -150,7 +173,7 @@ fn markers_add(f: &super::Film, ecproj: &Path, p: &Value) -> Result<Value> {
                 ]
             }
         });
-        
+        let _ = crate::native_media::write_staged_steps(ecproj, &json!({"id": "markers.set", "params": ec_params}));
     }
 
     let seq = if f.project.is_file() { execute(&f.project, "sequence.inspect", json!({})).ok() } else { None };
@@ -369,9 +392,9 @@ fn markers_delete(f: &super::Film, ecproj: &Path, action: &str, p: &Value) -> Re
         }
         if ecproj.is_file() {
             if let Some(ec_idx) = p.get("ec_index").or_else(|| p.get("index")).and_then(Value::as_u64) {
-                
+                let _ = crate::native_media::write_staged_steps(ecproj, &json!({"id": "markers.delete", "params": {"index": ec_idx}}));
             } else if let Some(at_sec) = p.get("time_sec").or_else(|| p.get("seconds")).and_then(Value::as_f64) {
-                
+                let _ = crate::native_media::write_staged_steps(ecproj, &json!({"id": "markers.delete", "params": {"at": at_sec}}));
             }
         }
     }
@@ -420,12 +443,47 @@ fn markers_interchange(f: &super::Film, default_ecproj: &Path, p: &Value) -> Res
     }
 
     let spec_out = interchange_path.with_extension(format!("{format}.json"));
-    crate::doc_state::write_json(&spec_out, &json!({"direction": direction, "format": format, "path": interchange_path}))?;
+    crate::doc_state::write_json(
+        &spec_out,
+        &json!({"direction": direction, "format": format, "prerender": prerender, "ecproj": ecproj, "path": interchange_path}),
+    )?;
     Ok(json!({
         "ok": true,
         "direction": direction,
         "format": format,
+        "prerender": prerender,
+        "ecproj": ecproj,
         "interchange_path": interchange_path,
         "staged_spec": spec_out,
     }))
+}
+
+pub fn cmd_video_markers(s: &mut Session, p: &Value) -> Result<Value> {
+    let f = film(s)?;
+    let ecproj = f.dir.join("lettering/lyrics.ecproj");
+    let has_time_or_name = p.get("time").is_some() || p.get("seconds").is_some() || p.get("tick").is_some() || p.get("name").is_some();
+    let action = p["action"].as_str().unwrap_or(if has_time_or_name { "add" } else { "list" });
+
+    match action {
+        "list" => {
+            let seq = if f.project.is_file() { execute(&f.project, "sequence.inspect", json!({})).ok() } else { None };
+            let markers = extract_synced_markers(&f.dir, seq.as_ref());
+            Ok(json!({
+                "ok": true,
+                "timeline": f.project,
+                "ecproj": ecproj,
+                "markers": markers,
+                "interchange_formats": ["otio", "fcpxml", "xml", "edl", "aaf", "omf", "ale"],
+            }))
+        }
+        "add" | "set" => markers_add(&f, &ecproj, p),
+        "edit" | "palette" => markers_edit_or_palette(&f, action, p),
+        "export_csv" | "csv" => markers_export_csv(&f, p),
+        "seed" | "seed_from_lyrics" => markers_seed(&f, &ecproj, p),
+        "delete" | "clear" => markers_delete(&f, &ecproj, action, p),
+        "interchange" => markers_interchange(&f, &ecproj, p),
+        other => Err(EngineError::InvalidParams(format!(
+            "unknown video.markers action `{other}`; expected list, add, edit, palette, export_csv, seed, delete, clear, or interchange"
+        ))),
+    }
 }

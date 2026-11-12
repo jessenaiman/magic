@@ -246,6 +246,10 @@ pub(crate) fn sync_lyric_track_to_filmcraft(s: &mut Session, srt_path: &Path, do
     if let Ok(fcproj) = crate::cmd::film::film_path(s)
         && fcproj.is_file()
     {
+        let _ = crate::native_media::write_staged_steps(
+            &fcproj,
+            &json!({"id": "captions.import", "params": {"srt": srt_path, "has_transcript": doc.is_some()}}),
+        );
     }
     let _ = crate::cmd::words::cmd_words_captions(s, &json!({"to": "video"}));
 }

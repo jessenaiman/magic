@@ -179,7 +179,7 @@ fn draw_theatre_clips_and_timeline(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str
     }
 }
 
-fn draw_property_reveal_dock(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str) {
+fn draw_property_reveal_dock(ui: &mut Ui, ctx: &mut ViewCtx<'_>, _cid: &str) {
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
         ui.label(RichText::new("Reveal (T20):").monospace().size(9.5).color(ctx.pal.text_muted));
@@ -243,7 +243,7 @@ fn draw_property_reveal_dock(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str) {
 }
 
 /// Full-width Value & Speed Cubic Bezier Graph Editor workspace (`Sheet 08` Section `9`).
-fn draw_bezier_graph_editor_dock(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str) {
+fn draw_bezier_graph_editor_dock(ui: &mut Ui, ctx: &mut ViewCtx<'_>, _cid: &str) {
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
         for (interp, lbl) in [

@@ -27,7 +27,7 @@ fn parse_hex_rgb(hex: &str) -> Option<[u8; 3]> {
     Some([r, g, b])
 }
 
-fn encode_png_atomic(img: &RgbaImage, out: &Path) -> Result<()> {
+pub fn encode_png_atomic(img: &RgbaImage, out: &Path) -> Result<()> {
     if let Some(parent) = out.parent() {
         std::fs::create_dir_all(parent)?;
     }

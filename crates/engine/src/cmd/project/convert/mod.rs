@@ -164,7 +164,7 @@ impl BaseConverter {
         let fcproj_path = seed_filmcraft_project(s, &project_dir, &plan, local_audio.as_deref())?;
 
         reset_for_project(s, magic_file.clone(), staged_assets);
-        s.song.title = Some(plan.title.clone());
+        s.song.title = plan.title.clone();
         s.song_audio = local_audio;
         s.video_project_path = Some(fcproj_path.clone());
         write_project_file(s)?;

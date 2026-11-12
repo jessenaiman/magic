@@ -527,7 +527,7 @@ fn save_as(s: &mut Session, target: PathBuf) -> Result<Value> {
     };
     let documents = flush_dirty_documents(s)?;
     let relinked = match old_dir {
-        Some(ref prev_dir) if prev_dir != target_dir => copy_project_tree_on_save_as(prev_dir, &target_dir)?,
+        Some(ref prev_dir) if *prev_dir != target_dir => copy_project_tree_on_save_as(prev_dir, &target_dir)?,
         _ => Vec::new(),
     };
     if let Some(ref prev_dir) = old_dir {

@@ -157,7 +157,6 @@ impl MagicDesktopApp {
         {
             return Err("session started with --control-input-only: mutating engine commands are disabled; drive controls via ui.*".into());
         }
-        let ws_dir = self.session.project_path.clone();
         match id {
             "engine.execute" => {
                 let cmd = params["command"]

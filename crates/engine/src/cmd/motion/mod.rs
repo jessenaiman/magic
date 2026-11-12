@@ -495,3 +495,8 @@ pub fn cmd_motion_preview_frame(s: &mut Session, p: &Value) -> Result<Value> {
     }
     Ok(json!({ "empty": true, "source": ecproj, "kind": "motion", "time": time }))
 }
+
+/// `motion.effects`: return distinct CLI-mapped VectorCraft, EffectCraft, and PhotoCraft motion effects.
+pub fn cmd_motion_effects(_s: &mut Session, p: &Value) -> Result<Value> {
+    Ok(crate::craft_effects::query_motion_effects(p))
+}

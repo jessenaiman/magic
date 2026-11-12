@@ -404,8 +404,6 @@ fn draw_motion_audio_and_track_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             let sel = ctx.state.motion.track_source == src;
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, lbl, tip).selected(sel)).clicked() {
                 ctx.state.motion.track_source = src.into();
-                let solo = src == "effectcraft";
-                let enabled = src != "filmcraft";
                 ctx.exec("video.frame", json!({"seconds": ctx.state.motion.start_sec}), None);
             }
         }

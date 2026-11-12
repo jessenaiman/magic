@@ -64,15 +64,16 @@ fn new_project_file_path(s: &Session, params: &Value, mode: Option<&str>) -> Res
             return Ok(scratch);
         }
         let has_magic_ext = resolved.extension().is_some_and(|e| e.eq_ignore_ascii_case("magic"));
-        let stem = explicit_name
-            .or_else(|| resolved.file_stem().and_then(|st| st.to_str()))
+        let stem: String = explicit_name
+            .map(str::to_owned)
+            .or_else(|| resolved.file_stem().and_then(|st| st.to_str()).map(str::to_owned))
             .ok_or_else(|| EngineError::InvalidParams("project path must include a project name".into()))?;
-        let slug = validate_project_name(stem)?;
+        let slug = validate_project_name(&stem)?;
         if !has_magic_ext {
             let dir_matches = resolved
                 .file_name()
                 .and_then(|n| n.to_str())
-                .is_some_and(|n| n.eq_ignore_ascii_case(&slug) || n.eq_ignore_ascii_case(stem));
+                .is_some_and(|n| n.eq_ignore_ascii_case(&slug) || n.eq_ignore_ascii_case(&stem));
             let proj_dir = if dir_matches { resolved } else { resolved.join(&slug) };
             return Ok(proj_dir.join(format!("{stem}.magic")));
         }
@@ -81,7 +82,7 @@ fn new_project_file_path(s: &Session, params: &Value, mode: Option<&str>) -> Res
         let parent_matches_project = parent
             .file_name()
             .and_then(|n| n.to_str())
-            .is_some_and(|n| n.eq_ignore_ascii_case(&slug) || n.eq_ignore_ascii_case(stem));
+            .is_some_and(|n| n.eq_ignore_ascii_case(&slug) || n.eq_ignore_ascii_case(&stem));
         if parent_matches_project && !parent_has_other_magic_file(parent, &fname) {
             return Ok(parent.join(fname));
         }
@@ -375,7 +376,7 @@ pub fn cmd_project_new(s: &mut Session, params: &Value) -> Result<Value> {
         .map(str::trim)
         .filter(|t| !t.is_empty())
     {
-        s.song.title = Some(title.to_owned());
+        s.song.title = title.to_owned();
     }
 
     create_initial_project_file(s, overwrite)?;

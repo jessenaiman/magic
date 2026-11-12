@@ -249,7 +249,6 @@ fn draw_aep_dry_run_banner(ui: &mut Ui, ctx: &mut ViewCtx<'_>, aep_src: &str) {
             )
             .clicked()
             {
-                let allow = ctx.state.project.aep_allow_losses;
                 ctx.exec("project.import_file", json!({"path": aep_src}), Some("Imported file into project assets"));
             }
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("pf-aep-dismiss", "close", "Dismiss .aep report")).clicked() {
@@ -287,8 +286,7 @@ fn draw_dynamic_link_config_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>, ec_path: &st
         .get("baked")
         .and_then(Value::as_bool)
         .unwrap_or(false);
-    let ec_live = Some(true)
-        .unwrap_or(false);
+    let ec_live = ctx.state.project_path.is_some();
 
     ui.add_space(4.0);
     ctx.pal.inset_frame().show(ui, |ui| {
@@ -442,10 +440,8 @@ pub fn draw_offline_and_source_guard_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     let all_online = pre["all_online"].as_bool().unwrap_or(true);
     let protected_ok = pre["source_overwrite_blocked"].as_bool().unwrap_or(true);
     let ec_missing = pre["ecproj_missing_count"].as_u64().unwrap_or(0);
-    let fc_live = Some(true)
-        .unwrap_or(false);
-    let ec_live = Some(true)
-        .unwrap_or(false);
+    let fc_live = ctx.state.project_path.is_some();
+    let ec_live = ctx.state.project_path.is_some();
 
     fill_card(ui, ctx.pal, false, |ui| {
         ui.horizontal_wrapped(|ui| {

@@ -8,6 +8,59 @@ use serde_json::{Value, json};
 use super::{View, bad, part_list, root_part};
 use crate::{Result, Session};
 
+/// Pure-Rust in-process image step runner (`layer.removeBackground`, `image.imageSize`,
+/// `file.export.layersToFiles`, `file.saveACopy`) replacing legacy `photocraft-cli` spawning.
+pub(crate) fn photocraft_run(
+    src: &Path,
+    steps: &[(&str, Value)],
+    out_pcraft: Option<&Path>,
+) -> Result<()> {
+    let mut current = crate::native_media::load_rgba(src)?;
+    for (op, params) in steps {
+        match *op {
+            "layer.removeBackground" => {
+                let tmp = std::env::temp_dir().join(format!(
+                    "magic-cutout-{}-{}.png",
+                    std::process::id(),
+                    src.file_stem().and_then(|s| s.to_str()).unwrap_or("img")
+                ));
+                let _ = crate::native_media::isolate_subject_rgba(src, &tmp, None, 1.2)?;
+                current = crate::native_media::load_rgba(&tmp)?;
+                let _ = std::fs::remove_file(&tmp);
+            }
+            "image.imageSize" => {
+                let w = params["width"].as_u64().and_then(|n| u32::try_from(n).ok()).unwrap_or_else(|| current.width()).max(1);
+                let h = params["height"].as_u64().and_then(|n| u32::try_from(n).ok()).unwrap_or_else(|| current.height()).max(1);
+                if (w, h) != current.dimensions() {
+                    current = image::imageops::resize(&current, w, h, image::imageops::FilterType::Lanczos3);
+                }
+            }
+            "file.export.layersToFiles" => {
+                if let Some(dir_str) = params["dir"].as_str() {
+                    let dir = Path::new(dir_str);
+                    std::fs::create_dir_all(dir)?;
+                    let prefix = params["prefix"].as_str().unwrap_or("layer");
+                    let layer_png = dir.join(format!("{prefix}-00.png"));
+                    let (w, h) = current.dimensions();
+                    crate::native_media::crop_and_anchor_cell(&current, [0, 0, w, h], false, &layer_png)?;
+                }
+            }
+            "file.saveACopy" => {
+                if let Some(dst_str) = params["path"].as_str() {
+                    crate::native_media::encode_png_atomic(&current, Path::new(dst_str))?;
+                }
+            }
+            _ => {}
+        }
+    }
+    if let Some(pcraft) = out_pcraft {
+        crate::native_media::encode_png_atomic(&current, pcraft)?;
+        let step_list: Vec<Value> = steps.iter().map(|(id, p)| json!({"id": id, "params": p})).collect();
+        let _ = crate::native_media::write_staged_steps(pcraft, &json!({"source": src, "steps": step_list}))?;
+    }
+    Ok(())
+}
+
 pub(crate) fn photocraft_dimensions(path: &Path) -> Result<(u32, u32)> {
     if let Some((w, h, _)) = magic_util::media::fast_dimensions(path) {
         return Ok((w, h));

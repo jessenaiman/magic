@@ -15,7 +15,7 @@ use crate::state::{PickerTarget, UiAction, ViewCtx};
 use crate::widgets::{BtnSpec, action_button, status_pill, text_input};
 
 /// Left-column `T18` Time Remapping, Work Area, Layer/Key Stagger, & Precompose card.
-pub fn draw_time_and_stagger_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str) {
+pub fn draw_time_and_stagger_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>, _cid: &str) {
     let sky = ctx.pal.accent_sky;
     fill_card(ui, ctx.pal, false, |ui| {
         ui.horizontal_wrapped(|ui| {
@@ -68,7 +68,6 @@ pub fn draw_time_and_stagger_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str)
             {
                 ctx.exec("project.autosave", json!({}), Some("Applied time remapping"));
             }
-            let delta_sec = ctx.state.animation.stagger_frames / 24.0;
             if action_button(
                 ui,
                 ctx.reg,
@@ -280,7 +279,7 @@ fn draw_puppet_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str, view_obj: Opti
     });
 }
 
-fn draw_3d_camera_and_lights_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str) {
+fn draw_3d_camera_and_lights_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>, _cid: &str) {
     ui.label(RichText::new("3D Renderer & Models (T14)").size(11.5).strong().color(ctx.pal.accent_sky));
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
@@ -369,7 +368,7 @@ fn draw_3d_camera_and_lights_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str) 
     });
 }
 
-fn draw_roto_and_expr_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str) {
+fn draw_roto_and_expr_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>, _cid: &str) {
     ui.label(RichText::new("Roto Brush 3.0 & Object Matte (T17)").size(11.5).strong().color(ctx.pal.accent_emerald));
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;

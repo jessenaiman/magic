@@ -1,10 +1,7 @@
 //! Production project root & workspace directory resolution (`magic/projects`, `magic/assets`,
 //! `magic/animations`) backed by [`crate::settings::SessionSettings`] (`config.toml`).
 
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::{fs, path::PathBuf};
 
 use serde_json::{Value, json};
 

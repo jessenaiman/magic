@@ -497,7 +497,10 @@ impl MagicDesktopApp {
                     && !matches!(ext.as_str(), "ecproj" | "pcraft" | "psd" | "vectorcraft" | "anicraft")
                 {
                     let asset_path = val["path"].as_str().map(PathBuf::from).unwrap_or(path);
-                    let _ = self.execute_engine(ctx, "project.import_file", json!({"path": path_str}));
+                    let _ = magic::native_media::write_staged_steps(
+                        ec_doc,
+                        &json!({"id": "file.import", "params": {"paths": [asset_path]}}),
+                    );
                 }
             }
         }
