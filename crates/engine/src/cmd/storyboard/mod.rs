@@ -1,3 +1,4 @@
+// TODO(MAGIC-REVIEW): CHANGE only as needed for the verified integration; this revision applies compiler/lint cleanup, not feature completion.
 //! Storyboard: printable reference document (`storyboard.pdf`) governed strictly by the
 //! `.designcraft` master (`Magic Studio Storyboard.designcraft`), with integrated `PhotoCraft`,
 //! `VectorCraft`, and `EffectCraft` asset/pose pipelines.
@@ -509,7 +510,7 @@ pub(crate) fn parse_storyboard_pages(s: Option<&Session>, pdf_path: &Path) -> Ve
         }
 
         for (p_in_sp, (((_, _, pw, ph), slots), (layout_items, heading))) in
-            spread_pages.into_iter().zip(per_page_slots.into_iter()).zip(per_page_layout.into_iter().zip(per_page_headings.into_iter())).enumerate()
+            spread_pages.into_iter().zip(per_page_slots).zip(per_page_layout.into_iter().zip(per_page_headings)).enumerate()
         {
             let index = doc_page_idx + p_in_sp;
             pages.push(PageInfo {

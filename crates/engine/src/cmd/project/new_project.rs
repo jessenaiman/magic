@@ -404,6 +404,7 @@ mod tests {
     }
 
     #[test]
+    // TODO(MAGIC-REVIEW): CHANGE asset import to register copied inputs in the saved project; this regression currently fails.
     fn project_new_creates_dedicated_dir_and_copies_all_files() {
         let sandbox = temp_sandbox("dedicated_copy");
         let external_src = sandbox.join("external_inputs");
@@ -461,6 +462,7 @@ mod tests {
     }
 
     #[test]
+    // TODO(MAGIC-REVIEW): CHANGE verification order: check journal permissions before saving clears the journal; retain both permission assertions.
     fn autosave_and_backups_use_private_permissions() {
         let sandbox = temp_sandbox("private_perms");
         let ext_wav = sandbox.join("tune.wav");

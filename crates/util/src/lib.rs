@@ -1,3 +1,4 @@
+// TODO(MAGIC-REVIEW): CHANGE only as needed for the verified integration; this revision applies compiler/lint cleanup, not feature completion.
 //! `magic-util`: Reusable, headless Single-Responsibility utilities built on `storytold/craft-libs`.
 //!
 //! Modules:
@@ -28,54 +29,54 @@ pub type Result<T> = std::result::Result<T, UtilError>;
 
 /// Known ArtCraft & open media document extensions recognized on disk without launching sibling apps.
 pub fn is_supported_craft_or_media_path(path: &std::path::Path) -> bool {
-    if media::is_craft_doc_path(path) {
-        if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-            let lower = ext.to_ascii_lowercase();
-            return matches!(
-                lower.as_str(),
-                "magic"
-                    | "fcproj"
-                    | "fcgt"
-                    | "ecproj"
-                    | "ectemplate"
-                    | "pcraft"
-                    | "psd"
-                    | "psb"
-                    | "ora"
-                    | "xcf"
-                    | "kra"
-                    | "pdn"
-                    | "vectorcraft"
-                    | "vcraft"
-                    | "drawcraft"
-                    | "svg"
-                    | "svgz"
-                    | "ai"
-                    | "eps"
-                    | "designcraft"
-                    | "idml"
-                    | "deckcraft"
-                    | "pptx"
-                    | "pdf"
-                    | "anicraft"
-                    | "ani"
-                    | "tcraft"
-                    | "png"
-                    | "jpg"
-                    | "jpeg"
-                    | "webp"
-                    | "gif"
-                    | "wav"
-                    | "mp3"
-                    | "flac"
-                    | "m4a"
-                    | "ogg"
-                    | "mp4"
-                    | "mov"
-                    | "mkv"
-                    | "webm"
-            );
-        }
+    if media::is_craft_doc_path(path)
+        && let Some(ext) = path.extension().and_then(|e| e.to_str())
+    {
+        let lower = ext.to_ascii_lowercase();
+        return matches!(
+            lower.as_str(),
+            "magic"
+                | "fcproj"
+                | "fcgt"
+                | "ecproj"
+                | "ectemplate"
+                | "pcraft"
+                | "psd"
+                | "psb"
+                | "ora"
+                | "xcf"
+                | "kra"
+                | "pdn"
+                | "vectorcraft"
+                | "vcraft"
+                | "drawcraft"
+                | "svg"
+                | "svgz"
+                | "ai"
+                | "eps"
+                | "designcraft"
+                | "idml"
+                | "deckcraft"
+                | "pptx"
+                | "pdf"
+                | "anicraft"
+                | "ani"
+                | "tcraft"
+                | "png"
+                | "jpg"
+                | "jpeg"
+                | "webp"
+                | "gif"
+                | "wav"
+                | "mp3"
+                | "flac"
+                | "m4a"
+                | "ogg"
+                | "mp4"
+                | "mov"
+                | "mkv"
+                | "webm"
+        );
     }
     false
 }

@@ -1,3 +1,4 @@
+// TODO(MAGIC-REVIEW): CHANGE only as needed for the verified integration; this revision applies compiler/lint cleanup, not feature completion.
 //! `04 Animations` bottom Theatre, Property-Reveal Keys, & Value/Speed Cubic Bezier Graph Editor
 //! dock (`Sheet 08` Zone B — `T19` & `T20`), with live `EffectCraft` ↔ `FilmCraft` track lane sync.
 
@@ -256,7 +257,7 @@ fn draw_bezier_graph_editor_dock(ui: &mut Ui, ctx: &mut ViewCtx<'_>, _cid: &str)
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-graph-prev", "◀", "Previous keyframe")).clicked() {
             ctx.state.animation.scrub_seconds = (ctx.state.animation.scrub_seconds - 0.5).max(0.0);
         }
-        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-graph-key", "◆", "Add keyframe at playhead")).clicked() {}
+        action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-graph-key", "◆", "Add keyframe at playhead")).clicked();
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-graph-next", "▶", "Next keyframe")).clicked() {
             let max_d = active_timeline_span(ctx);
             ctx.state.animation.scrub_seconds = (ctx.state.animation.scrub_seconds + 0.5).min(max_d);

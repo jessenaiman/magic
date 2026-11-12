@@ -1,3 +1,4 @@
+// TODO(MAGIC-REVIEW): CHANGE only as needed for the verified integration; this revision applies compiler/lint cleanup, not feature completion.
 //! Characters as Craft app documents: Scribbles marks parts, `PhotoCraft` isolates subjects and cuts
 //! layers (`.pcraft` / `.psd`), `VectorCraft` traces silhouettes (`.vectorcraft` / `.svg`), headless
 //! `anicraft-cli` renders optional cel sequences (`.anicraft`), and `EffectCraft` rigs, puppet-pins,
@@ -63,10 +64,6 @@ pub(crate) const SKIP_CHARACTER_GROUPS: &[&str] = &[
 
 pub(crate) fn bad(message: impl Into<String>) -> EngineError {
     EngineError::InvalidParams(message.into())
-}
-
-pub(crate) fn path_arg(path: &Path) -> String {
-    path.to_string_lossy().into_owned()
 }
 
 fn matches_character_name(folder_name: &str, id: &str) -> bool {

@@ -1,3 +1,4 @@
+// TODO(MAGIC-REVIEW): CHANGE only as needed for the verified integration; this revision applies compiler/lint cleanup, not feature completion.
 //! Signature GPU-painted interactive Magic Studio controls (`egui::Painter`) matching
 //! `00-figma-component-system-sheet.jpg` (`e142e6c2.jpeg`):
 //! - `ring_slider_h` & `ring_slider_v`: 4px rounded track, hollow accent ring thumb kept strictly
@@ -49,9 +50,7 @@ pub struct EffectRowSpec<'a> {
 
 fn format_inline_value(val: f64, suffix: &str) -> String {
     let unit = if matches!(suffix, "LUFS" | "dB" | "EV" | "dBTP") { format!(" {suffix}") } else { suffix.to_owned() };
-    if suffix == "s" {
-        format!("{val:.1}{unit}")
-    } else if matches!(suffix, "EV" | "LUFS" | "dB" | "×") {
+    if matches!(suffix, "s" | "EV" | "LUFS" | "dB" | "×") {
         format!("{val:.1}{unit}")
     } else if (val - val.round()).abs() < 0.05 {
         format!("{:.0}{unit}", val.round())

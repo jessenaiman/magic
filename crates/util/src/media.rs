@@ -140,9 +140,7 @@ pub fn craft_outline_summary(path: &Path) -> Option<String> {
         return Some(format!("pcraft dir v{ver}"));
     }
     let bytes = std::fs::read(path).ok()?;
-    if craft_doc::sniff(&bytes).is_none() {
-        return None;
-    }
+    craft_doc::sniff(&bytes)?;
     let outline = craft_doc::outline(&bytes, &Limits::default()).ok()?;
     let layers = outline.layers.len();
     let pages = outline.pages.len();

@@ -1,3 +1,4 @@
+// TODO(MAGIC-REVIEW): CHANGE only as needed for the verified integration; this revision applies compiler/lint cleanup, not feature completion.
 //! Base project conversion pipeline (`BaseConverter` + `LegacyConverter` trait) shared by all
 //! three migration modes:
 //! 1. [`hyperframes::HyperFramesConverter`] (`convert.kind = "hyperframes"`)
@@ -560,11 +561,11 @@ mod tests {
         let hf_src = sandbox.join("legacy_hf");
         std::fs::create_dir_all(&hf_src).unwrap();
         crate::doc_state::write_file(
-            &hf_src.join("index.html"),
+            hf_src.join("index.html"),
             br#"<div data-composition-id="main" data-width="1920" data-height="1080" data-fps="30"><audio src="missing.wav"></audio></div>"#,
         )
         .unwrap();
-        crate::doc_state::write_file(&hf_src.join("film.js"), b"window.__hf = { renderAt(t) {} };").unwrap();
+        crate::doc_state::write_file(hf_src.join("film.js"), b"window.__hf = { renderAt(t) {} };").unwrap();
 
         let mut s = Session::default();
         let hf_res =
@@ -581,9 +582,9 @@ mod tests {
         // 2. Remotion source with staticFile missing asset + poseAt hard wall
         let rem_src = sandbox.join("legacy_rem");
         std::fs::create_dir_all(rem_src.join("src")).unwrap();
-        crate::doc_state::write_file(&rem_src.join("package.json"), br#"{"name":"pterodactyl","dependencies":{"remotion":"4.0.0"}}"#).unwrap();
+        crate::doc_state::write_file(rem_src.join("package.json"), br#"{"name":"pterodactyl","dependencies":{"remotion":"4.0.0"}}"#).unwrap();
         crate::doc_state::write_file(
-            &rem_src.join("src/Root.tsx"),
+            rem_src.join("src/Root.tsx"),
             concat!(
                 "import {Composition, staticFile, useCurrentFrame} from 'remotion'; ",
                 "const a = staticFile('dino.png'); function poseAt(t:number){return Math.sin(t);} ",
@@ -602,7 +603,7 @@ mod tests {
         // 3. Custom project creating working FilmCraft + empty storyboard + magic/{projects,assets,animations}
         let cust_src = sandbox.join("legacy_custom");
         std::fs::create_dir_all(&cust_src).unwrap();
-        crate::doc_state::write_file(&cust_src.join("notes.txt"), b"Storytelling narrative draft").unwrap();
+        crate::doc_state::write_file(cust_src.join("notes.txt"), b"Storytelling narrative draft").unwrap();
         let cust_res = cmd_project_convert(
             &mut s,
             &json!({"kind": "custom", "source": cust_src, "magic_root": magic_root, "name": "Story Custom", "emit_terminal": false}),

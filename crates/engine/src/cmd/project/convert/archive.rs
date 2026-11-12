@@ -1,3 +1,4 @@
+// TODO(MAGIC-REVIEW): CHANGE only as needed for the verified integration; this revision applies compiler/lint cleanup, not feature completion.
 //! Pure-Rust `.tar.gz` archiver (`flate2` + POSIX `ustar` headers + `sha2`) that preserves and
 //! compresses converted legacy projects inside `<project_dir>/magic/originals/` tagged `"legacy"`.
 
@@ -166,7 +167,7 @@ pub fn archive_legacy_project(source_dir: &Path, project_dir: &Path, slug: &str)
     let sha_hex: String = hasher.finalize().iter().map(|b| format!("{b:02x}")).collect();
     let compressed_bytes = gz_buf.len() as u64;
 
-    let _ = crate::doc_state::write_file(&archive_path, &gz_buf)?;
+    crate::doc_state::write_file(&archive_path, &gz_buf)?;
     let manifest_doc = json!({
         "format": "magic.legacy_archive",
         "version": 1,

@@ -1,3 +1,4 @@
+// TODO(MAGIC-REVIEW): CHANGE only as needed for the verified integration; this revision applies compiler/lint cleanup, not feature completion.
 //! Production project root & workspace directory resolution (`magic/projects`, `magic/assets`,
 //! `magic/animations`) backed by [`crate::settings::SessionSettings`] (`config.toml`).
 
@@ -83,9 +84,9 @@ pub fn saved_path(key: &str) -> Option<PathBuf> {
     let store = open_store();
     let prefs = store.get();
     match key {
-        "projects_root" | "project.root" => prefs.project.root.as_deref().map(|r| crate::workspace::expand_tilde(r)),
-        "characters_root" | "project.characters_root" => prefs.project.characters_root.as_deref().map(|r| crate::workspace::expand_tilde(r)),
-        _ => stored_settings().get(key)?.as_str().map(|r| crate::workspace::expand_tilde(r)),
+        "projects_root" | "project.root" => prefs.project.root.as_deref().map(crate::workspace::expand_tilde),
+        "characters_root" | "project.characters_root" => prefs.project.characters_root.as_deref().map(crate::workspace::expand_tilde),
+        _ => stored_settings().get(key)?.as_str().map(crate::workspace::expand_tilde),
     }
 }
 

@@ -1,3 +1,4 @@
+// TODO(MAGIC-REVIEW): CHANGE only as needed for the verified integration; this revision applies compiler/lint cleanup, not feature completion.
 //! Canonical top-level `magic/` workspace hierarchy (`magic/projects`, `magic/assets`,
 //! `magic/animations`) and shared asset catalog (`magic/assets/catalog.json`) management.
 
@@ -25,10 +26,10 @@ pub struct MagicWorkspaceLayout {
 /// directory resolves cleanly to `<magic_root>/` containing `projects/`, `assets/`, and `animations/`.
 pub fn resolve_magic_root(raw: &Path, create_named_magic_subdir: bool) -> PathBuf {
     let name = raw.file_name().and_then(|n| n.to_str()).unwrap_or_default();
-    if name.eq_ignore_ascii_case("projects") || name.eq_ignore_ascii_case("animations") || name.eq_ignore_ascii_case("assets") {
-        if let Some(parent) = raw.parent().filter(|p| !p.as_os_str().is_empty()) {
-            return parent.to_path_buf();
-        }
+    if (name.eq_ignore_ascii_case("projects") || name.eq_ignore_ascii_case("animations") || name.eq_ignore_ascii_case("assets"))
+        && let Some(parent) = raw.parent().filter(|p| !p.as_os_str().is_empty())
+    {
+        return parent.to_path_buf();
     }
     if name.eq_ignore_ascii_case("magic") || raw.join("workspace.json").is_file() {
         return raw.to_path_buf();

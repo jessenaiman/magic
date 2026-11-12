@@ -1,3 +1,4 @@
+// TODO(MAGIC-REVIEW): CHANGE only as needed for the verified integration; this revision applies compiler/lint cleanup, not feature completion.
 //! Workspace path resolution and OS file handoff (`workspace.open`).
 //!
 //! Following the ArtCraft cross-editor file pattern (`photocraft/docs/embedded-vector-editing.md`),
@@ -107,10 +108,6 @@ pub fn resolve_executable_path(name: &str) -> Option<PathBuf> {
         }
     }
     None
-}
-
-pub(crate) fn find_executable(name: &str) -> Result<PathBuf> {
-    resolve_executable_path(name).ok_or_else(|| EngineError::ExternalTool(name.to_owned(), "executable not found on PATH".into()))
 }
 
 pub fn resolve_tool(name: &str) -> String {

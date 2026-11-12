@@ -359,7 +359,8 @@ fn markers_seed(f: &super::Film, ecproj: &Path, p: &Value) -> Result<Value> {
     if f.project.is_file() && !fc_steps.is_empty() {
         let _ = run_steps(Some(&f.project), false, true, &fc_steps);
     }
-    if ecproj.is_file() && !ec_steps.is_empty() {}
+    // TODO(MAGIC-REVIEW): CHANGE these prepared marker steps into real EffectCraft execution; they currently have no effect.
+    let _ = (ecproj, ec_steps);
 
     let seq = if f.project.is_file() { execute(&f.project, "sequence.inspect", json!({})).ok() } else { None };
     let markers = extract_synced_markers(&f.dir, seq.as_ref());

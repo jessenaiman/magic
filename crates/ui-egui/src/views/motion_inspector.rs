@@ -1,3 +1,4 @@
+// TODO(MAGIC-REVIEW): CHANGE only as needed for the verified integration; this revision applies compiler/lint cleanup, not feature completion.
 //! `06 Motion` (`V4 · motion/actions.ecproj` & `motion/svg/*.svg`) supplementary `EffectCraft`
 //! & `VectorCraft` controls (`Sheet 08` Zone D — `T04`, `T27`–`T31`):
 //! - `T04`: Two-way `.lottie` / `.json` export & import + collapsible degradation warnings strip.
@@ -108,7 +109,7 @@ pub fn draw_layer_compositing_switches(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     });
 
     ui.horizontal_wrapped(|ui| {
-        if pill_toggle(ui, ctx.reg, ctx.pal, "motion-sw-mblur", "Motion Blur", &mut ctx.state.motion.motion_blur, ctx.pal.accent_emerald).changed() {}
+        pill_toggle(ui, ctx.reg, ctx.pal, "motion-sw-mblur", "Motion Blur", &mut ctx.state.motion.motion_blur, ctx.pal.accent_emerald).changed();
         if pill_toggle(ui, ctx.reg, ctx.pal, "motion-sw-adj", "Adjustment", &mut ctx.state.motion.adjustment_layer, ctx.pal.accent_amber).changed() {}
     });
 
@@ -403,14 +404,12 @@ fn draw_tracking_and_exr_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     });
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
-        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("motion-exr-list", "Inspect Channels", "layer.channels")).clicked() {}
+        action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("motion-exr-list", "Inspect Channels", "layer.channels")).clicked();
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("motion-crypto-pick", "Pick Cryptomatte", "effect.pickCryptomatte").primary()).clicked() {
             ctx.exec("project.autosave", json!({}), Some("Isolated object ID matte via Cryptomatte"));
         }
     });
-    if pill_toggle(ui, ctx.reg, ctx.pal, "motion-preserve-rgb", "Preserve RGB (Raw Color)", &mut ctx.state.motion.preserve_rgb, ctx.pal.accent_amber).changed()
-    {
-    }
+    pill_toggle(ui, ctx.reg, ctx.pal, "motion-preserve-rgb", "Preserve RGB (Raw Color)", &mut ctx.state.motion.preserve_rgb, ctx.pal.accent_amber).changed();
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
         ui.spacing_mut().item_spacing.y = 4.0;

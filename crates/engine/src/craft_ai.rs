@@ -1,3 +1,4 @@
+// TODO(MAGIC-REVIEW): CHANGE only as needed for the verified integration; this revision applies compiler/lint cleanup, not feature completion.
 //! Suite-native AI integration layer for Magic Studio built strictly on
 //! [`storytold/craft-ai-integrations`](https://github.com/storytold/craft-ai-integrations).
 //!
@@ -558,10 +559,11 @@ pub fn cmd_image_generate(s: &mut Session, p: &Value) -> Result<Value> {
 
     let (width, height) = image::image_dimensions(&final_png).unwrap_or((1024, 1024));
     let mut attached_id = Value::Null;
-    if s.project_path.is_some() && p["register_asset"].as_bool().unwrap_or(true) {
-        if let Ok(res) = s.execute("project.add_asset", json!({"path": final_png, "kind": "image", "name": base_name, "load": false})) {
-            attached_id = res["asset_id"].clone();
-        }
+    if s.project_path.is_some()
+        && p["register_asset"].as_bool().unwrap_or(true)
+        && let Ok(res) = s.execute("project.add_asset", json!({"path": final_png, "kind": "image", "name": base_name, "load": false}))
+    {
+        attached_id = res["asset_id"].clone();
     }
 
     Ok(json!({

@@ -1,3 +1,4 @@
+// TODO(MAGIC-REVIEW): CHANGE only as needed for the verified integration; this revision applies compiler/lint cleanup, not feature completion.
 //! Kinetic Lyrics stage views, interactive teaching scene modes, reading, and saving.
 //! Cached EffectCraft/FilmCraft runtime tool catalogs avoid repeated CLI spawns per read.
 
@@ -101,7 +102,9 @@ fn inspect_lettering_ecproj(ecproj: &Path) -> Value {
     })
 }
 
-fn collect_lettering_previews(dir: &Path) -> (Vec<(u64, PathBuf)>, Vec<(u64, PathBuf)>) {
+type PreviewFrames = Vec<(u64, PathBuf)>;
+
+fn collect_lettering_previews(dir: &Path) -> (PreviewFrames, PreviewFrames) {
     let preview_dir = dir.join("lettering/.preview");
     let mut stage_frames = Vec::new();
     let mut lyrics_frames = Vec::new();

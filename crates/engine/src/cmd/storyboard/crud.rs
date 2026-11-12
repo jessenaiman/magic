@@ -410,14 +410,14 @@ pub fn cmd_storyboard_set(s: &mut Session, p: &Value) -> Result<Value> {
             updated.push(idx);
         }
         save_field_state(&path, &state)?;
-        if !pdf_steps.is_empty() {}
+        // TODO(MAGIC-REVIEW): CHANGE PDF edits to apply pdf_steps in the owning app; current success only records field state.
         return Ok(json!({"ok": true, "pages": updated, "path": path}));
     }
 
     let idx = page_index(&pages, p)?;
     apply_page_edits(s, &path, &pages[idx], p, &mut state, &mut pdf_steps)?;
     save_field_state(&path, &state)?;
-    if !pdf_steps.is_empty() {}
+    // TODO(MAGIC-REVIEW): CHANGE PDF edits to apply pdf_steps in the owning app; current success only records field state.
     Ok(json!({
         "ok": true,
         "page": idx,

@@ -227,7 +227,7 @@ fn draw_sections_two_up_rail(ui: &mut Ui, ctx: &mut ViewCtx<'_>, pages: &[PageSu
                         for pg in pair {
                             ui.vertical(|ui| {
                                 let (r, resp) = ui.allocate_exact_size(Vec2::new(thumb_w, thumb_h), Sense::click());
-                                ctx.reg.record(&format!("sb-rail-p{:02}", pg.index + 1), &format!("{sec_name} P{:02}", pg.index + 1), &resp, None);
+                                ctx.reg.record(format!("sb-rail-p{:02}", pg.index + 1), format!("{sec_name} P{:02}", pg.index + 1), &resp, None);
                                 let selected = ctx.state.storyboard.current_page == pg.index;
                                 paint_mini_page(ui, r, pg, selected, ctx.pal.accent_emerald);
                                 if resp.clicked() {

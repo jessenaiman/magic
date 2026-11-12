@@ -171,13 +171,13 @@ pub fn paint_local_image(ui: &mut Ui, rect: Rect, path: Option<&str>, bg_fill: C
     }
     let img = Image::from_uri(uri);
     let aspect = cached_image_aspect(raw_path).or_else(|| match img.load_for_size(ui.ctx(), inner.size()) {
-        Ok(egui::load::TexturePoll::Ready { texture }) if texture.size.y > 0.0 => Some((texture.size.x as f32) / (texture.size.y as f32)),
+        Ok(egui::load::TexturePoll::Ready { texture }) if texture.size.y > 0.0 => Some(texture.size.x / texture.size.y),
         _ => None,
     });
     let target = aspect.map_or(inner, |ar| fit_contain_rect(inner, ar));
     let mut clipped = ui.new_child(egui::UiBuilder::new().max_rect(inner));
     clipped.set_clip_rect(inner);
-    img.corner_radius(CornerRadius::same(corner_radius.saturating_sub(1))).paint_at(&mut clipped, target);
+    img.corner_radius(CornerRadius::same(corner_radius.saturating_sub(1))).paint_at(&clipped, target);
     true
 }
 
@@ -266,7 +266,7 @@ fn parse_svg_coords(raw: &str) -> Vec<(f32, f32)> {
     }
     let nums: Vec<f32> =
         raw.split(|c: char| !c.is_ascii_digit() && c != '.' && c != '-').filter(|tok| !tok.is_empty()).filter_map(|tok| tok.parse::<f32>().ok()).collect();
-    nums.chunks_exact(2).map(|pair| (pair[0], pair[1])).collect()
+    nums.as_chunks::<2>().0.iter().map(|pair| (pair[0], pair[1])).collect()
 }
 
 fn fit_points_into_rect(pts: &[(f32, f32)], target: Rect) -> Vec<Pos2> {

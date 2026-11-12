@@ -1,3 +1,4 @@
+// TODO(MAGIC-REVIEW): CHANGE only as needed for the verified integration; this revision applies compiler/lint cleanup, not feature completion.
 //! Underlying song & `FilmCraft` / `EffectCraft` audio transport for `Animations`, `Lyrics`,
 //! `Motion`, `Project`, and `Studio` (`Storyboard` remains silent editorial print layout).
 //!
@@ -212,7 +213,7 @@ fn slice_riff_wav_from(src: &Path, start_sec: f64) -> Option<PathBuf> {
         let cid = &ch_hdr[0..4];
         let clen = u32::from_le_bytes([ch_hdr[4], ch_hdr[5], ch_hdr[6], ch_hdr[7]]);
         let pos = file.stream_position().ok()?;
-        if cid == b"fmt " && clen >= 16 && clen <= 256 {
+        if cid == b"fmt " && (16..=256).contains(&clen) {
             let mut buf = vec![0_u8; clen as usize];
             file.read_exact(&mut buf).ok()?;
             sample_rate = u32::from_le_bytes([buf[4], buf[5], buf[6], buf[7]]);

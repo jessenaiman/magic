@@ -144,7 +144,7 @@ pub fn paint_mini_page(ui: &mut Ui, rect: Rect, page: &PageSummary, selected: bo
 ///   click-to-pick (`craft-dialogs`), and right-click to open linked `.pcraft`/`.vectorcraft`/`.ecproj`.
 pub fn draw_interactive_page(ui: &mut Ui, ctx: &mut ViewCtx<'_>, page: &PageSummary, page_size: Vec2, dropped_paths: &[String]) -> Rect {
     let (page_rect, page_resp) = ui.allocate_exact_size(page_size, Sense::click());
-    ctx.reg.record(&format!("sb-page-{:02}", page.index + 1), &format!("Storyboard Page {:02} ({})", page.index + 1, page.section), &page_resp, None);
+    ctx.reg.record(format!("sb-page-{:02}", page.index + 1), format!("Storyboard Page {:02} ({})", page.index + 1, page.section), &page_resp, None);
     if page_resp.clicked() {
         ctx.state.storyboard.current_page = page.index;
     }
@@ -244,7 +244,7 @@ fn draw_interactive_slots_on_page(
                 draw_inline_text_editor(ui, ctx, rect, page.index, label, scale);
             } else {
                 let resp = ui.interact(rect, ui.make_persistent_id(("sb_txt_slot", page.index, label)), Sense::click());
-                ctx.reg.record(&format!("sb-field-p{:02}-{label}", page.index), &format!("Edit {} (Page {})", label, page.index + 1), &resp, None);
+                ctx.reg.record(format!("sb-field-p{:02}-{label}", page.index), format!("Edit {} (Page {})", label, page.index + 1), &resp, None);
                 let val_str = slot["text"].as_str().unwrap_or("");
                 if !has_raster_bg {
                     paint_text_slot_value(ui, rect, val_str, filled, required, resp.hovered(), scale);
@@ -268,7 +268,7 @@ fn draw_interactive_slots_on_page(
             }
         } else {
             let resp = ui.interact(rect, ui.make_persistent_id(("sb_img_slot", page.index, label)), Sense::click());
-            ctx.reg.record(&format!("sb-img-p{:02}-{label}", page.index), &format!("Image Slot {} (Page {})", label, page.index + 1), &resp, None);
+            ctx.reg.record(format!("sb-img-p{:02}-{label}", page.index), format!("Image Slot {} (Page {})", label, page.index + 1), &resp, None);
             let img_path = slot["image"].as_str().filter(|p| !p.trim().is_empty());
             if !has_raster_bg || img_path.is_some() {
                 let slot_bg = Color32::from_rgb(234, 229, 218);
