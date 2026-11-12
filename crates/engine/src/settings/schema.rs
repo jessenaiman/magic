@@ -41,16 +41,7 @@ pub const CATEGORIES: &[Category] = &[
 
 pub fn fields_with_cat() -> Vec<(&'static str, Field)> {
     vec![
-        (
-            "ai",
-            Field {
-                key: "ai.enabled",
-                label: "Enable AI Integrations (storytold/craft-ai-integrations)",
-                kind: Kind::Bool,
-                wired: true,
-                enabled_by: None,
-            },
-        ),
+        ("ai", Field { key: "ai.enabled", label: "Enable AI Integrations (storytold/craft-ai-integrations)", kind: Kind::Bool, wired: true, enabled_by: None }),
         (
             "ai",
             Field {
@@ -73,24 +64,9 @@ pub fn fields_with_cat() -> Vec<(&'static str, Field)> {
         ),
         (
             "ai",
-            Field {
-                key: "fidget.connection",
-                label: "Fidget SharedStore Connection ID",
-                kind: Kind::Text,
-                wired: true,
-                enabled_by: Some("fidget.enabled"),
-            },
+            Field { key: "fidget.connection", label: "Fidget SharedStore Connection ID", kind: Kind::Text, wired: true, enabled_by: Some("fidget.enabled") },
         ),
-        (
-            "ai",
-            Field {
-                key: "fidget.model",
-                label: "Fidget Model ID",
-                kind: Kind::Text,
-                wired: true,
-                enabled_by: Some("fidget.enabled"),
-            },
-        ),
+        ("ai", Field { key: "fidget.model", label: "Fidget Model ID", kind: Kind::Text, wired: true, enabled_by: Some("fidget.enabled") }),
         (
             "ai",
             Field {
@@ -111,16 +87,7 @@ pub fn fields_with_cat() -> Vec<(&'static str, Field)> {
                 enabled_by: Some("scribbles.enabled"),
             },
         ),
-        (
-            "ai",
-            Field {
-                key: "scribbles.model",
-                label: "Scribbles Model ID",
-                kind: Kind::Text,
-                wired: true,
-                enabled_by: Some("scribbles.enabled"),
-            },
-        ),
+        ("ai", Field { key: "scribbles.model", label: "Scribbles Model ID", kind: Kind::Text, wired: true, enabled_by: Some("scribbles.enabled") }),
         (
             "ai",
             Field {
@@ -131,16 +98,7 @@ pub fn fields_with_cat() -> Vec<(&'static str, Field)> {
                 enabled_by: Some("scribbles.enabled"),
             },
         ),
-        (
-            "ai",
-            Field {
-                key: "scribbles.template",
-                label: "Default Scribbles Drawing Template",
-                kind: Kind::Text,
-                wired: true,
-                enabled_by: None,
-            },
-        ),
+        ("ai", Field { key: "scribbles.template", label: "Default Scribbles Drawing Template", kind: Kind::Text, wired: true, enabled_by: None }),
         (
             "appearance",
             Field {
@@ -170,28 +128,13 @@ pub fn fields_with_cat() -> Vec<(&'static str, Field)> {
                 enabled_by: None,
             },
         ),
-        (
-            "appearance",
-            Field {
-                key: "appearance.accessible_contrast",
-                label: "High contrast",
-                kind: Kind::Bool,
-                wired: true,
-                enabled_by: None,
-            },
-        ),
+        ("appearance", Field { key: "appearance.accessible_contrast", label: "High contrast", kind: Kind::Bool, wired: true, enabled_by: None }),
         (
             "appearance",
             Field {
                 key: "appearance.accent",
                 label: "Accent",
-                kind: Kind::Choice(&[
-                    ("teal", "Teal (Mint)"),
-                    ("blue", "Blue"),
-                    ("violet", "Violet"),
-                    ("amber", "Amber"),
-                    ("graphite", "Graphite"),
-                ]),
+                kind: Kind::Choice(&[("teal", "Teal (Mint)"), ("blue", "Blue"), ("violet", "Violet"), ("amber", "Amber"), ("graphite", "Graphite")]),
                 wired: true,
                 enabled_by: None,
             },
@@ -240,23 +183,11 @@ pub fn fields_with_cat() -> Vec<(&'static str, Field)> {
                 enabled_by: None,
             },
         ),
+        ("project", Field { key: "project.storyboard_template", label: "Storyboard Master Template", kind: Kind::Text, wired: true, enabled_by: None }),
+        ("project", Field { key: "project.storyboard_format", label: "Storyboard Reference Format", kind: Kind::Text, wired: true, enabled_by: None }),
         (
             "project",
-            Field { key: "project.storyboard_template", label: "Storyboard Master Template", kind: Kind::Text, wired: true, enabled_by: None },
-        ),
-        (
-            "project",
-            Field { key: "project.storyboard_format", label: "Storyboard Reference Format", kind: Kind::Text, wired: true, enabled_by: None },
-        ),
-        (
-            "project",
-            Field {
-                key: "project.storyboard_locked",
-                label: "Enforce Read-Only Master Storyboard Layout",
-                kind: Kind::Bool,
-                wired: true,
-                enabled_by: None,
-            },
+            Field { key: "project.storyboard_locked", label: "Enforce Read-Only Master Storyboard Layout", kind: Kind::Bool, wired: true, enabled_by: None },
         ),
         (
             "lyrics",
@@ -283,13 +214,7 @@ pub fn fields_with_cat() -> Vec<(&'static str, Field)> {
         ),
         (
             "autosave",
-            Field {
-                key: "autosave.enabled",
-                label: "Enable Crash-Recovery Journal (.history/*.autosave)",
-                kind: Kind::Bool,
-                wired: true,
-                enabled_by: None,
-            },
+            Field { key: "autosave.enabled", label: "Enable Crash-Recovery Journal (.history/*.autosave)", kind: Kind::Bool, wired: true, enabled_by: None },
         ),
         (
             "autosave",

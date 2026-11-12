@@ -94,23 +94,13 @@ impl PageBuilder {
 
     fn badge_pill(&mut self, bounds: [f64; 4], bg: &str, text: &str, text_col: &str) {
         self.shape(bounds, bg, "[None]", 0.0);
-        self.label_chrome(
-            [bounds[0] + 5.0, bounds[1] + 2.0, bounds[2] - 5.0, bounds[3] - 1.0],
-            text,
-            7.6,
-            text_col,
-        );
+        self.label_chrome([bounds[0] + 5.0, bounds[1] + 2.0, bounds[2] - 5.0, bounds[3] - 1.0], text, 7.6, text_col);
     }
 
     fn text_slot(&mut self, state: &FieldState, label: &str, bounds: [f64; 4], default_text: &str) {
         self.next_id += 1;
         let fkey = field_key(self.index, label);
-        let val = state
-            .text
-            .get(&fkey)
-            .or_else(|| state.text.get(label))
-            .cloned()
-            .unwrap_or_else(|| default_text.to_owned());
+        let val = state.text.get(&fkey).or_else(|| state.text.get(label)).cloned().unwrap_or_else(|| default_text.to_owned());
         let filled = slot_is_filled("text", Some(&val), None);
         self.slots.push(Slot {
             label: label.to_owned(),
@@ -131,24 +121,12 @@ impl PageBuilder {
         });
     }
 
-    fn image_slot(
-        &mut self,
-        state: &FieldState,
-        base_dir: &Path,
-        label: &str,
-        bounds: [f64; 4],
-        default_img: Option<&str>,
-        craft_app: &str,
-    ) {
+    fn image_slot(&mut self, state: &FieldState, base_dir: &Path, label: &str, bounds: [f64; 4], default_img: Option<&str>, craft_app: &str) {
         self.next_id += 1;
         let fkey = field_key(self.index, label);
         let stored = state.images.get(&fkey).or_else(|| state.images.get(label));
-        let resolved_img = stored
-            .map(|m| resolve_rel_path(base_dir, &m.image))
-            .or_else(|| default_img.map(|d| resolve_rel_path(base_dir, d)));
-        let linked = stored
-            .and_then(|m| m.linked_file.as_deref().map(|l| resolve_rel_path(base_dir, l)))
-            .or_else(|| resolved_img.clone());
+        let resolved_img = stored.map(|m| resolve_rel_path(base_dir, &m.image)).or_else(|| default_img.map(|d| resolve_rel_path(base_dir, d)));
+        let linked = stored.and_then(|m| m.linked_file.as_deref().map(|l| resolve_rel_path(base_dir, l))).or_else(|| resolved_img.clone());
         let filled = slot_is_filled("image", None, resolved_img.as_deref());
         self.slots.push(Slot {
             label: label.to_owned(),
@@ -159,9 +137,7 @@ impl PageBuilder {
             image: resolved_img,
             linked_file: linked,
             asset_id: stored.and_then(|m| m.asset_id.clone()),
-            craft_app: stored
-                .and_then(|m| m.craft_app.clone())
-                .or_else(|| Some(craft_app.to_owned())),
+            craft_app: stored.and_then(|m| m.craft_app.clone()).or_else(|| Some(craft_app.to_owned())),
             outline: stored.and_then(|m| m.outline.clone()),
             time_sec: stored.and_then(|m| m.time_sec),
             bounds,
@@ -194,11 +170,7 @@ fn resolve_rel_path(base: &Path, raw: &str) -> String {
         return trimmed.to_owned();
     }
     let cand = base.join(trimmed);
-    if cand.exists() {
-        cand.to_string_lossy().into_owned()
-    } else {
-        trimmed.to_owned()
-    }
+    if cand.exists() { cand.to_string_lossy().into_owned() } else { trimmed.to_owned() }
 }
 
 fn discover_characters(proj_dir: &Path) -> Vec<(String, String, Option<String>)> {
@@ -215,8 +187,7 @@ fn discover_characters(proj_dir: &Path) -> Vec<(String, String, Option<String>)>
             .filter(|w| !w.is_empty())
             .map(|w| {
                 let mut ch = w.chars();
-                ch.next()
-                    .map_or_else(String::new, |f| format!("{}{}", f.to_ascii_uppercase(), ch.as_str()))
+                ch.next().map_or_else(String::new, |f| format!("{}{}", f.to_ascii_uppercase(), ch.as_str()))
             })
             .collect::<Vec<_>>()
             .join(" ");
@@ -229,11 +200,7 @@ fn discover_characters(proj_dir: &Path) -> Vec<(String, String, Option<String>)>
                     .ok()?
                     .flatten()
                     .map(|e| e.path())
-                    .find(|p| {
-                        p.extension()
-                            .and_then(|x| x.to_str())
-                            .is_some_and(|x| matches!(x, "png" | "jpg" | "webp"))
-                    })
+                    .find(|p| p.extension().and_then(|x| x.to_str()).is_some_and(|x| matches!(x, "png" | "jpg" | "webp")))
             })
             .map(|p| p.to_string_lossy().into_owned());
         characters.push((cid, display, img));
@@ -249,16 +216,9 @@ fn discover_backgrounds(proj_dir: &Path) -> Vec<(String, String)> {
     let mut paths: Vec<PathBuf> = entries.flatten().map(|e| e.path()).collect();
     paths.sort();
     for p in paths {
-        let is_img = p
-            .extension()
-            .and_then(|x| x.to_str())
-            .is_some_and(|x| matches!(x, "png" | "jpg" | "jpeg" | "webp"));
+        let is_img = p.extension().and_then(|x| x.to_str()).is_some_and(|x| matches!(x, "png" | "jpg" | "jpeg" | "webp"));
         if p.is_file() && is_img {
-            let name = p
-                .file_stem()
-                .and_then(|n| n.to_str())
-                .unwrap_or("Location")
-                .replace(['-', '_'], " ");
+            let name = p.file_stem().and_then(|n| n.to_str()).unwrap_or("Location").replace(['-', '_'], " ");
             backgrounds.push((name, p.to_string_lossy().into_owned()));
         } else if p.is_dir()
             && let Some(img) = std::fs::read_dir(&p)
@@ -267,17 +227,9 @@ fn discover_backgrounds(proj_dir: &Path) -> Vec<(String, String)> {
                 .flatten()
                 .flatten()
                 .map(|e| e.path())
-                .find(|f| {
-                    f.extension()
-                        .and_then(|x| x.to_str())
-                        .is_some_and(|x| matches!(x, "png" | "jpg" | "webp"))
-                })
+                .find(|f| f.extension().and_then(|x| x.to_str()).is_some_and(|x| matches!(x, "png" | "jpg" | "webp")))
         {
-            let name = p
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("Location")
-                .replace(['-', '_'], " ");
+            let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("Location").replace(['-', '_'], " ");
             backgrounds.push((name, img.to_string_lossy().into_owned()));
         }
     }
@@ -307,36 +259,22 @@ fn discover_lyric_lines(proj_dir: &Path) -> Vec<String> {
 }
 
 fn discover_project_seed(s: Option<&Session>, doc_path: &Path, state: &FieldState) -> ProjectSeed {
-    let proj_dir = s
-        .and_then(|sess| sess.project_path.as_deref().and_then(Path::parent))
-        .or_else(|| doc_path.parent())
-        .unwrap_or_else(|| Path::new("."));
+    let proj_dir = s.and_then(|sess| sess.project_path.as_deref().and_then(Path::parent)).or_else(|| doc_path.parent()).unwrap_or_else(|| Path::new("."));
 
     let default_title = s
         .map(|sess| sess.song.title.trim())
         .filter(|t| !t.is_empty())
         .map(str::to_owned)
         .or_else(|| state.text.get("p00_cover_title").cloned())
-        .or_else(|| {
-            proj_dir
-                .file_name()
-                .and_then(|n| n.to_str())
-                .map(|slug| slug.replace('-', " "))
-        })
+        .or_else(|| proj_dir.file_name().and_then(|n| n.to_str()).map(|slug| slug.replace('-', " ")))
         .unwrap_or_else(|| "Song Storyboard".into());
 
     let mut assets = Vec::new();
     if let Some(sess) = s {
         for a in sess.project_assets.iter().take(6) {
             if let Some(ref apath) = a.path {
-                let (proj_img, linked, app) =
-                    crate::cmd::project::assets::resolve_asset_project_image(Some(proj_dir), apath);
-                assets.push((
-                    a.name.clone(),
-                    proj_img.to_string_lossy().into_owned(),
-                    linked,
-                    app,
-                ));
+                let (proj_img, linked, app) = crate::cmd::project::assets::resolve_asset_project_image(Some(proj_dir), apath);
+                assets.push((a.name.clone(), proj_img.to_string_lossy().into_owned(), linked, app));
             }
         }
     }
@@ -352,12 +290,7 @@ fn discover_project_seed(s: Option<&Session>, doc_path: &Path, state: &FieldStat
 }
 
 /// Build a dedicated Editorial Section Cover / Title Page (`Sections → Title Pages → Sub-Pages`).
-fn build_section_cover_page(
-    index: usize,
-    spec: SectionCoverSpec<'_>,
-    state: &FieldState,
-    base_dir: &Path,
-) -> PageBuilder {
+fn build_section_cover_page(index: usize, spec: SectionCoverSpec<'_>, state: &FieldState, base_dir: &Path) -> PageBuilder {
     let mut b = PageBuilder::new(index, spec.section, "section_title", spec.sec_num, spec.title_slot.1);
     b.shape([0.0, 0.0, BARNYARD_W, 8.0], spec.accent_swatch, "[None]", 0.0);
     b.shape([24.0, 26.0, 468.0, 514.0], "WarmCard", "Rule", 1.0);
@@ -378,24 +311,12 @@ fn build_section_cover_page(
 
     b.shape([486.0, 26.0, 936.0, 514.0], "[Paper]", "Rule", 1.0);
     b.label_chrome([502.0, 38.0, 760.0, 54.0], "HERO REFERENCE PLATE", 8.0, spec.accent_swatch);
-    b.image_slot(
-        state,
-        base_dir,
-        spec.image_slot_spec.0,
-        [502.0, 58.0, 920.0, 498.0],
-        spec.image_slot_spec.1,
-        spec.image_slot_spec.2,
-    );
+    b.image_slot(state, base_dir, spec.image_slot_spec.0, [502.0, 58.0, 920.0, 498.0], spec.image_slot_spec.1, spec.image_slot_spec.2);
     b
 }
 
 /// Slide 1A (`Cover` — Barnyard `PRODUCTION / VIDEO INSTRUCTION`, `VIDEO PROMPT`, `CAST · PERFORMERS`, `MOVEMENT / CONTINUITY / EDITING`).
-fn build_barnyard_master_cover(
-    index: usize,
-    seed: &ProjectSeed,
-    state: &FieldState,
-    base_dir: &Path,
-) -> PageInfo {
+fn build_barnyard_master_cover(index: usize, seed: &ProjectSeed, state: &FieldState, base_dir: &Path) -> PageInfo {
     let mut b = PageBuilder::new(index, "Cover", "cover", "01", &format!("{} · Production Bible", seed.title));
     b.shape([0.0, 0.0, BARNYARD_W, 8.0], "Rust", "[None]", 0.0);
     b.label_chrome([24.0, 18.0, 560.0, 34.0], "01 · PRODUCTION / VIDEO INSTRUCTION", 8.5, "Rust");
@@ -444,10 +365,7 @@ fn build_barnyard_master_cover(
         let x0 = 382.0 + (ei as f64) * 109.0;
         let x1 = x0 + 103.0;
         b.shape([x0, 354.0, x1, 426.0], "[Paper]", "Rule", 1.0);
-        let def_ename = seed
-            .characters
-            .get(slot_num - 1)
-            .map_or_else(|| format!("Cast {slot_num}"), |c| c.1.clone());
+        let def_ename = seed.characters.get(slot_num - 1).map_or_else(|| format!("Cast {slot_num}"), |c| c.1.clone());
         b.text_slot(state, &format!("cast_{slot_num}_name"), [x0 + 5.0, 360.0, x1 - 5.0, 390.0], &def_ename);
         b.text_slot(state, &format!("cast_{slot_num}_role"), [x0 + 5.0, 392.0, x1 - 5.0, 420.0], "Ensemble Beat");
     }
@@ -455,103 +373,56 @@ fn build_barnyard_master_cover(
     // Footer Petrol Directives Bar: MOVEMENT · CONTINUITY · EDITING
     b.shape([24.0, 448.0, 936.0, 522.0], "Petrol", "[None]", 0.0);
     b.badge_pill([36.0, 456.0, 128.0, 472.0], "Sky", "MOVEMENT", "Ink");
-    b.text_slot(
-        state,
-        "movement",
-        [36.0, 476.0, 318.0, 514.0],
-        "Playful beat-locked bounce, natural arcs, gentle camera drift.",
-    );
+    b.text_slot(state, "movement", [36.0, 476.0, 318.0, 514.0], "Playful beat-locked bounce, natural arcs, gentle camera drift.");
     b.badge_pill([332.0, 456.0, 432.0, 472.0], "Sun", "CONTINUITY", "Ink");
-    b.text_slot(
-        state,
-        "identity",
-        [332.0, 476.0, 622.0, 514.0],
-        "Preserve exact character silhouettes, proportions, and palette across shots.",
-    );
+    b.text_slot(state, "identity", [332.0, 476.0, 622.0, 514.0], "Preserve exact character silhouettes, proportions, and palette across shots.");
     b.badge_pill([636.0, 456.0, 726.0, 472.0], "Rose", "EDITING", "Ink");
-    b.text_slot(
-        state,
-        "editing",
-        [636.0, 476.0, 924.0, 514.0],
-        "Cut on musical phrase downbeats; keep C1 captions clear of hero action.",
-    );
+    b.text_slot(state, "editing", [636.0, 476.0, 924.0, 514.0], "Cut on musical phrase downbeats; keep C1 captions clear of hero action.");
 
     b.finish()
 }
 
 /// Slide 1B (`Cover` Sub-Page `1.1` — Barnyard `LOCATIONS 1..5` & `SONG MAP Phrase 1..4 / Action 1..4`).
-fn build_barnyard_locations_and_song_map(
-    index: usize,
-    seed: &ProjectSeed,
-    state: &FieldState,
-    base_dir: &Path,
-) -> PageInfo {
+fn build_barnyard_locations_and_song_map(index: usize, seed: &ProjectSeed, state: &FieldState, base_dir: &Path) -> PageInfo {
     let mut b = PageBuilder::new(index, "Cover", "subpage", "1.1", "Locations & Song Map");
     b.shape([0.0, 0.0, BARNYARD_W, 8.0], "Petrol", "[None]", 0.0);
     b.label_chrome([24.0, 18.0, 480.0, 34.0], "1.1 · MASTER LOCATIONS & SONG PHRASE MAP", 8.5, "Petrol");
 
     b.badge_pill([24.0, 40.0, 148.0, 58.0], "Petrol", "LOCATIONS (1–5)", "[Paper]");
-    let loc_badges = [
-        ("Rust", "START + END"),
-        ("Sun", "LOC 02"),
-        ("Sky", "LOC 03"),
-        ("Rose", "LOC 04"),
-        ("Moss", "FINALE"),
-    ];
-    for li in 0..5usize {
+    let loc_badges = [("Rust", "START + END"), ("Sun", "LOC 02"), ("Sky", "LOC 03"), ("Rose", "LOC 04"), ("Moss", "FINALE")];
+    for (li, loc_badge) in loc_badges.iter().enumerate() {
         let n = li + 1;
         let x0 = 24.0 + (li as f64) * 184.0;
         let x1 = x0 + 176.0;
         b.shape([x0, 64.0, x1, 254.0], "WarmCard", "Rule", 1.0);
-        b.badge_pill([x0 + 8.0, 70.0, x0 + 96.0, 86.0], loc_badges[li].0, loc_badges[li].1, "[Paper]");
+        b.badge_pill([x0 + 8.0, 70.0, x0 + 96.0, 86.0], loc_badge.0, loc_badge.1, "[Paper]");
         let bg_entry = seed.backgrounds.get(li).or_else(|| seed.backgrounds.first());
         let def_loc_name = bg_entry.map_or_else(|| format!("Stage Location {n}"), |(nm, _)| nm.clone());
         let def_loc_img = bg_entry.map(|(_, p)| p.as_str());
-        b.image_slot(
-            state,
-            base_dir,
-            &format!("place_art_{n}"),
-            [x0 + 8.0, 90.0, x1 - 8.0, 212.0],
-            def_loc_img,
-            "PhotoCraft",
-        );
+        b.image_slot(state, base_dir, &format!("place_art_{n}"), [x0 + 8.0, 90.0, x1 - 8.0, 212.0], def_loc_img, "PhotoCraft");
         b.text_slot(state, &format!("location_{n}"), [x0 + 8.0, 216.0, x1 - 8.0, 248.0], &def_loc_name);
     }
 
     b.badge_pill([24.0, 266.0, 156.0, 284.0], "Petrol", "SONG MAP (1–4)", "[Paper]");
     let verse_accents = ["Sun", "Sky", "Rose", "Rust"];
-    for vi in 0..4usize {
+    for (vi, verse_accent) in verse_accents.iter().enumerate() {
         let n = vi + 1;
         let x0 = 24.0 + (vi as f64) * 230.0;
         let x1 = x0 + 222.0;
         b.shape([x0, 290.0, x1, 518.0], "WarmCard", "Rule", 1.0);
-        b.badge_pill([x0 + 10.0, 298.0, x0 + 86.0, 316.0], verse_accents[vi], &format!("PHRASE {n}"), "[Paper]");
-        let def_phrase = seed
-            .lyric_lines
-            .get(vi)
-            .cloned()
-            .unwrap_or_else(|| format!("Sung lyric phrase {n} establishes the beat."));
+        b.badge_pill([x0 + 10.0, 298.0, x0 + 86.0, 316.0], verse_accent, &format!("PHRASE {n}"), "[Paper]");
+        let def_phrase = seed.lyric_lines.get(vi).cloned().unwrap_or_else(|| format!("Sung lyric phrase {n} establishes the beat."));
         b.label_chrome([x0 + 10.0, 322.0, x1 - 10.0, 336.0], "LYRIC PHRASE", 7.4, "Pencil");
         b.text_slot(state, &format!("phrase_{n}"), [x0 + 10.0, 338.0, x1 - 10.0, 418.0], &def_phrase);
         b.label_chrome([x0 + 10.0, 424.0, x1 - 10.0, 438.0], "SONG ACTION & STAGING", 7.4, "Petrol");
-        b.text_slot(
-            state,
-            &format!("action_{n}"),
-            [x0 + 10.0, 440.0, x1 - 10.0, 510.0],
-            &format!("Cast performs beat {n} gesture synced to vocal rhythm."),
-        );
+        b.text_slot(state, &format!("action_{n}"), [x0 + 10.0, 440.0, x1 - 10.0, 510.0], &format!("Cast performs beat {n} gesture synced to vocal rhythm."));
     }
 
     b.finish()
 }
 
 /// Section 2 Sub-Page (`2.1` — Master Location Staging & Prompt Sheet).
-fn build_world_location_subpage(
-    index: usize,
-    seed: &ProjectSeed,
-    state: &FieldState,
-    base_dir: &Path,
-) -> PageInfo {
+fn build_world_location_subpage(index: usize, seed: &ProjectSeed, state: &FieldState, base_dir: &Path) -> PageInfo {
     let mut b = PageBuilder::new(index, "Backgrounds", "subpage", "2.1", "Master Location Plates & Lighting");
     b.shape([0.0, 0.0, BARNYARD_W, 8.0], "Petrol", "[None]", 0.0);
     b.label_chrome([24.0, 18.0, 520.0, 34.0], "2.1 · LOCATION PLATES, DEPTH LAYERS & LIGHTING KEY", 8.5, "Petrol");
@@ -583,12 +454,7 @@ fn build_world_location_subpage(
         "Warm key light from upper-left (120°); ground shadow softness matched across character cutouts.",
     );
     b.label_chrome([614.0, 414.0, 880.0, 428.0], "CAMERA & PARALLAX PLANES", 7.8, "Petrol");
-    b.text_slot(
-        state,
-        "world_camera_staging",
-        [614.0, 432.0, 924.0, 508.0],
-        "Keep center 60% clear for hero cast performance and V3 kinetic lyrics.",
-    );
+    b.text_slot(state, "world_camera_staging", [614.0, 432.0, 924.0, 508.0], "Keep center 60% clear for hero cast performance and V3 kinetic lyrics.");
     b.finish()
 }
 
@@ -607,12 +473,7 @@ fn build_character_subpage(
     let code = format!("3.{sub_idx}");
     let mut b = PageBuilder::new(index, "Characters", "subpage", &code, &format!("{cname} · Character Sheet"));
     b.shape([0.0, 0.0, BARNYARD_W, 8.0], "Sun", "[None]", 0.0);
-    b.label_chrome(
-        [24.0, 18.0, 560.0, 34.0],
-        &format!("{code} · CHARACTER MODEL, RIG & IDENTITY SHEET"),
-        8.5,
-        "Rust",
-    );
+    b.label_chrome([24.0, 18.0, 560.0, 34.0], &format!("{code} · CHARACTER MODEL, RIG & IDENTITY SHEET"), 8.5, "Rust");
     b.text_slot(state, "char_heading", [24.0, 36.0, 620.0, 68.0], cname);
 
     b.shape([24.0, 78.0, 312.0, 516.0], "[Paper]", "Rule", 1.0);
@@ -632,39 +493,19 @@ fn build_character_subpage(
         &format!("{cname}: consistent silhouette, clean articulated limbs for 2.5D cutout animation, expressive eyes and mouth visemes."),
     );
     b.label_chrome([640.0, 280.0, 900.0, 294.0], "PERFORMER ROLE & EXPRESSIONS", 7.8, "Petrol");
-    b.text_slot(
-        state,
-        "char_subheading",
-        [640.0, 298.0, 924.0, 392.0],
-        "Idle breathe · Sing visemes · Wave · Jump / Fly cycle.",
-    );
+    b.text_slot(state, "char_subheading", [640.0, 298.0, 924.0, 392.0], "Idle breathe · Sing visemes · Wave · Jump / Fly cycle.");
     b.label_chrome([640.0, 404.0, 900.0, 418.0], "RIG & LAYER CONTINUITY", 7.8, "Pencil");
-    b.text_slot(
-        state,
-        "char_rig_notes",
-        [640.0, 422.0, 924.0, 504.0],
-        "Pivot pins locked at shoulder, hip, head, and jaw; transparent RGBA8 bounds.",
-    );
+    b.text_slot(state, "char_rig_notes", [640.0, 422.0, 924.0, 504.0], "Pivot pins locked at shoulder, hip, head, and jaw; transparent RGBA8 bounds.");
 
     b.finish()
 }
 
 /// Slide 2 (`Scenes` Section Title Page `04` — Barnyard `SEQUENCE MAP` Beat 1..5 + `MOVEMENT VOCABULARY: LEAD → ECHO → RETURN → REPEAT`).
-fn build_barnyard_sequence_map_cover(
-    index: usize,
-    seed: &ProjectSeed,
-    state: &FieldState,
-    base_dir: &Path,
-) -> PageInfo {
+fn build_barnyard_sequence_map_cover(index: usize, seed: &ProjectSeed, state: &FieldState, base_dir: &Path) -> PageInfo {
     let mut b = PageBuilder::new(index, "Scenes", "section_title", "04", "04 · Sequence Map & Movement Vocabulary");
     b.shape([0.0, 0.0, BARNYARD_W, 8.0], "Petrol", "[None]", 0.0);
     b.badge_pill([24.0, 18.0, 178.0, 36.0], "Petrol", "04 · SEQUENCE MAP", "[Paper]");
-    b.text_slot(
-        state,
-        "sequence_title",
-        [24.0, 40.0, 720.0, 72.0],
-        &format!("{} — Story & Beat Sequence", seed.title),
-    );
+    b.text_slot(state, "sequence_title", [24.0, 40.0, 720.0, 72.0], &format!("{} — Story & Beat Sequence", seed.title));
     b.text_slot(
         state,
         "sequence_order",
@@ -673,37 +514,17 @@ fn build_barnyard_sequence_map_cover(
     );
 
     let beat_colors = ["Rust", "Sun", "Sky", "Rose", "Moss"];
-    let beat_defaults = [
-        "Beat 1 · Intro",
-        "Beat 2 · Verse",
-        "Beat 3 · Turn",
-        "Beat 4 · Climax",
-        "Beat 5 · Finale",
-    ];
+    let beat_defaults = ["Beat 1 · Intro", "Beat 2 · Verse", "Beat 3 · Turn", "Beat 4 · Climax", "Beat 5 · Finale"];
     for bi in 0..5usize {
         let n = bi + 1;
         let x0 = 24.0 + (bi as f64) * 184.0;
         let x1 = x0 + 170.0;
         b.shape([x0, 106.0, x1, 336.0], "WarmCard", "Rule", 1.0);
-        let bg_img = seed
-            .backgrounds
-            .get(bi % seed.backgrounds.len().max(1))
-            .map(|(_, p)| p.as_str());
-        b.image_slot(
-            state,
-            base_dir,
-            &format!("art_{n}"),
-            [x0 + 7.0, 114.0, x1 - 7.0, 212.0],
-            bg_img,
-            "FilmCraft",
-        );
+        let bg_img = seed.backgrounds.get(bi % seed.backgrounds.len().max(1)).map(|(_, p)| p.as_str());
+        b.image_slot(state, base_dir, &format!("art_{n}"), [x0 + 7.0, 114.0, x1 - 7.0, 212.0], bg_img, "FilmCraft");
         b.shape([x0 + 7.0, 218.0, x1 - 7.0, 244.0], beat_colors[bi], "[None]", 0.0);
         b.text_slot(state, &format!("beat_{n}"), [x0 + 10.0, 221.0, x1 - 10.0, 242.0], beat_defaults[bi]);
-        let def_act = seed
-            .lyric_lines
-            .get(bi)
-            .cloned()
-            .unwrap_or_else(|| format!("Visual action & staging for beat {n}."));
+        let def_act = seed.lyric_lines.get(bi).cloned().unwrap_or_else(|| format!("Visual action & staging for beat {n}."));
         b.text_slot(state, &format!("seq_action_{n}"), [x0 + 8.0, 250.0, x1 - 8.0, 328.0], &def_act);
 
         if bi < 4 {
@@ -742,42 +563,25 @@ fn build_barnyard_scene_beat_subpage(
     state: &FieldState,
     base_dir: &Path,
 ) -> PageInfo {
-    let sc_code = custom_slide
-        .and_then(|s| s["shot_id"].as_str())
-        .map(str::to_owned)
-        .unwrap_or_else(|| format!("SC-{scene_num:02}"));
+    let sc_code = custom_slide.and_then(|s| s["shot_id"].as_str()).map(str::to_owned).unwrap_or_else(|| format!("SC-{scene_num:02}"));
     let def_lyric = custom_slide
         .and_then(|s| s["lyric_cue"].as_str())
         .map(str::to_owned)
         .or_else(|| seed.lyric_lines.get(scene_num - 1).cloned())
         .unwrap_or_else(|| format!("Sung lyric line for scene {scene_num}"));
-    let def_title = custom_slide
-        .and_then(|s| s["title"].as_str())
-        .map(str::to_owned)
-        .unwrap_or_else(|| {
-            let snippet: String = def_lyric.chars().take(38).collect();
-            format!("{sc_code} · {snippet}")
-        });
+    let def_title = custom_slide.and_then(|s| s["title"].as_str()).map(str::to_owned).unwrap_or_else(|| {
+        let snippet: String = def_lyric.chars().take(38).collect();
+        format!("{sc_code} · {snippet}")
+    });
     let start_s = ((scene_num - 1) as f64) * 6.5;
     let end_s = start_s + 6.5;
     let def_timing = format!("0:{start_s:04.1} – 0:{end_s:04.1} (6.5s hold)");
-    let def_cast = custom_slide
-        .and_then(|s| s["visible_cast"].as_str())
-        .map(str::to_owned)
-        .unwrap_or_else(|| {
-            if seed.characters.is_empty() {
-                "Lead + Supporting Cast".into()
-            } else {
-                seed.characters.iter().map(|c| c.1.as_str()).collect::<Vec<_>>().join(", ")
-            }
-        });
+    let def_cast = custom_slide.and_then(|s| s["visible_cast"].as_str()).map(str::to_owned).unwrap_or_else(|| {
+        if seed.characters.is_empty() { "Lead + Supporting Cast".into() } else { seed.characters.iter().map(|c| c.1.as_str()).collect::<Vec<_>>().join(", ") }
+    });
     let def_img = custom_slide
         .and_then(|s| s["main_image"].as_str())
-        .or_else(|| {
-            seed.backgrounds
-                .get((scene_num - 1) % seed.backgrounds.len().max(1))
-                .map(|(_, p)| p.as_str())
-        });
+        .or_else(|| seed.backgrounds.get((scene_num - 1) % seed.backgrounds.len().max(1)).map(|(_, p)| p.as_str()));
 
     let mut b = PageBuilder::new(index, "Scenes", "subpage", &sc_code, &def_title);
     b.shape([0.0, 0.0, BARNYARD_W, 8.0], "Rust", "[None]", 0.0);
@@ -803,21 +607,12 @@ fn build_barnyard_scene_beat_subpage(
         state,
         "prompt",
         [216.0, 380.0, 606.0, 418.0],
-        custom_slide
-            .and_then(|s| s["prompt"].as_str())
-            .unwrap_or("Wide 16:9 storybook framing with clear center silhouette staging."),
+        custom_slide.and_then(|s| s["prompt"].as_str()).unwrap_or("Wide 16:9 storybook framing with clear center silhouette staging."),
     );
 
     b.shape([628.0, 68.0, 936.0, 424.0], "WarmCard", "Rule", 1.0);
     b.shape([640.0, 78.0, 924.0, 104.0], "Rust", "[None]", 0.0);
-    b.text_slot(
-        state,
-        "status",
-        [648.0, 81.0, 916.0, 101.0],
-        custom_slide
-            .and_then(|s| s["status"].as_str())
-            .unwrap_or("READY · IDENTITY LOCKED"),
-    );
+    b.text_slot(state, "status", [648.0, 81.0, 916.0, 101.0], custom_slide.and_then(|s| s["status"].as_str()).unwrap_or("READY · IDENTITY LOCKED"));
 
     b.label_chrome([640.0, 112.0, 880.0, 126.0], "LYRIC CUE", 7.6, "Rust");
     b.text_slot(state, "lyric_cue", [640.0, 128.0, 924.0, 178.0], &def_lyric);
@@ -829,21 +624,14 @@ fn build_barnyard_scene_beat_subpage(
     b.text_slot(state, "visible_cast", [640.0, 246.0, 924.0, 276.0], &def_cast);
 
     b.label_chrome([640.0, 282.0, 880.0, 296.0], "STORY BEAT", 7.6, "Rust");
-    b.text_slot(
-        state,
-        "story_beat",
-        [640.0, 298.0, 924.0, 352.0],
-        custom_slide.and_then(|s| s["story_beat"].as_str()).unwrap_or(&def_lyric),
-    );
+    b.text_slot(state, "story_beat", [640.0, 298.0, 924.0, 352.0], custom_slide.and_then(|s| s["story_beat"].as_str()).unwrap_or(&def_lyric));
 
     b.label_chrome([640.0, 358.0, 880.0, 372.0], "CONTINUITY", 7.6, "Rust");
     b.text_slot(
         state,
         "continuity",
         [640.0, 374.0, 924.0, 418.0],
-        custom_slide
-            .and_then(|s| s["continuity_lock"].as_str())
-            .unwrap_or("Match cast scale, lighting direction, and prop placement with adjacent scenes."),
+        custom_slide.and_then(|s| s["continuity_lock"].as_str()).unwrap_or("Match cast scale, lighting direction, and prop placement with adjacent scenes."),
     );
 
     b.shape([24.0, 434.0, 936.0, 524.0], "Petrol", "[None]", 0.0);
@@ -852,19 +640,14 @@ fn build_barnyard_scene_beat_subpage(
         state,
         "motion",
         [36.0, 462.0, 456.0, 494.0],
-        custom_slide
-            .and_then(|s| s["motion"].as_str())
-            .unwrap_or("Gentle camera push-in + beat-synced character bounce (V2/V4)."),
+        custom_slide.and_then(|s| s["motion"].as_str()).unwrap_or("Gentle camera push-in + beat-synced character bounce (V2/V4)."),
     );
     b.badge_pill([474.0, 442.0, 566.0, 458.0], "Sky", "CAPTION", "Ink");
     b.text_slot(
         state,
         "caption",
         [474.0, 462.0, 924.0, 494.0],
-        custom_slide
-            .and_then(|s| s["editable_caption"].as_str())
-            .filter(|c| !c.is_empty())
-            .unwrap_or(&def_lyric),
+        custom_slide.and_then(|s| s["editable_caption"].as_str()).filter(|c| !c.is_empty()).unwrap_or(&def_lyric),
     );
     b.text_slot(
         state,
@@ -877,27 +660,12 @@ fn build_barnyard_scene_beat_subpage(
 }
 
 /// Section 5 (`Assets` Section Title & 6-Card Linked Craft Asset Matrix).
-fn build_assets_section_page(
-    index: usize,
-    seed: &ProjectSeed,
-    state: &FieldState,
-    base_dir: &Path,
-) -> PageInfo {
+fn build_assets_section_page(index: usize, seed: &ProjectSeed, state: &FieldState, base_dir: &Path) -> PageInfo {
     let mut b = PageBuilder::new(index, "Assets", "section_title", "05", "05 · Craft Assets & Prop Library");
     b.shape([0.0, 0.0, BARNYARD_W, 8.0], "Sun", "[None]", 0.0);
     b.badge_pill([24.0, 18.0, 212.0, 36.0], "Petrol", "05 · CRAFT ASSET MATRIX", "[Paper]");
-    b.text_slot(
-        state,
-        "assets_heading",
-        [24.0, 40.0, 620.0, 70.0],
-        "Linked PhotoCraft, VectorCraft & EffectCraft Assets",
-    );
-    b.text_slot(
-        state,
-        "assets_group",
-        [630.0, 44.0, 936.0, 68.0],
-        "Right-click any slot to open its native Craft file",
-    );
+    b.text_slot(state, "assets_heading", [24.0, 40.0, 620.0, 70.0], "Linked PhotoCraft, VectorCraft & EffectCraft Assets");
+    b.text_slot(state, "assets_group", [630.0, 44.0, 936.0, 68.0], "Right-click any slot to open its native Craft file");
 
     for ai in 0..6usize {
         let n = ai + 1;
@@ -909,74 +677,29 @@ fn build_assets_section_page(
         let y1 = y0 + 208.0;
         b.shape([x0, y0, x1, y1], "WarmCard", "Rule", 1.0);
         let item = seed.assets.get(ai);
-        let def_img = item
-            .map(|x| x.1.as_str())
-            .or_else(|| seed.backgrounds.first().map(|(_, p)| p.as_str()));
+        let def_img = item.map(|x| x.1.as_str()).or_else(|| seed.backgrounds.first().map(|(_, p)| p.as_str()));
         let def_name = item.map_or_else(|| format!("Project Asset {n}"), |x| x.0.clone());
         let def_app = item.and_then(|x| x.3.as_deref()).unwrap_or("PhotoCraft");
-        b.image_slot(
-            state,
-            base_dir,
-            &format!("assets_thumb_{n}"),
-            [x0 + 10.0, y0 + 10.0, x1 - 10.0, y0 + 148.0],
-            def_img,
-            def_app,
-        );
-        b.text_slot(
-            state,
-            &format!("assets_name_{n}"),
-            [x0 + 10.0, y0 + 152.0, x1 - 10.0, y0 + 176.0],
-            &def_name,
-        );
-        b.text_slot(
-            state,
-            &format!("assets_details_{n}"),
-            [x0 + 10.0, y0 + 178.0, x1 - 10.0, y0 + 202.0],
-            &format!("{def_app} · Linked project asset"),
-        );
+        b.image_slot(state, base_dir, &format!("assets_thumb_{n}"), [x0 + 10.0, y0 + 10.0, x1 - 10.0, y0 + 148.0], def_img, def_app);
+        b.text_slot(state, &format!("assets_name_{n}"), [x0 + 10.0, y0 + 152.0, x1 - 10.0, y0 + 176.0], &def_name);
+        b.text_slot(state, &format!("assets_details_{n}"), [x0 + 10.0, y0 + 178.0, x1 - 10.0, y0 + 202.0], &format!("{def_app} · Linked project asset"));
     }
 
     b.finish()
 }
 
 /// Slide 4 (`Final` Section Cover `06` — Barnyard `PRODUCTION HANDOFF`: `STORY SEQUENCE`, `IDENTITY`, `MOVEMENT`, `EDITING`, `NEXT REVIEW`).
-fn build_barnyard_production_handoff(
-    index: usize,
-    seed: &ProjectSeed,
-    state: &FieldState,
-    base_dir: &Path,
-) -> PageInfo {
+fn build_barnyard_production_handoff(index: usize, seed: &ProjectSeed, state: &FieldState, base_dir: &Path) -> PageInfo {
     let mut b = PageBuilder::new(index, "Final", "section_title", "06", "06 · Production Handoff & Sign-Off");
     b.shape([0.0, 0.0, BARNYARD_W, 8.0], "Moss", "[None]", 0.0);
     b.badge_pill([24.0, 18.0, 214.0, 36.0], "Moss", "06 · PRODUCTION HANDOFF", "[Paper]");
-    b.text_slot(
-        state,
-        "final_heading",
-        [24.0, 40.0, 740.0, 72.0],
-        &format!("{} — Studio Finishing & Handoff", seed.title),
-    );
+    b.text_slot(state, "final_heading", [24.0, 40.0, 740.0, 72.0], &format!("{} — Studio Finishing & Handoff", seed.title));
 
     let handoff_cards = [
-        (
-            "sequence",
-            "01 · STORY SEQUENCE",
-            "All sections, cover sheets, and timed scene beats verified against canonical lyrics.",
-        ),
-        (
-            "cast",
-            "02 · IDENTITY",
-            "Character cutouts and EffectCraft rigs consistent across every scene beat.",
-        ),
-        (
-            "handoff_motion",
-            "03 · MOVEMENT",
-            "V2 Character Animation, V3 Kinetic Lyrics, and V4 Action Motion aligned to Tick clock.",
-        ),
-        (
-            "edit",
-            "04 · EDITING",
-            "FilmCraft master sequence assembled with broadcast-safe C1 captions and -14 LUFS mix.",
-        ),
+        ("sequence", "01 · STORY SEQUENCE", "All sections, cover sheets, and timed scene beats verified against canonical lyrics."),
+        ("cast", "02 · IDENTITY", "Character cutouts and EffectCraft rigs consistent across every scene beat."),
+        ("handoff_motion", "03 · MOVEMENT", "V2 Character Animation, V3 Kinetic Lyrics, and V4 Action Motion aligned to Tick clock."),
+        ("edit", "04 · EDITING", "FilmCraft master sequence assembled with broadcast-safe C1 captions and -14 LUFS mix."),
     ];
     for (hi, (hkey, hlabel, hdef)) in handoff_cards.into_iter().enumerate() {
         let y0 = 84.0 + (hi as f64) * 100.0;
@@ -1007,12 +730,7 @@ fn build_barnyard_production_handoff(
 
     b.shape([24.0, 488.0, 936.0, 524.0], "WarmCard", "Rule", 1.0);
     b.label_chrome([36.0, 498.0, 148.0, 514.0], "HANDOFF STATUS", 7.8, "Moss");
-    b.text_slot(
-        state,
-        "final_credits",
-        [156.0, 494.0, 924.0, 518.0],
-        "Production Bible Ready · Linked to Live ArtCraft Suite",
-    );
+    b.text_slot(state, "final_credits", [156.0, 494.0, 924.0, 518.0], "Production Bible Ready · Linked to Live ArtCraft Suite");
 
     b.finish()
 }
@@ -1084,31 +802,14 @@ pub(crate) fn build_barnyard_hierarchical_pages(s: Option<&Session>, doc_path: &
     );
     let char_count = seed.characters.len().clamp(1, 6);
     for ci in 0..char_count {
-        pages.push(build_character_subpage(
-            pages.len(),
-            ci + 1,
-            seed.characters.get(ci),
-            &state,
-            base_dir,
-        ));
+        pages.push(build_character_subpage(pages.len(), ci + 1, seed.characters.get(ci), &state, base_dir));
     }
 
     // Section 4: Scenes (Barnyard Slide 2 `SEQUENCE MAP` Cover `04` + Barnyard Slide 3 `Scene Beat` Sub-Pages `SC-01..SC-NN`)
     pages.push(build_barnyard_sequence_map_cover(pages.len(), &seed, &state, base_dir));
-    let scene_count = if !custom_slides.is_empty() {
-        custom_slides.len()
-    } else {
-        seed.lyric_lines.len().clamp(4, 12)
-    };
+    let scene_count = if !custom_slides.is_empty() { custom_slides.len() } else { seed.lyric_lines.len().clamp(4, 12) };
     for si in 0..scene_count {
-        pages.push(build_barnyard_scene_beat_subpage(
-            pages.len(),
-            si + 1,
-            custom_slides.get(si),
-            &seed,
-            &state,
-            base_dir,
-        ));
+        pages.push(build_barnyard_scene_beat_subpage(pages.len(), si + 1, custom_slides.get(si), &seed, &state, base_dir));
     }
 
     // Section 5: Assets (Section Cover + 6-Card Linked Craft Asset Matrix `05`)

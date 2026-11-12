@@ -9,10 +9,7 @@ use std::io::{BufRead, Write};
 
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use serde_json::{Value, json};
-use subcommands::{
-    CaptionsArgs, ControlsArgs, ConvertArgs, ExportArgs, FinishArgs,
-    InterchangeArgs, MarkersArgs,
-};
+use subcommands::{CaptionsArgs, ControlsArgs, ConvertArgs, ExportArgs, FinishArgs, InterchangeArgs, MarkersArgs};
 
 const AFTER_HELP: &str = "\
 CREATE:   magic-cli new --audio song.wav --name \"My Song\" [--wizard]
@@ -293,12 +290,11 @@ fn run_new(target: &mut Target, args: NewArgs) -> Result<(), String> {
     }
     let is_anim = params.get("mode").and_then(Value::as_str) == Some("animation");
     if !is_anim && params.get("audio").and_then(Value::as_str).is_none_or(|s| s.trim().is_empty()) {
-        return Err(
-            concat!(
-                "magic-cli new requires --audio <SONG_FILE> (or audio=<SONG_FILE>) so Magic can transcribe ",
-                "timestamps, sync the FilmCraft lyric track, and start the storyboard."
-            ).into(),
-        );
+        return Err(concat!(
+            "magic-cli new requires --audio <SONG_FILE> (or audio=<SONG_FILE>) so Magic can transcribe ",
+            "timestamps, sync the FilmCraft lyric track, and start the storyboard."
+        )
+        .into());
     }
     let wiz = build_wizard_params(params.get("wizard").cloned(), &args);
     if wiz.as_object().is_some_and(|m| !m.is_empty()) {
@@ -427,7 +423,6 @@ fn run_ui(target: &mut Target, action: &str, value: Option<String>, params: Opti
     emit(&result);
     Ok(())
 }
-
 
 struct SiblingProductSpec {
     slug: &'static str,
@@ -560,6 +555,7 @@ fn format_sibling_signpost(spec: &SiblingProductSpec, attempted: &[String]) -> S
             "2. Open or connect to {title} using `--control`: `{open}`\n",
             "3. PAUSE and ask the user if you are unable to connect — DO NOT invent workarounds, shell hacks, or direct file mutations — and provide: target=`{title}`, intended_call=`{call_str}`, cli_check=`command -v {slug}-cli`, endpoint_tried, and exact_stderr.",
         ),
+        call_str = call_str,
         title = spec.title,
         slug = spec.slug,
         mcp = spec.mcp_cmd,
@@ -568,36 +564,18 @@ fn format_sibling_signpost(spec: &SiblingProductSpec, attempted: &[String]) -> S
     )
 }
 
-fn run_app_call(
-    target: &mut Target,
-    port: Option<String>,
-    method: Option<String>,
-    positional: Option<String>,
-    arguments: Vec<String>,
-) -> Result<(), String> {
-    let endpoint = port
-        .or_else(|| target.connect.clone())
-        .unwrap_or_else(|| magic_mcp::DEFAULT_CONTROL_ADDR.to_owned());
-    let chosen = method
-        .or(positional.clone())
-        .ok_or("magic-cli app requires `--method <METHOD>` or `<COMMAND_OR_METHOD>`")?;
+fn run_app_call(target: &mut Target, port: Option<String>, method: Option<String>, positional: Option<String>, arguments: Vec<String>) -> Result<(), String> {
+    let endpoint = port.or_else(|| target.connect.clone()).unwrap_or_else(|| magic_mcp::DEFAULT_CONTROL_ADDR.to_owned());
+    let chosen = method.clone().or(positional.clone()).ok_or("magic-cli app requires `--method <METHOD>` or `<COMMAND_OR_METHOD>`")?;
     let mut tokens = arguments;
     if method.is_some()
         && let Some(pos_json) = positional
     {
         tokens.insert(0, pos_json);
     }
-    let raw_json = if tokens.len() == 1 && tokens[0].trim_start().starts_with('{') {
-        Some(tokens.remove(0))
-    } else {
-        None
-    };
+    let raw_json = if tokens.len() == 1 && tokens[0].trim_start().starts_with('{') { Some(tokens.remove(0)) } else { None };
     let params = parse_params(&tokens, raw_json.as_deref())?;
-    let result = if target.dry {
-        dry_result(&chosen, &params)
-    } else {
-        call_live_control(Some(&endpoint), &chosen, params)?
-    };
+    let result = if target.dry { dry_result(&chosen, &params) } else { call_live_control(Some(&endpoint), &chosen, params)? };
     emit(&result);
     Ok(())
 }
@@ -690,14 +668,7 @@ fn run(cli: Cli) -> Result<(), String> {
     if let (Some(path), Some(session)) = (cli.project.as_deref(), session.as_mut()) {
         session.execute("file.open", json!({ "path": path })).map_err(|e| e.to_string())?;
     }
-    let mut target = Target {
-        session,
-        connect: cli.connect,
-        project: cli.project,
-        save: cli.save,
-        save_as: cli.save_as,
-        dry: cli.dry_run,
-    };
+    let mut target = Target { session, connect: cli.connect, project: cli.project, save: cli.save, save_as: cli.save_as, dry: cli.dry_run };
     match (cli.command_id, cli.command) {
         (Some(_), Some(_)) => Err("Use --command or a subcommand, not both.".into()),
         (Some(id), None) => {
@@ -737,10 +708,7 @@ fn run(cli: Cli) -> Result<(), String> {
 fn main() {
     let cli = Cli::parse();
     if cli.connect.is_some() && cli.project.is_some() {
-        let _ = writeln!(
-            std::io::stderr(),
-            "Use --connect or --project, not both: --connect uses the project open in the live window."
-        );
+        let _ = writeln!(std::io::stderr(), "Use --connect or --project, not both: --connect uses the project open in the live window.");
         std::process::exit(2);
     }
     if let Err(err) = run(cli) {

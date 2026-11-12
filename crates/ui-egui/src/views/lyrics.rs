@@ -14,22 +14,17 @@ use std::time::Duration;
 use craft_ui::layout::{SplitAxis, SplitSize, split_rect};
 use egui::epaint::CubicBezierShape;
 use egui::{
-    Align, Align2, Color32, CornerRadius, FontId, Id, LayerId, Layout, Order, Painter, Pos2, Rect,
-    RichText, ScrollArea, Sense, Stroke, StrokeKind, Ui, Vec2,
+    Align, Align2, Color32, CornerRadius, FontId, Id, LayerId, Layout, Order, Painter, Pos2, Rect, RichText, ScrollArea, Sense, Stroke, StrokeKind, Ui, Vec2,
 };
 use serde_json::{Value, json};
 
 use crate::controls::{
-    FilmbarOrientation, FilmbarStyle, badge_accent_color, child_pane, fill_card,
-    paint_craft_doc_card, paint_filmbar_frame, paint_local_image, pill_toggle,
+    FilmbarOrientation, FilmbarStyle, badge_accent_color, child_pane, fill_card, paint_craft_doc_card, paint_filmbar_frame, paint_local_image, pill_toggle,
 };
 use crate::editorial::{ScrubberSpec, ThreePaneSpec, draw_compact_scrubber, draw_three_pane_workspace};
 use crate::state::{UiAction, ViewCtx};
 use crate::timeline::{CraftTimelineLane, CraftTimelineSpan, draw_craft_timeline};
-use crate::views::lyrics_inspector::{
-    apply_effect_to_selected_word, draw_captions_and_template_strip, draw_lyrics_inspector,
-    resolved_lyrics_effects,
-};
+use crate::views::lyrics_inspector::{apply_effect_to_selected_word, draw_captions_and_template_strip, draw_lyrics_inspector, resolved_lyrics_effects};
 use crate::widgets::{BtnSpec, action_button, status_pill, text_input};
 
 struct LyricReelEntry {
@@ -75,13 +70,14 @@ pub fn show(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             show_left,
             show_right,
         },
-        |rail| {
+        &mut (&mut *ctx, &mut anchors),
+        |rail, (ctx, anchors)| {
             anchors.reel_socket = draw_moment_film_reel(rail, ctx);
         },
-        |center| {
-            draw_center_kinetic_workspace(center, ctx, &mut anchors);
+        |center, (ctx, anchors)| {
+            draw_center_kinetic_workspace(center, ctx, anchors);
         },
-        |insp| {
+        |insp, (ctx, anchors)| {
             if let Some(insp_fx) = draw_lyrics_inspector(insp, ctx) {
                 anchors.effect_anchor = Some(insp_fx);
             }
@@ -99,10 +95,7 @@ fn cubic_point(p0: Pos2, c1: Pos2, c2: Pos2, p3: Pos2, t: f32) -> Pos2 {
     let b1 = 3.0 * u * u * t;
     let b2 = 3.0 * u * t * t;
     let b3 = t * t * t;
-    Pos2::new(
-        b0 * p0.x + b1 * c1.x + b2 * c2.x + b3 * p3.x,
-        b0 * p0.y + b1 * c1.y + b2 * c2.y + b3 * p3.y,
-    )
+    Pos2::new(b0 * p0.x + b1 * c1.x + b2 * c2.x + b3 * p3.x, b0 * p0.y + b1 * c1.y + b2 * c2.y + b3 * p3.y)
 }
 
 pub(crate) struct MusicalTetherSpec {
@@ -118,28 +111,9 @@ pub(crate) struct MusicalTetherSpec {
 
 /// Paint glowing animated cubic-Bézier connection tethers with flowing musical notes (`♪` / `♫` / `♩`).
 pub(crate) fn paint_musical_bezier_tether(painter: &Painter, spec: MusicalTetherSpec) {
-    let MusicalTetherSpec {
-        from,
-        to,
-        c1,
-        c2,
-        color_a,
-        color_b,
-        time_sec,
-        phase_offset,
-    } = spec;
-    painter.add(CubicBezierShape::from_points_stroke(
-        [from, c1, c2, to],
-        false,
-        Color32::TRANSPARENT,
-        Stroke::new(4.2, color_a.gamma_multiply(0.16)),
-    ));
-    painter.add(CubicBezierShape::from_points_stroke(
-        [from, c1, c2, to],
-        false,
-        Color32::TRANSPARENT,
-        Stroke::new(1.5, color_a.gamma_multiply(0.72)),
-    ));
+    let MusicalTetherSpec { from, to, c1, c2, color_a, color_b, time_sec, phase_offset } = spec;
+    painter.add(CubicBezierShape::from_points_stroke([from, c1, c2, to], false, Color32::TRANSPARENT, Stroke::new(4.2, color_a.gamma_multiply(0.16))));
+    painter.add(CubicBezierShape::from_points_stroke([from, c1, c2, to], false, Color32::TRANSPARENT, Stroke::new(1.5, color_a.gamma_multiply(0.72))));
 
     painter.circle_filled(from, 3.6, color_a);
     painter.circle_stroke(from, 5.2, Stroke::new(1.0, color_a.gamma_multiply(0.45)));
@@ -152,24 +126,13 @@ pub(crate) fn paint_musical_bezier_tether(painter: &Painter, spec: MusicalTether
         let blend = if idx % 2 == 0 { color_a } else { color_b };
         painter.circle_filled(pt, 7.5, Color32::from_rgba_unmultiplied(8, 13, 22, 210));
         painter.circle_stroke(pt, 7.5, Stroke::new(1.0, blend.gamma_multiply(0.65)));
-        painter.text(
-            pt,
-            Align2::CENTER_CENTER,
-            *glyph,
-            FontId::proportional(10.5),
-            blend,
-        );
+        painter.text(pt, Align2::CENTER_CENTER, *glyph, FontId::proportional(10.5), blend);
     }
 }
 
-fn paint_animated_musical_tethers(
-    ui: &Ui,
-    ctx: &ViewCtx<'_>,
-    clip_rect: Rect,
-    anchors: &LyricsTetherAnchors,
-) {
+fn paint_animated_musical_tethers(ui: &Ui, ctx: &ViewCtx<'_>, clip_rect: Rect, anchors: &LyricsTetherAnchors) {
     let time_sec = ui.ctx().input(|i| i.time);
-    let layer = LayerId::new(Order::Foreground, Id::new("lyrics_musical_tethers"));
+    let layer = LayerId::new(Order::Foreground, Id::unique("lyrics_musical_tethers"));
     let painter = ui.ctx().layer_painter(layer).with_clip_rect(clip_rect);
 
     if let (Some(reel), Some(word_l)) = (anchors.reel_socket, anchors.stage_word_left)
@@ -235,13 +198,8 @@ fn paint_animated_musical_tethers(
 
 fn active_section_revision(ctx: &ViewCtx<'_>) -> Option<(String, u64)> {
     let anims = ctx.state.cache.words_doc.pointer("/document/animations").and_then(Value::as_array)?;
-    let chosen = ctx
-        .state
-        .lyrics
-        .selected_anim_id
-        .as_deref()
-        .and_then(|id| anims.iter().find(|a| a["animation_id"].as_str() == Some(id)))
-        .or_else(|| anims.first())?;
+    let chosen =
+        ctx.state.lyrics.selected_anim_id.as_deref().and_then(|id| anims.iter().find(|a| a["animation_id"].as_str() == Some(id))).or_else(|| anims.first())?;
     let id = chosen["animation_id"].as_str()?.to_owned();
     let rev = chosen["source_revision"].as_u64().unwrap_or(0);
     Some((id, rev))
@@ -257,14 +215,7 @@ fn collect_lyric_reel_entries(ctx: &ViewCtx<'_>, anims: &[Value]) -> Vec<LyricRe
                 let id = anim["animation_id"].as_str().unwrap_or("sec").to_owned();
                 let sec_name = anim["scope"]["section"].as_str().unwrap_or(&id);
                 let anchor_sec = anim["song_anchor"].as_f64().unwrap_or((idx as f64) * 4.0);
-                let words_str: String = anim["words"]
-                    .as_array()
-                    .into_iter()
-                    .flatten()
-                    .filter_map(|w| w["text"].as_str())
-                    .take(8)
-                    .collect::<Vec<_>>()
-                    .join(" ");
+                let words_str: String = anim["words"].as_array().into_iter().flatten().filter_map(|w| w["text"].as_str()).take(8).collect::<Vec<_>>().join(" ");
                 let line_text = if words_str.is_empty() { sec_name.to_owned() } else { words_str };
                 let frame_path = anim["preview_frame"]
                     .as_str()
@@ -272,19 +223,8 @@ fn collect_lyric_reel_entries(ctx: &ViewCtx<'_>, anims: &[Value]) -> Vec<LyricRe
                     .or_else(|| anim["background_path"].as_str())
                     .filter(|p| !p.is_empty())
                     .map(str::to_owned)
-                    .or_else(|| {
-                        if film_frames.is_empty() {
-                            None
-                        } else {
-                            film_frames.get(idx % film_frames.len()).cloned()
-                        }
-                    });
-                LyricReelEntry {
-                    id,
-                    anchor_sec,
-                    line_text,
-                    frame_path,
-                }
+                    .or_else(|| if film_frames.is_empty() { None } else { film_frames.get(idx % film_frames.len()).cloned() });
+                LyricReelEntry { id, anchor_sec, line_text, frame_path }
             })
             .collect();
     }
@@ -295,14 +235,7 @@ fn collect_lyric_reel_entries(ctx: &ViewCtx<'_>, anims: &[Value]) -> Vec<LyricRe
         .song_lyrics
         .get("lyrics")
         .and_then(Value::as_str)
-        .map(|txt| {
-            txt.lines()
-                .map(str::trim)
-                .filter(|l| !l.is_empty())
-                .take(8)
-                .map(str::to_owned)
-                .collect()
-        })
+        .map(|txt| txt.lines().map(str::trim).filter(|l| !l.is_empty()).take(8).map(str::to_owned).collect())
         .unwrap_or_default();
 
     let count = raw_lines.len().max(film_frames.len()).clamp(4, 8);
@@ -310,21 +243,9 @@ fn collect_lyric_reel_entries(ctx: &ViewCtx<'_>, anims: &[Value]) -> Vec<LyricRe
     (0..count)
         .map(|idx| {
             let anchor_sec = (idx as f64) * (total / (count as f64));
-            let line_text = raw_lines
-                .get(idx)
-                .cloned()
-                .unwrap_or_else(|| format!("Reel Beat {} · Align Audio", idx + 1));
-            let frame_path = if film_frames.is_empty() {
-                None
-            } else {
-                film_frames.get(idx % film_frames.len()).cloned()
-            };
-            LyricReelEntry {
-                id: format!("reel-{}", idx + 1),
-                anchor_sec,
-                line_text,
-                frame_path,
-            }
+            let line_text = raw_lines.get(idx).cloned().unwrap_or_else(|| format!("Reel Beat {} · Align Audio", idx + 1));
+            let frame_path = if film_frames.is_empty() { None } else { film_frames.get(idx % film_frames.len()).cloned() };
+            LyricReelEntry { id: format!("reel-{}", idx + 1), anchor_sec, line_text, frame_path }
         })
         .collect()
 }
@@ -342,42 +263,25 @@ fn collect_stage_word_tokens(ctx: &ViewCtx<'_>, active: Option<&Value>) -> Vec<S
                 if text.is_empty() {
                     return None;
                 }
-                let id = w["word_id"]
-                    .as_str()
-                    .filter(|s| !s.is_empty())
-                    .map_or_else(|| format!("w-{i}"), str::to_owned);
+                let id = w["word_id"].as_str().filter(|s| !s.is_empty()).map_or_else(|| format!("w-{i}"), str::to_owned);
                 let st = w["start"].as_f64().unwrap_or(anchor + (i as f64) * 0.42);
                 let en = w["end"].as_f64().unwrap_or(st + 0.38);
-                let emp = w["emphasis"].as_bool() == Some(true)
-                    || text.chars().filter(|c| c.is_alphabetic()).count() >= 7;
-                Some(StageWordToken {
-                    id,
-                    text: text.to_owned(),
-                    emphasis: emp,
-                    start_sec: st,
-                    end_sec: en,
-                })
+                let emp = w["emphasis"].as_bool() == Some(true) || text.chars().filter(|c| c.is_alphabetic()).count() >= 7;
+                Some(StageWordToken { id, text: text.to_owned(), emphasis: emp, start_sec: st, end_sec: en })
             })
             .collect();
     }
 
-    let line_str = ctx
-        .state
-        .cache
-        .song_lyrics
-        .get("lyrics")
-        .and_then(Value::as_str)
-        .and_then(|txt| {
-            let lines: Vec<&str> = txt.lines().map(str::trim).filter(|l| !l.is_empty()).collect();
-            if lines.is_empty() {
-                None
-            } else {
-                let total = ctx.state.audio_duration_sec.max(24.0);
-                let idx = (((ctx.state.lyrics.scrub_seconds / total) * (lines.len() as f64)).floor() as usize)
-                    .min(lines.len().saturating_sub(1));
-                Some((idx, lines[idx].to_owned(), lines.len()))
-            }
-        });
+    let line_str = ctx.state.cache.song_lyrics.get("lyrics").and_then(Value::as_str).and_then(|txt| {
+        let lines: Vec<&str> = txt.lines().map(str::trim).filter(|l| !l.is_empty()).collect();
+        if lines.is_empty() {
+            None
+        } else {
+            let total = ctx.state.audio_duration_sec.max(24.0);
+            let idx = (((ctx.state.lyrics.scrub_seconds / total) * (lines.len() as f64)).floor() as usize).min(lines.len().saturating_sub(1));
+            Some((idx, lines[idx].to_owned(), lines.len()))
+        }
+    });
 
     if let Some((line_idx, line, line_count)) = line_str {
         let total = ctx.state.audio_duration_sec.max(24.0);
@@ -418,14 +322,7 @@ fn collect_stage_word_tokens(ctx: &ViewCtx<'_>, active: Option<&Value>) -> Vec<S
 
 /// Dedicated Left 35mm Film Reel (`FilmbarOrientation::Vertical`), returning right-edge socket `Pos2` of selected card.
 fn draw_moment_film_reel(ui: &mut Ui, ctx: &mut ViewCtx<'_>) -> Option<Pos2> {
-    let anims = ctx
-        .state
-        .cache
-        .words_doc
-        .pointer("/document/animations")
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
+    let anims = ctx.state.cache.words_doc.pointer("/document/animations").and_then(Value::as_array).cloned().unwrap_or_default();
     let entries = collect_lyric_reel_entries(ctx, &anims);
     let mut selected_socket = None;
 
@@ -451,75 +348,56 @@ fn draw_moment_film_reel(ui: &mut Ui, ctx: &mut ViewCtx<'_>) -> Option<Pos2> {
         ui.add_space(4.0);
 
         let query = ctx.state.lyrics.search.trim().to_ascii_lowercase();
-        ScrollArea::vertical()
-            .id_salt("words_moments_scroll")
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                for (idx, item) in entries.iter().enumerate() {
-                    if !query.is_empty()
-                        && !item.line_text.to_ascii_lowercase().contains(&query)
-                        && !item.id.to_ascii_lowercase().contains(&query)
-                    {
-                        continue;
-                    }
-                    let selected = ctx
-                        .state
-                        .lyrics
-                        .selected_anim_id
-                        .as_deref()
-                        .map_or(idx == 0, |sel| sel == item.id)
-                        || (anims.is_empty() && (ctx.state.lyrics.scrub_seconds - item.anchor_sec).abs() < 2.2);
-
-                    let reel_w = (ui.available_width() - 4.0).max(132.0);
-                    let (crect, resp) = ui.allocate_exact_size(Vec2::new(reel_w, 96.0), Sense::click());
-                    let inner = paint_filmbar_frame(
-                        ui,
-                        crect,
-                        ctx.pal,
-                        FilmbarStyle {
-                            orientation: FilmbarOrientation::Vertical,
-                            selected,
-                            hovered: resp.hovered(),
-                            timecode: None,
-                        },
-                    );
-                    if !paint_local_image(ui, inner, item.frame_path.as_deref(), ctx.pal.bg_stage, 3) {
-                        paint_craft_doc_card(ui, inner, ctx.pal, "EC", "lyrics.ecproj", "");
-                    }
-                    let band = Rect::from_min_max(
-                        Pos2::new(inner.min.x, (inner.max.y - 30.0).max(inner.min.y)),
-                        inner.max,
-                    );
-                    ui.painter().rect_filled(band, CornerRadius::same(2), Color32::from_rgba_unmultiplied(8, 12, 18, 224));
-                    ui.painter().text(
-                        Pos2::new(band.min.x + 6.0, band.min.y + 8.0),
-                        Align2::LEFT_CENTER,
-                        format!("♪ 0:{:04.1}", item.anchor_sec),
-                        FontId::monospace(8.6),
-                        if selected { ctx.pal.accent_emerald } else { ctx.pal.accent_amber },
-                    );
-                    ui.painter().text(
-                        Pos2::new(band.min.x + 6.0, band.max.y - 8.0),
-                        Align2::LEFT_CENTER,
-                        truncate_words(&item.line_text, 22),
-                        FontId::proportional(10.2),
-                        ctx.pal.text_primary,
-                    );
-                    if selected {
-                        selected_socket = Some(Pos2::new(crect.max.x - 2.0, crect.center().y));
-                    }
-                    if resp.clicked() {
-                        if !anims.is_empty() {
-                            ctx.state.lyrics.selected_anim_id = Some(item.id.clone());
-                        }
-                        ctx.state.lyrics.selected_word_id = None;
-                        ctx.state.lyrics.scrub_seconds = item.anchor_sec;
-                        ctx.push(UiAction::SeekAudio(item.anchor_sec));
-                    }
-                    ctx.reg.record(format!("words-moment-{}-0", item.id), &item.line_text, &resp, None);
-                    ui.add_space(5.0);
+        ScrollArea::vertical().id_salt("words_moments_scroll").auto_shrink([false, false]).show(ui, |ui| {
+            for (idx, item) in entries.iter().enumerate() {
+                if !query.is_empty() && !item.line_text.to_ascii_lowercase().contains(&query) && !item.id.to_ascii_lowercase().contains(&query) {
+                    continue;
                 }
-            });
+                let selected = ctx.state.lyrics.selected_anim_id.as_deref().map_or(idx == 0, |sel| sel == item.id)
+                    || (anims.is_empty() && (ctx.state.lyrics.scrub_seconds - item.anchor_sec).abs() < 2.2);
+
+                let reel_w = (ui.available_width() - 4.0).max(132.0);
+                let (crect, resp) = ui.allocate_exact_size(Vec2::new(reel_w, 96.0), Sense::click());
+                let inner = paint_filmbar_frame(
+                    ui,
+                    crect,
+                    ctx.pal,
+                    FilmbarStyle { orientation: FilmbarOrientation::Vertical, selected, hovered: resp.hovered(), timecode: None },
+                );
+                if !paint_local_image(ui, inner, item.frame_path.as_deref(), ctx.pal.bg_stage, 3) {
+                    paint_craft_doc_card(ui, inner, ctx.pal, "EC", "lyrics.ecproj", "");
+                }
+                let band = Rect::from_min_max(Pos2::new(inner.min.x, (inner.max.y - 30.0).max(inner.min.y)), inner.max);
+                ui.painter().rect_filled(band, CornerRadius::same(2), Color32::from_rgba_unmultiplied(8, 12, 18, 224));
+                ui.painter().text(
+                    Pos2::new(band.min.x + 6.0, band.min.y + 8.0),
+                    Align2::LEFT_CENTER,
+                    format!("♪ 0:{:04.1}", item.anchor_sec),
+                    FontId::monospace(8.6),
+                    if selected { ctx.pal.accent_emerald } else { ctx.pal.accent_amber },
+                );
+                ui.painter().text(
+                    Pos2::new(band.min.x + 6.0, band.max.y - 8.0),
+                    Align2::LEFT_CENTER,
+                    truncate_words(&item.line_text, 22),
+                    FontId::proportional(10.2),
+                    ctx.pal.text_primary,
+                );
+                if selected {
+                    selected_socket = Some(Pos2::new(crect.max.x - 2.0, crect.center().y));
+                }
+                if resp.clicked() {
+                    if !anims.is_empty() {
+                        ctx.state.lyrics.selected_anim_id = Some(item.id.clone());
+                    }
+                    ctx.state.lyrics.selected_word_id = None;
+                    ctx.state.lyrics.scrub_seconds = item.anchor_sec;
+                    ctx.push(UiAction::SeekAudio(item.anchor_sec));
+                }
+                ctx.reg.record(format!("words-moment-{}-0", item.id), &item.line_text, &resp, None);
+                ui.add_space(5.0);
+            }
+        });
     });
     ctx.reg.record("words-lyrics", "Lyric Film Reel", &panel.response, None);
     selected_socket
@@ -536,21 +414,9 @@ fn truncate_words(s: &str, max_chars: usize) -> String {
 }
 
 fn draw_center_kinetic_workspace(ui: &mut Ui, ctx: &mut ViewCtx<'_>, anchors: &mut LyricsTetherAnchors) {
-    let anims = ctx
-        .state
-        .cache
-        .words_doc
-        .pointer("/document/animations")
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
-    let active = ctx
-        .state
-        .lyrics
-        .selected_anim_id
-        .as_deref()
-        .and_then(|id| anims.iter().find(|a| a["animation_id"].as_str() == Some(id)))
-        .or_else(|| anims.first());
+    let anims = ctx.state.cache.words_doc.pointer("/document/animations").and_then(Value::as_array).cloned().unwrap_or_default();
+    let active =
+        ctx.state.lyrics.selected_anim_id.as_deref().and_then(|id| anims.iter().find(|a| a["animation_id"].as_str() == Some(id))).or_else(|| anims.first());
     let tokens = collect_stage_word_tokens(ctx, active);
 
     let center_rect = ui.available_rect_before_wrap();
@@ -570,9 +436,7 @@ fn draw_center_kinetic_workspace(ui: &mut Ui, ctx: &mut ViewCtx<'_>, anchors: &m
 }
 
 fn draw_stage_header_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>, active: Option<&Value>) {
-    let sec_heading = active
-        .and_then(|a| a["scope"]["section"].as_str().or_else(|| a["animation_id"].as_str()))
-        .unwrap_or("Lyrics Stage");
+    let sec_heading = active.and_then(|a| a["scope"]["section"].as_str().or_else(|| a["animation_id"].as_str())).unwrap_or("Lyrics Stage");
     let ecproj_meta = &ctx.state.cache.words_doc["ecproj"];
     let ecproj_summary = if ecproj_meta.is_object() {
         let layers = ecproj_meta["layer_count"].as_u64().unwrap_or(0);
@@ -585,33 +449,9 @@ fn draw_stage_header_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>, active: Option<&Val
         ui.spacing_mut().item_spacing.x = 4.0;
         ui.label(RichText::new(sec_heading).size(12.2).strong());
         ui.label(RichText::new(ecproj_summary).monospace().size(9.2).color(ctx.pal.text_muted));
-        let _ = pill_toggle(
-            ui,
-            ctx.reg,
-            ctx.pal,
-            "words-tethers-toggle",
-            "♪ Tethers",
-            &mut ctx.state.lyrics.show_tethers,
-            ctx.pal.accent_emerald,
-        );
-        let _ = pill_toggle(
-            ui,
-            ctx.reg,
-            ctx.pal,
-            "words-warp-toggle",
-            "Warp Arcs",
-            &mut ctx.state.lyrics.show_warp_paths,
-            ctx.pal.accent_sky,
-        );
-        let _ = pill_toggle(
-            ui,
-            ctx.reg,
-            ctx.pal,
-            "words-flat-preview-toggle",
-            "Flat PNG",
-            &mut ctx.state.lyrics.flat_preview_only,
-            ctx.pal.accent_amber,
-        );
+        let _ = pill_toggle(ui, ctx.reg, ctx.pal, "words-tethers-toggle", "♪ Tethers", &mut ctx.state.lyrics.show_tethers, ctx.pal.accent_emerald);
+        let _ = pill_toggle(ui, ctx.reg, ctx.pal, "words-warp-toggle", "Warp Arcs", &mut ctx.state.lyrics.show_warp_paths, ctx.pal.accent_sky);
+        let _ = pill_toggle(ui, ctx.reg, ctx.pal, "words-flat-preview-toggle", "Flat PNG", &mut ctx.state.lyrics.flat_preview_only, ctx.pal.accent_amber);
 
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             ui.spacing_mut().item_spacing.x = 4.0;
@@ -653,7 +493,8 @@ fn draw_stage_header_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>, active: Option<&Val
                     ctx.exec("project.autosave", json!({}), Some("Saved lyric draft"));
                 }
             }
-            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("words-reload", "refresh", "Reload words.read & words.effects (--control API)")).clicked() {
+            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("words-reload", "refresh", "Reload words.read & words.effects (--control API)")).clicked()
+            {
                 ctx.exec("words.read", json!({}), None);
                 ctx.exec("words.effects", json!({"refresh": true}), None);
             }
@@ -669,37 +510,23 @@ fn draw_compact_music_transport_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
 
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
-        if action_button(
-            ui,
-            ctx.reg,
-            ctx.pal,
-            BtnSpec::icon_only("words-audio-play", play_icon, "Play / pause song audio")
-                .primary()
-                .enabled(has_audio),
-        )
-        .clicked()
+        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("words-audio-play", play_icon, "Play / pause song audio").primary().enabled(has_audio))
+            .clicked()
         {
             ctx.push(UiAction::ToggleAudio);
         }
-        ui.label(
-            RichText::new(format!("0:{:04.1}/{:04.1}", ctx.state.lyrics.scrub_seconds, dur))
-                .monospace()
-                .size(9.3)
-                .color(if ctx.state.audio_playing { ctx.pal.accent_emerald } else { ctx.pal.text_secondary }),
-        );
+        ui.label(RichText::new(format!("0:{:04.1}/{:04.1}", ctx.state.lyrics.scrub_seconds, dur)).monospace().size(9.3).color(if ctx.state.audio_playing {
+            ctx.pal.accent_emerald
+        } else {
+            ctx.pal.text_secondary
+        }));
 
         let scrub_w = (ui.available_width() - 312.0).clamp(80.0, 380.0);
         if let Some(sec) = draw_compact_scrubber(
             ui,
             ctx.reg,
             ctx.pal,
-            ScrubberSpec {
-                id: "words-scrub",
-                label: "Lyrics Scrubber",
-                width: scrub_w,
-                duration_sec: dur,
-                accent: ctx.pal.accent_emerald,
-            },
+            ScrubberSpec { id: "words-scrub", label: "Lyrics Scrubber", width: scrub_w, duration_sec: dur, accent: ctx.pal.accent_emerald },
             &mut ctx.state.lyrics.scrub_seconds,
         ) {
             ctx.push(UiAction::SeekAudio(sec));
@@ -717,14 +544,7 @@ fn draw_compact_music_transport_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             }
         }
         let aud_lbl = if ctx.state.lyrics.audio_source == "filmcraft" { "FC Mix" } else { "♪ Song" };
-        if action_button(
-            ui,
-            ctx.reg,
-            ctx.pal,
-            BtnSpec::label_only("words-audio-src-toggle", aud_lbl, "Toggle Song Stem vs FilmCraft Audio Mix"),
-        )
-        .clicked()
-        {
+        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("words-audio-src-toggle", aud_lbl, "Toggle Song Stem vs FilmCraft Audio Mix")).clicked() {
             ctx.state.lyrics.audio_source = if ctx.state.lyrics.audio_source == "filmcraft" { "song".into() } else { "filmcraft".into() };
         }
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("words-align-audio", "Align", "Run speech alignment on song audio")).clicked() {
@@ -735,8 +555,7 @@ fn draw_compact_music_transport_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             ui,
             ctx.reg,
             ctx.pal,
-            BtnSpec::label_only("words-captions-drawer-toggle", cap_lbl, "Toggle C1 Broadcast Captions & .ectemplate")
-                .selected(ctx.state.lyrics.draw_enabled),
+            BtnSpec::label_only("words-captions-drawer-toggle", cap_lbl, "Toggle C1 Broadcast Captions & .ectemplate").selected(ctx.state.lyrics.draw_enabled),
         )
         .clicked()
         {
@@ -746,12 +565,7 @@ fn draw_compact_music_transport_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
 }
 
 /// Interactive bracketed word token strip (`[ All · the · pterodactyls · were · sleeping ✨ · very · still. ]`).
-fn draw_bracketed_word_token_bar(
-    ui: &mut Ui,
-    ctx: &mut ViewCtx<'_>,
-    tokens: &[StageWordToken],
-    anchors: &mut LyricsTetherAnchors,
-) {
+fn draw_bracketed_word_token_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>, tokens: &[StageWordToken], anchors: &mut LyricsTetherAnchors) {
     let active_wid = ctx
         .state
         .lyrics
@@ -813,7 +627,7 @@ fn choreography_base_pos(choreo: &str, idx: usize, total: usize, emphasis: bool)
             let row = (idx % 3) as f32;
             let nx = 0.17 + t * 0.66;
             let ny = 0.26 + row * 0.22;
-            let rot = if idx % 2 == 0 { -6.0 } else { 5.5 };
+            let rot = if idx.is_multiple_of(2) { -6.0 } else { 5.5 };
             (nx, ny, rot)
         }
         "stack" => {
@@ -824,7 +638,7 @@ fn choreography_base_pos(choreo: &str, idx: usize, total: usize, emphasis: bool)
         "plain" => {
             let row = idx / 5;
             let col = idx % 5;
-            let cols_in_row = (total.saturating_sub(row * 5)).min(5).max(1) as f32;
+            let cols_in_row = (total.saturating_sub(row * 5)).clamp(1, 5) as f32;
             let nx = 0.18 + ((col as f32 + 0.5) / cols_in_row) * 0.64;
             let ny = if total > 5 { 0.42 + (row as f32) * 0.22 } else { 0.54 };
             (nx, ny, 0.0)
@@ -880,22 +694,14 @@ fn draw_interactive_lyrics_stage_card(
                 ui,
                 outer_stage,
                 ctx.pal,
-                FilmbarStyle {
-                    orientation: FilmbarOrientation::Horizontal,
-                    selected: false,
-                    hovered: stage_resp.hovered(),
-                    timecode: Some(tc_badge),
-                },
+                FilmbarStyle { orientation: FilmbarOrientation::Horizontal, selected: false, hovered: stage_resp.hovered(), timecode: Some(tc_badge) },
             );
             ctx.reg.record("words-stage", "Lyrics Interactive Stage", &stage_resp, None);
 
             let film_bg = ctx.state.film_frame_at_time(ctx.state.lyrics.scrub_seconds);
-            let scene_bg = active
-                .and_then(|a| a["background_path"].as_str())
-                .or(film_bg.as_deref());
-            let rendered_frame = ctx.state.cache.last_words_frame.as_deref().or_else(|| {
-                active.and_then(|a| a["preview_frame"].as_str().or_else(|| a["lyrics_frame"].as_str()))
-            });
+            let scene_bg = active.and_then(|a| a["background_path"].as_str()).or(film_bg.as_deref());
+            let rendered_frame =
+                ctx.state.cache.last_words_frame.as_deref().or_else(|| active.and_then(|a| a["preview_frame"].as_str().or_else(|| a["lyrics_frame"].as_str())));
             let bg = if ctx.state.lyrics.backdrop_mode == "paper" { ctx.pal.stage_paper } else { ctx.pal.bg_stage };
 
             if ctx.state.lyrics.track_source == "filmcraft" {
@@ -920,11 +726,7 @@ fn draw_interactive_lyrics_stage_card(
                         ui.painter().rect_filled(stage_rect, CornerRadius::same(4), bg);
                     }
                     // Subtle cinematic scrim so interactive typography & handles pop clearly over bright scenes
-                    ui.painter().rect_filled(
-                        stage_rect,
-                        CornerRadius::same(4),
-                        Color32::from_rgba_unmultiplied(7, 11, 18, 92),
-                    );
+                    ui.painter().rect_filled(stage_rect, CornerRadius::same(4), Color32::from_rgba_unmultiplied(7, 11, 18, 92));
                 } else {
                     ui.painter().rect_filled(stage_rect, CornerRadius::same(4), bg);
                 }
@@ -943,13 +745,7 @@ fn draw_interactive_lyrics_stage_card(
     ctx.reg.record("words-stage-panel", "Stage Panel", &panel.response, None);
 }
 
-fn paint_interactive_stage_words(
-    ui: &mut Ui,
-    ctx: &mut ViewCtx<'_>,
-    stage_rect: Rect,
-    tokens: &[StageWordToken],
-    anchors: &mut LyricsTetherAnchors,
-) {
+fn paint_interactive_stage_words(ui: &mut Ui, ctx: &mut ViewCtx<'_>, stage_rect: Rect, tokens: &[StageWordToken], anchors: &mut LyricsTetherAnchors) {
     if tokens.is_empty() {
         paint_craft_doc_card(ui, stage_rect.shrink(14.0), ctx.pal, "EC", "lettering/lyrics.ecproj", "Add lyrics or align audio");
         return;
@@ -964,11 +760,7 @@ fn paint_interactive_stage_words(
         ui.painter().line_segment([Pos2::new(stage_rect.min.x, gy), Pos2::new(stage_rect.max.x, gy)], Stroke::new(1.0, guide_col));
     }
 
-    let default_sel = tokens
-        .iter()
-        .find(|t| t.emphasis)
-        .or_else(|| tokens.first())
-        .map(|t| t.id.clone());
+    let default_sel = tokens.iter().find(|t| t.emphasis).or_else(|| tokens.first()).map(|t| t.id.clone());
     if ctx.state.lyrics.selected_word_id.is_none() {
         ctx.state.lyrics.selected_word_id = default_sel;
     }
@@ -986,11 +778,7 @@ fn paint_interactive_stage_words(
         let cx = stage_rect.min.x + ((bx + dx).clamp(0.08, 0.92)) * stage_rect.width();
         let cy = stage_rect.min.y + ((by + dy).clamp(0.12, 0.88)) * stage_rect.height();
 
-        let hero_mult = if tok.emphasis || (choreo == "poster" && idx == tokens.len() / 2) {
-            1.68
-        } else {
-            0.96
-        };
+        let hero_mult = if tok.emphasis || (choreo == "poster" && idx == tokens.len() / 2) { 1.68 } else { 0.96 };
         let px = (19.0 * hero_mult * base_font_scale * w_scale * (stage_rect.height() / 210.0).clamp(0.75, 1.35)).clamp(12.0, 56.0);
         let galley = ui.painter().layout_no_wrap(tok.text.clone(), FontId::proportional(px), Color32::WHITE);
         let pad = Vec2::new(12.0, 6.0);
@@ -1060,11 +848,7 @@ fn paint_interactive_stage_words(
 
         // Soft glow / shadow behind stage lettering
         if has_glow_or_emphasis(fx_opt.as_deref(), is_sel, is_sung_now) {
-            ui.painter().rect_filled(
-                wrect.expand(2.0),
-                CornerRadius::same(6),
-                fg.gamma_multiply(if is_sel { 0.14 } else { 0.08 }),
-            );
+            ui.painter().rect_filled(wrect.expand(2.0), CornerRadius::same(6), fg.gamma_multiply(if is_sel { 0.14 } else { 0.08 }));
         }
         ui.painter().text(
             wrect.center() + Vec2::new(1.8, 2.0),
@@ -1073,24 +857,12 @@ fn paint_interactive_stage_words(
             FontId::proportional(font_px),
             Color32::from_rgba_unmultiplied(6, 10, 16, 225),
         );
-        ui.painter().text(
-            wrect.center(),
-            Align2::CENTER_CENTER,
-            &tok.text,
-            FontId::proportional(font_px),
-            fg,
-        );
+        ui.painter().text(wrect.center(), Align2::CENTER_CENTER, &tok.text, FontId::proportional(font_px), fg);
 
         if let Some(ref fx_id) = fx_opt {
             let short_fx = fx_id.rsplit('.').next().unwrap_or(fx_id);
             let tag_pos = Pos2::new(wrect.max.x, wrect.min.y - 5.0);
-            ui.painter().text(
-                tag_pos,
-                Align2::RIGHT_BOTTOM,
-                format!("✨ {short_fx}"),
-                FontId::monospace(8.2),
-                ctx.pal.accent_emerald,
-            );
+            ui.painter().text(tag_pos, Align2::RIGHT_BOTTOM, format!("✨ {short_fx}"), FontId::monospace(8.2), ctx.pal.accent_emerald);
         }
 
         if is_sel {
@@ -1100,7 +872,6 @@ fn paint_interactive_stage_words(
         ctx.reg.record(format!("word-box-{idx}"), &tok.text, &hit, None);
     }
 }
-
 
 fn draw_selected_word_gizmo(
     ui: &mut Ui,
@@ -1142,11 +913,8 @@ fn draw_selected_word_gizmo(
         ctx.state.dirty_drafts.insert("lyrics".into());
     }
 
-    let hud_txt = if rot_deg.abs() > 0.4 {
-        format!("♪ {:.2}s · {:.0}°", tok.start_sec, rot_deg)
-    } else {
-        format!("♪ {:.2}s · drag to place", tok.start_sec)
-    };
+    let hud_txt =
+        if rot_deg.abs() > 0.4 { format!("♪ {:.2}s · {:.0}°", tok.start_sec, rot_deg) } else { format!("♪ {:.2}s · drag to place", tok.start_sec) };
     ui.painter().text(
         Pos2::new(wrect.center().x, (wrect.max.y + 8.5).min(stage_rect.max.y - 5.0)),
         Align2::CENTER_CENTER,
@@ -1255,14 +1023,7 @@ fn draw_choreography_and_move_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing.x = 3.5;
             ui.spacing_mut().item_spacing.y = 3.0;
-            for (mid, lbl) in [
-                ("pop", "Pop"),
-                ("rise", "Rise"),
-                ("loop", "Wave"),
-                ("fall", "Fall"),
-                ("sleep", "Sleep"),
-                ("settle", "Settle"),
-            ] {
+            for (mid, lbl) in [("pop", "Pop"), ("rise", "Rise"), ("loop", "Wave"), ("fall", "Fall"), ("sleep", "Sleep"), ("settle", "Settle")] {
                 let id = format!("words-move-{mid}");
                 let sel = ctx.state.lyrics.move_preset == mid;
                 if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, lbl, "Per-word kinetic act").selected(sel)).clicked() {
@@ -1287,40 +1048,33 @@ fn draw_center_quick_craft_effects(ui: &mut Ui, ctx: &mut ViewCtx<'_>) -> Option
             status_pill(
                 ui,
                 ctx.pal,
-                if api_live { ":9877 Live" } else { &format!("{} Ready", effects.len()) },
+                &if api_live { ":9877 Live".to_owned() } else { format!("{} Ready", effects.len()) },
                 if api_live { ctx.pal.accent_emerald } else { ctx.pal.accent_amber },
             );
         });
-        ScrollArea::vertical()
-            .id_salt("words_center_quick_fx")
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                ui.horizontal_wrapped(|ui| {
-                    ui.spacing_mut().item_spacing.x = 4.0;
-                    ui.spacing_mut().item_spacing.y = 4.0;
-                    for fx in effects.iter().take(10) {
-                        let fx_id = fx["id"].as_str().unwrap_or_default();
-                        let label = fx["label"].as_str().unwrap_or(fx_id);
-                        let badge = fx["badge"].as_str().unwrap_or("EC");
-                        let sel = ctx.state.lyrics.selected_effect_id == fx_id;
-                        let chip_lbl = format!("{badge} · {label}");
-                        let btn_id = format!("words-quick-fx-{fx_id}");
-                        let resp = action_button(
-                            ui,
-                            ctx.reg,
-                            ctx.pal,
-                            BtnSpec::label_only(&btn_id, &chip_lbl, fx["summary"].as_str().unwrap_or(fx_id)).selected(sel),
-                        );
-                        if sel {
-                            selected_pt = Some(Pos2::new(resp.rect.center().x, resp.rect.min.y));
-                        }
-                        if resp.clicked() {
-                            let _ = badge_accent_color(ctx.pal, badge);
-                            apply_effect_to_selected_word(ctx, fx_id, label);
-                        }
+        ScrollArea::vertical().id_salt("words_center_quick_fx").auto_shrink([false, false]).show(ui, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing.x = 4.0;
+                ui.spacing_mut().item_spacing.y = 4.0;
+                for fx in effects.iter().take(10) {
+                    let fx_id = fx["id"].as_str().unwrap_or_default();
+                    let label = fx["label"].as_str().unwrap_or(fx_id);
+                    let badge = fx["badge"].as_str().unwrap_or("EC");
+                    let sel = ctx.state.lyrics.selected_effect_id == fx_id;
+                    let chip_lbl = format!("{badge} · {label}");
+                    let btn_id = format!("words-quick-fx-{fx_id}");
+                    let resp =
+                        action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&btn_id, &chip_lbl, fx["summary"].as_str().unwrap_or(fx_id)).selected(sel));
+                    if sel {
+                        selected_pt = Some(Pos2::new(resp.rect.center().x, resp.rect.min.y));
                     }
-                });
+                    if resp.clicked() {
+                        let _ = badge_accent_color(ctx.pal, badge);
+                        apply_effect_to_selected_word(ctx, fx_id, label);
+                    }
+                }
             });
+        });
     });
     selected_pt
 }
@@ -1333,12 +1087,7 @@ fn draw_interactive_bezier_easing_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         let p2 = ctx.state.lyrics.curve_p2;
         ui.horizontal(|ui| {
             ui.label(RichText::new("Easing Curve").size(10.8).strong().color(ctx.pal.accent_amber));
-            ui.label(
-                RichText::new(format!("({:.2},{:.2},{:.2},{:.2})", p1[0], p1[1], p2[0], p2[1]))
-                    .monospace()
-                    .size(8.4)
-                    .color(ctx.pal.text_muted),
-            );
+            ui.label(RichText::new(format!("({:.2},{:.2},{:.2},{:.2})", p1[0], p1[1], p2[0], p2[1])).monospace().size(8.4).color(ctx.pal.text_muted));
         });
 
         let avail = ui.available_size();
@@ -1348,12 +1097,8 @@ fn draw_interactive_bezier_easing_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         ui.painter().rect_filled(grect, CornerRadius::same(4), ctx.pal.bg_stage);
         ui.painter().rect_stroke(grect, CornerRadius::same(4), Stroke::new(1.0, ctx.pal.border_subtle), StrokeKind::Inside);
 
-        let to_screen = |nx: f32, ny: f32| -> Pos2 {
-            Pos2::new(
-                inner.min.x + nx.clamp(0.0, 1.0) * inner.width(),
-                inner.max.y - ny.clamp(0.0, 1.0) * inner.height(),
-            )
-        };
+        let to_screen =
+            |nx: f32, ny: f32| -> Pos2 { Pos2::new(inner.min.x + nx.clamp(0.0, 1.0) * inner.width(), inner.max.y - ny.clamp(0.0, 1.0) * inner.height()) };
         let start_pt = to_screen(0.0, 0.0);
         let end_pt = to_screen(1.0, 1.0);
         let c1_pt = to_screen(p1[0], p1[1]);
@@ -1372,11 +1117,7 @@ fn draw_interactive_bezier_easing_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         for (idx, (pt, col)) in [(c1_pt, ctx.pal.accent_sky), (c2_pt, ctx.pal.accent_amber)].into_iter().enumerate() {
             ui.painter().circle_filled(pt, 4.8, col);
             ui.painter().circle_stroke(pt, 4.8, Stroke::new(1.2, Color32::WHITE));
-            let h_hit = ui.interact(
-                Rect::from_center_size(pt, Vec2::splat(14.0)),
-                ui.scope_id().with(("lyrics_bezier_handle", idx)),
-                Sense::drag(),
-            );
+            let h_hit = ui.interact(Rect::from_center_size(pt, Vec2::splat(14.0)), ui.scope_id().with(("lyrics_bezier_handle", idx)), Sense::drag());
             if h_hit.dragged()
                 && let Some(ptr) = h_hit.interact_pointer_pos()
             {
@@ -1395,13 +1136,7 @@ fn draw_interactive_bezier_easing_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     });
 }
 
-fn draw_compact_beat_and_words_strip(
-    ui: &mut Ui,
-    ctx: &mut ViewCtx<'_>,
-    anims: &[Value],
-    active: Option<&Value>,
-    tokens: &[StageWordToken],
-) {
+fn draw_compact_beat_and_words_strip(ui: &mut Ui, ctx: &mut ViewCtx<'_>, anims: &[Value], active: Option<&Value>, tokens: &[StageWordToken]) {
     let total_dur = ctx.state.audio_duration_sec.max(30.0);
     let has_audio = ctx.state.song_audio_path().is_some();
     let active_words = active.and_then(|a| a["words"].as_array()).cloned().unwrap_or_default();
@@ -1412,39 +1147,21 @@ fn draw_compact_beat_and_words_strip(
             .take(36)
             .map(|w| {
                 let st = w["start"].as_f64().unwrap_or(0.0);
-                CraftTimelineSpan {
-                    start_sec: st,
-                    end_sec: w["end"].as_f64().unwrap_or(st + 0.28),
-                    label: w["text"].as_str().unwrap_or("").to_owned(),
-                }
+                CraftTimelineSpan { start_sec: st, end_sec: w["end"].as_f64().unwrap_or(st + 0.28), label: w["text"].as_str().unwrap_or("").to_owned() }
             })
             .collect()
     } else {
-        tokens
-            .iter()
-            .map(|t| CraftTimelineSpan {
-                start_sec: t.start_sec,
-                end_sec: t.end_sec,
-                label: t.text.clone(),
-            })
-            .collect()
+        tokens.iter().map(|t| CraftTimelineSpan { start_sec: t.start_sec, end_sec: t.end_sec, label: t.text.clone() }).collect()
     };
 
-    let cue_keys: Vec<f64> = if !anims.is_empty() {
-        anims.iter().filter_map(|a| a["song_anchor"].as_f64()).collect()
-    } else {
-        tokens.iter().map(|t| t.start_sec).collect()
-    };
+    let cue_keys: Vec<f64> =
+        if !anims.is_empty() { anims.iter().filter_map(|a| a["song_anchor"].as_f64()).collect() } else { tokens.iter().map(|t| t.start_sec).collect() };
 
     let audio_spans = if has_audio {
         vec![CraftTimelineSpan {
             start_sec: 0.0,
             end_sec: total_dur,
-            label: if ctx.state.lyrics.audio_source == "filmcraft" {
-                "♪ FilmCraft Audio Mix".into()
-            } else {
-                "♪ Song Audio".into()
-            },
+            label: if ctx.state.lyrics.audio_source == "filmcraft" { "♪ FilmCraft Audio Mix".into() } else { "♪ Song Audio".into() },
         }]
     } else {
         Vec::new()

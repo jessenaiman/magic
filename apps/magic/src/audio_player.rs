@@ -147,7 +147,8 @@ fn sync_stage_playheads(state: &mut UiShellState, song_sec: f64) {
                 for anim in anims {
                     let st = anim["song_anchor"].as_f64().unwrap_or(0.0);
                     let dur = anim["authored_duration"].as_f64().unwrap_or(3.0).max(0.25);
-                    if song_sec >= st && song_sec <= st + dur
+                    if song_sec >= st
+                        && song_sec <= st + dur
                         && let Some(aid) = anim["animation_id"].as_str()
                     {
                         state.lyrics.selected_anim_id = Some(aid.to_owned());
@@ -174,16 +175,8 @@ fn resolve_active_audio_file(state: &UiShellState) -> Option<PathBuf> {
         ViewMode::Studio => true,
         _ => false,
     };
-    if want_fc_mix
-        && let Some(proj_dir) = &state.project_path
-    {
-        for rel in [
-            "film/audio.wav",
-            "film/preview.wav",
-            "film/mix.wav",
-            "film/preview.mp4",
-            "film/master.mp4",
-        ] {
+    if want_fc_mix && let Some(proj_dir) = &state.project_path {
+        for rel in ["film/audio.wav", "film/preview.wav", "film/mix.wav", "film/preview.mp4", "film/master.mp4"] {
             let candidate = proj_dir.join(rel);
             if candidate.is_file() {
                 return Some(candidate);
@@ -219,7 +212,7 @@ fn slice_riff_wav_from(src: &Path, start_sec: f64) -> Option<PathBuf> {
         let cid = &ch_hdr[0..4];
         let clen = u32::from_le_bytes([ch_hdr[4], ch_hdr[5], ch_hdr[6], ch_hdr[7]]);
         let pos = file.stream_position().ok()?;
-        if cid == b"fmt " && clen >= 16 && clen <= 256 {
+        if cid == b"fmt " && (16..=256).contains(&clen) {
             let mut buf = vec![0_u8; clen as usize];
             file.read_exact(&mut buf).ok()?;
             sample_rate = u32::from_le_bytes([buf[4], buf[5], buf[6], buf[7]]);
@@ -251,9 +244,7 @@ fn slice_riff_wav_from(src: &Path, start_sec: f64) -> Option<PathBuf> {
 
     let out_path = std::env::temp_dir().join(format!("magic-scrub-{}.wav", std::process::id()));
     let mut out = File::create(&out_path).ok()?;
-    let riff_size = 4_u32
-        .saturating_add(8 + fmt.len() as u32)
-        .saturating_add(8 + rem_len);
+    let riff_size = 4_u32.saturating_add(8 + fmt.len() as u32).saturating_add(8 + rem_len);
     out.write_all(b"RIFF").ok()?;
     out.write_all(&riff_size.to_le_bytes()).ok()?;
     out.write_all(b"WAVEfmt ").ok()?;
@@ -270,24 +261,14 @@ fn spawn_os_audio_player(path: &Path, start_sec: f64) -> Option<Child> {
     #[cfg(target_os = "macos")]
     {
         let _ = start_sec;
-        return Command::new("afplay")
-            .arg(p_str)
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .ok();
+        return Command::new("afplay").arg(p_str).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().ok();
     }
     #[cfg(target_os = "windows")]
     {
         let _ = start_sec;
         let escaped = p_str.replace('\'', "''");
         return Command::new("powershell")
-            .args([
-                "-NoProfile",
-                "-Command",
-                &format!("(New-Object Media.SoundPlayer '{escaped}').PlaySync()"),
-            ])
+            .args(["-NoProfile", "-Command", &format!("(New-Object Media.SoundPlayer '{escaped}').PlaySync()")])
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
@@ -297,13 +278,7 @@ fn spawn_os_audio_player(path: &Path, start_sec: f64) -> Option<Child> {
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
         for tool in ["pw-play", "paplay", "aplay"] {
-            if let Ok(child) = Command::new(tool)
-                .arg(p_str)
-                .stdin(Stdio::null())
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .spawn()
-            {
+            if let Ok(child) = Command::new(tool).arg(p_str).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn() {
                 return Some(child);
             }
         }

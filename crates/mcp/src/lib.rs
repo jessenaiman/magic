@@ -4,17 +4,7 @@
 //! sockets (`deckcraft/docs/mcp.md`, `cadcraft/docs/cli.md`). When `--connect <PORT|127.0.0.1:PORT>`
 //! is explicitly supplied, it drives a running `magic --control <PORT>` window over IPv4 loopback.
 
-#![cfg_attr(
-    not(test),
-    deny(
-        clippy::unwrap_used,
-        clippy::expect_used,
-        clippy::panic,
-        clippy::unimplemented,
-        clippy::todo,
-        clippy::unreachable
-    )
-)]
+#![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable))]
 
 mod server;
 pub use server::Server;
@@ -47,9 +37,7 @@ pub fn normalize_control_addr(spec: &str) -> String {
 /// Parse and enforce strict `127.0.0.1:<1..=65535>` so tokens are never sent to `::1` or `127.0.0.x` (`wordcraft#3699`).
 pub fn parse_ipv4_loopback(spec: &str) -> Result<SocketAddr, String> {
     let normalized = normalize_control_addr(spec);
-    let addr: SocketAddr = normalized
-        .parse()
-        .map_err(|_| format!("--connect requires `PORT` or `127.0.0.1:PORT`, got `{spec}`"))?;
+    let addr: SocketAddr = normalized.parse().map_err(|_| format!("--connect requires `PORT` or `127.0.0.1:PORT`, got `{spec}`"))?;
     if addr.ip() != IpAddr::V4(Ipv4Addr::LOCALHOST) || addr.port() == 0 {
         return Err("--connect only connects to 127.0.0.1 on port 1..=65535".into());
     }
@@ -60,17 +48,7 @@ pub fn parse_ipv4_loopback(spec: &str) -> Result<SocketAddr, String> {
 pub fn is_live_shell_method(id: &str) -> bool {
     id.starts_with("ui.")
         || id.starts_with("window.")
-        || matches!(
-            id,
-            "document.inspect"
-                | "app.open"
-                | "app.save"
-                | "app.quit"
-                | "app.restart"
-                | "app.hide"
-                | "perf.stats"
-                | "render.frame"
-        )
+        || matches!(id, "document.inspect" | "app.open" | "app.save" | "app.quit" | "app.restart" | "app.hide" | "perf.stats" | "render.frame")
 }
 
 fn is_direct_control_method(id: &str) -> bool {
@@ -100,11 +78,7 @@ pub fn interpolate_batch_params(params: &Value, prior_results: &[Value]) -> Valu
     match params {
         Value::String(s) => resolve_step_ref(s, prior_results).unwrap_or_else(|| Value::String(s.clone())),
         Value::Array(items) => Value::Array(items.iter().map(|v| interpolate_batch_params(v, prior_results)).collect()),
-        Value::Object(map) => Value::Object(
-            map.iter()
-                .map(|(k, v)| (k.clone(), interpolate_batch_params(v, prior_results)))
-                .collect(),
-        ),
+        Value::Object(map) => Value::Object(map.iter().map(|(k, v)| (k.clone(), interpolate_batch_params(v, prior_results))).collect()),
         other => other.clone(),
     }
 }
@@ -124,11 +98,7 @@ fn resolve_step_ref(expr: &str, prior_results: &[Value]) -> Option<Value> {
     let mut cur = root;
     if let Some(path) = tail {
         for seg in path.split('.') {
-            cur = if let Ok(i) = seg.parse::<usize>() {
-                cur.get(i)?
-            } else {
-                cur.get(seg)?
-            };
+            cur = if let Ok(i) = seg.parse::<usize>() { cur.get(i)? } else { cur.get(seg)? };
         }
     }
     Some(cur.clone())
@@ -154,9 +124,7 @@ impl Headless {
     }
 
     pub fn with_roots(roots: Option<AutomationRoots>) -> Self {
-        Self {
-            session: Session::user_session().with_automation_roots(roots),
-        }
+        Self { session: Session::user_session().with_automation_roots(roots) }
     }
 }
 
@@ -175,11 +143,7 @@ pub struct Remote {
 
 impl Remote {
     pub fn new(addr: impl Into<String>, token: Option<String>) -> Self {
-        Self {
-            addr: normalize_control_addr(&addr.into()),
-            token: token.filter(|t| !t.trim().is_empty()),
-            next_id: 1,
-        }
+        Self { addr: normalize_control_addr(&addr.into()), token: token.filter(|t| !t.trim().is_empty()), next_id: 1 }
     }
 
     /// Connect to a live `magic --control` socket on `127.0.0.1` and verify reachability at startup.
@@ -200,18 +164,13 @@ impl Backend for Remote {
     fn execute(&mut self, id: &str, params: Value) -> Result<Value, String> {
         let addr = parse_ipv4_loopback(&self.addr)?;
         let read_only = is_read_only_call(id, &params);
-        let mut stream = TcpStream::connect_timeout(&addr, Duration::from_secs(5))
-            .map_err(|e| format!("connect {addr}: {e}"))?;
+        let mut stream = TcpStream::connect_timeout(&addr, Duration::from_secs(5)).map_err(|e| format!("connect {addr}: {e}"))?;
         stream.set_read_timeout(Some(Duration::from_secs(90))).map_err(|e| e.to_string())?;
         stream.set_write_timeout(Some(Duration::from_secs(60))).map_err(|e| e.to_string())?;
 
         let req_id = self.next_id;
         self.next_id += 1;
-        let (method, wire_params) = if is_direct_control_method(id) {
-            (id, params)
-        } else {
-            ("engine.execute", json!({"command": id, "params": params}))
-        };
+        let (method, wire_params) = if is_direct_control_method(id) { (id, params) } else { ("engine.execute", json!({"command": id, "params": params})) };
         let mut msg = json!({
             "id": req_id,
             "method": method,
@@ -226,43 +185,27 @@ impl Backend for Remote {
             if read_only {
                 format!("{id} ({addr}): {detail}")
             } else {
-                format!(
-                    "outcome unknown for `{id}` ({addr}): {detail}; the command may still have run — inspect the project before retrying"
-                )
+                format!("outcome unknown for `{id}` ({addr}): {detail}; the command may still have run — inspect the project before retrying")
             }
         };
 
-        stream
-            .write_all(line.as_bytes())
-            .map_err(|e| outcome_unknown(format!("write failed after sending started: {e}")))?;
-        stream
-            .flush()
-            .map_err(|e| outcome_unknown(format!("flush failed: {e}")))?;
+        stream.write_all(line.as_bytes()).map_err(|e| outcome_unknown(format!("write failed after sending started: {e}")))?;
+        stream.flush().map_err(|e| outcome_unknown(format!("flush failed: {e}")))?;
 
         let mut reader = BufReader::new(stream);
         let mut raw_reply = Vec::new();
-        let n = reader
-            .by_ref()
-            .take((MAX_REPLY_BYTES + 1) as u64)
-            .read_until(b'\n', &mut raw_reply)
-            .map_err(|e| outcome_unknown(format!("read failed: {e}")))?;
+        let n =
+            reader.by_ref().take((MAX_REPLY_BYTES + 1) as u64).read_until(b'\n', &mut raw_reply).map_err(|e| outcome_unknown(format!("read failed: {e}")))?;
         if n == 0 {
             return Err(outcome_unknown("connection closed before reply".into()));
         }
         if raw_reply.len() > MAX_REPLY_BYTES || !raw_reply.ends_with(b"\n") {
-            return Err(outcome_unknown(format!(
-                "reply exceeded {MAX_REPLY_BYTES} bytes or lacked newline"
-            )));
+            return Err(outcome_unknown(format!("reply exceeded {MAX_REPLY_BYTES} bytes or lacked newline")));
         }
-        let reply_str = std::str::from_utf8(&raw_reply)
-            .map_err(|_| outcome_unknown("reply was not valid UTF-8".into()))?;
-        let parsed: Value = serde_json::from_str(reply_str.trim())
-            .map_err(|e| outcome_unknown(format!("invalid JSON reply: {e}")))?;
+        let reply_str = std::str::from_utf8(&raw_reply).map_err(|_| outcome_unknown("reply was not valid UTF-8".into()))?;
+        let parsed: Value = serde_json::from_str(reply_str.trim()).map_err(|e| outcome_unknown(format!("invalid JSON reply: {e}")))?;
         if parsed.get("id").and_then(Value::as_u64) != Some(req_id) {
-            return Err(outcome_unknown(format!(
-                "mismatched reply id (expected {req_id}, got {})",
-                parsed.get("id").unwrap_or(&Value::Null)
-            )));
+            return Err(outcome_unknown(format!("mismatched reply id (expected {req_id}, got {})", parsed.get("id").unwrap_or(&Value::Null))));
         }
         match parsed.get("ok").and_then(Value::as_bool) {
             Some(true) => Ok(parsed.get("result").cloned().unwrap_or(Value::Null)),
@@ -295,8 +238,7 @@ pub fn run_mcp_server(
 
     if let Some(spec) = connect {
         let addr = normalize_control_addr(spec);
-        let remote = Remote::connect_verified(&addr, magic::workspace::control_token())
-            .map_err(|e| format!("{bin_name}: cannot connect to {addr}: {e}"))?;
+        let remote = Remote::connect_verified(&addr, magic::workspace::control_token()).map_err(|e| format!("{bin_name}: cannot connect to {addr}: {e}"))?;
         let _ = writeln!(std::io::stderr(), "{bin_name}: connected to live Magic window at {addr}");
         return Server::new(remote).serve();
     }
@@ -310,7 +252,7 @@ pub fn run_mcp_server(
 
 #[cfg(test)]
 mod tests {
-    use super::{Remote, Backend, interpolate_batch_params, normalize_control_addr, parse_ipv4_loopback};
+    use super::{Backend, Remote, interpolate_batch_params, normalize_control_addr, parse_ipv4_loopback};
     use serde_json::json;
     use std::io::{BufRead, BufReader};
     use std::net::TcpListener;

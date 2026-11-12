@@ -9,16 +9,13 @@
 //! - `draw_persisted_style_controls`: top-bar `Style` & `Dark/Light` controls persisted immediately via `prefs.set`.
 
 use craft_ui::layout::{SplitAxis, SplitSize, split_rect};
-use egui::{
-    Align, Align2, Color32, CornerRadius, FontFamily, FontId, Layout, Painter, Pos2, Rect, RichText,
-    Sense, Stroke, Ui, Vec2,
-};
+use egui::{Align, Align2, Color32, CornerRadius, FontFamily, FontId, Layout, Painter, Pos2, Rect, RichText, Sense, Stroke, Ui, Vec2};
 use serde_json::json;
 
-use crate::automation::AutomationRegistry;
 use crate::controls::child_pane;
 use crate::state::ViewCtx;
-use crate::theme::{ MagicPalette, ThemeMode };
+use crate::theme::{MagicPalette, ThemeMode};
+use crate::widgets::AutomationRegistry;
 use crate::widgets::{BtnSpec, action_button, status_pill};
 
 pub struct ThreePaneSpec<'a> {
@@ -33,50 +30,40 @@ pub struct ThreePaneSpec<'a> {
 
 /// Shared 3-pane studio layout (`Left Rail` + `Center Stage` + `Right Inspector`) that honors
 /// `show_nav_rail` and `show_right_inspector` without duplicating `split_rect` geometry across views.
-pub fn draw_three_pane_workspace(
+// TODO(MAGIC-REVIEW): KEEP one shared mutable state borrow; pane callbacks run sequentially.
+pub fn draw_three_pane_workspace<T>(
     ui: &mut Ui,
     spec: ThreePaneSpec<'_>,
-    draw_left: impl FnOnce(&mut Ui),
-    draw_center: impl FnOnce(&mut Ui),
-    draw_right: impl FnOnce(&mut Ui),
+    state: &mut T,
+    draw_left: impl FnOnce(&mut Ui, &mut T),
+    draw_center: impl FnOnce(&mut Ui, &mut T),
+    draw_right: impl FnOnce(&mut Ui, &mut T),
 ) -> Rect {
     let body = ui.available_rect_before_wrap();
     let after_left = if spec.show_left
-        && let Some(left_split) = split_rect(
-            body,
-            SplitAxis::Horizontal,
-            SplitSize::FixedFirst(spec.left_width),
-            spec.gap,
-            spec.min_center,
-        )
+        && let Some(left_split) = split_rect(body, SplitAxis::Horizontal, SplitSize::FixedFirst(spec.left_width), spec.gap, spec.min_center)
     {
         let left_id = format!("{}_left", spec.id_prefix);
         let mut left_ui = child_pane(ui, left_split.first, &left_id);
-        draw_left(&mut left_ui);
+        draw_left(&mut left_ui, state);
         left_split.second
     } else {
         body
     };
 
     if spec.show_right
-        && let Some(right_split) = split_rect(
-            after_left,
-            SplitAxis::Horizontal,
-            SplitSize::FixedSecond(spec.right_width),
-            spec.gap,
-            spec.min_center,
-        )
+        && let Some(right_split) = split_rect(after_left, SplitAxis::Horizontal, SplitSize::FixedSecond(spec.right_width), spec.gap, spec.min_center)
     {
         let center_id = format!("{}_center", spec.id_prefix);
         let mut center_ui = child_pane(ui, right_split.first, &center_id);
-        draw_center(&mut center_ui);
+        draw_center(&mut center_ui, state);
         let right_id = format!("{}_right", spec.id_prefix);
         let mut right_ui = child_pane(ui, right_split.second, &right_id);
-        draw_right(&mut right_ui);
+        draw_right(&mut right_ui, state);
     } else {
         let center_id = format!("{}_center", spec.id_prefix);
         let mut center_ui = child_pane(ui, after_left, &center_id);
-        draw_center(&mut center_ui);
+        draw_center(&mut center_ui, state);
     }
 
     let _ = ui.allocate_rect(body, Sense::hover());
@@ -84,14 +71,7 @@ pub fn draw_three_pane_workspace(
 }
 
 /// Crisp editorial header strip with a vertical accent bar, tracked monospace kicker, and right pill.
-pub fn draw_pane_kicker_header(
-    ui: &mut Ui,
-    pal: &MagicPalette,
-    kicker: &str,
-    title: &str,
-    accent: Color32,
-    badge: Option<(&str, Color32)>,
-) {
+pub fn draw_pane_kicker_header(ui: &mut Ui, pal: &MagicPalette, kicker: &str, title: &str, accent: Color32, badge: Option<(&str, Color32)>) {
     ui.horizontal(|ui| {
         let (bar_r, _) = ui.allocate_exact_size(Vec2::new(3.0, 24.0), Sense::hover());
         ui.painter().rect_filled(bar_r, CornerRadius::same(2), accent);
@@ -117,13 +97,7 @@ pub struct ScrubberSpec<'a> {
 }
 
 /// Compact 16px playhead scrubber bar shared by `Lyrics` and `Motion` transport rows.
-pub fn draw_compact_scrubber(
-    ui: &mut Ui,
-    reg: &mut AutomationRegistry,
-    pal: &MagicPalette,
-    spec: ScrubberSpec<'_>,
-    current_sec: &mut f64,
-) -> Option<f64> {
+pub fn draw_compact_scrubber(ui: &mut Ui, reg: &mut AutomationRegistry, pal: &MagicPalette, spec: ScrubberSpec<'_>, current_sec: &mut f64) -> Option<f64> {
     let dur = spec.duration_sec.max(0.5);
     let (srect, sresp) = ui.allocate_exact_size(Vec2::new(spec.width.max(72.0), 16.0), Sense::click_and_drag());
     let track_r = Rect::from_center_size(srect.center(), Vec2::new(srect.width(), 4.0));
@@ -133,8 +107,7 @@ pub fn draw_compact_scrubber(
     let fill_r = Rect::from_min_max(track_r.min, Pos2::new(knob_x, track_r.max.y));
     ui.painter().rect_filled(fill_r, CornerRadius::same(2), spec.accent);
     ui.painter().circle_filled(Pos2::new(knob_x, track_r.center().y), 5.2, Color32::WHITE);
-    ui.painter()
-        .circle_stroke(Pos2::new(knob_x, track_r.center().y), 5.2, Stroke::new(1.2, spec.accent));
+    ui.painter().circle_stroke(Pos2::new(knob_x, track_r.center().y), 5.2, Stroke::new(1.2, spec.accent));
 
     let mut sought = None;
     if (sresp.clicked() || sresp.dragged())
@@ -164,11 +137,7 @@ pub fn paint_wrapped_editorial_text(painter: &Painter, spec: WrappedTextSpec<'_>
     if inner.width() < 8.0 || inner.height() < 6.0 || spec.text.trim().is_empty() {
         return;
     }
-    let family = if spec.monospace {
-        FontFamily::Monospace
-    } else {
-        FontFamily::Proportional
-    };
+    let family = if spec.monospace { FontFamily::Monospace } else { FontFamily::Proportional };
     let avg_char_w = (spec.font_pt * if spec.monospace { 0.60 } else { 0.51 }).max(3.6);
     let max_chars = ((inner.width() / avg_char_w).floor() as usize).max(4);
     let line_h = (spec.font_pt * 1.22).max(8.5);
@@ -181,13 +150,7 @@ pub fn paint_wrapped_editorial_text(painter: &Painter, spec: WrappedTextSpec<'_>
             if y + spec.font_pt > inner.max.y + 3.0 {
                 return;
             }
-            clip.text(
-                Pos2::new(inner.min.x, y),
-                Align2::LEFT_TOP,
-                &line,
-                FontId::new(spec.font_pt, family.clone()),
-                spec.color,
-            );
+            clip.text(Pos2::new(inner.min.x, y), Align2::LEFT_TOP, &line, FontId::new(spec.font_pt, family.clone()), spec.color);
             y += line_h;
         }
     }
@@ -201,11 +164,7 @@ fn wrap_paragraph(para: &str, max_chars: usize) -> Vec<String> {
     let mut out = Vec::new();
     let mut cur = String::new();
     for word in trimmed.split_whitespace() {
-        let next_len = if cur.is_empty() {
-            word.chars().count()
-        } else {
-            cur.chars().count() + 1 + word.chars().count()
-        };
+        let next_len = if cur.is_empty() { word.chars().count() } else { cur.chars().count() + 1 + word.chars().count() };
         if next_len <= max_chars || cur.is_empty() {
             if !cur.is_empty() {
                 cur.push(' ');
@@ -237,21 +196,12 @@ pub fn draw_persisted_style_controls(ui: &mut Ui, ctx: &mut ViewCtx<'_>, wide: b
     if action_button(ui, ctx.reg, ctx.pal, mode_spec).clicked() {
         let next_mode = if ctx.pal.dark { ThemeMode::Light } else { ThemeMode::Dark };
         ctx.state.theme_mode = next_mode;
-        ctx.exec(
-            "prefs.set",
-            json!({"key": "appearance.theme", "value": next_mode.as_str()}),
-            Some("Saved colour mode"),
-        );
+        ctx.exec("prefs.set", json!({"key": "appearance.theme", "value": next_mode.as_str()}), Some("Saved colour mode"));
     }
 
     let style_lbl = ctx.state.interface_style.label();
     let style_spec = if wide {
-        BtnSpec::new(
-            "menu-style-cycle",
-            "sliders",
-            style_lbl,
-            "Cycle studio interface style preset (Aurora · Editorial · Modern … — persisted)",
-        )
+        BtnSpec::new("menu-style-cycle", "sliders", style_lbl, "Cycle studio interface style preset (Aurora · Editorial · Modern … — persisted)")
     } else {
         BtnSpec::label_only("menu-style-cycle", style_lbl, "Cycle studio interface style preset")
     };

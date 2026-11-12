@@ -12,17 +12,7 @@ use sha2::{Digest, Sha256};
 
 use crate::{EngineError, Result};
 
-const SKIP_DIRS: &[&str] = &[
-    "node_modules",
-    ".git",
-    "target",
-    "dist",
-    "build",
-    ".next",
-    ".turbo",
-    ".cache",
-    "__pycache__",
-];
+const SKIP_DIRS: &[&str] = &["node_modules", ".git", "target", "dist", "build", ".next", ".turbo", ".cache", "__pycache__"];
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LegacyArchiveReceipt {
@@ -61,11 +51,7 @@ fn collect_source_files(root: &Path, cur: &Path, out: &mut Vec<(String, PathBuf,
             collect_source_files(root, &entry, out)?;
         } else if entry.is_file() {
             let len = std::fs::metadata(&entry).map(|m| m.len()).unwrap_or(0);
-            let rel = entry
-                .strip_prefix(root)
-                .unwrap_or(&entry)
-                .to_string_lossy()
-                .replace('\\', "/");
+            let rel = entry.strip_prefix(root).unwrap_or(&entry).to_string_lossy().replace('\\', "/");
             out.push((rel, entry, len));
         }
     }
@@ -180,7 +166,7 @@ pub fn archive_legacy_project(source_dir: &Path, project_dir: &Path, slug: &str)
     let sha_hex: String = hasher.finalize().iter().map(|b| format!("{b:02x}")).collect();
     let compressed_bytes = gz_buf.len() as u64;
 
-    let _ = crate::doc_state::write_file(&archive_path, &gz_buf)?;
+    crate::doc_state::write_file(&archive_path, &gz_buf)?;
     let manifest_doc = json!({
         "format": "magic.legacy_archive",
         "version": 1,

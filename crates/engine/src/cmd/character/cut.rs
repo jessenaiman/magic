@@ -10,20 +10,13 @@ use crate::{Result, Session};
 
 /// Pure-Rust in-process image step runner (`layer.removeBackground`, `image.imageSize`,
 /// `file.export.layersToFiles`, `file.saveACopy`) replacing legacy `photocraft-cli` spawning.
-pub(crate) fn photocraft_run(
-    src: &Path,
-    steps: &[(&str, Value)],
-    out_pcraft: Option<&Path>,
-) -> Result<()> {
+pub(crate) fn photocraft_run(src: &Path, steps: &[(&str, Value)], out_pcraft: Option<&Path>) -> Result<()> {
     let mut current = crate::native_media::load_rgba(src)?;
     for (op, params) in steps {
         match *op {
             "layer.removeBackground" => {
-                let tmp = std::env::temp_dir().join(format!(
-                    "magic-cutout-{}-{}.png",
-                    std::process::id(),
-                    src.file_stem().and_then(|s| s.to_str()).unwrap_or("img")
-                ));
+                let tmp =
+                    std::env::temp_dir().join(format!("magic-cutout-{}-{}.png", std::process::id(), src.file_stem().and_then(|s| s.to_str()).unwrap_or("img")));
                 let _ = crate::native_media::isolate_subject_rgba(src, &tmp, None, 1.2)?;
                 current = crate::native_media::load_rgba(&tmp)?;
                 let _ = std::fs::remove_file(&tmp);
@@ -77,10 +70,7 @@ pub(crate) fn vectorcraft_trace_outline(image: &Path, svg_out: &Path, offset_px:
     let (_, rel_pts) = crate::native_media::trace_silhouette_svg(image, svg_out, offset_px, false)?;
     let cx = f64::from(w) / 2.0;
     let cy = f64::from(h) / 2.0;
-    Ok(rel_pts
-        .into_iter()
-        .map(|pt| json!([(pt[0] + cx).round() as i64, (pt[1] + cy).round() as i64]))
-        .collect())
+    Ok(rel_pts.into_iter().map(|pt| json!([(pt[0] + cx).round() as i64, (pt[1] + cy).round() as i64])).collect())
 }
 
 fn outline_bbox(outline: &[Value], img_w: u32, img_h: u32) -> [u32; 4] {
@@ -149,16 +139,10 @@ pub fn cmd_character_cut(s: &mut Session, p: &Value) -> Result<Value> {
         parts["image"] = json!(drawing.file_name().map(|n| n.to_string_lossy().into_owned()));
         drawing
     } else {
-        let raw_image = parts["image"]
-            .as_str()
-            .map(|i| view.dir.join(i))
-            .filter(|i| i.is_file())
-            .ok_or_else(|| bad("parts.json image is missing"))?;
+        let raw_image = parts["image"].as_str().map(|i| view.dir.join(i)).filter(|i| i.is_file()).ok_or_else(|| bad("parts.json image is missing"))?;
         let image = if p["remove_background"].as_bool().unwrap_or(true) {
             let isolated = view.dir.join(format!("{}-{}-isolated.png", view.id, view.view));
-            if crate::native_media::isolate_subject_rgba(&raw_image, &isolated, p["chroma"].as_str(), 0.8).is_ok()
-                && isolated.is_file()
-            {
+            if crate::native_media::isolate_subject_rgba(&raw_image, &isolated, p["chroma"].as_str(), 0.8).is_ok() && isolated.is_file() {
                 isolated
             } else {
                 raw_image
@@ -170,10 +154,7 @@ pub fn cmd_character_cut(s: &mut Session, p: &Value) -> Result<Value> {
         let (img_w, img_h) = src_rgba.dimensions();
         for part in &list {
             let id = part["id"].as_str().ok_or_else(|| bad("a part has no id"))?;
-            let outline = part["outline"]
-                .as_array()
-                .filter(|o| o.len() >= 3)
-                .ok_or_else(|| bad(format!("part {id} needs an outline of 3 or more points")))?;
+            let outline = part["outline"].as_array().filter(|o| o.len() >= 3).ok_or_else(|| bad(format!("part {id} needs an outline of 3 or more points")))?;
             let rect = outline_bbox(outline, img_w, img_h);
             let dst = layers_dir.join(format!("{id}.png"));
             crate::native_media::crop_and_anchor_cell(&src_rgba, rect, false, &dst)?;
