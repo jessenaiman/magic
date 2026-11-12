@@ -52,7 +52,16 @@ pub enum InterfaceStyle {
 }
 
 impl InterfaceStyle {
-    pub const ALL: [Self; 8] = [Self::Aurora, Self::Modern, Self::Classic, Self::Minimal, Self::Ocean, Self::Forest, Self::Plum, Self::Sand];
+    pub const ALL: [Self; 8] = [
+        Self::Aurora,
+        Self::Modern,
+        Self::Classic,
+        Self::Minimal,
+        Self::Ocean,
+        Self::Forest,
+        Self::Plum,
+        Self::Sand,
+    ];
 
     pub fn as_str(self) -> &'static str {
         match self {
@@ -107,7 +116,13 @@ pub enum AccentChoice {
 }
 
 impl AccentChoice {
-    pub const ALL: [Self; 5] = [Self::Teal, Self::Blue, Self::Violet, Self::Amber, Self::Graphite];
+    pub const ALL: [Self; 5] = [
+        Self::Teal,
+        Self::Blue,
+        Self::Violet,
+        Self::Amber,
+        Self::Graphite,
+    ];
 
     pub fn as_str(self) -> &'static str {
         match self {
@@ -246,7 +261,13 @@ impl MagicPalette {
         Self::resolve(mode, InterfaceStyle::Aurora, AccentChoice::Teal, false, system_dark)
     }
 
-    pub fn resolve(mode: ThemeMode, style: InterfaceStyle, accent: AccentChoice, high_contrast: bool, system_dark: Option<bool>) -> Self {
+    pub fn resolve(
+        mode: ThemeMode,
+        style: InterfaceStyle,
+        accent: AccentChoice,
+        high_contrast: bool,
+        system_dark: Option<bool>,
+    ) -> Self {
         let is_dark = match mode {
             ThemeMode::Dark => true,
             ThemeMode::Light => false,
@@ -311,7 +332,11 @@ impl MagicPalette {
         pal.bg_active = pal.accent_emerald_bg;
 
         if high_contrast {
-            pal.border = if is_dark { Color32::from_rgb(0xa8, 0xb5, 0xcc) } else { Color32::from_rgb(0x26, 0x30, 0x42) };
+            pal.border = if is_dark {
+                Color32::from_rgb(0xa8, 0xb5, 0xcc)
+            } else {
+                Color32::from_rgb(0x26, 0x30, 0x42)
+            };
             pal.border_subtle = pal.border.gamma_multiply(0.75);
             pal.text_primary = if is_dark { Color32::WHITE } else { Color32::BLACK };
             pal.text_secondary = pal.text_primary;
@@ -320,15 +345,37 @@ impl MagicPalette {
     }
 
     pub fn widget_palette(&self) -> WidgetPalette {
-        WidgetPalette { noninteractive: self.bg_panel, inactive: self.bg_elevated, hovered: self.bg_hover, active: self.bg_active, open: self.bg_elevated }
+        WidgetPalette {
+            noninteractive: self.bg_panel,
+            inactive: self.bg_elevated,
+            hovered: self.bg_hover,
+            active: self.bg_active,
+            open: self.bg_elevated,
+        }
     }
 
     pub fn icon_button_style(&self) -> IconButtonStyle {
         IconButtonStyle {
-            normal: ButtonVisuals { fill: Color32::TRANSPARENT, stroke: Stroke::NONE, icon: self.text_secondary },
-            hovered: ButtonVisuals { fill: self.bg_hover, stroke: Stroke::new(1.0, self.border), icon: self.text_primary },
-            pressed: Some(ButtonVisuals { fill: self.bg_active, stroke: Stroke::new(1.0, self.accent_emerald), icon: self.accent_emerald }),
-            selected: ButtonVisuals { fill: self.accent_emerald_bg, stroke: Stroke::new(1.0, self.accent_emerald), icon: self.accent_emerald },
+            normal: ButtonVisuals {
+                fill: Color32::TRANSPARENT,
+                stroke: Stroke::NONE,
+                icon: self.text_secondary,
+            },
+            hovered: ButtonVisuals {
+                fill: self.bg_hover,
+                stroke: Stroke::new(1.0, self.border),
+                icon: self.text_primary,
+            },
+            pressed: Some(ButtonVisuals {
+                fill: self.bg_active,
+                stroke: Stroke::new(1.0, self.accent_emerald),
+                icon: self.accent_emerald,
+            }),
+            selected: ButtonVisuals {
+                fill: self.accent_emerald_bg,
+                stroke: Stroke::new(1.0, self.accent_emerald),
+                icon: self.accent_emerald,
+            },
             corner_radius: CornerRadius::same(self.corner),
             focus_stroke: Stroke::new(1.5, self.accent_sky),
         }
@@ -336,21 +383,49 @@ impl MagicPalette {
 
     pub fn solid_button_style(&self, primary: bool) -> IconButtonStyle {
         if primary {
-            let fg = if self.dark { Color32::from_rgb(0x06, 0x13, 0x18) } else { Color32::WHITE };
+            let fg = if self.dark {
+                Color32::from_rgb(0x06, 0x13, 0x18)
+            } else {
+                Color32::WHITE
+            };
             IconButtonStyle {
-                normal: ButtonVisuals { fill: self.accent_emerald, stroke: Stroke::NONE, icon: fg },
-                hovered: ButtonVisuals { fill: self.accent_mint, stroke: Stroke::NONE, icon: fg },
+                normal: ButtonVisuals {
+                    fill: self.accent_emerald,
+                    stroke: Stroke::NONE,
+                    icon: fg,
+                },
+                hovered: ButtonVisuals {
+                    fill: self.accent_mint,
+                    stroke: Stroke::NONE,
+                    icon: fg,
+                },
                 pressed: None,
-                selected: ButtonVisuals { fill: self.accent_emerald, stroke: Stroke::new(1.0, self.text_primary), icon: fg },
+                selected: ButtonVisuals {
+                    fill: self.accent_emerald,
+                    stroke: Stroke::new(1.0, self.text_primary),
+                    icon: fg,
+                },
                 corner_radius: CornerRadius::same(self.corner),
                 focus_stroke: Stroke::new(1.5, self.accent_sky),
             }
         } else {
             IconButtonStyle {
-                normal: ButtonVisuals { fill: self.bg_elevated, stroke: Stroke::new(1.0, self.border), icon: self.text_primary },
-                hovered: ButtonVisuals { fill: self.bg_hover, stroke: Stroke::new(1.0, self.border), icon: self.text_primary },
+                normal: ButtonVisuals {
+                    fill: self.bg_elevated,
+                    stroke: Stroke::new(1.0, self.border),
+                    icon: self.text_primary,
+                },
+                hovered: ButtonVisuals {
+                    fill: self.bg_hover,
+                    stroke: Stroke::new(1.0, self.border),
+                    icon: self.text_primary,
+                },
                 pressed: None,
-                selected: ButtonVisuals { fill: self.accent_emerald_bg, stroke: Stroke::new(1.0, self.accent_emerald), icon: self.accent_emerald },
+                selected: ButtonVisuals {
+                    fill: self.accent_emerald_bg,
+                    stroke: Stroke::new(1.0, self.accent_emerald),
+                    icon: self.accent_emerald,
+                },
                 corner_radius: CornerRadius::same(self.corner),
                 focus_stroke: Stroke::new(1.5, self.accent_sky),
             }
@@ -358,7 +433,10 @@ impl MagicPalette {
     }
 
     pub fn panel_frame(&self) -> egui::Frame {
-        egui::Frame::new().fill(self.bg_panel).inner_margin(egui::Margin::symmetric(10, 6)).stroke(Stroke::new(1.0, self.border))
+        egui::Frame::new()
+            .fill(self.bg_panel)
+            .inner_margin(egui::Margin::symmetric(10, 6))
+            .stroke(Stroke::new(1.0, self.border))
     }
 
     pub fn card_frame(&self) -> egui::Frame {
@@ -380,7 +458,11 @@ impl MagicPalette {
     pub fn apply(&self, ctx: &egui::Context) {
         let mut style: Style = (*ctx.global_style()).clone();
         let mut visuals = if self.dark { Visuals::dark() } else { Visuals::light() };
-        self.widget_palette().apply_to(&mut visuals.widgets, CornerRadius::same(self.corner), Stroke::new(1.0, self.text_primary));
+        self.widget_palette().apply_to(
+            &mut visuals.widgets,
+            CornerRadius::same(self.corner),
+            Stroke::new(1.0, self.text_primary),
+        );
         visuals.widgets.noninteractive.bg_stroke = Stroke::new(1.0, self.border_subtle);
         visuals.widgets.noninteractive.fg_stroke = Stroke::new(1.0, self.text_secondary);
         visuals.widgets.inactive.bg_stroke = Stroke::new(1.0, self.border);

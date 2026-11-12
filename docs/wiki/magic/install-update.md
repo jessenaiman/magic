@@ -22,9 +22,9 @@ Magic Studio follows the same MCP pattern as [VectorCraft](https://github.com/st
 # Auto-attach to live window when open, else fall back to headless:
 claude mcp add magic -- magic-cli mcp
 
-# Pin live desktop watching (start `magic --control 9876` first):
-magic --control 9876 &
-claude mcp add magic-app -- magic-cli mcp --connect 127.0.0.1:9876
+# Pin live desktop watching (start `magic --control 9875` first):
+magic --control 9875 &
+claude mcp add magic-app -- magic-cli mcp --connect 127.0.0.1:9875
 ```
 
 ## Updating

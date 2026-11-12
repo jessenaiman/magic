@@ -1,6 +1,6 @@
 # Source-Available Non-Resale License
 
-Magic Studio is distributed under the **Magic Studio Source-Available Non-Resale License** (root [`LICENSE`](https://github.com/jessenaiman/magic/blob/main/LICENSE) and [`docs/brand/LICENSE-brand.txt`](https://github.com/jessenaiman/magic/blob/main/docs/brand/LICENSE-brand.txt)), modeled on [`storytold/artcraft-services/LICENSE.md`](https://github.com/storytold/artcraft-services/blob/main/LICENSE.md) and [`storytold/soundcraft/docs/brand/LICENSE-brand.txt`](https://github.com/storytold/soundcraft/blob/main/docs/brand/LICENSE-brand.txt).
+Magic Studio is distributed under the **Magic Studio Source-Available Non-Resale License** (root [`LICENSE`](https://github.com/jessenaiman/magic/blob/main/LICENSE) and [`docs/brand/LICENSE-brand.txt`](https://github.com/jessenaiman/magic/blob/main/docs/brand/LICENSE-brand.txt)), modeled on [`storytold/artcraft-services/LICENSE.md`](https://github.com/storytold/artcraft-services/blob/main/LICENSE.md) and [`storytold/soundcraft/docs/brand/LICENSE-brand.txt`](https://github.com/storytold/soundcraft/blob/main/README.md).
 
 ## Summary of Rights & Restrictions
 

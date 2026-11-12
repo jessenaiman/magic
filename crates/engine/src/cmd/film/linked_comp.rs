@@ -11,9 +11,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 use crate::cmd::character::{check_ecproj_head, ecproj_first_comp_name};
-use crate::craft_hub::discovery::resolve_executable_path;
+use crate::workspace::resolve_executable_path;
 use crate::time::TICKS_PER_SECOND;
-use crate::{CraftHub, EngineError, Result, Session};
+use crate::{EngineError, Result, Session};
 
 const LINK_MANIFEST_REL: &str = "film/linked-compositions.json";
 
@@ -65,7 +65,11 @@ fn bad(msg: impl Into<String>) -> EngineError {
 
 fn file_size_and_mtime(path: &Path) -> Option<(u64, u64)> {
     let meta = std::fs::metadata(path).ok()?;
-    let mtime = meta.modified().ok().and_then(|t| t.duration_since(UNIX_EPOCH).ok()).map_or(0, |d| d.as_millis() as u64);
+    let mtime = meta
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+        .map_or(0, |d| d.as_millis() as u64);
     Some((meta.len(), mtime))
 }
 
@@ -78,7 +82,10 @@ fn load_manifest(project_dir: &Path) -> LinkManifest {
     std::fs::read_to_string(&path)
         .ok()
         .and_then(|raw| serde_json::from_str::<LinkManifest>(&raw).ok())
-        .unwrap_or(LinkManifest { version: 2, links: Vec::new() })
+        .unwrap_or(LinkManifest {
+            version: 2,
+            links: Vec::new(),
+        })
 }
 
 fn save_manifest(project_dir: &Path, manifest: &LinkManifest) -> Result<()> {
@@ -97,7 +104,9 @@ pub fn list_ecproj_comps(ecproj: &Path) -> Vec<String> {
     if let Ok(bytes) = std::fs::read(ecproj) {
         if let Ok(doc) = serde_json::from_slice::<Value>(&bytes) {
             for item in doc["items"].as_array().into_iter().flatten() {
-                let is_comp = item["kind"].as_str().is_some_and(|k| k.eq_ignore_ascii_case("comp") || k.eq_ignore_ascii_case("composition"))
+                let is_comp = item["kind"]
+                    .as_str()
+                    .is_some_and(|k| k.eq_ignore_ascii_case("comp") || k.eq_ignore_ascii_case("composition"))
                     || item.get("comp").is_some();
                 if is_comp
                     && let Some(name) = item["name"].as_str().map(str::trim).filter(|s| !s.is_empty())
@@ -204,7 +213,11 @@ fn build_link_id(ecproj: &Path, comp: &str) -> String {
     let stem = ecproj.file_stem().and_then(|s| s.to_str()).unwrap_or("comp");
     let clean_stem = crate::workspace::sanitize_asset_id(stem);
     let clean_comp = crate::workspace::sanitize_asset_id(comp);
-    if clean_comp.is_empty() || clean_comp == clean_stem { clean_stem } else { format!("{clean_stem}-{clean_comp}") }
+    if clean_comp.is_empty() || clean_comp == clean_stem {
+        clean_stem
+    } else {
+        format!("{clean_stem}-{clean_comp}")
+    }
 }
 
 fn upsert_record(manifest: &mut LinkManifest, record: LinkedCompRecord) {
@@ -290,9 +303,8 @@ fn render_linked_cache(record: &mut LinkedCompRecord, duration_sec: f64) -> std:
             "resolution": "full",
         }),
     };
-    CraftHub::render_effect_clip(&record.ecproj_path, &render_params).map_err(|e| e.to_string())?;
-    let comp_opt = (!record.comp.is_empty()).then_some(record.comp.as_str());
-    let _ = CraftHub::render_effect_frame(&record.ecproj_path, comp_opt, 0.0, 960, &record.preview_png);
+    crate::native_media::write_staged_steps(&record.ecproj_path, &render_params).map_err(|e| e.to_string())?;
+    let _ = crate::native_media::extract_or_copy_preview(&record.ecproj_path, &record.preview_png, 960);
     Ok(())
 }
 
@@ -330,7 +342,7 @@ pub fn cmd_video_list_ec_comps(s: &mut Session, p: &Value) -> Result<Value> {
     }))
 }
 
-/// `video.link_effectcraft` / `filmcraft.import_effectcraft`: dynamically link an `.ecproj` composition onto FilmCraft.
+/// `video.link_effectcraft`: dynamically link an `.ecproj` composition onto FilmCraft.
 pub fn cmd_video_link_effectcraft(s: &mut Session, p: &Value) -> Result<Value> {
     let dir = crate::workshop::project_dir(s)?;
     let raw_proj = p["project"]
@@ -347,17 +359,29 @@ pub fn cmd_video_link_effectcraft(s: &mut Session, p: &Value) -> Result<Value> {
         .filter(|v| !v.is_empty())
         .map(str::to_owned)
         .or_else(|| available_comps.first().cloned())
-        .unwrap_or_else(|| ecproj.file_stem().and_then(|st| st.to_str()).unwrap_or("Main").to_owned());
+        .unwrap_or_else(|| {
+            ecproj
+                .file_stem()
+                .and_then(|st| st.to_str())
+                .unwrap_or("Main")
+                .to_owned()
+        });
     let track = p["track"].as_str().unwrap_or("V2").to_owned();
     let from_seconds = p["from"].as_f64().unwrap_or(0.0).max(0.0);
     let (fps_num, fps_den) = parse_rational_fps(p);
     let (cache_format, ext) = normalize_cache_format(p["format"].as_str().or_else(|| p["cache_format"].as_str()));
-    let duration_sec = p["duration"].as_f64().or_else(|| crate::workshop::song_seconds(&dir)).unwrap_or(8.0);
+    let duration_sec = p["duration"]
+        .as_f64()
+        .or_else(|| crate::workshop::song_seconds(&dir))
+        .unwrap_or(8.0);
 
-    let sync_rate = p["sync_comp_rate"].as_bool().or_else(|| p["sync_fps"].as_bool()).unwrap_or(true);
+    let sync_rate = p["sync_comp_rate"]
+        .as_bool()
+        .or_else(|| p["sync_fps"].as_bool())
+        .unwrap_or(true);
     if sync_rate && ecproj.is_file() {
         let fps_f = (fps_num as f64) / (fps_den.max(1) as f64);
-        let _ = CraftHub::run_effect_steps(Some(&ecproj), true, &[("comp.settings".into(), json!({"comp": comp, "frameRate": fps_f}))]);
+        let _ = crate::native_media::write_staged_steps(&ecproj, &json!({"comp": comp, "frameRate": fps_f}));
     }
 
     let link_id = build_link_id(&ecproj, &comp);
@@ -407,7 +431,11 @@ pub fn cmd_video_link_effectcraft(s: &mut Session, p: &Value) -> Result<Value> {
         }));
     }
 
-    let placed = if from_seconds <= 0.001 && matches!(track.as_str(), "V2" | "V3" | "V4" | "Character Animation" | "Kinetic Lyrics" | "Action Motion") {
+    let placed = if from_seconds <= 0.001
+        && matches!(
+            track.as_str(),
+            "V2" | "V3" | "V4" | "Character Animation" | "Kinetic Lyrics" | "Action Motion"
+        ) {
         let published = super::publish_effect_track(s, track_display_name(&track), &cache_mov)?;
         rec.clip_id = published["clip"].as_u64();
         rec.item_id = published["item"].as_u64();

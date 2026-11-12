@@ -1,5 +1,5 @@
 //! Privacy-scrubbed diagnostics copy (`Copy Diagnostics` & `Report a Problem`), preference +
-//! `storytold/craft-ai-integrations` + `FilmCraft` × `EffectCraft` bridge hydration, project
+//! `storytold/craft-ai-integrations`, project
 //! cache refresh, and safe HTTPS opener.
 
 use std::path::PathBuf;
@@ -13,7 +13,11 @@ fn scrub_home(raw: &str) -> String {
         return raw.to_owned();
     };
     let trimmed = home.trim_end_matches(['/', '\\']);
-    if trimmed.is_empty() { raw.to_owned() } else { raw.replace(trimmed, "~") }
+    if trimmed.is_empty() {
+        raw.to_owned()
+    } else {
+        raw.replace(trimmed, "~")
+    }
 }
 
 /// Build a sanitized Markdown + JSON diagnostics payload (scrubs `$HOME` to `~` and never includes secrets/tokens).
@@ -28,13 +32,11 @@ pub fn build_sanitized_diagnostics(session: &mut Session, ui_state: &mut UiShell
     {
         ui_state.cache.ai_status = ai;
     }
-    if ui_state.cache.bridge_status.is_null()
-        && let Ok(br) = session.execute("bridge.status", json!({"ensure_tokens": false}))
-    {
-        ui_state.cache.bridge_status = br;
-    }
 
-    let proj_display = ui_state.project_path.as_ref().map_or_else(|| "none".into(), |p| scrub_home(&p.to_string_lossy()));
+    let proj_display = ui_state
+        .project_path
+        .as_ref()
+        .map_or_else(|| "none".into(), |p| scrub_home(&p.to_string_lossy()));
 
     let summary = ui_state.ai.problem_summary.trim();
     let steps = ui_state.ai.problem_steps.trim();
@@ -62,10 +64,6 @@ pub fn build_sanitized_diagnostics(session: &mut Session, ui_state: &mut UiShell
         "ai_enabled": ui_state.ai.enabled,
         "ai_roles": ui_state.cache.ai_status.get("roles").cloned().unwrap_or(Value::Null),
         "craft_apps": ui_state.cache.doctor.get("apps").cloned().unwrap_or(Value::Null),
-        "bridge_ports": {
-            "effectcraft_tcp": ui_state.cache.bridge_status.pointer("/effectcraft/tcp_listening").cloned().unwrap_or(Value::Bool(false)),
-            "filmcraft_tcp": ui_state.cache.bridge_status.pointer("/filmcraft/tcp_listening").cloned().unwrap_or(Value::Bool(false)),
-        },
     });
     let json_text = serde_json::to_string_pretty(&payload).unwrap_or_else(|_| "{}".into());
     out.push_str("```json\n");
@@ -74,7 +72,7 @@ pub fn build_sanitized_diagnostics(session: &mut Session, ui_state: &mut UiShell
     out
 }
 
-/// Hydrate appearance preferences, `craft-ai-integrations`, and `:9876`/`:9877` bridge status.
+/// Hydrate appearance preferences and `craft-ai-integrations` status.
 pub fn hydrate_prefs_and_ai(session: &mut Session, ui_state: &mut UiShellState) {
     if let Ok(prefs_res) = session.execute("prefs.get", json!({})) {
         let p = &prefs_res["prefs"];
@@ -100,18 +98,6 @@ pub fn hydrate_prefs_and_ai(session: &mut Session, ui_state: &mut UiShellState) 
         if let Some(as_min) = p.pointer("/autosave/interval_minutes").and_then(Value::as_f64) {
             ui_state.autosave_minutes = as_min.clamp(1.0, 60.0);
         }
-        if let Some(fp) = p.pointer("/craft/filmcraft_port").and_then(Value::as_i64) {
-            ui_state.ai.fc_port_str = fp.to_string();
-        }
-        if let Some(ep) = p.pointer("/craft/effectcraft_port").and_then(Value::as_i64) {
-            ui_state.ai.ec_port_str = ep.to_string();
-        }
-        if let Some(live) = p.pointer("/craft/prefer_live_bridge").and_then(Value::as_bool) {
-            ui_state.ai.prefer_live_bridge = live;
-        }
-        if let Some(mcp_as) = p.pointer("/craft/effectcraft_mcp_autosave").and_then(Value::as_bool) {
-            ui_state.ai.ec_mcp_autosave = mcp_as;
-        }
         if let Some(fdirs) = p.pointer("/lyrics/font_dirs").and_then(Value::as_str) {
             ui_state.lyrics.font_dir_extra = fdirs.to_owned();
             apply_app_font_dirs(fdirs);
@@ -120,9 +106,6 @@ pub fn hydrate_prefs_and_ai(session: &mut Session, ui_state: &mut UiShellState) 
     if let Ok(ai) = session.execute("ai.status", json!({})) {
         sync_ai_ui_from_status(ui_state, &ai);
         ui_state.cache.ai_status = ai;
-    }
-    if let Ok(br) = session.execute("bridge.status", json!({"ensure_tokens": true})) {
-        ui_state.cache.bridge_status = br;
     }
 }
 
@@ -158,7 +141,10 @@ pub fn sync_ai_ui_from_status(ui_state: &mut UiShellState, ai: &Value) {
 
 pub fn hydrate_selected_character(session: &mut Session, ui_state: &mut UiShellState) {
     let chars = ui_state.cache.characters["characters"].as_array().cloned().unwrap_or_default();
-    let active_id = ui_state.selected_character_id.clone().or_else(|| chars.first().and_then(|c| c["id"].as_str().map(str::to_owned)));
+    let active_id = ui_state
+        .selected_character_id
+        .clone()
+        .or_else(|| chars.first().and_then(|c| c["id"].as_str().map(str::to_owned)));
     let Some(cid) = active_id else {
         ui_state.cache.character_keys = Value::Null;
         ui_state.cache.character_path = Value::Null;
@@ -170,8 +156,12 @@ pub fn hydrate_selected_character(session: &mut Session, ui_state: &mut UiShellS
         .and_then(|c| c["views"].as_array())
         .is_some_and(|vs| vs.iter().any(|v| v["ecproj"].as_bool() == Some(true)));
     if has_ecproj {
-        ui_state.cache.character_keys = session.execute("character.keys", json!({"character": cid, "op": "list"})).unwrap_or(Value::Null);
-        ui_state.cache.character_path = session.execute("character.path", json!({"character": cid, "op": "inspect"})).unwrap_or(Value::Null);
+        ui_state.cache.character_keys = session
+            .execute("character.keys", json!({"character": cid, "op": "list"}))
+            .unwrap_or(Value::Null);
+        ui_state.cache.character_path = session
+            .execute("character.path", json!({"character": cid, "op": "inspect"}))
+            .unwrap_or(Value::Null);
     } else {
         ui_state.cache.character_keys = Value::Null;
         ui_state.cache.character_path = Value::Null;
@@ -210,9 +200,6 @@ fn hydrate_open_project_caches(session: &mut Session, ui_state: &mut UiShellStat
     if let Ok(tl) = session.execute("video.timeline", json!({})) {
         ui_state.cache.timeline = tl;
     }
-    if let Ok(pre) = session.execute("bridge.preflight", json!({"action": "check"})) {
-        ui_state.cache.bridge_preflight = pre;
-    }
 }
 
 pub fn refresh_cached_state(session: &mut Session, ui_state: &mut UiShellState, initial: bool) {
@@ -234,18 +221,15 @@ pub fn refresh_cached_state(session: &mut Session, ui_state: &mut UiShellState, 
             sync_ai_ui_from_status(ui_state, &ai);
             ui_state.cache.ai_status = ai;
         }
-        if let Ok(br) = session.execute("bridge.status", json!({"ensure_tokens": true})) {
-            ui_state.cache.bridge_status = br;
-        }
     }
     if ui_state.project_path.is_some() {
         hydrate_open_project_caches(session, ui_state);
     }
     if let Some(song) = ui_state.song_audio_path()
-        && let Ok(probe) = craft_util::media::probe_audio_in_process(std::path::Path::new(&song))
+        && let Ok(probe) = magic_util::media::probe_audio_in_process(std::path::Path::new(&song))
         && let Some(ticks) = probe["duration"].as_i64()
     {
-        ui_state.audio_duration_sec = craft_util::time::Tick(ticks).seconds();
+        ui_state.audio_duration_sec = magic_util::time::Tick(ticks).seconds();
     } else if let Some(sec) = ui_state
         .cache
         .snapshot
@@ -265,7 +249,9 @@ pub fn open_https_url(ctx: &egui::Context, url: &str) {
 }
 
 pub fn apply_app_font_dirs(raw: &str) {
-    let dirs: Vec<PathBuf> = std::env::split_paths(raw).filter(|p| !p.as_os_str().is_empty()).collect();
+    let dirs: Vec<PathBuf> = std::env::split_paths(raw)
+        .filter(|p| !p.as_os_str().is_empty())
+        .collect();
     craft_font_catalog::Catalog::global().set_app_dirs(dirs);
     craft_font_catalog::Catalog::global().rescan_if_changed();
 }

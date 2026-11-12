@@ -1,10 +1,9 @@
-//! Shared project state and command dispatch for Magic Studio's lightweight coordinator workspace.
+//! Shared project state and command dispatch for Magic Studio.
 //!
 //! The pure-Rust `eframe` + `egui` desktop shell (`magic`), `magic-cli`, and `magic-cli mcp` share
-//! the same command registry and [`Session::execute`] entry point. Magic coordinates installed
-//! ArtCraft applications (`DesignCraft`, `PhotoCraft`, `VectorCraft`, `EffectCraft`, `FilmCraft`,
-//! and headless `anicraft-cli`) via [`CraftHub`] and delegates AI/LLM capabilities strictly to
-//! [`storytold/craft-ai-integrations`](https://github.com/storytold/craft-ai-integrations) via [`craft_ai`].
+//! the same command registry and [`Session::execute`] entry point. Magic reads and writes project
+//! assets on disk via [`storytold/craft-libs`](https://github.com/storytold/craft-libs) and
+//! delegates AI/LLM capabilities to [`storytold/craft-ai-integrations`](https://github.com/storytold/craft-ai-integrations).
 
 #![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable))]
 
@@ -17,13 +16,13 @@ pub mod commands;
 pub mod confinement;
 pub mod craft_ai;
 pub mod craft_effects;
-pub mod craft_hub;
 pub mod doc_state;
 pub mod doctor;
 pub mod error;
 pub mod guard;
 pub mod history;
 pub mod link_watch;
+pub mod native_media;
 pub mod project_lock;
 pub(crate) mod read_only_file;
 pub mod scribbles;
@@ -41,7 +40,6 @@ pub use cmd::project::transcript as workshop_transcript;
 pub use cmd::project::workshop;
 pub use commands::{CommandSpec, command_specs, find as find_command};
 pub use confinement::AutomationRoots;
-pub use craft_hub::{CraftHub, CraftTarget};
 pub use doc_state::write_file;
 pub use error::{EngineError, Result};
 pub use session::{Asset, ProjectAsset, Session};

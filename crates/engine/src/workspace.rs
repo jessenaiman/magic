@@ -1,68 +1,22 @@
-//! Workspace path helpers and unified routing to `CraftHub` for external Craft apps.
+//! Workspace path resolution and OS file handoff (`workspace.open`).
 //!
-//! All ArtCraft binary discovery, `--control` desktop launches, and `<product>-cli` command
-//! execution delegate to [`crate::CraftHub`] so every Craft product is accessed consistently.
+//! Following the ArtCraft cross-editor file pattern (`photocraft/docs/embedded-vector-editing.md`),
+//! Magic Studio hands project files to external editors on disk without opening cross-app `--control`
+//! sockets or generating sibling token files, and watches saved file changes via `link_watch`.
 
 use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
 
 use serde_json::{Value, json};
 
-use crate::craft_hub::discovery::{require_executable, resolve_executable_path};
-use crate::{CraftHub, CraftTarget, EngineError, Result};
+use crate::{EngineError, Result};
 
-fn control_token_file() -> Option<PathBuf> {
-    let base = std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from).or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))?;
-    Some(base.join("magic/control-token"))
-}
-
-/// The control token: `MAGIC_CONTROL_TOKEN`, else the private token file the desktop creates.
+/// Optional bearer token from `MAGIC_CONTROL_TOKEN` when explicitly configured by the user.
 pub fn control_token() -> Option<String> {
-    std::env::var("MAGIC_CONTROL_TOKEN").ok().filter(|t| !t.is_empty()).or_else(|| Some(std::fs::read_to_string(control_token_file()?).ok()?.trim().to_owned()))
-}
-
-/// The token for a desktop starting its control port, creating the private file on first use.
-pub fn ensure_control_token() -> Result<String> {
-    if let Some(token) = control_token() {
-        return Ok(token);
-    }
-    use std::io::{Read, Write};
-    let path = control_token_file().ok_or_else(|| EngineError::InvalidParams("no home folder for the control token".into()))?;
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    let mut bytes = [0_u8; 32];
-    std::fs::File::open("/dev/urandom")?.read_exact(&mut bytes)?;
-    let token: String = bytes.iter().map(|b| format!("{b:02x}")).collect();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        std::fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(&path)?.write_all(token.as_bytes())?;
-    }
-    #[cfg(not(unix))]
-    {
-        craft_atomic::atomic_write(&path, token.as_bytes())?;
-    }
-    Ok(token)
-}
-
-/// Removes credentials this engine holds from a child process's environment.
-pub fn scrub_inherited_credentials(command: &mut std::process::Command) {
-    for (key, _) in std::env::vars_os() {
-        let Some(name) = key.to_str() else { continue };
-        if name == "MAGIC_CONTROL_TOKEN"
-            || name.starts_with("CRAFT_AI_SECRET_")
-            || name == "OPENAI_API_KEY"
-            || name == "OPENAI_ORG"
-            || name == "OPENAI_PROJECT"
-            || name == "CODEX_API_KEY"
-            || name == "ANTHROPIC_API_KEY"
-            || name == "GEMINI_API_KEY"
-            || name == "GOOGLE_API_KEY"
-            || name == "GOOGLE_GENAI_USE_VERTEXAI"
-        {
-            command.env_remove(name);
-        }
-    }
+    std::env::var("MAGIC_CONTROL_TOKEN")
+        .ok()
+        .map(|t| t.trim().to_owned())
+        .filter(|t| !t.is_empty())
 }
 
 pub fn workspace_root(s: &crate::Session) -> PathBuf {
@@ -84,22 +38,37 @@ pub fn workspace_root(s: &crate::Session) -> PathBuf {
     s.cwd.clone()
 }
 
+/// Expand a leading `~` or `~/` segment against `HOME` (or `USERPROFILE` on Windows).
+pub fn expand_tilde(raw: &str) -> PathBuf {
+    let trimmed = raw.trim();
+    if trimmed == "~" {
+        if let Some(home) = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")) {
+            return PathBuf::from(home);
+        }
+    } else if let Some(rest) = trimmed.strip_prefix("~/").or_else(|| trimmed.strip_prefix("~\\"))
+        && let Some(home) = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE"))
+    {
+        return PathBuf::from(home).join(rest);
+    }
+    PathBuf::from(trimmed)
+}
+
 /// Resolve a potentially relative path against the session workspace root.
 pub fn resolve_workspace_path(s: &crate::Session, raw: &str) -> PathBuf {
+    let expanded = expand_tilde(raw);
+    if expanded.is_absolute() {
+        return expanded;
+    }
     if let Ok(resolved) = craft_docpath::resolve_absolute(raw, s.project_path.as_deref())
         && resolved.exists()
     {
         return resolved;
     }
-    let p = Path::new(raw);
-    if p.is_absolute() {
-        return p.to_path_buf();
-    }
-    let from_cwd = s.cwd.join(p);
+    let from_cwd = s.cwd.join(&expanded);
     if from_cwd.exists() {
         return from_cwd;
     }
-    workspace_root(s).join(p)
+    workspace_root(s).join(expanded)
 }
 
 /// The user's portable data directory; relative XDG values are not valid roots.
@@ -107,272 +76,133 @@ pub(crate) fn user_data_dir() -> Option<PathBuf> {
     std::env::var_os("XDG_DATA_HOME")
         .map(PathBuf::from)
         .filter(|path| path.is_absolute())
-        .or_else(|| std::env::var_os("HOME").map(PathBuf::from).filter(|path| path.is_absolute()).map(|home| home.join(".local/share")))
+        .or_else(|| {
+            std::env::var_os("HOME")
+                .map(PathBuf::from)
+                .filter(|path| path.is_absolute())
+                .map(|home| home.join(".local/share"))
+        })
 }
 
-/// Resolve an installed executable via `craft_hub::discovery`.
-pub(crate) fn find_executable(name: &str) -> Result<PathBuf> {
-    require_executable(name)
-}
-
-/// Hand off a document for editing. ArtCraft desktop apps always launch or focus with `--control`
-/// enabled via [`CraftHub::open_live`] so live designer edits and CLI `--bridge` calls share one window.
-pub(crate) fn open_editor(app: &str, document: &Path) -> Result<()> {
-    if let Some(target) = CraftTarget::from_name(app) {
-        let _ = CraftHub::open_live(target, document)?;
-        return Ok(());
-    }
-    use std::process::{Command, Stdio};
-    let mut cmd = Command::new(resolve_tool(app));
-    scrub_inherited_credentials(&mut cmd);
-    let mut editor = cmd
-        .arg(document)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .map_err(|e| EngineError::ExternalTool(app.to_owned(), e.to_string()))?;
-    std::thread::spawn(move || {
-        let _ = editor.wait();
-    });
-    Ok(())
-}
-
-fn find_first_with_ext(dir: &Path, exts: &[&str], depth: usize) -> Option<PathBuf> {
-    if depth == 0 {
+/// Resolve an installed executable via `config.toml` `[tools]` or `PATH`.
+pub fn resolve_executable_path(name: &str) -> Option<PathBuf> {
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
         return None;
     }
-    let mut entries: Vec<PathBuf> = std::fs::read_dir(dir)
-        .ok()?
-        .flatten()
-        .map(|e| e.path())
-        .filter(|p| !p.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with('.') || n == "target" || n == "frames"))
-        .collect();
-    entries.sort();
-    for entry in &entries {
-        if craft_util::media::is_craft_doc_path(entry) && has_extension(entry, exts) {
-            return Some(entry.clone());
+    let stored = crate::project_settings::stored_settings();
+    if let Some(cfg) = stored
+        .pointer(&format!("/tools/{trimmed}"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        let candidate = expand_tilde(cfg);
+        if candidate.is_file() {
+            return Some(candidate);
         }
     }
-    for entry in &entries {
-        if entry.is_dir()
-            && !craft_util::media::is_craft_doc_path(entry)
-            && let Some(found) = find_first_with_ext(entry, exts, depth - 1)
-        {
-            return Some(found);
+    let direct = Path::new(trimmed);
+    if direct.components().count() > 1 && direct.is_file() {
+        return Some(direct.to_path_buf());
+    }
+    let path_var = std::env::var_os("PATH")?;
+    for dir in std::env::split_paths(&path_var) {
+        let candidate = dir.join(trimmed);
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+        if cfg!(windows) {
+            let exe = dir.join(format!("{trimmed}.exe"));
+            if exe.is_file() {
+                return Some(exe);
+            }
         }
     }
     None
 }
 
-fn find_project_craft_doc(s: &crate::Session, target: CraftTarget) -> Option<PathBuf> {
-    let dir = s.project_path.as_deref()?.parent()?;
-    match target {
-        CraftTarget::Design => [dir.join("storyboard.designcraft"), dir.join("storyboard/storyboard.designcraft")]
-            .into_iter()
-            .find(|p| p.is_file())
-            .or_else(|| find_first_with_ext(dir, &["designcraft"], 3)),
-        CraftTarget::Pdf => [dir.join("storyboard.pdf"), dir.join("storyboard-template.pdf")]
-            .into_iter()
-            .find(|p| p.is_file())
-            .or_else(|| find_first_with_ext(dir, &["pdf"], 3)),
-        CraftTarget::Deck => find_first_with_ext(dir, &["deckcraft", "pptx"], 3),
-        CraftTarget::Effect => {
-            let lyrics = dir.join("lettering/lyrics.ecproj");
-            lyrics.is_file().then_some(lyrics).or_else(|| find_first_with_ext(dir, &["ecproj"], 4))
-        }
-        CraftTarget::Film => {
-            let stem = s.project_path.as_deref().and_then(|p| p.file_stem()).and_then(|n| n.to_str()).unwrap_or("Film");
-            let primary = dir.join("film").join(format!("{stem}.fcproj"));
-            primary
-                .is_file()
-                .then_some(primary)
-                .or_else(|| crate::cmd::project::workshop::video_project_path(dir))
-                .or_else(|| find_first_with_ext(dir, &["fcproj"], 3))
-        }
-        CraftTarget::Photo => find_first_with_ext(dir, &["pcraft", "psd", "psb", "ora", "xcf", "kra", "pdn"], 4),
-        CraftTarget::Vector => find_first_with_ext(dir, &["vectorcraft", "vcraft", "drawcraft", "svg", "ai"], 4),
-        CraftTarget::Ani => find_first_with_ext(dir, &["anicraft", "ani"], 4),
-        CraftTarget::Texture => find_first_with_ext(dir, &["tcraft", "mcraft"], 4),
-    }
-}
-
-/// Close sibling Craft apps spawned by Magic during this session (`Close apps opened by Magic`).
-pub fn cmd_workspace_close_opened(_s: &mut crate::Session, _params: &Value) -> Result<Value> {
-    CraftHub::close_opened_apps()
-}
-
-/// Open a project file in the Craft app that owns its format (with `--control` enabled), launch a
-/// Craft app directly, or invoke the system opener.
-pub fn cmd_workspace_open(s: &mut crate::Session, params: &Value) -> Result<Value> {
-    let ws_dir = s.project_path.as_deref().and_then(Path::parent);
-    if params.get("path").and_then(Value::as_str).is_none_or(|p| p.trim().is_empty())
-        && let Some(app) = params.get("app").and_then(Value::as_str).map(str::trim).filter(|a| !a.is_empty())
-    {
-        let target = CraftTarget::from_name(app).ok_or_else(|| EngineError::InvalidParams(format!("unsupported Craft app '{app}'")))?;
-        let doc = find_project_craft_doc(s, target);
-        return CraftHub::launch_with_control(target, doc.as_deref(), None, ws_dir);
-    }
-    let raw = params["path"].as_str().filter(|p| !p.trim().is_empty()).ok_or_else(|| EngineError::InvalidParams("missing 'path'".into()))?;
-    let path = resolve_workspace_path(s, raw);
-    let requested_app = params.get("app").and_then(Value::as_str).map(str::trim).filter(|a| !a.is_empty());
-    if let Some(app) = requested_app {
-        if let Some(target) = CraftTarget::from_name(app) {
-            let resolved_target = if target == CraftTarget::Photo && craft_util::media::is_craft_doc_path(&path.with_extension("pcraft")) {
-                path.with_extension("pcraft")
-            } else if target == CraftTarget::Vector && path.with_extension("vectorcraft").is_file() {
-                path.with_extension("vectorcraft")
-            } else {
-                path
-            };
-            return CraftHub::launch_with_control(target, Some(&resolved_target), None, ws_dir);
-        }
-        return Err(EngineError::InvalidParams(format!("unsupported Craft app '{app}'")));
-    }
-    if let Some(target) = CraftTarget::from_path(&path) {
-        return CraftHub::launch_with_control(target, Some(&path), None, ws_dir);
-    }
-    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or_default().to_ascii_lowercase();
-    let app = match ext.as_str() {
-        "cadcraft" | "dwg" => "cadcraft",
-        "mcraft" => "materialcraft",
-        "solidcraft" | "step" | "stp" => "solidcraft",
-        "soundcraft" => "soundcraft",
-        "wordcraft" | "docx" => "wordcraft",
-        "glb" | "gltf" | "fbx" | "obj" => "texturecraft",
-        _ => "xdg-open",
-    };
-    open_editor(app, &path)?;
-    Ok(json!({"ok": true, "app": app, "path": path}))
-}
-
-fn parse_step_pairs(p: &Value, default_cmd: Option<&str>) -> Result<Vec<(String, Value)>> {
-    let steps: Vec<Value> = if let Some(arr) = p["steps"].as_array() {
-        arr.clone()
-    } else if let Some(id) = p["id"].as_str().or_else(|| p["command"].as_str()) {
-        vec![json!({"id": id, "params": p.get("params").cloned().unwrap_or_else(|| json!({}))})]
-    } else if let Some(def) = default_cmd {
-        vec![json!({"id": def, "params": {}})]
-    } else {
-        return Err(EngineError::InvalidParams("id=<command> or steps=[...] is required".into()));
-    };
-    let mut out = Vec::with_capacity(steps.len());
-    for step in &steps {
-        let id = step["id"].as_str().or_else(|| step["command"].as_str()).ok_or_else(|| EngineError::InvalidParams("step missing command id".into()))?;
-        let params = step.get("params").cloned().unwrap_or_else(|| json!({}));
-        out.push((id.to_owned(), params));
-    }
-    Ok(out)
-}
-
-pub fn cmd_photo_exec(s: &mut crate::Session, p: &Value) -> Result<Value> {
-    let raw = p["path"].as_str().ok_or_else(|| EngineError::InvalidParams("path is required".into()))?;
-    let path = resolve_workspace_path(s, raw);
-    let owned = parse_step_pairs(p, Some("document.inspect"))?;
-    let is_query = owned.len() == 1 && matches!(owned[0].0.as_str(), "document.inspect" | "session.inspect" | "command.list" | "info");
-    let save = p["save"].as_str().map(|out| resolve_workspace_path(s, out)).or_else(|| (!is_query).then(|| path.with_extension("pcraft")));
-    let pairs: Vec<(&str, Value)> = owned.iter().map(|(id, params)| (id.as_str(), params.clone())).collect();
-    let results = CraftHub::run_batch(CraftTarget::Photo, Some(&path), save.as_deref(), &pairs)?;
-    let info = save.as_deref().or(Some(path.as_path())).and_then(craft_util::media::inspect_craft_envelope);
-    Ok(json!({"ok": true, "path": path, "pcraft": save, "info": info, "results": results, "via": "photocraft"}))
-}
-
-fn resolve_effect_exec_target(s: &crate::Session, p: &Value) -> Result<PathBuf> {
-    if let Some(raw) = p["path"].as_str().filter(|v| !v.trim().is_empty()) {
-        return Ok(resolve_workspace_path(s, raw));
-    }
-    let proj_dir = crate::workshop::project_dir(s)?;
-    match p["domain"].as_str().unwrap_or_default() {
-        "lyrics" | "words" => Ok(proj_dir.join("lettering/lyrics.ecproj")),
-        "motion" => Ok(proj_dir.join("motion/actions.ecproj")),
-        "character" | "animation" => {
-            if let Some(cid) = p["character"].as_str().filter(|c| !c.trim().is_empty()) {
-                let candidate = proj_dir.join("assets/characters").join(cid).join("rig.ecproj");
-                if candidate.is_file() {
-                    return Ok(candidate);
-                }
-            }
-            Ok(find_project_craft_doc(s, CraftTarget::Effect).unwrap_or_else(|| proj_dir.join("assets/characters/rig.ecproj")))
-        }
-        _ => find_project_craft_doc(s, CraftTarget::Effect)
-            .ok_or_else(|| EngineError::InvalidParams("path=<.ecproj> or domain=lyrics|motion|character is required".into())),
-    }
-}
-
-pub fn cmd_effect_exec(s: &mut crate::Session, p: &Value) -> Result<Value> {
-    let path = resolve_effect_exec_target(s, p)?;
-    let steps: Vec<Value> = if let Some(arr) = p["steps"].as_array() {
-        arr.clone()
-    } else if let Some(id) = p["id"].as_str().or_else(|| p["command"].as_str()) {
-        vec![json!({"id": id, "params": p.get("params").cloned().unwrap_or_else(|| json!({}))})]
-    } else {
-        return Err(EngineError::InvalidParams("id=<effectcraft command> or steps=[...] is required".into()));
-    };
-    let read_only = steps.len() == 1
-        && steps[0]["id"]
-            .as_str()
-            .is_some_and(|id| matches!(id, "comp.info" | "text.fonts" | "text.fontFeatures" | "layer.channels" | "edit.history.list" | "footage.check"));
-    let save = p["save"].as_bool().unwrap_or(!read_only);
-    let dir = path.parent().unwrap_or_else(|| Path::new("."));
-    let results = crate::cmd::character::effectcraft(dir, path.is_file().then_some(path.as_path()), &steps, save)?;
-    let info = craft_util::media::inspect_craft_envelope(&path);
-    Ok(json!({"ok": true, "path": path, "info": info, "results": results, "via": "effectcraft"}))
-}
-
-pub fn cmd_vector_exec(s: &mut crate::Session, p: &Value) -> Result<Value> {
-    let raw = p["path"].as_str().ok_or_else(|| EngineError::InvalidParams("path is required".into()))?;
-    let path = resolve_workspace_path(s, raw);
-    let owned = parse_step_pairs(p, Some("document.inspect"))?;
-    let is_query = owned.len() == 1 && matches!(owned[0].0.as_str(), "document.inspect" | "session.inspect" | "command.list");
-    let save = p["save"]
-        .as_str()
-        .or_else(|| p["out"].as_str())
-        .map(|o| resolve_workspace_path(s, o))
-        .or_else(|| (!is_query).then(|| path.with_extension("vectorcraft")));
-    let pairs: Vec<(&str, Value)> = owned.iter().map(|(id, params)| (id.as_str(), params.clone())).collect();
-    let results = CraftHub::run_batch(CraftTarget::Vector, path.is_file().then_some(path.as_path()), save.as_deref(), &pairs)?;
-    let info = save.as_deref().or(Some(path.as_path())).and_then(craft_util::media::inspect_craft_envelope);
-    Ok(json!({"ok": true, "path": path, "vectorcraft": save, "info": info, "results": results, "via": "vectorcraft"}))
+pub(crate) fn find_executable(name: &str) -> Result<PathBuf> {
+    resolve_executable_path(name).ok_or_else(|| {
+        EngineError::ExternalTool(name.to_owned(), "executable not found on PATH".into())
+    })
 }
 
 pub fn resolve_tool(name: &str) -> String {
-    resolve_executable_path(name).map_or_else(|| name.to_string(), |p| p.to_string_lossy().into_owned())
+    resolve_executable_path(name)
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_else(|| name.to_string())
 }
 
-pub(crate) struct ToolSlotGuard;
-impl Drop for ToolSlotGuard {
-    fn drop(&mut self) {
-        let (lock, cvar) = tool_limiter();
-        if let Ok(mut active) = lock.lock() {
-            *active = active.saturating_sub(1);
-            cvar.notify_one();
-        }
+/// Open a document on disk using an optional app binary or the platform default file opener,
+/// without passing any `--control` or `--bridge` flags.
+pub fn open_editor(app: &str, document: &Path) -> Result<()> {
+    let trimmed = app.trim();
+    let mut cmd = if !trimmed.is_empty() && trimmed != "system" && resolve_executable_path(trimmed).is_some() {
+        let mut c = Command::new(resolve_tool(trimmed));
+        c.arg(document);
+        c
+    } else if cfg!(target_os = "macos") {
+        let mut c = Command::new("open");
+        c.arg(document);
+        c
+    } else if cfg!(target_os = "windows") {
+        let mut c = Command::new("cmd");
+        c.args(["/C", "start", ""]).arg(document);
+        c
+    } else {
+        let mut c = Command::new("xdg-open");
+        c.arg(document);
+        c
+    };
+    let mut child = cmd
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|e| EngineError::ExternalTool(trimmed.to_owned(), e.to_string()))?;
+    std::thread::spawn(move || {
+        let _ = child.wait();
+    });
+    Ok(())
+}
+
+/// Open a project file in its native desktop editor on disk (`workspace.open`).
+pub fn cmd_workspace_open(s: &mut crate::Session, params: &Value) -> Result<Value> {
+    let raw = params["path"]
+        .as_str()
+        .filter(|p| !p.trim().is_empty())
+        .ok_or_else(|| EngineError::InvalidParams("missing `path`".into()))?;
+    let path = resolve_workspace_path(s, raw);
+    if !magic_util::media::is_craft_doc_path(&path) {
+        return Err(EngineError::InvalidParams(format!("file does not exist: {}", path.display())));
     }
-}
-
-fn tool_limiter() -> &'static (std::sync::Mutex<usize>, std::sync::Condvar) {
-    static LIMITER: std::sync::OnceLock<(std::sync::Mutex<usize>, std::sync::Condvar)> = std::sync::OnceLock::new();
-    LIMITER.get_or_init(|| (std::sync::Mutex::new(0), std::sync::Condvar::new()))
-}
-
-pub(crate) fn acquire_tool_slot() -> ToolSlotGuard {
-    let (lock, cvar) = tool_limiter();
-    if let Ok(mut active) = lock.lock() {
-        while *active >= 4 {
-            active = match cvar.wait(active) {
-                Ok(g) => g,
-                Err(p) => p.into_inner(),
-            };
-        }
-        *active += 1;
+    let app = params
+        .get("app")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|a| !a.is_empty())
+        .unwrap_or("system");
+    if app.eq_ignore_ascii_case("anicraft") {
+        return Err(EngineError::InvalidParams(
+            "AniCraft desktop UI is disabled while in early alpha".into(),
+        ));
     }
-    ToolSlotGuard
+    open_editor(app, &path)?;
+    Ok(json!({
+        "ok": true,
+        "app": app,
+        "path": path,
+        "document": {"app": app, "file": path}
+    }))
 }
 
 pub(crate) const AUDIO_EXTENSIONS: &[&str] = &["wav", "mp3", "flac", "m4a", "aac", "ogg"];
 
 pub(crate) fn has_extension(path: &Path, allowed: &[&str]) -> bool {
-    path.extension().and_then(|e| e.to_str()).is_some_and(|e| allowed.iter().any(|a| a.eq_ignore_ascii_case(e)))
+    path.extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| allowed.iter().any(|a| a.eq_ignore_ascii_case(e)))
 }
 
 pub(crate) fn song_audio_path(s: &crate::Session, raw: &str) -> Result<PathBuf> {

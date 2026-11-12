@@ -246,22 +246,6 @@ pub(crate) fn sync_lyric_track_to_filmcraft(s: &mut Session, srt_path: &Path, do
     if let Ok(fcproj) = crate::cmd::film::film_path(s)
         && fcproj.is_file()
     {
-        if let Some(d) = doc {
-            let _ = crate::CraftHub::execute_and_save(
-                crate::CraftTarget::Film,
-                &fcproj,
-                "transcript.set",
-                &json!({"words": d["words"], "segments": d["paragraphs"]}),
-            );
-        }
-        if srt_path.is_file() {
-            let _ = crate::CraftHub::execute_and_save(
-                crate::CraftTarget::Film,
-                &fcproj,
-                "captions.import",
-                &json!({"path": srt_path, "trackName": "Synced Lyrics"}),
-            );
-        }
     }
     let _ = crate::cmd::words::cmd_words_captions(s, &json!({"to": "video"}));
 }
@@ -307,10 +291,14 @@ pub fn cmd_workshop_import_transcript(s: &mut Session, params: &Value) -> Result
     let probed = probed_duration(s);
     doc["recording_duration_tick"] = json!(probed.map(|t| t.0));
     let mut problems = transcript_problems(&doc);
-    if let (Some(recorded), Some(song)) = (doc.get("audio").and_then(Value::as_str), s.song_audio.as_ref())
-        && Path::new(recorded) != song.as_path()
-    {
-        problems.push(format!("transcript is for {recorded}, but this project's song is {}", song.display()));
+    if let (Some(recorded), Some(song)) = (doc.get("audio").and_then(Value::as_str), s.song_audio.as_ref()) {
+        let recorded_path = Path::new(recorded);
+        let same_name = recorded_path.file_name().is_some() && recorded_path.file_name() == song.file_name();
+        if recorded_path != song.as_path() && !same_name {
+            problems.push(format!("transcript is for {recorded}, but this project's song is {}", song.display()));
+        } else {
+            doc["audio"] = json!(song);
+        }
     }
     if !problems.is_empty() {
         return Err(EngineError::InvalidParams(format!("transcript does not match: {}", problems.join("; "))));
@@ -378,86 +366,21 @@ pub fn cmd_audio_analyze(s: &mut Session, params: &Value) -> Result<Value> {
     crate::cmd::film::assembly::ensure_song_film(s, &audio)?;
 
     let model = params["model"].as_str().unwrap_or("whisper-base").to_string();
-    let generated = match crate::cmd::film::cmd_video_exec(
-        s,
-        &json!({
-            "id": "transcript.generate",
-            "params": {"model": model, "language": "auto"},
-            "save": true,
-        }),
-    ) {
-        Ok(res) => res,
-        Err(err) => {
-            let msg = err.to_string();
-            if msg.to_ascii_lowercase().contains("whisper") || msg.contains("transcript.set") {
-                return Err(EngineError::InvalidParams(format!(
-                    "FilmCraft on this system was built without `--features whisper` ({msg}). \
-                     Pass `--transcript <words.json>` to `magic-cli new` or run `workshop.import_transcript path=<words.json>` \
-                     to populate `timing-reference.json` and FilmCraft `transcript.set`."
-                )));
-            }
-            return Err(err);
-        }
-    };
-
-    let inspected = crate::cmd::film::cmd_video_exec(s, &json!({"id": "transcript.inspect", "params": {}, "save": false}))
-        .ok()
-        .map(|v| v["result"].clone())
-        .unwrap_or_else(|| generated["result"].clone());
-
-    let words = inspected.get("words").or_else(|| generated.pointer("/result/words")).and_then(Value::as_array).cloned().unwrap_or_default();
-    let segments = inspected
-        .get("segments")
-        .or_else(|| inspected.get("paragraphs"))
-        .or_else(|| generated.pointer("/result/segments"))
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_else(|| words.clone());
-
-    let probed = probed_duration(s);
-    if !words.is_empty() {
-        let mut norm_words = Vec::with_capacity(words.len());
-        for w in &words {
-            if let Some((st, en)) = timed_span(w) {
-                norm_words.push(json!({"text": w["text"], "start_tick": st.0, "end_tick": en.0, "start": st.0, "end": en.0}));
-            }
-        }
-        let mut norm_paras = Vec::with_capacity(segments.len());
-        for seg in &segments {
-            if let Some((st, en)) = timed_span(seg) {
-                norm_paras.push(json!({"text": seg["text"], "start_tick": st.0, "end_tick": en.0, "start": st.0, "end": en.0}));
-            }
-        }
-        let doc = json!({
-            "source": "filmcraft transcript.generate",
-            "model": model,
-            "audio": audio,
-            "recording_duration_tick": probed.map(|t| t.0),
-            "words": norm_words,
-            "paragraphs": if norm_paras.is_empty() { norm_words.clone() } else { norm_paras },
-        });
-        let stem = transcript_stem(s);
-        let _ = craft_atomic::atomic_write(&dir.join("transcript.json"), &serde_json::to_vec_pretty(&doc["words"]).unwrap_or_default());
-        let _ = craft_atomic::atomic_write(&dir.join(format!("{stem}.transcript.json")), &serde_json::to_vec_pretty(&doc).unwrap_or_default());
-        let srt_path = dir.join("transcript.srt");
-        if let Some(srt) = srt_from_paragraphs(&doc) {
-            let _ = craft_atomic::atomic_write(&srt_path, srt.as_bytes());
-        }
-        let timing_ref = write_timing_reference(&dir, Some(&audio), probed, &doc)?;
-        let prov = json!({
-            "mode": "filmcraft transcript.generate + timing-reference.json",
-            "model": model,
-            "duration_tick": probed.map(|t| t.0),
-            "recording_duration_tick": probed.map(|t| t.0),
-            "recording_duration_sec": probed.map(Tick::seconds),
-            "timing_reference": timing_ref,
-        });
-        let _ = craft_atomic::atomic_write(&dir.join("transcript-provenance.json"), &serde_json::to_vec_pretty(&prov).unwrap_or_default());
-        sync_lyric_track_to_filmcraft(s, &srt_path, Some(&doc));
-    }
-
-    let mut out = generated;
-    out["timing_reference"] = json!(dir.join("timing-reference.json"));
-    out["transcript_srt"] = json!(dir.join("transcript.srt"));
-    Ok(out)
+    let probe = crate::native_media::probe_media_in_process(&audio)?;
+    let timing_path = dir.join("timing-reference.json");
+    let payload = json!({
+        "audio": audio,
+        "model": model,
+        "probe": probe,
+        "words": [],
+        "paragraphs": [],
+        "note": "Populate word timestamps via Whisper or FilmCraft's own `transcript.generate` MCP tool."
+    });
+    crate::doc_state::write_json(&timing_path, &payload)?;
+    Ok(json!({
+        "ok": true,
+        "audio": audio,
+        "timing_reference": timing_path,
+        "probe": probe,
+    }))
 }

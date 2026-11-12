@@ -1,14 +1,8 @@
-//! `app.doctor` (`magic-cli app doctor`): install, ArtCraft Launcher, `<product>-cli`, `--control`,
-//! and `storytold/craft-ai-integrations` status checks in the Craft suite's standard doctor shape
-//! (`checks: [{name, status, message, remediation?}]`).
-
-use std::path::Path;
+//! `app.doctor` (`magic-cli app doctor`): verify Magic's own `--control` listener,
+//! `storytold/craft-ai-integrations` SharedStore health, and `craft-settings` configuration.
 
 use serde_json::{Value, json};
 
-use crate::craft_hub::CraftTarget;
-use crate::craft_hub::control::is_listening;
-use crate::craft_hub::discovery::{control_addr, detect_craft_launcher, resolve_executable_path};
 use crate::{Result, Session};
 
 struct Check {
@@ -20,11 +14,26 @@ struct Check {
 
 impl Check {
     fn ok(name: impl Into<String>, message: impl Into<String>) -> Self {
-        Self { name: name.into(), status: "ok", message: message.into(), remediation: None }
+        Self {
+            name: name.into(),
+            status: "ok",
+            message: message.into(),
+            remediation: None,
+        }
     }
 
-    fn problem(status: &'static str, name: impl Into<String>, message: impl Into<String>, remediation: impl Into<String>) -> Self {
-        Self { name: name.into(), status, message: message.into(), remediation: Some(remediation.into()) }
+    fn problem(
+        status: &'static str,
+        name: impl Into<String>,
+        message: impl Into<String>,
+        remediation: impl Into<String>,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            status,
+            message: message.into(),
+            remediation: Some(remediation.into()),
+        }
     }
 
     fn to_json(&self) -> Value {
@@ -36,78 +45,66 @@ impl Check {
     }
 }
 
-fn tool_check(name: &str, missing: &'static str, remediation: &str) -> Check {
-    match resolve_executable_path(name) {
-        Some(path) => Check::ok(format!("tool:{name}"), format!("{name} is at {}", path.display())),
-        None => Check::problem(missing, format!("tool:{name}"), format!("{name} was not found"), remediation),
-    }
-}
-
-fn craft_target_checks(target: CraftTarget) -> [Check; 2] {
-    let missing = if target.optional_in_doctor() { "warn" } else { "fail" };
-    let remedy = format!("Install or update {} via the ArtCraft Launcher (https://getartcraft.com)", target.name());
-    let cli_check = tool_check(target.cli_name(), missing, &remedy);
-
-    let app_name = target.name();
-    let app_check = match resolve_executable_path(app_name) {
-        Some(path) => {
-            let live_note = control_addr(target)
-                .ok()
-                .map(|addr| if is_listening(addr) { format!(" (--control listening on {addr})") } else { format!(" (--control idle on {addr})") })
-                .unwrap_or_default();
-            Check::ok(format!("app:{app_name}"), format!("{app_name} is at {}{live_note}", path.display()))
-        }
-        None => Check::problem(missing, format!("app:{app_name}"), format!("{app_name} desktop binary was not found"), &remedy),
-    };
-    [app_check, cli_check]
-}
-
 fn checks(s: &Session) -> Vec<Check> {
     let mut out = Vec::new();
-    match detect_craft_launcher() {
-        Some(path) => out.push(Check::ok("launcher:artcraft", format!("ArtCraft Launcher registered at {}", path.display()))),
-        None => out.push(Check::problem(
-            "warn",
-            "launcher:artcraft",
-            "ArtCraft Launcher desktop entry or binary not detected in standard user paths",
-            "Keep Craft apps updated with the ArtCraft Launcher (https://github.com/storytold/craft-launcher)",
-        )),
-    }
-
-    for target in CraftTarget::ALL {
-        out.extend(craft_target_checks(target));
-    }
-
-    out.push(tool_check("magic-cli", "fail", "Build it with `cargo build -p magic-cli` and put target/debug on PATH"));
 
     let ai = crate::craft_ai::craft_ai_status();
     let ai_enabled = ai["enabled"].as_bool().unwrap_or(false);
     let conn_count = ai["connections"].as_array().map_or(0, Vec::len);
     out.push(Check::ok(
         "ai:craft-ai-integrations",
-        format!("ai.enabled={ai_enabled}, {conn_count} SharedStore connection(s) configured via storytold/craft-ai-integrations"),
+        format!(
+            "ai.enabled={ai_enabled}, {conn_count} SharedStore connection(s) configured via storytold/craft-ai-integrations"
+        ),
     ));
+
+    let settings_report = s.settings.report_json();
+    if settings_report["has_problems"].as_bool() == Some(true)
+        || settings_report["read_only"].as_bool() == Some(true)
+    {
+        out.push(Check::problem(
+            "warn",
+            "settings:config",
+            format!(
+                "craft-settings LoadReport flagged problems or read-only mode: {settings_report}"
+            ),
+            "Inspect config.toml (or any config.broken-*.toml backup beside it) and verify folder write permissions",
+        ));
+    } else {
+        out.push(Check::ok(
+            "settings:config",
+            format!(
+                "craft-settings ready (persistent={}, path={})",
+                settings_report["persistent"],
+                settings_report["path"].as_str().unwrap_or("memory")
+            ),
+        ));
+    }
 
     out.push(match s.control_address {
         Some(addr) => Check::ok("control", format!("live control listening on {addr}")),
-        None => Check::ok("control", "no live control listener in this session (headless)"),
+        None => Check::ok("control", "headless session (launch `magic --control 9875` for live UI control)"),
     });
 
-    let project_dir = s.project_path.as_ref().and_then(|p| p.parent()).map(Path::to_path_buf).unwrap_or_else(|| s.cwd.clone());
-    let server_file = project_dir.join(".video-server.json");
-    if server_file.is_file() {
-        out.push(Check::problem(
-            "warn",
-            "video-server",
-            format!("{} is present; its server is not verified", server_file.display()),
-            "Delete the file if no video preview server is running for this project",
-        ));
+    if let Some(proj) = &s.project_path {
+        if proj.is_file() {
+            out.push(Check::ok("project", format!("open project {}", proj.display())));
+        } else {
+            out.push(Check::problem(
+                "warn",
+                "project",
+                format!("project path missing on disk: {}", proj.display()),
+                "Run `file.save` or re-open an existing `.magic` project",
+            ));
+        }
     }
+
     out
 }
 
 pub fn cmd_app_doctor(s: &mut Session, _p: &Value) -> Result<Value> {
     let found = checks(s);
-    let checks: Vec<Value> = found.iter().map(Check::to_json).collect();
-    Ok(json!({"ok": true, "checks": checks}))
+    let list: Vec<Value> = found.iter().map(Check::to_json).collect();
+    let ok = found.iter().all(|c| c.status == "ok");
+    Ok(json!({ "ok": ok, "checks": list }))
 }

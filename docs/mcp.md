@@ -1,15 +1,8 @@
-# Magic Studio MCP Server (`magic-cli mcp` / `magic-mcp`)
+# MCP Server (`magic-cli mcp` / `magic-mcp`)
 
-`magic-cli mcp` (and `magic-mcp`) serves the [Model Context Protocol](https://modelcontextprotocol.io) over stdio (JSON-RPC 2.0), matching [FilmCraft MCP](https://github.com/storytold/filmcraft/blob/main/docs/control-protocol.md) (`filmcraft-cli mcp --bridge 127.0.0.1:9876`) and [EffectCraft MCP](https://github.com/storytold/effectcraft/blob/main/docs/mcp.md) (`effectcraft-cli mcp --autosave` / `--bridge 9877`).
+Magic Studio ships a standard ArtCraft Model Context Protocol server over stdio (`crates/mcp`, JSON-RPC 2.0).
 
-| Mode | Command | What Works |
-|---|---|---|
-| **Remote (`--connect`)** | `magic-cli mcp --connect 127.0.0.1:9875` (with `magic --control 9875`) | Everything — coordinator commands, `$N.field` / `$last.field` batches, live `egui` inspection/input (`inspect_ui`, `ui_elements`, `ui_click`, `screenshot`, `ui_control`), and `bridge_craft` (`:9876` / `:9877`). |
-| **Headless (`--headless`)** | `magic-cli mcp --headless [--project song.magic]` | Full `magic::Session` driving `filmcraft-cli`, `effectcraft-cli`, `designcraft-cli`, `photocraft-cli`, `vectorcraft-cli`, and `anicraft-cli`, plus `bridge_craft` to running sibling Craft windows. |
-
-With neither flag, `magic-cli mcp` probes `MAGIC_CONTROL_PORT` (`127.0.0.1:9875`) once and falls back cleanly to headless mode.
-
-## Multi-Server `.mcp.json` Setup (`Magic` + `FilmCraft :9876` + `EffectCraft :9877`)
+## `.mcp.json` Configuration
 
 ```json
 {
@@ -18,27 +11,27 @@ With neither flag, `magic-cli mcp` probes `MAGIC_CONTROL_PORT` (`127.0.0.1:9875`
       "command": "magic-cli",
       "args": ["mcp"]
     },
-    "filmcraft": {
-      "command": "filmcraft-cli",
-      "args": ["mcp", "--bridge", "127.0.0.1:9876"]
-    },
-    "effectcraft": {
-      "command": "effectcraft-cli",
-      "args": ["mcp", "--autosave"]
+    "magic-app": {
+      "command": "magic-cli",
+      "args": ["mcp", "--connect", "127.0.0.1:9875"]
     }
   }
 }
 ```
 
-## Tools
+- **Headless by default (`magic-cli mcp`)**: Runs an isolated in-process `magic::Session` over stdio with zero network sockets (never silently auto-probing `:9875`, matching `DeckCraft` and `CADCraft` RFC-0012).
+- **Live window (`magic-cli mcp --connect 127.0.0.1:9875`)**: Connects strictly to `127.0.0.1` (`Ipv4Addr::LOCALHOST`) on a running `magic --control 9875` window, bounds replies at `16 MiB`, and never replays mutating requests on lost replies (`outcome unknown`).
+- **Confined headless (`magic-cli mcp --automation-read-root <dir> --automation-write-root <dir>`)**: Confines headless file reads and writes to the given roots (`--connect` together with root flags is rejected).
+- **Sibling ArtCraft Apps (`magic-cli <product>`)**: Connect directly to each sibling app's own `<product>-cli mcp` (`deckcraft-cli mcp --connect 7990`, `designcraft-cli mcp --connect 7979`, `filmcraft-cli mcp --bridge 127.0.0.1:9876` with `FILMCRAFT_CONTROL_TOKEN`, `effectcraft-cli mcp --bridge 9877`, `photocraft-cli mcp --bridge 127.0.0.1:7878 --control-token-file <file>`, `vectorcraft-cli mcp --connect 127.0.0.1:7979`). Calling `magic-cli <product>` prints a 3-line setup signpost and exits with code `2`.
 
-| Tool (and ArtCraft Core Alias) | Backend | Description |
-|---|---|---|
-| `list_commands` / `command_list` | Both | List coordinator command IDs, labels, and parameter schemas (`{filter?, enabled_only?, compact?}`). |
-| `run_command` / `command_run` | Both | Run one coordinator command (`{command\|id, params?}`). |
-| `run_batch` / `command_batch` | Both | Run sequential steps with `"$N.field"` and `"$last.field"` result interpolation (`{steps, stop_on_error?}`). |
-| `inspect_document` / `doc_inspect` | Both | Inspect `all`, `project`, `storyboard`, `timeline`, `bridge` (`:9876`/`:9877`), `preflight`, or `history`. |
-| `render_preview` | Both | Render a PNG frame for `studio`, `lyrics`, `motion`, `animation`, or `storyboard`. |
-| `bridge_craft` | Both | Launch, focus, check status, or execute commands/methods on `filmcraft` (`:9876`), `effectcraft` (`:9877`), `designcraft` (`:7979`), `photocraft`, or `vectorcraft`. |
-| `open_file` / `save_file` | Both | Open or save `.magic` projects (`file.open`, `file.save`, `file.saveAs`). |
-| `inspect_ui`, `ui_elements`, `ui_click`, `ui_drag`, `ui_scroll`, `ui_key`, `ui_type`, `screenshot`, `ui_control` | `--connect` | Inspect and operate the live `eframe`/`egui` window (`screenshot {window: false}` also renders storyboard spreads headlessly). |
+## Core Tools
+
+| Tool | Purpose |
+| :--- | :--- |
+| `command_list` / `list_commands` | List Magic command IDs, labels, and parameter schemas |
+| `command_run` / `run_command` | Run one Magic command (`{id, params?}`) |
+| `command_batch` / `run_batch` | Run sequential commands with `$1.field` / `$last.field` interpolation |
+| `doc_inspect` / `inspect_document` | Inspect `all`, `project`, `storyboard`, or `timeline` |
+| `open_file` / `save_file` | Open or save a `.magic` project |
+| `render_preview` / `screenshot` | Extract stage preview PNG or capture live window PNG |
+| `inspect_ui`, `ui_elements`, `ui_click`, `ui_drag`, `ui_scroll`, `ui_key`, `ui_type`, `ui_control` | Drive the live `magic --control 9875` window (`--connect` only) |

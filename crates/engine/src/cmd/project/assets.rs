@@ -6,42 +6,13 @@ use std::path::{Path, PathBuf};
 use serde_json::{Value, json};
 
 use super::{cmd_project_save, ensure_default_asset_project};
-use crate::{CraftHub, EngineError, Result, Session};
+use crate::{EngineError, Result, Session};
 
-const IMAGE_EXTENSIONS: &[&str; 33] = &[
-    "png",
-    "jpg",
-    "jpeg",
-    "webp",
-    "svg",
-    "svgz",
-    "gif",
-    "bmp",
-    "tif",
-    "tiff",
-    "exr",
-    "hdr",
-    "fits",
-    "qoi",
-    "tga",
-    "heic",
-    "heif",
-    "pcraft",
-    "psd",
-    "psb",
-    "pdn",
-    "ora",
-    "xcf",
-    "kra",
-    "af",
-    "afdesign",
-    "afphoto",
-    "afpub",
-    "vectorcraft",
-    "vcraft",
-    "drawcraft",
-    "ai",
-    "eps",
+const IMAGE_EXTENSIONS: &[&str; 36] = &[
+    "png", "jpg", "jpeg", "webp", "svg", "svgz", "gif", "bmp", "tif", "tiff", "exr", "hdr",
+    "fits", "qoi", "tga", "heic", "heif", "pcraft", "psd", "psb", "pdn", "ora", "xcf", "kra",
+    "af", "afdesign", "afphoto", "afpub", "vectorcraft", "vcraft", "drawcraft", "ai", "eps",
+    "emf", "wmf", "dxf",
 ];
 const MODEL_EXTENSIONS: &[&str; 2] = &["glb", "gltf"];
 
@@ -73,34 +44,35 @@ fn preview_is_fresh(source: &Path, preview: &Path) -> bool {
 /// Resolve the flat project preview `.png` and linked Craft file metadata for any project asset
 /// (`.pcraft` ZIP or directory bundle, `.psd`/`.psb`/`.ora`/`.xcf`/`.kra`/`.pdn`/`.af*`,
 /// `.vectorcraft`/`.ai`/`.eps`, `.ecproj`/`.ectemplate`, `.fcproj`, or image with sibling Craft project).
-pub(crate) fn resolve_asset_project_image(project_dir: Option<&Path>, asset_path: &Path) -> (PathBuf, Option<String>, Option<String>) {
+pub(crate) fn resolve_asset_project_image(
+    project_dir: Option<&Path>,
+    asset_path: &Path,
+) -> (PathBuf, Option<String>, Option<String>) {
     let ext = asset_path.extension().and_then(|e| e.to_str()).unwrap_or_default().to_ascii_lowercase();
     let stem = asset_path.file_stem().and_then(|n| n.to_str()).unwrap_or("asset");
-    let previews_dir = project_dir.map(|d| d.join("assets/.previews")).unwrap_or_else(|| asset_path.parent().unwrap_or(Path::new(".")).join(".previews"));
+    let previews_dir = project_dir
+        .map(|d| d.join("assets/.previews"))
+        .unwrap_or_else(|| asset_path.parent().unwrap_or(Path::new(".")).join(".previews"));
     let preview_png = previews_dir.join(format!("{stem}.png"));
     let linked_str = Some(asset_path.to_string_lossy().into_owned());
 
     match ext.as_str() {
-        "pcraft" | "psd" | "psb" | "pdn" | "ora" | "xcf" | "kra" | "afphoto" | "exr" | "hdr" | "fits" | "qoi" | "tga" | "heic" | "heif" => {
+        "pcraft" | "psd" | "psb" | "pdn" | "ora" | "xcf" | "kra" | "afphoto" | "exr" | "hdr"
+        | "fits" | "qoi" | "tga" | "heic" | "heif" => {
             if preview_is_fresh(asset_path, &preview_png) {
                 return (preview_png, linked_str, Some("photocraft".into()));
             }
-            if craft_util::media::extract_craft_preview(asset_path, &preview_png).unwrap_or(false) && preview_png.is_file() {
-                return (preview_png, linked_str, Some("photocraft".into()));
-            }
-            if CraftHub::export_photo_preview(asset_path, &preview_png).is_ok() && preview_png.is_file() {
+            if magic_util::media::extract_craft_preview(asset_path, &preview_png).unwrap_or(false) && preview_png.is_file() {
                 return (preview_png, linked_str, Some("photocraft".into()));
             }
             (asset_path.to_path_buf(), linked_str, Some("photocraft".into()))
         }
-        "vectorcraft" | "vcraft" | "drawcraft" | "svgz" | "ai" | "eps" | "dxf" | "emf" | "wmf" | "af" | "afdesign" | "afpub" => {
+        "vectorcraft" | "vcraft" | "drawcraft" | "svgz" | "ai" | "eps" | "dxf" | "emf" | "wmf"
+        | "af" | "afdesign" | "afpub" => {
             if preview_is_fresh(asset_path, &preview_png) {
                 return (preview_png, linked_str, Some("vectorcraft".into()));
             }
-            if craft_util::media::extract_craft_preview(asset_path, &preview_png).unwrap_or(false) && preview_png.is_file() {
-                return (preview_png, linked_str, Some("vectorcraft".into()));
-            }
-            if CraftHub::export_vector_preview(asset_path, &preview_png).is_ok() && preview_png.is_file() {
+            if magic_util::media::extract_craft_preview(asset_path, &preview_png).unwrap_or(false) && preview_png.is_file() {
                 return (preview_png, linked_str, Some("vectorcraft".into()));
             }
             (asset_path.to_path_buf(), linked_str, Some("vectorcraft".into()))
@@ -109,30 +81,21 @@ pub(crate) fn resolve_asset_project_image(project_dir: Option<&Path>, asset_path
             if preview_is_fresh(asset_path, &preview_png) {
                 return (preview_png, linked_str, Some("vectorcraft".into()));
             }
-            if CraftHub::export_vector_preview(asset_path, &preview_png).is_ok() && preview_png.is_file() {
-                return (preview_png, linked_str, Some("vectorcraft".into()));
-            }
             (asset_path.to_path_buf(), linked_str, Some("vectorcraft".into()))
         }
         "ecproj" | "ectemplate" => {
             if preview_is_fresh(asset_path, &preview_png) {
                 return (preview_png, linked_str, Some("effectcraft".into()));
             }
-            for sib in [asset_path.with_file_name(format!("{stem}-preview.png")), asset_path.with_extension("png")] {
+            for sib in [
+                asset_path.with_file_name(format!("{stem}-preview.png")),
+                asset_path.with_extension("png"),
+            ] {
                 if sib.is_file() {
                     return (sib, linked_str, Some("effectcraft".into()));
                 }
             }
-            if craft_util::media::extract_craft_preview(asset_path, &preview_png).unwrap_or(false) && preview_png.is_file() {
-                return (preview_png, linked_str, Some("effectcraft".into()));
-            }
-            let rendered = if ext == "ectemplate" {
-                CraftHub::render_effect_template(asset_path, None, &preview_png, Some(0.0)).is_ok()
-            } else {
-                let first_comp = crate::cmd::character::ecproj_first_comp_name(asset_path);
-                CraftHub::render_effect_frame(asset_path, first_comp.as_deref(), 0.0, 960, &preview_png).is_ok()
-            };
-            if rendered && preview_png.is_file() {
+            if magic_util::media::extract_craft_preview(asset_path, &preview_png).unwrap_or(false) && preview_png.is_file() {
                 return (preview_png, linked_str, Some("effectcraft".into()));
             }
             (asset_path.to_path_buf(), linked_str, Some("effectcraft".into()))
@@ -143,9 +106,13 @@ pub(crate) fn resolve_asset_project_image(project_dir: Option<&Path>, asset_path
             (img, linked_str, Some("filmcraft".into()))
         }
         _ => {
-            for (cand_ext, app) in
-                [("pcraft", "photocraft"), ("psd", "photocraft"), ("vectorcraft", "vectorcraft"), ("ecproj", "effectcraft"), ("fcproj", "filmcraft")]
-            {
+            for (cand_ext, app) in [
+                ("pcraft", "photocraft"),
+                ("psd", "photocraft"),
+                ("vectorcraft", "vectorcraft"),
+                ("ecproj", "effectcraft"),
+                ("fcproj", "filmcraft"),
+            ] {
                 let cand = asset_path.with_extension(cand_ext);
                 if cand.exists() {
                     return (asset_path.to_path_buf(), Some(cand.to_string_lossy().into_owned()), Some(app.into()));
@@ -169,7 +136,7 @@ pub fn cmd_project_list_assets(s: &mut Session, _: &Value) -> Result<Value> {
                 entry["project_image"] = json!(proj_img);
                 entry["linked_file"] = json!(linked_file.unwrap_or_else(|| p.to_string_lossy().into_owned()));
                 entry["craft_app"] = json!(craft_app);
-                entry["outline"] = json!(craft_util::media::craft_outline_summary(p));
+                entry["outline"] = json!(magic_util::media::craft_outline_summary(p));
             }
             Ok(entry)
         })
@@ -213,13 +180,15 @@ fn file_kind(path: &Path) -> Option<&'static str> {
 }
 
 fn asset_kind<'a>(requested: &'a str, path: &Path) -> Result<&'a str> {
-    let found = craft_util::media::is_craft_doc_path(path).then(|| file_kind(path)).flatten();
+    let found = magic_util::media::is_craft_doc_path(path).then(|| file_kind(path)).flatten();
     match (requested, found) {
         ("auto", Some(kind)) => Ok(kind),
         ("image", Some("image")) | ("model_3d", Some("model_3d")) => Ok(requested),
-        ("image", _) => {
-            Err(EngineError::InvalidParams(format!("{} is not a supported image or Craft artwork ({})", path.display(), IMAGE_EXTENSIONS.join(", "))))
-        }
+        ("image", _) => Err(EngineError::InvalidParams(format!(
+            "{} is not a supported image or Craft artwork ({})",
+            path.display(),
+            IMAGE_EXTENSIONS.join(", ")
+        ))),
         ("model_3d", _) => Err(EngineError::InvalidParams(format!("{} is not a 3D model ({})", path.display(), MODEL_EXTENSIONS.join(", ")))),
         (kind, _) => Ok(kind),
     }
@@ -257,11 +226,13 @@ fn asset_request(s: &Session, params: &Value) -> Result<AssetRequest> {
     })
 }
 
-fn outside_project_image(dir: &Path, source: &Path) -> bool {
-    !source.starts_with(dir) && source.is_file() && file_kind(source) == Some("image")
+fn is_outside_project(dir: &Path, source: &Path) -> bool {
+    let canon_dir = dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf());
+    let canon_src = source.canonicalize().unwrap_or_else(|_| source.to_path_buf());
+    !canon_src.starts_with(&canon_dir)
 }
 
-fn asset_destination_folder(dir: &Path, params: &Value) -> Result<(PathBuf, PathBuf)> {
+fn asset_destination_folder(dir: &Path, params: &Value, source: &Path, kind: &str) -> Result<(PathBuf, PathBuf)> {
     let dest = |key: &str| {
         params
             .get(key)
@@ -273,36 +244,59 @@ fn asset_destination_folder(dir: &Path, params: &Value) -> Result<(PathBuf, Path
     match (dest("character"), dest("background"), dest("image")) {
         (Some(c), None, None) => {
             let folder = dir.join("assets/characters").join(&c);
-            Ok((folder.clone(), folder.join("parts")))
+            return Ok((folder.clone(), folder.join("parts")));
         }
         (None, Some(b), None) => {
-            let folder = dir.join("assets/backgrounds").join(&b);
-            Ok((folder.clone(), folder))
+            let folder = dir.join("assets/backgrounds").join(b);
+            return Ok((folder.clone(), folder));
         }
         (None, None, Some(name)) => {
             let folder = dir.join("assets/images").join(name);
-            Ok((folder.clone(), folder))
+            return Ok((folder.clone(), folder));
         }
-        _ => Err(EngineError::InvalidParams(
-            "an image from outside the project needs one destination: \
-             character=<name> (copied to assets/characters/<name>/parts/) or \
-             background=<name> (copied to assets/backgrounds/<name>/) or image=<name> (copied to assets/images/<name>/)"
-                .into(),
-        )),
+        (None, None, None) => {}
+        _ => {
+            return Err(EngineError::InvalidParams(
+                "specify at most one destination bucket (`character`, `background`, or `image`)".into(),
+            ));
+        }
     }
+    let ext = source.extension().and_then(|e| e.to_str()).unwrap_or_default().to_ascii_lowercase();
+    if kind == "model_3d" || matches!(ext.as_str(), "glb" | "gltf") {
+        let folder = dir.join("assets/3d");
+        return Ok((folder.clone(), folder));
+    }
+    if matches!(ext.as_str(), "ecproj" | "ectemplate") {
+        let folder = dir.join("animations");
+        return Ok((folder.clone(), folder));
+    }
+    if kind == "video" || matches!(ext.as_str(), "mp4" | "mov" | "webm" | "mkv") {
+        let folder = dir.join("film");
+        return Ok((folder.clone(), folder));
+    }
+    if matches!(
+        ext.as_str(),
+        "vectorcraft" | "vcraft" | "drawcraft" | "svg" | "svgz" | "ai" | "eps" | "emf" | "wmf" | "dxf"
+    ) {
+        let folder = dir.join("assets/vectors");
+        return Ok((folder.clone(), folder));
+    }
+    let stem = crate::workspace::sanitize_asset_id(source.file_stem().and_then(|s| s.to_str()).unwrap_or("image"));
+    let folder = dir.join("assets/images").join(stem);
+    Ok((folder.clone(), folder))
 }
 
-fn copy_destination(s: &Session, params: &Value, path: &Option<PathBuf>) -> Result<Option<(PathBuf, PathBuf)>> {
+fn copy_destination(s: &Session, params: &Value, path: &Option<PathBuf>, kind: &str) -> Result<Option<(PathBuf, PathBuf)>> {
     let Some(dir) = s.project_path.as_ref().and_then(|p| p.parent()) else {
         return Ok(None);
     };
     let Some(source) = path.as_ref() else {
         return Ok(None);
     };
-    if !outside_project_image(dir, source) {
+    if !is_outside_project(dir, source) {
         return Ok(None);
     }
-    asset_destination_folder(dir, params).map(Some)
+    asset_destination_folder(dir, params, source, kind).map(Some)
 }
 
 fn unique_asset_id(s: &Session, base_id: &str, explicit: bool) -> Result<String> {
@@ -337,15 +331,16 @@ fn record_provenance(folder: &Path, copy: &Path, source: &Path, meta: &std::fs::
     Ok(())
 }
 
-fn copy_asset_file(folder: &Path, files: &Path, source: &Path) -> Result<PathBuf> {
+fn copy_asset_file(folder: &Path, files: &Path, source: &Path, overwrite: bool) -> Result<PathBuf> {
     let copy = files.join(source.file_name().unwrap_or_default());
-    if copy.exists() {
-        return Err(EngineError::InvalidParams(format!("{} is already in the project; connect that file instead", copy.display())));
-    }
     std::fs::create_dir_all(files)?;
-    std::fs::copy(source, &copy)?;
-    let meta = std::fs::metadata(source)?;
-    record_provenance(folder, &copy, source, &meta)?;
+    if source.is_dir() && source.extension().is_some_and(|e| e.eq_ignore_ascii_case("pcraft")) {
+        crate::doc_state::atomic_copy_dir(source, &copy, overwrite)?;
+    } else {
+        crate::doc_state::atomic_copy_file(source, &copy, overwrite)?;
+        let meta = std::fs::metadata(source)?;
+        record_provenance(folder, &copy, source, &meta)?;
+    }
     Ok(copy)
 }
 
@@ -371,18 +366,19 @@ pub fn cmd_project_add_asset(s: &mut Session, params: &Value) -> Result<Value> {
         return Ok(reused);
     }
     let base_id = explicit_id.clone().or_else(|| crate::workspace::try_sanitize_asset_id(&name)).unwrap_or_else(|| crate::workspace::sanitize_asset_id(&stem));
-    let copy_into = copy_destination(s, params, &path)?;
+    let copy_into = copy_destination(s, params, &path, &kind)?;
     let id = unique_asset_id(s, &base_id, explicit_id.is_some())?;
     let mut stored = path.clone();
+    let overwrite = params.get("overwrite").and_then(Value::as_bool).unwrap_or(false);
     if let (Some((folder, files)), Some(source)) = (&copy_into, &path) {
-        stored = Some(copy_asset_file(folder, files, source)?);
+        stored = Some(copy_asset_file(folder, files, source, overwrite)?);
     }
     if params["remove_background"].as_bool().unwrap_or(false)
         && kind == "image"
         && let Some(ref img_path) = stored.clone()
     {
         let cutout_path = img_path.with_file_name(format!("{stem}-cutout.png"));
-        CraftHub::remove_background_photo(img_path, &cutout_path, params["chroma"].as_str(), 0.8)?;
+        crate::native_media::isolate_subject_rgba(img_path, &cutout_path, params["chroma"].as_str(), 0.8)?;
         stored = Some(cutout_path);
     }
     if params["vectorize"].as_bool().unwrap_or(false)
@@ -390,7 +386,7 @@ pub fn cmd_project_add_asset(s: &mut Session, params: &Value) -> Result<Value> {
         && let Some(ref img_path) = stored.clone()
     {
         let svg_path = img_path.with_file_name(format!("{stem}.svg"));
-        CraftHub::trace_subject_vector(img_path, &svg_path, None, true, params["strokes"].as_bool().unwrap_or(false))?;
+        crate::native_media::trace_silhouette_svg(img_path, &svg_path, 1.5, params["strokes"].as_bool().unwrap_or(false))?;
         stored = Some(svg_path);
     }
     s.project_assets.push(crate::ProjectAsset { id: id.clone(), name, preset: None, path: stored.clone(), kind, extra: Default::default() });
@@ -407,7 +403,7 @@ pub fn cmd_project_add_asset(s: &mut Session, params: &Value) -> Result<Value> {
     if params["save"].as_bool() == Some(true) {
         cmd_project_save(s, &json!({}))?;
     }
-    Ok(json!({"ok": true, "asset_id": id, "loaded": load, "assets": s.project_assets, "copied_to": copy_into.is_some().then_some(&stored)}))
+    Ok(json!({"ok": true, "asset_id": id, "path": stored, "loaded": load, "assets": s.project_assets, "copied_to": copy_into.is_some().then_some(&stored)}))
 }
 
 pub fn cmd_project_remove_asset(s: &mut Session, params: &Value) -> Result<Value> {
@@ -450,7 +446,7 @@ fn loaded_asset(entry: &crate::ProjectAsset, path: &Path) -> Result<crate::Asset
         return Err(EngineError::InvalidParams(format!("project asset file is missing: {}", path.display())));
     }
     let mut asset = crate::Asset { id: entry.id.clone(), path: path.to_path_buf(), ..Default::default() };
-    if let Some((w, h, has_alpha)) = craft_util::media::fast_dimensions(path) {
+    if let Some((w, h, has_alpha)) = magic_util::media::fast_dimensions(path) {
         asset.width = w;
         asset.height = h;
         asset.has_alpha = has_alpha;
@@ -473,4 +469,70 @@ pub fn cmd_project_load_asset(s: &mut Session, params: &Value) -> Result<Value> 
     }
     s.active_asset = Some(entry.id.clone());
     Ok(json!({"ok": true, "asset_id": entry.id}))
+}
+
+/// Save an external or shared `magic/assets` file directly into the open project's own `<slug>/assets/`
+/// directory, persist `<Title>.magic` atomically, and optionally promote a copy to `<magic_root>/assets/`.
+pub fn cmd_project_save_asset(s: &mut Session, params: &Value) -> Result<Value> {
+    if s.project_path.is_none() {
+        return Err(EngineError::InvalidParams("no project is open; open or create a .magic project first".into()));
+    }
+    let proj_dir = s
+        .project_path
+        .as_deref()
+        .and_then(Path::parent)
+        .map(Path::to_path_buf)
+        .ok_or_else(|| EngineError::InvalidParams("project path has no parent directory".into()))?;
+
+    let mut merged = params.clone();
+    if merged.get("path").is_none()
+        && let Some(ws_id) = params.get("workspace_asset").and_then(Value::as_str).map(str::trim).filter(|v| !v.is_empty())
+    {
+        let magic_root = super::workspace_layout::enclosing_magic_root(&proj_dir).ok_or_else(|| {
+            EngineError::InvalidParams("project is not inside a magic/projects or magic/animations workspace".into())
+        })?;
+        let (ws_file, ws_entry) = super::workspace_layout::find_workspace_catalog_asset(&magic_root, ws_id)
+            .ok_or_else(|| EngineError::InvalidParams(format!("workspace asset '{ws_id}' not found in magic/assets/catalog.json")))?;
+        merged["path"] = json!(ws_file);
+        if merged.get("name").is_none()
+            && let Some(n) = ws_entry["name"].as_str()
+        {
+            merged["name"] = json!(n);
+        }
+    }
+    merged["save"] = json!(true);
+    let mut added = cmd_project_add_asset(s, &merged)?;
+
+    let promote = params["promote_to_workspace"]
+        .as_bool()
+        .or_else(|| params["share_to_workspace"].as_bool())
+        .unwrap_or(false);
+    if promote
+        && let Some(local_str) = added["path"].as_str()
+        && let Some(magic_root) = super::workspace_layout::enclosing_magic_root(&proj_dir)
+    {
+        let local_path = PathBuf::from(local_str);
+        let asset_id = added["asset_id"].as_str().unwrap_or("asset");
+        let name = merged["name"].as_str().unwrap_or(asset_id);
+        let kind = merged["kind"].as_str().unwrap_or("image");
+        let bucket = if merged.get("character").is_some() {
+            "characters"
+        } else if merged.get("background").is_some() {
+            "backgrounds"
+        } else {
+            "images"
+        };
+        let overwrite = merged["overwrite"].as_bool().unwrap_or(true);
+        let shared = super::workspace_layout::promote_asset_to_workspace(
+            &magic_root,
+            asset_id,
+            name,
+            kind,
+            bucket,
+            &local_path,
+            overwrite,
+        )?;
+        added["workspace_asset"] = json!(shared);
+    }
+    Ok(added)
 }

@@ -1,12 +1,26 @@
-# The AI-related part of ~/.config/magic/config.toml.
-# The app writes the full file; keep its other sections when you copy this in.
+# Coordinator settings stored at ~/.config/magic/config.toml via `craft-settings`.
+# Unknown sections and comments survive saves (`#[serde(default)]` without `deny_unknown_fields`).
 schema_version = 1
 
-[image]
-# The only value today: images run through the Codex subscription (`codex login`).
-provider = "codex"
+[ai]
+# Opt-in AI integrations (`storytold/craft-ai-integrations` SharedStore & ConsentLedger).
+enabled = false
+
+[fidget]
+enabled = true
+seamless = false
 
 [scribbles]
-provider = "codex"
-# Override with: magic-cli exec prefs.set '{"key":"scribbles.model","value":"gpt-6-luna"}'
-model = "gpt-6-luna"
+enabled = true
+template = "new"
+
+[project]
+# Optional explicit workspace overrides (defaults to `<data_dir>/magic/projects` and `magic/animations`).
+# root = "/abs/path/to/magic/projects"
+# characters_root = "/abs/path/to/magic/animations"
+storyboard_template = "magic"
+storyboard_format = "pdfcraft"
+storyboard_locked = true
+
+[craft]
+effectcraft_mcp_autosave = true

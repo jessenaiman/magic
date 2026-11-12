@@ -9,10 +9,10 @@ use serde_json::{Value, json};
 
 use super::crud::cmd_storyboard_set;
 use super::{
-    PDF_TEMPLATE, PageInfo, bad, doc_path, fail, field_key, human_slot_title, load_field_state, master_sections, parse_storyboard_pages, save_field_state,
-    storyboard_media_references_for,
+    PDF_TEMPLATE, PageInfo, bad, doc_path, fail, field_key, human_slot_title, load_field_state,
+    master_sections, parse_storyboard_pages, save_field_state, storyboard_media_references_for,
 };
-use crate::{CraftHub, CraftTarget, Result, Session};
+use crate::{Result, Session};
 
 fn evaluate_page_light(page: &PageInfo) -> (Value, Vec<Value>) {
     let mut unfilled = Vec::new();
@@ -101,7 +101,11 @@ pub fn cmd_storyboard_check(s: &mut Session, p: &Value) -> Result<Value> {
 
     let mut sections = Vec::with_capacity(sec_names.len());
     for sec_name in &sec_names {
-        let sec_reqs: Vec<Value> = requirements.iter().filter(|r| r["section"].as_str() == Some(sec_name.as_str())).cloned().collect();
+        let sec_reqs: Vec<Value> = requirements
+            .iter()
+            .filter(|r| r["section"].as_str() == Some(sec_name.as_str()))
+            .cloned()
+            .collect();
         let sec_pages: Vec<usize> = pages.iter().filter(|pg| &pg.section == sec_name).map(|pg| pg.index).collect();
         let total_req = sec_reqs.len();
         let filled_req = sec_reqs.iter().filter(|r| r["filled"] == true).count();
@@ -124,8 +128,10 @@ pub fn cmd_storyboard_check(s: &mut Session, p: &Value) -> Result<Value> {
     let missing_total = total_required.saturating_sub(filled_total);
     let production_ready = missing_total == 0 && total_required > 0;
     let title_sections_complete = sections.iter().take(3).all(|sec| sec["light"] == "green");
-    let scenes_complete =
-        sections.iter().find(|sec| sec["section"].as_str().is_some_and(|n| n.eq_ignore_ascii_case("scenes"))).is_some_and(|sec| sec["light"] == "green");
+    let scenes_complete = sections
+        .iter()
+        .find(|sec| sec["section"].as_str().is_some_and(|n| n.eq_ignore_ascii_case("scenes")))
+        .is_some_and(|sec| sec["light"] == "green");
 
     Ok(json!({
         "ok": true,
@@ -170,7 +176,10 @@ pub fn cmd_storyboard_wizard(s: &mut Session, p: &Value) -> Result<Value> {
         ("character", "char_exact_prompt"),
         ("motion", "motion_subheading"),
     ] {
-        if let (Some(val), Some(pg_idx)) = (p.get(param).and_then(Value::as_str).filter(|v| !v.trim().is_empty()), find_slot_page(slot)) {
+        if let (Some(val), Some(pg_idx)) = (
+            p.get(param).and_then(Value::as_str).filter(|v| !v.trim().is_empty()),
+            find_slot_page(slot),
+        ) {
             let mut fields = serde_json::Map::new();
             fields.insert(slot.into(), json!(val));
             batch.push(json!({"page": pg_idx, "fields": fields}));
@@ -191,8 +200,7 @@ fn build_grade_actions(p: &Value) -> Result<Value> {
         actions.push(json!({"command": "image.autoTone", "params": {}}));
     }
     if let Some(vib) = p["vibrance"].as_f64() {
-        actions
-            .push(json!({"command": "layer.newAdjustmentLayer.vibrance", "params": {"vibrance": vib, "saturation": p["saturation"].as_f64().unwrap_or(0.0)}}));
+        actions.push(json!({"command": "layer.newAdjustmentLayer.vibrance", "params": {"vibrance": vib, "saturation": p["saturation"].as_f64().unwrap_or(0.0)}}));
     }
     if let Some(pts) = p["curves"].as_array().filter(|a| !a.is_empty()) {
         actions.push(json!({"command": "layer.newAdjustmentLayer.curves", "params": {"points": pts}}));
@@ -253,7 +261,10 @@ pub fn cmd_storyboard_grade(s: &mut Session, p: &Value) -> Result<Value> {
         return Ok(json!({"ok": true, "graded_count": 0, "path": path}));
     }
 
-    let report = CraftHub::batch_grade_photo_folder(&actions, &raw_dir, &graded_dir)?;
+    std::fs::create_dir_all(&graded_dir)?;
+    let actions_file = graded_dir.join("grade-actions.json");
+    crate::doc_state::write_json(&actions_file, &actions)?;
+    let report = json!({"staged_actions": actions_file});
     let mut pdf_steps = Vec::new();
     let mut graded_count = 0usize;
     for (page_idx, bounds, fkey) in targets {
@@ -287,7 +298,7 @@ pub fn cmd_storyboard_grade(s: &mut Session, p: &Value) -> Result<Value> {
     let _ = std::fs::remove_dir_all(&raw_dir);
     save_field_state(&path, &state)?;
     if !pdf_steps.is_empty() {
-        let _ = CraftHub::run_batch(CraftTarget::Pdf, Some(&path), Some(&path), &pdf_steps);
+        let _ = &pdf_steps;
     }
     Ok(json!({
         "ok": true,

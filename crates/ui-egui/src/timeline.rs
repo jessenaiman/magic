@@ -4,7 +4,10 @@
 //! Renders a legible top time ruler with major/minor ticks, a glowing playhead cap + spanning line,
 //! audio waveform detail, diamond keyframes, filmstrip scene tiles, and click/drag scrubbing.
 
-use egui::{Align, Align2, Color32, CornerRadius, FontId, Layout, Pos2, Rect, RichText, Sense, Shape, Stroke, StrokeKind, Ui, Vec2};
+use egui::{
+    Align, Align2, Color32, CornerRadius, FontId, Layout, Pos2, Rect, RichText, Sense, Shape,
+    Stroke, StrokeKind, Ui, Vec2,
+};
 use serde_json::json;
 
 use crate::controls::{FilmbarOrientation, FilmbarStyle, paint_filmbar_frame, paint_local_image};
@@ -70,7 +73,8 @@ fn paint_waveform_bars(ui: &mut Ui, rect: Rect, color: Color32, seed_tag: &str) 
         let rand = ((seed >> 16) as f32) / 65535.0;
         let h = (max_half * (0.22 + 0.78 * rand * env)).max(1.5);
         let x = rect.min.x + frac * rect.width();
-        ui.painter().line_segment([Pos2::new(x, mid_y - h), Pos2::new(x, mid_y + h)], stroke);
+        ui.painter()
+            .line_segment([Pos2::new(x, mid_y - h), Pos2::new(x, mid_y + h)], stroke);
     }
 }
 
@@ -122,7 +126,12 @@ pub fn draw_craft_timeline(
     let mut ruler_track_rect = Rect::NOTHING;
     ui.horizontal(|ui| {
         ui.allocate_ui_with_layout(Vec2::new(TRACK_HEADER_W, 18.0), Layout::left_to_right(Align::Center), |ui| {
-            ui.label(RichText::new(format_ruler_tick(*playhead_sec, dur)).monospace().size(9.5).color(ctx.pal.accent_emerald));
+            ui.label(
+                RichText::new(format_ruler_tick(*playhead_sec, dur))
+                    .monospace()
+                    .size(9.5)
+                    .color(ctx.pal.accent_emerald),
+            );
         });
         let bar_w = (ui.available_width() - 2.0).max(100.0);
         let (rrect, rresp) = ui.allocate_exact_size(Vec2::new(bar_w, 18.0), Sense::click_and_drag());
@@ -135,7 +144,10 @@ pub fn draw_craft_timeline(
             scrubbed = true;
         }
         ui.painter().rect_filled(rrect, CornerRadius::same(3), Color32::from_rgb(0x0c, 0x11, 0x18));
-        ui.painter().line_segment([Pos2::new(rrect.min.x, rrect.max.y - 1.0), Pos2::new(rrect.max.x, rrect.max.y - 1.0)], Stroke::new(1.0, ctx.pal.border));
+        ui.painter().line_segment(
+            [Pos2::new(rrect.min.x, rrect.max.y - 1.0), Pos2::new(rrect.max.x, rrect.max.y - 1.0)],
+            Stroke::new(1.0, ctx.pal.border),
+        );
 
         let major_step = choose_major_step(dur, bar_w);
         let minor_step = (major_step / 5.0).max(0.05);
@@ -146,7 +158,10 @@ pub fn draw_craft_timeline(
             let is_major = rem.abs() < 0.04;
             let tick_h = if is_major { 6.5 } else { 3.2 };
             let tick_col = if is_major { ctx.pal.text_muted } else { ctx.pal.border };
-            ui.painter().line_segment([Pos2::new(x, rrect.max.y - tick_h), Pos2::new(x, rrect.max.y - 1.0)], Stroke::new(1.0, tick_col));
+            ui.painter().line_segment(
+                [Pos2::new(x, rrect.max.y - tick_h), Pos2::new(x, rrect.max.y - 1.0)],
+                Stroke::new(1.0, tick_col),
+            );
             if is_major && x + 28.0 <= rrect.max.x + 12.0 {
                 ui.painter().text(
                     Pos2::new(x + 2.5, rrect.min.y + 6.5),
@@ -171,7 +186,11 @@ pub fn draw_craft_timeline(
                 let (dr, _) = ui.allocate_exact_size(Vec2::new(8.0, 16.0), Sense::hover());
                 let dot_col = if lane.dirty { ctx.pal.accent_amber } else { lane.color };
                 ui.painter().circle_filled(dr.center(), 3.0, dot_col);
-                let title_txt = if lane.dirty { format!("{}*", lane.title) } else { lane.title.to_owned() };
+                let title_txt = if lane.dirty {
+                    format!("{}*", lane.title)
+                } else {
+                    lane.title.to_owned()
+                };
                 ui.label(RichText::new(title_txt).monospace().size(9.5).color(ctx.pal.text_secondary));
             });
 
@@ -191,7 +210,12 @@ pub fn draw_craft_timeline(
                     ui,
                     lane_rect,
                     ctx.pal,
-                    FilmbarStyle { orientation: FilmbarOrientation::Horizontal, selected: false, hovered: lresp.hovered(), timecode: None },
+                    FilmbarStyle {
+                        orientation: FilmbarOrientation::Horizontal,
+                        selected: false,
+                        hovered: lresp.hovered(),
+                        timecode: None,
+                    },
                 );
                 if !lane.frames.is_empty() {
                     let slots = ((inner.width() / 46.0).round() as usize).clamp(4, 18);
@@ -205,11 +229,27 @@ pub fn draw_craft_timeline(
                         let _ = paint_local_image(ui, tr, Some(fp.as_str()), ctx.pal.bg_stage, 1);
                     }
                 } else if !lane.empty_hint.is_empty() {
-                    ui.painter().text(inner.center(), Align2::CENTER_CENTER, lane.empty_hint, FontId::monospace(8.5), ctx.pal.text_muted);
+                    ui.painter().text(
+                        inner.center(),
+                        Align2::CENTER_CENTER,
+                        lane.empty_hint,
+                        FontId::monospace(8.5),
+                        ctx.pal.text_muted,
+                    );
                 }
             } else {
-                let border_col = if lane.dirty { ctx.pal.accent_amber } else { lane.color.gamma_multiply(0.55) };
-                ui.painter().rect(lane_rect, CornerRadius::same(4), ctx.pal.bg_input, Stroke::new(1.0, border_col), StrokeKind::Inside);
+                let border_col = if lane.dirty {
+                    ctx.pal.accent_amber
+                } else {
+                    lane.color.gamma_multiply(0.55)
+                };
+                ui.painter().rect(
+                    lane_rect,
+                    CornerRadius::same(4),
+                    ctx.pal.bg_input,
+                    Stroke::new(1.0, border_col),
+                    StrokeKind::Inside,
+                );
                 ui.painter().line_segment(
                     [Pos2::new(lane_rect.min.x + 2.0, lane_rect.center().y), Pos2::new(lane_rect.max.x - 2.0, lane_rect.center().y)],
                     Stroke::new(0.7, ctx.pal.border_subtle),
@@ -220,7 +260,10 @@ pub fn draw_craft_timeline(
                         let x0 = lane_rect.min.x + ((sp.start_sec / dur).clamp(0.0, 1.0) as f32) * bar_w;
                         let span_len = (sp.end_sec - sp.start_sec).max(0.15);
                         let cw = ((span_len / dur) as f32 * bar_w).max(10.0);
-                        let cr = Rect::from_min_size(Pos2::new(x0, lane_rect.min.y + 2.0), Vec2::new(cw.min((lane_rect.max.x - x0).max(4.0)), row_h - 4.0));
+                        let cr = Rect::from_min_size(
+                            Pos2::new(x0, lane_rect.min.y + 2.0),
+                            Vec2::new(cw.min((lane_rect.max.x - x0).max(4.0)), row_h - 4.0),
+                        );
                         ui.painter().rect(
                             cr,
                             CornerRadius::same(3),
@@ -261,18 +304,31 @@ pub fn draw_craft_timeline(
                         let _ = paint_local_image(ui, kr, Some(fp.as_str()), ctx.pal.bg_stage, 2);
                     }
                 } else if !lane.empty_hint.is_empty() && lane.keyframes.is_empty() {
-                    ui.painter().text(lane_rect.center(), Align2::CENTER_CENTER, lane.empty_hint, FontId::monospace(8.5), ctx.pal.text_muted);
+                    ui.painter().text(
+                        lane_rect.center(),
+                        Align2::CENTER_CENTER,
+                        lane.empty_hint,
+                        FontId::monospace(8.5),
+                        ctx.pal.text_muted,
+                    );
                 }
 
                 for &kt in lane.keyframes {
                     if kt >= 0.0 && kt <= dur {
                         let kx = lane_rect.min.x + ((kt / dur) as f32) * bar_w;
-                        paint_diamond(ui.painter(), Pos2::new(kx, lane_rect.center().y), 4.2, lane.color, Color32::from_rgb(0x09, 0x0e, 0x15));
+                        paint_diamond(
+                            ui.painter(),
+                            Pos2::new(kx, lane_rect.center().y),
+                            4.2,
+                            lane.color,
+                            Color32::from_rgb(0x09, 0x0e, 0x15),
+                        );
                     }
                 }
             }
 
-            ctx.reg.record(format!("{id_prefix}-lane-{}", lane.code), lane.title, &lresp, None);
+            ctx.reg
+                .record(format!("{id_prefix}-lane-{}", lane.code), lane.title, &lresp, None);
         });
     }
 
@@ -281,7 +337,10 @@ pub fn draw_craft_timeline(
         let ph_x = ruler_track_rect.min.x + ((*playhead_sec / dur).clamp(0.0, 1.0) as f32) * ruler_track_rect.width();
         let cap = Rect::from_center_size(Pos2::new(ph_x, ruler_track_rect.min.y + 5.5), Vec2::new(9.0, 9.0));
         ui.painter().rect_filled(cap, CornerRadius::same(3), ctx.pal.accent_emerald);
-        ui.painter().line_segment([Pos2::new(ph_x, cap.max.y), Pos2::new(ph_x, bottom_lane_max_y)], Stroke::new(1.6, ctx.pal.accent_emerald));
+        ui.painter().line_segment(
+            [Pos2::new(ph_x, cap.max.y), Pos2::new(ph_x, bottom_lane_max_y)],
+            Stroke::new(1.6, ctx.pal.accent_emerald),
+        );
     }
     scrubbed
 }

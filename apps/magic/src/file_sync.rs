@@ -2,7 +2,7 @@
 //! - Polls `(size, mtime_ms)` of project `.ecproj` tracks (`V2` Character Animation, `V3` Kinetic
 //!   Lyrics, `V4` Action Motion, plus `film/linked-compositions.json`) on focus regain and stage
 //!   saves, populating `ui_state.dirty_tracks`.
-//! - Routes dropped media onto the active stage's `.ecproj` via `effect.exec` (`file.import`) when
+//! - Routes dropped media onto the active stage's `.ecproj` via `project.import_file` when
 //!   on `Animations`, `Lyrics`, or `Motion`.
 //! - Runs ~1-second debounced crash-recovery journal auto-save (`project.autosave`).
 
@@ -25,7 +25,11 @@ pub(crate) struct FileSyncMonitor {
 
 fn stamp_of(path: &Path) -> Option<(u64, u64)> {
     let meta = std::fs::metadata(path).ok()?;
-    let mtime = meta.modified().ok().and_then(|t| t.duration_since(UNIX_EPOCH).ok()).map_or(0, |d| d.as_millis() as u64);
+    let mtime = meta
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+        .map_or(0, |d| d.as_millis() as u64);
     Some((meta.len(), mtime))
 }
 
@@ -113,7 +117,10 @@ impl FileSyncMonitor {
         let Some(proj_dir) = ui_state.project_path.as_deref().and_then(Path::parent).map(Path::to_path_buf) else {
             return;
         };
-        let mut candidates = vec![("V3", proj_dir.join("lettering/lyrics.ecproj")), ("V4", proj_dir.join("motion/actions.ecproj"))];
+        let mut candidates = vec![
+            ("V3", proj_dir.join("lettering/lyrics.ecproj")),
+            ("V4", proj_dir.join("motion/actions.ecproj")),
+        ];
         if let Some(ec) = active_character_ecproj(ui_state) {
             candidates.push(("V2", ec));
         }

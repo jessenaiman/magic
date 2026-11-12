@@ -1,8 +1,9 @@
-//! ArtCraft-suite MCP tool router for Magic Studio (`crates/mcp/src/server.rs`).
+//! Standard ArtCraft MCP tool router for Magic Studio (`crates/mcp/src/server.rs`).
 //!
-//! Exposes both Magic's tool surface and the shared ArtCraft core MCP tools (`command_list`,
-//! `command_run`, `command_batch`, `doc_inspect`, `render_preview`, `bridge_craft`), with
-//! `$N.field` / `$last.field` batch step interpolation and live `--control` UI automation.
+//! Exposes Magic Studio's own command registry and live `egui` UI inspection/input tools
+//! (`command_list`, `command_run`, `command_batch`, `doc_inspect`, `render_preview`, `open_file`,
+//! `save_file`, `inspect_ui`, `ui_elements`, `ui_click`, `ui_drag`, `ui_scroll`, `ui_key`,
+//! `ui_type`, `screenshot`, `ui_control`) without proxying sibling ArtCraft applications.
 
 use crate::{Backend, interpolate_batch_params, is_live_shell_method};
 use rmcp::handler::server::{router::tool::ToolRouter, wrapper::Parameters};
@@ -46,7 +47,7 @@ struct BatchParams {
 #[derive(Debug, Default, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 struct DocInspectParams {
-    /// `"all"` (default), `"project"`, `"storyboard"`, `"timeline"`, `"bridge"`, `"preflight"`, or `"history"`.
+    /// `"all"` (default), `"project"`, `"storyboard"`, or `"timeline"`.
     target: Option<String>,
 }
 
@@ -57,20 +58,6 @@ struct PreviewParams {
     stage: Option<String>,
     time: Option<f64>,
     page: Option<usize>,
-    path: Option<String>,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-struct BridgeCraftParams {
-    /// `"filmcraft"` (`:9876`), `"effectcraft"` (`:9877`), `"designcraft"` (`:7979`), `"photocraft"`, or `"vectorcraft"`.
-    app: String,
-    /// `"status"`, `"launch"`, `"focus"`, `"close"`, `"execute"`, or `"control"`.
-    action: Option<String>,
-    command: Option<String>,
-    method: Option<String>,
-    params: Option<Value>,
-    port: Option<u16>,
     path: Option<String>,
 }
 
@@ -176,7 +163,12 @@ struct ControlParams {
 
 fn compact(value: Value) -> Value {
     match value {
-        Value::Object(map) => Value::Object(map.into_iter().filter(|(_, v)| !v.is_null()).map(|(k, v)| (k, compact(v))).collect()),
+        Value::Object(map) => Value::Object(
+            map.into_iter()
+                .filter(|(_, v)| !v.is_null())
+                .map(|(k, v)| (k, compact(v)))
+                .collect(),
+        ),
         other => other,
     }
 }
@@ -190,12 +182,17 @@ fn output(result: Result<Value, String>) -> CallToolResult {
 
 impl Server {
     pub fn new(backend: impl Backend + Send + 'static) -> Self {
-        Self { backend: Arc::new(Mutex::new(Box::new(backend))), tool_router: Self::tool_router() }
+        Self {
+            backend: Arc::new(Mutex::new(Box::new(backend))),
+            tool_router: Self::tool_router(),
+        }
     }
 
     pub fn serve(&mut self) -> Result<(), String> {
         tokio::runtime::Runtime::new().map_err(|e| e.to_string())?.block_on(async {
-            let service = ServiceExt::serve(self.clone(), rmcp::transport::stdio()).await.map_err(|e| e.to_string())?;
+            let service = ServiceExt::serve(self.clone(), rmcp::transport::stdio())
+                .await
+                .map_err(|e| e.to_string())?;
             service.waiting().await.map_err(|e| e.to_string())?;
             Ok(())
         })
@@ -224,7 +221,13 @@ impl Server {
             let filtered: Vec<Value> = commands
                 .into_iter()
                 .filter(|c| !p.enabled_only.unwrap_or(false) || c["enabled"] == true)
-                .map(|c| if p.compact.unwrap_or(false) { json!({"id": c["id"], "label": c["label"]}) } else { c })
+                .map(|c| {
+                    if p.compact.unwrap_or(false) {
+                        json!({"id": c["id"], "label": c["label"]})
+                    } else {
+                        c
+                    }
+                })
                 .collect();
             json!(filtered)
         }))
@@ -264,7 +267,11 @@ impl Server {
             }
         }
         let value = json!({"completed": completed, "failed": failed, "results": results});
-        if failed > 0 { CallToolResult::error(vec![Content::text(value.to_string())]) } else { output(Ok(value)) }
+        if failed > 0 {
+            CallToolResult::error(vec![Content::text(value.to_string())])
+        } else {
+            output(Ok(value))
+        }
     }
 
     async fn exec_doc_inspect(&self, target: Option<&str>) -> CallToolResult {
@@ -272,19 +279,17 @@ impl Server {
             "project" => self.run("workshop.status", json!({})).await,
             "storyboard" => self.run("storyboard.check", json!({})).await,
             "timeline" | "sequence" => self.run("video.timeline", json!({})).await,
-            "bridge" => self.run("bridge.status", json!({})).await,
-            "preflight" => self.run("bridge.preflight", json!({"action": "check"})).await,
-            "history" => self.run("bridge.history", json!({"op": "list"})).await,
             "all" => match self.run("workshop.status", json!({})).await {
                 Ok(project) => Ok(json!({
                     "project": project,
                     "storyboard": self.run("storyboard.check", json!({})).await.unwrap_or(Value::Null),
                     "timeline": self.run("video.timeline", json!({})).await.unwrap_or(Value::Null),
-                    "bridge": self.run("bridge.status", json!({})).await.unwrap_or(Value::Null),
                 })),
                 Err(e) => Err(e),
             },
-            other => Err(format!("unknown target `{other}` (expected all | project | storyboard | timeline | bridge | preflight | history)")),
+            other => Err(format!(
+                "unknown target `{other}` (expected all | project | storyboard | timeline)"
+            )),
         };
         output(res)
     }
@@ -292,17 +297,17 @@ impl Server {
 
 #[tool_router]
 impl Server {
-    #[tool(description = "List engine command IDs, labels and parameter schemas (`{filter?, enabled_only?, compact?}`).")]
+    #[tool(description = "List Magic Studio engine command IDs, labels and parameter schemas (`{filter?, enabled_only?, compact?}`).")]
     async fn list_commands(&self, Parameters(p): Parameters<ListParams>) -> CallToolResult {
         self.exec_list(p).await
     }
 
-    #[tool(description = "ArtCraft core alias for `list_commands` (`{filter?, enabled_only?, compact?}`).")]
+    #[tool(description = "ArtCraft standard alias for `list_commands` (`{filter?, enabled_only?, compact?}`).")]
     async fn command_list(&self, Parameters(p): Parameters<ListParams>) -> CallToolResult {
         self.exec_list(p).await
     }
 
-    #[tool(description = "Run one engine command (`{command, params?}`) in the selected backend.")]
+    #[tool(description = "Run one Magic Studio engine command (`{command, params?}`) in the selected backend.")]
     async fn run_command(&self, Parameters(p): Parameters<RunParams>) -> CallToolResult {
         let cmd = p.command.trim();
         if cmd.is_empty() {
@@ -311,7 +316,7 @@ impl Server {
         output(self.run(cmd, p.params.unwrap_or_else(|| json!({}))).await)
     }
 
-    #[tool(description = "ArtCraft core alias for `run_command` (`{id|command, params?}`).")]
+    #[tool(description = "ArtCraft standard alias for `run_command` (`{id|command, params?}`).")]
     async fn command_run(&self, Parameters(p): Parameters<RunParams>) -> CallToolResult {
         let cmd = p.command.trim();
         if cmd.is_empty() {
@@ -320,29 +325,27 @@ impl Server {
         output(self.run(cmd, p.params.unwrap_or_else(|| json!({}))).await)
     }
 
-    #[tool(description = "Run multiple engine commands sequentially with `$N.field` / `$last.field` interpolation.")]
+    #[tool(description = "Run multiple Magic Studio engine commands sequentially with `$N.field` / `$last.field` interpolation.")]
     async fn run_batch(&self, Parameters(p): Parameters<BatchParams>) -> CallToolResult {
         self.exec_batch(p).await
     }
 
-    #[tool(description = "ArtCraft core alias for `run_batch` (`{steps: [{id|command, params?}], stop_on_error?}`).")]
+    #[tool(description = "ArtCraft standard alias for `run_batch` (`{steps: [{id|command, params?}], stop_on_error?}`).")]
     async fn command_batch(&self, Parameters(p): Parameters<BatchParams>) -> CallToolResult {
         self.exec_batch(p).await
     }
 
-    #[tool(
-        description = "Inspect open `.magic` project, storyboard, FilmCraft timeline, or `:9876`/`:9877` bridge (`all|project|storyboard|timeline|bridge|preflight|history`)."
-    )]
+    #[tool(description = "Inspect the open `.magic` project, storyboard, or timeline (`all|project|storyboard|timeline`).")]
     async fn inspect_document(&self, Parameters(p): Parameters<DocInspectParams>) -> CallToolResult {
         self.exec_doc_inspect(p.target.as_deref()).await
     }
 
-    #[tool(description = "ArtCraft core alias for `inspect_document`.")]
+    #[tool(description = "ArtCraft standard alias for `inspect_document`.")]
     async fn doc_inspect(&self, Parameters(p): Parameters<DocInspectParams>) -> CallToolResult {
         self.exec_doc_inspect(p.target.as_deref()).await
     }
 
-    #[tool(description = "Render a stage frame PNG (`studio` via FilmCraft, `lyrics`/`motion`/`animation` via EffectCraft, or `storyboard` via PDFCraft).")]
+    #[tool(description = "Extract or render a cached stage preview PNG (`studio`, `lyrics`, `motion`, `animation`, or `storyboard`).")]
     async fn render_preview(&self, Parameters(p): Parameters<PreviewParams>) -> CallToolResult {
         let sec = p.time.unwrap_or(0.0);
         let res = match p.stage.as_deref().unwrap_or("studio") {
@@ -353,34 +356,6 @@ impl Server {
             _ => self.run("video.frame", compact(json!({"seconds": sec, "path": p.path}))).await,
         };
         output(res)
-    }
-
-    #[tool(description = "Launch, focus, inspect, or forward commands/methods to FilmCraft (:9876), EffectCraft (:9877), or sibling Craft apps.")]
-    async fn bridge_craft(&self, Parameters(p): Parameters<BridgeCraftParams>) -> CallToolResult {
-        let action = p.action.unwrap_or_else(|| {
-            if p.command.is_some() {
-                "execute".into()
-            } else if p.method.is_some() {
-                "control".into()
-            } else {
-                "status".into()
-            }
-        });
-        output(
-            self.run(
-                "bridge.control",
-                compact(json!({
-                    "app": p.app,
-                    "action": action,
-                    "command": p.command,
-                    "method": p.method,
-                    "params": p.params,
-                    "port": p.port,
-                    "path": p.path,
-                })),
-            )
-            .await,
-        )
     }
 
     #[tool(description = "Open a `.magic` project file (`file.open`).")]
@@ -447,9 +422,7 @@ impl Server {
         output(self.run("ui.type", compact(json!(p))).await)
     }
 
-    #[tool(
-        description = "Capture a PNG (`{window: true, path?, panel?, id?}` for the live eframe window, or `{window: false, page?}` for a headless PDFCraft storyboard page)."
-    )]
+    #[tool(description = "Capture a PNG (`{window: true, path?, panel?, id?}` for the live eframe window, or `{window: false, page?}` for a storyboard page preview).")]
     async fn screenshot(&self, Parameters(p): Parameters<ShotParams>) -> CallToolResult {
         if p.window == Some(false) {
             return output(self.run("storyboard.thumbnail", json!({"page": p.page.unwrap_or(0), "scale": 1.0})).await);
@@ -457,9 +430,7 @@ impl Server {
         output(self.run("ui.screenshot", compact(json!({"path": p.path, "panel": p.panel, "id": p.id}))).await)
     }
 
-    #[tool(
-        description = "Call a live shell control method (`ui.set`, `ui.viewer.locate`, `ui.viewer.hit`, `ui.timeline.locate`, `ui.timeline.hit`, `ui.menu.list`, `ui.menu.invoke`, `ui.playback`, `ui.focus`, `ui.effectcraft`, `ui.filmcraft`, `render.frame`, `perf.stats`, `app.quit`). Requires `--connect`."
-    )]
+    #[tool(description = "Call a live Magic shell control method (`document.inspect`, `ui.set`, `ui.viewer.locate`, `ui.viewer.hit`, `ui.timeline.locate`, `ui.timeline.hit`, `ui.menu.list`, `ui.menu.invoke`, `ui.playback`, `ui.focus`, `render.frame`, `perf.stats`, `app.quit`). Requires `--connect`.")]
     async fn ui_control(&self, Parameters(p): Parameters<ControlParams>) -> CallToolResult {
         if !is_live_shell_method(&p.method) {
             return output(Err("Use run_command / command_run for engine commands".into()));
@@ -474,7 +445,7 @@ impl ServerHandler for Server {
         rmcp::model::ServerConfig::new(rmcp::model::ServerCapabilities::builder().enable_tools().build())
             .with_server_info(rmcp::model::Implementation::new("magic", env!("CARGO_PKG_VERSION")))
             .with_instructions(
-                "Magic Studio is a pure-Rust eframe/egui 0.37 coordinator shell over PDFCraft (~/.pdfcraft-control.json), DesignCraft (:7979), PhotoCraft (:9879), VectorCraft (:9880), EffectCraft (:9877, mcp --autosave), and FilmCraft (:9876, FILMCRAFT_CONTROL_TOKEN). Start `magic --control 9875` and connect with `magic-cli mcp --connect 127.0.0.1:9875` (or `--bridge`) to drive the live window (`inspect_ui`, `ui_elements`, `ui_click`, `screenshot`, `ui_control`), or use `bridge_craft` / `video.finish` / `effect.exec` to drive FilmCraft and EffectCraft directly."
+                "Magic Studio is a pure-Rust eframe/egui 0.37 project, storyboard, puppet-rig, and lyric-timing coordinator built on storytold/craft-libs. Start `magic --control 9875` and connect with `magic-cli mcp --connect 127.0.0.1:9875` to drive the live Magic window, or run `magic-cli mcp` headlessly. Connect directly to each sibling ArtCraft app's own `<app>-cli mcp` server when editing in FilmCraft, EffectCraft, DeckCraft, DesignCraft, PhotoCraft, or VectorCraft."
                     .to_string(),
             )
     }

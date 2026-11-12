@@ -21,7 +21,8 @@ fn rendered_pngs(dir: &Path) -> Result<Vec<PathBuf>> {
 fn collect_view_frames(dir: &Path) -> Vec<PathBuf> {
     let frames_root = dir.join("frames");
     let mut out = rendered_pngs(&frames_root).unwrap_or_default();
-    let mut subdirs: Vec<PathBuf> = std::fs::read_dir(&frames_root).into_iter().flatten().flatten().map(|e| e.path()).filter(|p| p.is_dir()).collect();
+    let mut subdirs: Vec<PathBuf> =
+        std::fs::read_dir(&frames_root).into_iter().flatten().flatten().map(|e| e.path()).filter(|p| p.is_dir()).collect();
     subdirs.sort();
     for sub in subdirs {
         out.extend(rendered_pngs(&sub).unwrap_or_default());
@@ -66,8 +67,15 @@ fn discover_character_action_ecprojs(project_dir: &Path, folder: &Path, raw_id: 
     let mut ecprojs = Vec::new();
     collect_ecprojs_in_dir(folder, 2, &mut ecprojs);
 
-    let proj_slug = project_dir.file_name().and_then(|n| n.to_str()).map(crate::workspace::sanitize_asset_id).unwrap_or_default();
-    let mut anim_roots = vec![project_dir.join("animations"), project_dir.join("assets/animations")];
+    let proj_slug = project_dir
+        .file_name()
+        .and_then(|n| n.to_str())
+        .map(crate::workspace::sanitize_asset_id)
+        .unwrap_or_default();
+    let mut anim_roots = vec![
+        project_dir.join("animations"),
+        project_dir.join("assets/animations"),
+    ];
     if let Some(parent) = project_dir.parent() {
         anim_roots.push(parent.join("animations"));
     }
@@ -163,10 +171,17 @@ fn build_view_summary(dir: &Path, canonical_id: &str, raw_id: &str, view_name: &
         .or_else(|| is_flat.then(|| find_initial_cutout(dir)).flatten());
     let rendered_frames = collect_view_frames(dir);
     let extracted_craft_png = if rendered_frames.is_empty() && drawing.is_none() {
-        photo_doc.as_deref().or(vector_doc.as_deref()).and_then(|doc_path| {
-            let out = dir.join(".preview").join(format!("{canonical_id}-{view_name}-craft.png"));
-            if out.is_file() || craft_util::media::extract_craft_preview(doc_path, &out).unwrap_or(false) { out.is_file().then_some(out) } else { None }
-        })
+        photo_doc
+            .as_deref()
+            .or(vector_doc.as_deref())
+            .and_then(|doc_path| {
+                let out = dir.join(".preview").join(format!("{canonical_id}-{view_name}-craft.png"));
+                if out.is_file() || magic_util::media::extract_craft_preview(doc_path, &out).unwrap_or(false) {
+                    out.is_file().then_some(out)
+                } else {
+                    None
+                }
+            })
     } else {
         None
     };
@@ -525,7 +540,10 @@ fn animation_documents(s: &Session) -> Result<Vec<Value>> {
     for folder in ["motion", "lettering", "animations", "assets/animations"] {
         collect_ecprojs_in_dir(&root.join(folder), 3, &mut paths);
     }
-    Ok(paths.iter().map(|path| json!({"name": path.file_stem().map(|n| n.to_string_lossy().into_owned()), "path": path})).collect())
+    Ok(paths
+        .iter()
+        .map(|path| json!({"name": path.file_stem().map(|n| n.to_string_lossy().into_owned()), "path": path}))
+        .collect())
 }
 
 pub fn cmd_animation_view(s: &mut Session, p: &Value) -> Result<Value> {
@@ -600,7 +618,7 @@ pub fn cmd_animation_open(s: &mut Session, p: &Value) -> Result<Value> {
         .filter(|path| path.is_file() && path.extension().is_some_and(|ext| ext == "ecproj"))
         .ok_or_else(|| bad("path=<existing .ecproj> is required"))?;
     let head = check_ecproj_head(&path)?;
-    crate::CraftHub::open_live(crate::CraftTarget::Effect, &path)?;
+    crate::workspace::open_editor("effectcraft", &path)?;
     Ok(json!({
         "ok": true,
         "app": "effectcraft",
@@ -615,11 +633,8 @@ pub fn cmd_character_import(s: &mut Session, p: &Value) -> Result<Value> {
     let raw_path = p["path"].as_str().ok_or_else(|| bad("path=<file> is required"))?;
     let source = crate::workspace::resolve_workspace_path(s, raw_path);
     let ext = source.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase).unwrap_or_default();
-    if matches!(
-        ext.as_str(),
-        "ecproj" | "pcraft" | "psd" | "psb" | "ora" | "xcf" | "kra" | "pdn" | "vectorcraft" | "svg" | "ai" | "af" | "afdesign" | "afphoto" | "anicraft"
-    ) {
-        if !craft_util::media::is_craft_doc_path(&source) {
+    if matches!(ext.as_str(), "ecproj" | "pcraft" | "psd" | "psb" | "ora" | "xcf" | "kra" | "pdn" | "vectorcraft" | "svg" | "ai" | "af" | "afdesign" | "afphoto" | "anicraft") {
+        if !magic_util::media::is_craft_doc_path(&source) {
             return Err(bad(format!("{} does not exist", source.display())));
         }
         let head = (ext == "ecproj").then(|| check_ecproj_head(&source)).transpose()?;
@@ -727,7 +742,7 @@ pub fn cmd_character_set(s: &mut Session, p: &Value) -> Result<Value> {
 
 pub fn cmd_character_open(s: &mut Session, p: &Value) -> Result<Value> {
     let view = View::from_params(s, p)?;
-    let (app, target, file) = match p["app"].as_str().unwrap_or("effectcraft") {
+    let (app, file) = match p["app"].as_str().unwrap_or("effectcraft") {
         "effectcraft" => {
             let ec = view.file("ecproj");
             let chosen = if ec.is_file() {
@@ -746,22 +761,21 @@ pub fn cmd_character_open(s: &mut Session, p: &Value) -> Result<Value> {
                         .ok_or_else(|| bad("no EffectCraft .ecproj found; run character.rig or character.model3d.animate first"))?
                 }
             };
-            ("effectcraft", crate::CraftTarget::Effect, chosen)
+            ("effectcraft", chosen)
         }
-        "photocraft" => ("photocraft", crate::CraftTarget::Photo, view.require_photo_doc("character.cut")?),
-        "vectorcraft" => {
-            ("vectorcraft", crate::CraftTarget::Vector, view.vector_doc().ok_or_else(|| bad("no VectorCraft .vectorcraft or .svg found for this character"))?)
-        }
+        "photocraft" => ("photocraft", view.require_photo_doc("character.cut")?),
+        "vectorcraft" => (
+            "vectorcraft",
+            view.vector_doc().ok_or_else(|| bad("no .vectorcraft or .svg found for this character"))?,
+        ),
         "anicraft" => {
-            return Err(bad(
-                "AniCraft desktop UI is disabled for safety while in early alpha; run headless `anicraft.exec` or `character.sprite` and inspect inside EffectCraft (`app=\"effectcraft\"`).",
-            ));
+            return Err(bad("AniCraft desktop UI is disabled while in early alpha"));
         }
         other => return Err(bad(format!("app must be effectcraft, photocraft, or vectorcraft, not {other}"))),
     };
     if app == "effectcraft" {
         let _ = check_ecproj_head(&file)?;
     }
-    crate::CraftHub::open_live(target, &file)?;
+    crate::workspace::open_editor(app, &file)?;
     Ok(json!({"ok": true, "app": app, "file": file, "document": {"app": app, "file": file}}))
 }

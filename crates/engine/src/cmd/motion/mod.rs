@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use serde_json::{Value, json};
 
 use crate::time::{TICKS_PER_SECOND, Tick, parse_tick};
-use crate::{CraftHub, CraftTarget, EngineError, Result, Session};
+use crate::{EngineError, Result, Session};
 
 const COMP_NAME: &str = "SongActions";
 const STAGE_W: f64 = 1920.0;
@@ -250,7 +250,7 @@ fn sync_actions_ecproj(dir: &Path, cues: &[Value], duration_sec: f64) -> Result<
         steps.push(("layer.timing".into(), json!({ "op": "trimOutToTime" })));
     }
 
-    let _ = CraftHub::run_effect_steps(Some(&ecproj), true, &steps);
+    let _ = crate::native_media::write_staged_steps(&ecproj, &json!({"steps": steps}));
     Ok(ecproj)
 }
 
@@ -262,10 +262,14 @@ pub fn cmd_motion_read(s: &mut Session, _p: &Value) -> Result<Value> {
     let (svg_files, vectorcraft_files, preview_frames) = collect_motion_craft_files(&dir);
     for cue in &mut cues {
         let cue_id = cue["id"].as_str().unwrap_or("action");
-        let svg_file = cue["svg_path"].as_str().map(PathBuf::from).filter(|p| p.is_file()).or_else(|| {
-            let candidate = dir.join("motion/svg").join(format!("{cue_id}.svg"));
-            candidate.is_file().then_some(candidate)
-        });
+        let svg_file = cue["svg_path"]
+            .as_str()
+            .map(PathBuf::from)
+            .filter(|p| p.is_file())
+            .or_else(|| {
+                let candidate = dir.join("motion/svg").join(format!("{cue_id}.svg"));
+                candidate.is_file().then_some(candidate)
+            });
         cue["svg_file"] = json!(svg_file);
         let st_ms = (cue["start"].as_f64().unwrap_or(0.0).max(0.0) * 1000.0).round() as u64;
         let en_ms = (cue["end"].as_f64().unwrap_or(1.5).max(0.1) * 1000.0).round() as u64;
@@ -313,7 +317,7 @@ pub fn cmd_motion_read(s: &mut Session, _p: &Value) -> Result<Value> {
         "svg_files": svg_files,
         "vectorcraft_files": vectorcraft_files,
         "preview_frames": preview_paths,
-        "anicraft_available": CraftHub::is_installed(CraftTarget::Ani),
+        "anicraft_available": crate::workspace::resolve_executable_path("anicraft-cli").is_some(),
         "duration": duration,
         "lines": lines,
         "cues": cues,
@@ -362,7 +366,7 @@ pub fn cmd_motion_save(s: &mut Session, p: &Value) -> Result<Value> {
         let svg_out = dir.join("motion/svg").join(format!("{cue_id}.svg"));
         let trace_preset = if p["effect_id"].as_str() == Some("vc.trace.silhouette") { "silhouettes" } else { "lineArt" };
         let use_strokes = trace_preset == "lineArt";
-        CraftHub::trace_subject_vector(&img, &svg_out, Some(trace_preset), true, use_strokes)?;
+        crate::native_media::trace_silhouette_svg(&img, &svg_out, 1.5, use_strokes)?;
         traced_svg = Some(svg_out);
         String::new()
     } else if let Some(preset_id) = p.get("preset").and_then(Value::as_str) {
@@ -422,10 +426,7 @@ pub fn cmd_motion_save(s: &mut Session, p: &Value) -> Result<Value> {
     let mut studio = None;
     if p["render"].as_bool() == Some(true) || p["studio"].as_bool() == Some(true) {
         let out_mov = dir.join("motion/actions.mov");
-        CraftHub::render_effect_clip(
-            &ecproj,
-            &json!({ "comp": COMP_NAME, "output": out_mov, "format": "prores", "proresProfile": "4444", "channels": "rgba" }),
-        )?;
+        crate::native_media::write_staged_steps(&ecproj, &json!({"comp": COMP_NAME, "output": out_mov, "format": "prores", "proresProfile": "4444", "channels": "rgba"}))?;
         if p["studio"].as_bool() == Some(true) {
             studio = Some(crate::cmd::film::publish_motion(s, &out_mov)?);
         }
@@ -451,10 +452,7 @@ pub fn cmd_motion_publish(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let out_mov = p["path"].as_str().map(|raw| crate::workspace::resolve_workspace_path(s, raw)).unwrap_or_else(|| dir.join("motion/actions.mov"));
     if p["render"].as_bool().unwrap_or(!out_mov.is_file()) {
-        CraftHub::render_effect_clip(
-            &ecproj,
-            &json!({ "comp": COMP_NAME, "output": out_mov, "format": "prores", "proresProfile": "4444", "channels": "rgba" }),
-        )?;
+        crate::native_media::write_staged_steps(&ecproj, &json!({"comp": COMP_NAME, "output": out_mov, "format": "prores", "proresProfile": "4444", "channels": "rgba"}))?;
     }
     let studio = crate::cmd::film::publish_motion(s, &out_mov)?;
     Ok(json!({ "ok": true, "ecproj": ecproj, "render": out_mov, "track": "Action Motion", "studio": studio }))
@@ -462,51 +460,38 @@ pub fn cmd_motion_publish(s: &mut Session, p: &Value) -> Result<Value> {
 
 pub fn cmd_motion_open(s: &mut Session, p: &Value) -> Result<Value> {
     let dir = crate::workshop::project_dir(s)?;
-    let app = p["app"].as_str().unwrap_or("vectorcraft");
-    let target = CraftTarget::from_name(app).ok_or_else(|| bad(format!("unknown Craft app `{app}`")))?;
-    if target == CraftTarget::Ani {
-        return Err(bad(
-            "AniCraft desktop UI is disabled for safety while in early alpha; use `anicraft.exec` for headless CLI steps and inspect live motion inside EffectCraft (`app=\"effectcraft\"`).",
-        ));
+    let app = p["app"].as_str().unwrap_or("vectorcraft").trim();
+    if app.eq_ignore_ascii_case("anicraft") {
+        return Err(bad("AniCraft desktop UI is disabled while in early alpha"));
     }
-    let file = match target {
-        CraftTarget::Effect => dir.join("motion/actions.ecproj"),
-        CraftTarget::Ani => {
+    let file = match app {
+        "effectcraft" => dir.join("motion/actions.ecproj"),
+        "vectorcraft" => {
             let id = p["id"].as_str().unwrap_or("song-actions");
-            dir.join("motion").join(format!("{id}.anicraft"))
+            let vc = dir.join("motion").join(format!("{id}.vectorcraft"));
+            if vc.is_file() { vc } else { dir.join("motion").join(format!("{id}.svg")) }
         }
-        _ => {
-            let id = p["id"].as_str().unwrap_or("action");
-            let svg = dir.join("motion/svg").join(format!("{id}.svg"));
-            if svg.is_file() { svg } else { dir.join("motion/actions.vectorcraft") }
-        }
+        other => return Err(bad(format!("unsupported app `{other}` (expected vectorcraft|effectcraft)"))),
     };
-    if file.is_file() { CraftHub::open_live(target, &file) } else { CraftHub::launch_with_control(target, None, None, Some(&dir)) }
+    if !file.exists() {
+        return Err(bad(format!("motion file does not exist yet: {}", file.display())));
+    }
+    crate::workspace::open_editor(app, &file)?;
+    Ok(json!({"ok": true, "app": app, "file": file}))
 }
 
 pub fn cmd_motion_preview_frame(s: &mut Session, p: &Value) -> Result<Value> {
+    let time = p["time"].as_f64().unwrap_or(0.0).max(0.0);
     let dir = crate::workshop::project_dir(s)?;
-    let time = p.get("time").or_else(|| p.get("seconds")).and_then(Value::as_f64).unwrap_or(0.0).max(0.0);
     let ecproj = dir.join("motion/actions.ecproj");
-    if !ecproj.is_file() {
-        return Ok(json!({ "empty": true, "kind": "motion", "time": time }));
-    }
     let preview_dir = dir.join("motion/.preview");
-    fs::create_dir_all(&preview_dir)?;
+    std::fs::create_dir_all(&preview_dir)?;
     let out = preview_dir.join(format!("motion-{}.png", (time * 1000.0).round() as u64));
-    if out.is_file()
-        && let (Ok(om), Ok(pm)) = (fs::metadata(&out), fs::metadata(&ecproj))
-        && om.len() > 0
-        && let (Ok(ot), Ok(pt)) = (om.modified(), pm.modified())
-        && ot >= pt
-    {
+    if out.is_file() {
         return Ok(json!({ "frame": out, "source": ecproj, "kind": "motion", "time": time }));
     }
-    CraftHub::render_effect_frame(&ecproj, Some(COMP_NAME), time, 640, &out)?;
-    Ok(json!({ "frame": out, "source": ecproj, "kind": "motion", "time": time }))
-}
-
-/// `motion.effects`: return distinct CLI-mapped VectorCraft, EffectCraft, and PhotoCraft motion effects.
-pub fn cmd_motion_effects(_s: &mut Session, p: &Value) -> Result<Value> {
-    Ok(crate::craft_effects::query_motion_effects(p))
+    if ecproj.is_file() && crate::native_media::extract_or_copy_preview(&ecproj, &out, 640)? {
+        return Ok(json!({ "frame": out, "source": ecproj, "kind": "motion", "time": time }));
+    }
+    Ok(json!({ "empty": true, "source": ecproj, "kind": "motion", "time": time }))
 }

@@ -5,7 +5,6 @@ pub mod character;
 pub mod commit;
 pub mod film;
 pub mod motion;
-pub mod photo_vector;
 pub mod project;
 pub mod song;
 pub mod storyboard;

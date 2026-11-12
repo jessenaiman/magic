@@ -1,0 +1,310 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="920" viewBox="0 0 1440 920" fill="none">
+  <defs>
+    <linearGradient id="bgCanvas" x1="0" y1="0" x2="1440" y2="920" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#141C28"/>
+      <stop offset="100%" stop-color="#101722"/>
+    </linearGradient>
+    <linearGradient id="fanfareGrad" x1="24" y1="76" x2="1416" y2="164" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#331520"/>
+      <stop offset="55%" stop-color="#26131E"/>
+      <stop offset="100%" stop-color="#1E1726"/>
+    </linearGradient>
+    <radialGradient id="wgslOrbCore" cx="42%" cy="38%" r="62%">
+      <stop offset="0%" stop-color="#7CF7E0"/>
+      <stop offset="42%" stop-color="#35E1C0"/>
+      <stop offset="76%" stop-color="#56B4F5"/>
+      <stop offset="100%" stop-color="#1B2A4A"/>
+    </radialGradient>
+    <radialGradient id="wgslOrbBlob" cx="65%" cy="62%" r="50%">
+      <stop offset="0%" stop-color="#A78BFA" stop-opacity="0.85"/>
+      <stop offset="60%" stop-color="#35E1C0" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="#141C28" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="waveMint" x1="0" y1="335" x2="0" y2="488" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#35E1C0" stop-opacity="0.42"/>
+      <stop offset="100%" stop-color="#35E1C0" stop-opacity="0.03"/>
+    </linearGradient>
+    <linearGradient id="waveAmber" x1="0" y1="375" x2="0" y2="488" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#EABB62" stop-opacity="0.38"/>
+      <stop offset="100%" stop-color="#EABB62" stop-opacity="0.03"/>
+    </linearGradient>
+    <linearGradient id="waveSky" x1="0" y1="418" x2="0" y2="488" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#56B4F5" stop-opacity="0.36"/>
+      <stop offset="100%" stop-color="#56B4F5" stop-opacity="0.04"/>
+    </linearGradient>
+  </defs>
+
+  <g id="Artboard_Mayhem_InApp_1440x920">
+    <rect id="CanvasBackground" x="0" y="0" width="1440" height="920" fill="url(#bgCanvas)"/>
+
+    <!-- 1. Top Application Navigation Bar -->
+    <g id="TopAppBar">
+      <rect x="0" y="0" width="1440" height="60" fill="#0F1621"/>
+      <line x1="0" y1="60" x2="1440" y2="60" stroke="#2B364A" stroke-width="1"/>
+
+      <circle cx="24" cy="30" r="5.5" fill="#F05B6E"/>
+      <circle cx="42" cy="30" r="5.5" fill="#EABB62"/>
+      <circle cx="60" cy="30" r="5.5" fill="#35E1C0"/>
+
+      <rect x="84" y="14" width="214" height="32" rx="16" fill="#1C2433" stroke="#2B364A" stroke-width="1"/>
+      <circle cx="102" cy="30" r="5" fill="#35E1C0"/>
+      <text x="114" y="35" fill="#EEF3FB" font-family="Liberation Sans, Inter, sans-serif" font-size="13" font-weight="700">Pterodactyl Song.magic</text>
+
+      <rect x="396" y="11" width="648" height="38" rx="19" fill="#161F2E" stroke="#2B364A" stroke-width="1"/>
+      <text x="424" y="35" fill="#A6B4CB" font-family="Liberation Sans, Inter, sans-serif" font-size="13" font-weight="600">Storyboard</text>
+      <text x="524" y="35" fill="#A6B4CB" font-family="Liberation Sans, Inter, sans-serif" font-size="13" font-weight="600">Animations</text>
+      <text x="628" y="35" fill="#A6B4CB" font-family="Liberation Sans, Inter, sans-serif" font-size="13" font-weight="600">Lyrics</text>
+      <text x="700" y="35" fill="#A6B4CB" font-family="Liberation Sans, Inter, sans-serif" font-size="13" font-weight="600">Motion</text>
+      <text x="778" y="35" fill="#A6B4CB" font-family="Liberation Sans, Inter, sans-serif" font-size="13" font-weight="600">Studio</text>
+
+      <rect x="848" y="15" width="108" height="30" rx="15" fill="#35E1C0"/>
+      <text x="902" y="35" text-anchor="middle" fill="#0B131E" font-family="Liberation Sans, Inter, sans-serif" font-size="13" font-weight="700">Mayhem</text>
+
+      <rect x="966" y="18" width="66" height="24" rx="12" fill="#3B1722" stroke="#F05B6E" stroke-width="1"/>
+      <text x="999" y="34" text-anchor="middle" fill="#F05B6E" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="11" font-weight="700">2 ERR</text>
+
+      <rect x="1174" y="15" width="242" height="30" rx="8" fill="#141C28" stroke="#2B364A" stroke-width="1"/>
+      <circle cx="1190" cy="30" r="4.5" fill="#35E1C0"/>
+      <text x="1202" y="34" fill="#A6B4CB" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="11">--control 127.0.0.1:9875</text>
+    </g>
+
+    <!-- 2. Loud Rust Error Fanfare Banner -->
+    <g id="RustErrorFanfareDrawer">
+      <rect x="24" y="76" width="1392" height="88" rx="12" fill="url(#fanfareGrad)" stroke="#F05B6E" stroke-width="1.8"/>
+      
+    <g id="Moppet_AlarmBell">
+      <circle cx="68.0" cy="120.0" r="24" fill="#EABB62" fill-opacity="0.14" stroke="#EABB62" stroke-opacity="0.45" stroke-width="1.2"/>
+      <polygon points="53.0,112.0 49.0,98.0 62.0,105.0" fill="#B93848" stroke="#0F1621" stroke-width="1.4"/>
+      <polygon points="83.0,112.0 87.0,98.0 74.0,105.0" fill="#B93848" stroke="#0F1621" stroke-width="1.4"/>
+      <ellipse cx="68.0" cy="121.0" rx="16.5" ry="14.5" fill="#F05B6E" stroke="#0F1621" stroke-width="1.6"/>
+      <ellipse cx="68.0" cy="125.0" rx="10.5" ry="7.5" fill="#F8FAFC" fill-opacity="0.92"/>
+      <circle cx="61.5" cy="118.5" r="2.5" fill="#0F1621"/>
+      <circle cx="74.5" cy="118.5" r="2.5" fill="#0F1621"/>
+      <circle cx="62.3" cy="117.7" r="0.9" fill="#FFFFFF"/>
+      <circle cx="75.3" cy="117.7" r="0.9" fill="#FFFFFF"/>
+      <path d="M 58.0 113.0 L 64.0 116.0" fill="none" stroke="#0F1621" stroke-width="1.5" stroke-linecap="round"/>
+      <path d="M 78.0 113.0 L 72.0 116.0" fill="none" stroke="#0F1621" stroke-width="1.5" stroke-linecap="round"/>
+      <ellipse cx="68.0" cy="121.8" rx="2.4" ry="1.6" fill="#EABB62"/>
+      <ellipse cx="68.0" cy="126.0" rx="3.5" ry="4.2" fill="#0F1621"/>
+      
+      <g id="Moppet_AlarmBell_AlarmBell" transform="translate(88.0, 114.0) rotate(-18)">
+        <path d="M -8 6 L 8 6 L 6 -4 C 6 -9 -6 -9 -6 -4 Z" fill="#EABB62" stroke="#0F1621" stroke-width="1.5"/>
+        <circle cx="0" cy="8.5" r="2.6" fill="#F05B6E"/>
+        <path d="M 10 -6 Q 15 -2 12 5" fill="none" stroke="#F05B6E" stroke-width="2" stroke-linecap="round"/>
+      </g>
+    </g>
+
+      <rect x="108" y="90" width="166" height="22" rx="6" fill="#F05B6E"/>
+      <text x="191" y="105" text-anchor="middle" fill="#0F1621" font-family="Liberation Sans, Inter, sans-serif" font-size="11" font-weight="700">RUST ERROR FANFARE</text>
+      <text x="286" y="105" fill="#F8B4BE" font-family="Liberation Sans, Inter, sans-serif" font-size="12" font-weight="600">Loud failure boundary &#8212; zero silent `let _ =` disposal on engine, autosave, or CI paths</text>
+
+      <text x="108" y="131" fill="#EEF3FB" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="13" font-weight="700">error[E0432]: unresolved import `magic_mcp`  --&gt;  apps/magic-tui/src/main.rs:10:5</text>
+      <text x="108" y="150" fill="#A6B4CB" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="11">cause: `magic-mcp` missing from `apps/magic-tui/Cargo.toml` (+ unused `Backend` under `-D warnings`) &#183; ci-report.jsonl</text>
+
+      <rect x="1142" y="102" width="124" height="36" rx="8" fill="#1C2433" stroke="#F05B6E" stroke-width="1.2"/>
+      <text x="1204" y="125" text-anchor="middle" fill="#EEF3FB" font-family="Liberation Sans, Inter, sans-serif" font-size="12" font-weight="700">Copy Trace</text>
+
+      <rect x="1278" y="102" width="120" height="36" rx="8" fill="#F05B6E"/>
+      <text x="1338" y="125" text-anchor="middle" fill="#0F1621" font-family="Liberation Sans, Inter, sans-serif" font-size="12" font-weight="700">Inspect File</text>
+    </g>
+
+    <!-- 3. Bento Telemetry Row -->
+    <g id="Card_MainBuildAndMergeGuard">
+      <rect x="24" y="180" width="448" height="392" rx="12" fill="#1C2433" stroke="#2B364A" stroke-width="1.2"/>
+      <text x="44" y="212" fill="#EEF3FB" font-family="Liberation Sans, Inter, sans-serif" font-size="14" font-weight="700">1. MAIN BUILD &amp; MERGE GUARD</text>
+      <text x="44" y="231" fill="#6F7F99" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="11">jessenaiman/magic &#183; main @ 2e035fe</text>
+      
+    <g id="Moppet_Gaffer_Build">
+      <circle cx="428.0" cy="212.0" r="24" fill="#56B4F5" fill-opacity="0.14" stroke="#56B4F5" stroke-opacity="0.45" stroke-width="1.2"/>
+      <polygon points="413.0,204.0 409.0,190.0 422.0,197.0" fill="#1E9E85" stroke="#0F1621" stroke-width="1.4"/>
+      <polygon points="443.0,204.0 447.0,190.0 434.0,197.0" fill="#1E9E85" stroke="#0F1621" stroke-width="1.4"/>
+      <ellipse cx="428.0" cy="213.0" rx="16.5" ry="14.5" fill="#35E1C0" stroke="#0F1621" stroke-width="1.6"/>
+      <ellipse cx="428.0" cy="217.0" rx="10.5" ry="7.5" fill="#F8FAFC" fill-opacity="0.92"/>
+      <circle cx="421.5" cy="210.5" r="2.5" fill="#0F1621"/>
+      <circle cx="434.5" cy="210.5" r="2.5" fill="#0F1621"/>
+      <circle cx="422.3" cy="209.7" r="0.9" fill="#FFFFFF"/>
+      <circle cx="435.3" cy="209.7" r="0.9" fill="#FFFFFF"/>
+      <path d="M 418.0 206.0 Q 421.0 203.0 424.0 206.0" fill="none" stroke="#0F1621" stroke-width="1.5" stroke-linecap="round"/>
+      <path d="M 432.0 206.0 Q 435.0 203.0 438.0 206.0" fill="none" stroke="#0F1621" stroke-width="1.5" stroke-linecap="round"/>
+      <ellipse cx="428.0" cy="213.8" rx="2.4" ry="1.6" fill="#56B4F5"/>
+      <path d="M 423.0 216.0 Q 428.0 221.0 433.0 216.0" fill="none" stroke="#0F1621" stroke-width="1.8" stroke-linecap="round"/>
+      
+    </g>
+
+      <rect x="44" y="246" width="186" height="28" rx="14" fill="#3B1722" stroke="#F05B6E" stroke-width="1.2"/>
+      <circle cx="60" cy="260" r="4.5" fill="#F05B6E"/>
+      <text x="72" y="264" fill="#F05B6E" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="11" font-weight="700">main CI: FAILED (gate)</text>
+
+      <rect x="240" y="246" width="210" height="28" rx="14" fill="#332815" stroke="#EABB62" stroke-width="1.2"/>
+      <text x="345" y="264" text-anchor="middle" fill="#EABB62" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="11" font-weight="700">PR: Cannot Merge Cleanly</text>
+
+      <text x="44" y="294" fill="#A6B4CB" font-family="Liberation Sans, Inter, sans-serif" font-size="12">Rebase + local `xtask ci` receipt required (force-merge blocked)</text>
+
+      <g id="WGSL_FluidMorphShaderOrb">
+        <circle cx="248" cy="414" r="92" fill="#111722" stroke="#2B364A" stroke-width="1.5"/>
+        <path d="M 248.00 330.00 A 84.00 84.00 0 1 1 181.81 362.28" fill="none" stroke="#35E1C0" stroke-width="4" stroke-linecap="round"/>
+        <path d="M 248 340 C 292 336, 324 372, 316 416 C 308 460, 282 486, 242 482 C 198 478, 174 448, 182 406 C 190 364, 208 344, 248 340 Z" fill="url(#wgslOrbCore)"/>
+        <ellipse cx="268" cy="432" rx="46" ry="38" fill="url(#wgslOrbBlob)"/>
+        <circle cx="222" cy="382" r="8" fill="#FFFFFF" fill-opacity="0.35"/>
+        <text x="248" y="416" text-anchor="middle" fill="#0B131E" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="14" font-weight="700">6.2 ms / frame</text>
+        <text x="248" y="435" text-anchor="middle" fill="#0F1621" font-family="Liberation Sans, Inter, sans-serif" font-size="11" font-weight="700">120 Hz &#183; wgpu WGSL</text>
+      </g>
+
+      <text x="44" y="548" fill="#6F7F99" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="11">Receipt: SHA mismatch &#183; Run `cargo xtask ci` before push</text>
+    </g>
+
+    <g id="Card_OpenProjectAnalytics">
+      <rect x="488" y="180" width="464" height="392" rx="12" fill="#1C2433" stroke="#2B364A" stroke-width="1.2"/>
+      <text x="508" y="212" fill="#EEF3FB" font-family="Liberation Sans, Inter, sans-serif" font-size="14" font-weight="700">2. OPEN PROJECT ANALYTICS</text>
+      <text x="508" y="231" fill="#6F7F99" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="11">Pterodactyl Song.magic &#183; 14 Craft assets &#183; 3m 18s</text>
+      
+    <g id="Moppet_Scooter_Project">
+      <circle cx="908.0" cy="212.0" r="24" fill="#35E1C0" fill-opacity="0.14" stroke="#35E1C0" stroke-opacity="0.45" stroke-width="1.2"/>
+      <polygon points="893.0,204.0 889.0,190.0 902.0,197.0" fill="#B7832C" stroke="#0F1621" stroke-width="1.4"/>
+      <polygon points="923.0,204.0 927.0,190.0 914.0,197.0" fill="#B7832C" stroke="#0F1621" stroke-width="1.4"/>
+      <ellipse cx="908.0" cy="213.0" rx="16.5" ry="14.5" fill="#EABB62" stroke="#0F1621" stroke-width="1.6"/>
+      <ellipse cx="908.0" cy="217.0" rx="10.5" ry="7.5" fill="#F8FAFC" fill-opacity="0.92"/>
+      <circle cx="901.5" cy="210.5" r="2.5" fill="#0F1621"/>
+      <circle cx="914.5" cy="210.5" r="2.5" fill="#0F1621"/>
+      <circle cx="902.3" cy="209.7" r="0.9" fill="#FFFFFF"/>
+      <circle cx="915.3" cy="209.7" r="0.9" fill="#FFFFFF"/>
+      <path d="M 898.0 206.0 Q 901.0 203.0 904.0 206.0" fill="none" stroke="#0F1621" stroke-width="1.5" stroke-linecap="round"/>
+      <path d="M 912.0 206.0 Q 915.0 203.0 918.0 206.0" fill="none" stroke="#0F1621" stroke-width="1.5" stroke-linecap="round"/>
+      <ellipse cx="908.0" cy="213.8" rx="2.4" ry="1.6" fill="#35E1C0"/>
+      <path d="M 903.0 216.0 Q 908.0 221.0 913.0 216.0" fill="none" stroke="#0F1621" stroke-width="1.8" stroke-linecap="round"/>
+      
+    </g>
+
+      <circle cx="516" cy="258" r="5" fill="#35E1C0"/>
+      <text x="527" y="262" fill="#EEF3FB" font-family="Liberation Sans, Inter, sans-serif" font-size="12">V2 Puppet (48 MB)</text>
+
+      <circle cx="654" cy="258" r="5" fill="#EABB62"/>
+      <text x="665" y="262" fill="#EEF3FB" font-family="Liberation Sans, Inter, sans-serif" font-size="12">V3 Lyrics (Synced)</text>
+
+      <circle cx="794" cy="258" r="5" fill="#56B4F5"/>
+      <text x="805" y="262" fill="#EEF3FB" font-family="Liberation Sans, Inter, sans-serif" font-size="12">V4 Motion (Dirty)</text>
+
+      <rect x="504" y="280" width="432" height="208" rx="8" fill="#111722" stroke="#212B3C" stroke-width="1"/>
+      <line x1="504" y1="332" x2="936" y2="332" stroke="#1E293B" stroke-dasharray="4 4"/>
+      <line x1="504" y1="384" x2="936" y2="384" stroke="#1E293B" stroke-dasharray="4 4"/>
+      <line x1="504" y1="436" x2="936" y2="436" stroke="#1E293B" stroke-dasharray="4 4"/>
+
+      <path d="M 504 420 C 548 365, 582 355, 626 392 C 670 429, 710 340, 760 358 C 810 376, 858 332, 936 350 L 936 488 L 504 488 Z" fill="url(#waveMint)"/>
+      <path d="M 504 420 C 548 365, 582 355, 626 392 C 670 429, 710 340, 760 358 C 810 376, 858 332, 936 350" fill="none" stroke="#35E1C0" stroke-width="2.5"/>
+
+      <path d="M 504 448 C 552 430, 594 398, 644 416 C 694 434, 736 388, 790 396 C 844 404, 886 374, 936 386 L 936 488 L 504 488 Z" fill="url(#waveAmber)"/>
+      <path d="M 504 448 C 552 430, 594 398, 644 416 C 694 434, 736 388, 790 396 C 844 404, 886 374, 936 386" fill="none" stroke="#EABB62" stroke-width="2.5"/>
+
+      <path d="M 504 468 C 560 458, 610 442, 662 452 C 714 462, 764 426, 822 434 C 874 441, 904 418, 936 424 L 936 488 L 504 488 Z" fill="url(#waveSky)"/>
+      <path d="M 504 468 C 560 458, 610 442, 662 452 C 714 462, 764 426, 822 434 C 874 441, 904 418, 936 424" fill="none" stroke="#56B4F5" stroke-width="2.5"/>
+
+      <rect x="504" y="502" width="208" height="52" rx="8" fill="#141C28" stroke="#2B364A" stroke-width="1"/>
+      <text x="516" y="522" fill="#35E1C0" font-family="Liberation Sans, Inter, sans-serif" font-size="11" font-weight="700">STORYBOARD MASTER &amp; PDF</text>
+      <text x="516" y="541" fill="#EEF3FB" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="10.5">Read-Only &#183; 12p PDF Ready</text>
+
+      <rect x="724" y="502" width="212" height="52" rx="8" fill="#141C28" stroke="#2B364A" stroke-width="1"/>
+      <text x="736" y="522" fill="#EABB62" font-family="Liberation Sans, Inter, sans-serif" font-size="11" font-weight="700">CRAFT MEDIA BUNDLES</text>
+      <text x="736" y="541" fill="#EEF3FB" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="10.5">6 pcraft &#183; 5 vector &#183; 3 ecproj</text>
+    </g>
+
+    <g id="Card_GitHubTelemetry">
+      <rect x="968" y="180" width="448" height="392" rx="12" fill="#1C2433" stroke="#2B364A" stroke-width="1.2"/>
+      <text x="988" y="212" fill="#EEF3FB" font-family="Liberation Sans, Inter, sans-serif" font-size="14" font-weight="700">3. GITHUB &amp; CI TELEMETRY</text>
+      <text x="988" y="231" fill="#6F7F99" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="11">ETag cached &#183; House Rule 14 rate-limit safe</text>
+      
+    <g id="Moppet_Bleaker_GitHub">
+      <circle cx="1372.0" cy="212.0" r="24" fill="#35E1C0" fill-opacity="0.14" stroke="#35E1C0" stroke-opacity="0.45" stroke-width="1.2"/>
+      <polygon points="1357.0,204.0 1353.0,190.0 1366.0,197.0" fill="#6D48E5" stroke="#0F1621" stroke-width="1.4"/>
+      <polygon points="1387.0,204.0 1391.0,190.0 1378.0,197.0" fill="#6D48E5" stroke="#0F1621" stroke-width="1.4"/>
+      <ellipse cx="1372.0" cy="213.0" rx="16.5" ry="14.5" fill="#A78BFA" stroke="#0F1621" stroke-width="1.6"/>
+      <ellipse cx="1372.0" cy="217.0" rx="10.5" ry="7.5" fill="#F8FAFC" fill-opacity="0.92"/>
+      <circle cx="1365.5" cy="210.5" r="2.5" fill="#0F1621"/>
+      <circle cx="1378.5" cy="210.5" r="2.5" fill="#0F1621"/>
+      <circle cx="1366.3" cy="209.7" r="0.9" fill="#FFFFFF"/>
+      <circle cx="1379.3" cy="209.7" r="0.9" fill="#FFFFFF"/>
+      <path d="M 1362.0 206.0 Q 1365.0 203.0 1368.0 206.0" fill="none" stroke="#0F1621" stroke-width="1.5" stroke-linecap="round"/>
+      <path d="M 1376.0 206.0 Q 1379.0 203.0 1382.0 206.0" fill="none" stroke="#0F1621" stroke-width="1.5" stroke-linecap="round"/>
+      <ellipse cx="1372.0" cy="213.8" rx="2.4" ry="1.6" fill="#35E1C0"/>
+      <path d="M 1367.0 216.0 Q 1372.0 221.0 1377.0 216.0" fill="none" stroke="#0F1621" stroke-width="1.8" stroke-linecap="round"/>
+      
+    </g>
+
+      <g id="RadialTelemetryRings">
+        <path d="M 1192.00 318.00 A 86.00 86.00 0 1 1 1191.85 318.00" stroke="#141C28" stroke-width="12" fill="none"/>
+        <path d="M 1192.00 318.00 A 86.00 86.00 0 1 1 1114.06 367.65" stroke="#35E1C0" stroke-width="12" stroke-linecap="round" fill="none"/>
+
+        <path d="M 1192.00 338.00 A 66.00 66.00 0 1 1 1191.88 338.00" stroke="#141C28" stroke-width="12" fill="none"/>
+        <path d="M 1192.00 338.00 A 66.00 66.00 0 1 1 1159.00 461.16" stroke="#EABB62" stroke-width="12" stroke-linecap="round" fill="none"/>
+
+        <path d="M 1192.00 358.00 A 46.00 46.00 0 1 1 1191.92 358.00" stroke="#141C28" stroke-width="12" fill="none"/>
+        <path d="M 1192.00 358.00 A 46.00 46.00 0 1 1 1165.62 366.32" stroke="#A78BFA" stroke-width="12" stroke-linecap="round" fill="none"/>
+
+        <text x="1192" y="401" text-anchor="middle" fill="#EEF3FB" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="16" font-weight="700">4 / 5</text>
+        <text x="1192" y="419" text-anchor="middle" fill="#6F7F99" font-family="Liberation Sans, Inter, sans-serif" font-size="11">Gates Green</text>
+      </g>
+
+      <circle cx="994" cy="516" r="5" fill="#35E1C0"/>
+      <text x="1006" y="520" fill="#EEF3FB" font-family="Liberation Sans, Inter, sans-serif" font-size="11.5">Dev CI = Local `xtask ci`</text>
+
+      <circle cx="1208" cy="516" r="5" fill="#EABB62"/>
+      <text x="1220" y="520" fill="#EEF3FB" font-family="Liberation Sans, Inter, sans-serif" font-size="11.5">Release (`ci-release`)</text>
+
+      <circle cx="994" cy="544" r="5" fill="#A78BFA"/>
+      <text x="1006" y="548" fill="#EEF3FB" font-family="Liberation Sans, Inter, sans-serif" font-size="11.5">git-sources: storytold/* OK</text>
+
+      <circle cx="1208" cy="544" r="5" fill="#F05B6E"/>
+      <text x="1220" y="548" fill="#F05B6E" font-family="Liberation Sans, Inter, sans-serif" font-size="11.5">12MB docs dump flagged</text>
+    </g>
+
+    <!-- 4. Bottom Row: Disk System Logs + AGENTS.md UI Block -->
+    <g id="Card_SystemLogsDiskSnapshot">
+      <rect x="24" y="588" width="684" height="308" rx="12" fill="#1C2433" stroke="#2B364A" stroke-width="1.2"/>
+      <text x="44" y="618" fill="#EEF3FB" font-family="Liberation Sans, Inter, sans-serif" font-size="14" font-weight="700">4. SYSTEM LOGS (DISK SNAPSHOT)</text>
+      <text x="44" y="637" fill="#6F7F99" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="10.5">$XDG_DATA_HOME/magic/logs/ &#183; zero polling timers</text>
+
+      <rect x="536" y="602" width="152" height="36" rx="8" fill="#35E1C0"/>
+      <text x="612" y="625" text-anchor="middle" fill="#0B131E" font-family="Liberation Sans, Inter, sans-serif" font-size="13" font-weight="700">Reread Logs</text>
+
+      <rect x="44" y="654" width="204" height="222" rx="8" fill="#111722" stroke="#212B3C" stroke-width="1"/>
+      <rect x="52" y="664" width="188" height="32" rx="6" fill="#1E293B" stroke="#35E1C0" stroke-width="1"/>
+      <text x="62" y="685" fill="#EEF3FB" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="11.5" font-weight="700">magic.log (active)</text>
+
+      <text x="62" y="720" fill="#A6B4CB" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="11.5">magic.1.log (prev run)</text>
+      <text x="62" y="750" fill="#A6B4CB" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="11.5">magic.2.log (crashed)</text>
+      <text x="62" y="780" fill="#F05B6E" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="11.5">ci-report.jsonl (2 err)</text>
+      <text x="62" y="810" fill="#A6B4CB" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="11.5">ci-last.json (receipt)</text>
+      <text x="62" y="840" fill="#A6B4CB" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="11.5">activity-log.jsonl</text>
+
+      <rect x="260" y="654" width="428" height="222" rx="8" fill="#111722" stroke="#212B3C" stroke-width="1"/>
+      <text x="274" y="680" fill="#35E1C0" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="10.5">[12:48:02 INFO] wgpu adapter: Metal / Vulkan (surface_fit)</text>
+      <text x="274" y="704" fill="#A6B4CB" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="10.5">[12:48:05 INFO] opened Pterodactyl Song.magic (14 assets)</text>
+      <text x="274" y="728" fill="#EABB62" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="10.5">[12:49:18 WARN] V4 motion/actions.ecproj modified on disk</text>
+      <text x="274" y="752" fill="#F05B6E" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="10.5" font-weight="700">[12:50:11 ERR ] clippy failed: apps/magic-tui/src/main.rs</text>
+      <text x="274" y="774" fill="#F05B6E" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="10.5">  -&gt; E0432 unresolved import `magic_mcp` (Cargo.toml)</text>
+      <text x="274" y="798" fill="#F05B6E" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="10.5">[12:50:44 ERR ] autosave write failed: disk lock busy</text>
+      <text x="274" y="858" fill="#6F7F99" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="10.5">Snapshot 12:51:04 &#183; Click [Reread Logs] to reload disk</text>
+    </g>
+
+    <g id="Card_AgentRolesMarkdown">
+      <rect x="732" y="588" width="684" height="308" rx="12" fill="#1C2433" stroke="#2B364A" stroke-width="1.2"/>
+      <text x="752" y="618" fill="#EEF3FB" font-family="Liberation Sans, Inter, sans-serif" font-size="14" font-weight="700">5. AGENT ROLES (`AGENTS.md`)</text>
+      <text x="752" y="637" fill="#6F7F99" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="10.5">User-iterated markdown block &#183; zero agent guessing</text>
+
+      <rect x="1148" y="602" width="110" height="36" rx="8" fill="#141C28" stroke="#2B364A" stroke-width="1"/>
+      <text x="1203" y="625" text-anchor="middle" fill="#EEF3FB" font-family="Liberation Sans, Inter, sans-serif" font-size="12" font-weight="600">Reload</text>
+
+      <rect x="1268" y="602" width="128" height="36" rx="8" fill="#141C28" stroke="#35E1C0" stroke-width="1.2"/>
+      <text x="1332" y="625" text-anchor="middle" fill="#35E1C0" font-family="Liberation Sans, Inter, sans-serif" font-size="12" font-weight="700">Save AGENTS.md</text>
+
+      <rect x="752" y="654" width="644" height="222" rx="8" fill="#111722" stroke="#212B3C" stroke-width="1"/>
+      <text x="768" y="682" fill="#35E1C0" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="11.5" font-weight="700"># Project Agent Roles (User-Editable AGENTS.md)</text>
+      <text x="768" y="708" fill="#EEF3FB" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="11.5">- Control: `magic-cli mcp --connect 127.0.0.1:9875` (FC :9876, EC :9877)</text>
+      <text x="768" y="732" fill="#EEF3FB" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="11.5">- Storyboard: `storyboard.designcraft` (RO) -&gt; `storyboard.pdf` ref</text>
+      <text x="768" y="756" fill="#EEF3FB" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="11.5">- Design Master: `figcraft/magic-studio-master.figcraft` (single copy)</text>
+      <text x="768" y="780" fill="#EEF3FB" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="11.5">- Check-In: Run `cargo xtask ci` locally; zero markdown log dumps</text>
+      <text x="768" y="804" fill="#A6B4CB" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="11.5">- House Rules: Canonical `storytold/craft-contrib` SHA-256 block</text>
+      <text x="768" y="858" fill="#6F7F99" font-family="Liberation Mono, JetBrains Mono, monospace" font-size="10.5">Bound to: &lt;project&gt;/AGENTS.md &#183; Atomic save via magic::write_file</text>
+    </g>
+  </g>
+</svg>

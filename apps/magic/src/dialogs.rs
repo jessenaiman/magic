@@ -20,14 +20,26 @@ impl DialogHost {
     pub fn new(ctx: &egui::Context) -> Self {
         let wake_ctx = ctx.clone();
         let dialogs = Dialogs::new(Arc::new(move || wake_ctx.request_repaint()));
-        Self { dialogs, pending: VecDeque::new(), last: Value::Null, overridden: false }
+        Self {
+            dialogs,
+            pending: VecDeque::new(),
+            last: Value::Null,
+            overridden: false,
+        }
     }
 
     pub fn is_open(&self) -> bool {
         self.dialogs.is_open()
     }
 
-    pub fn open_picker(&mut self, target: PickerTarget, title: &str, extensions: &[String], directory: bool, save: bool) {
+    pub fn open_picker(
+        &mut self,
+        target: PickerTarget,
+        title: &str,
+        extensions: &[String],
+        directory: bool,
+        save: bool,
+    ) {
         let mut dialog = match (directory, save) {
             (true, _) => FileDialog::folder(),
             (false, true) => FileDialog::save(),
@@ -121,18 +133,25 @@ fn describe_answer(answer: &Answer) -> Value {
 
 enum Scripted {
     Native,
-    Answers { paths: Option<Vec<PathBuf>>, button: Option<MessageResult> },
+    Answers {
+        paths: Option<Vec<PathBuf>>,
+        button: Option<MessageResult>,
+    },
     Cancelled,
     Unavailable(String),
 }
 
-const OVERRIDE_FORMS: &str = "ui.dialog.override takes exactly one of: paths and/or button, cancelled: true, unavailable: reason, clear: true";
+const OVERRIDE_FORMS: &str =
+    "ui.dialog.override takes exactly one of: paths and/or button, cancelled: true, unavailable: reason, clear: true";
 
 fn parse_scripted(params: &Value) -> Result<Scripted, String> {
     super::only_keys(params, "ui.dialog.override", &["paths", "button", "cancelled", "unavailable", "clear"])?;
     let paths = params.get("paths");
     let button = params.get("button");
-    let forms = ["cancelled", "unavailable", "clear"].iter().filter(|key| params.get(**key).is_some()).count();
+    let forms = ["cancelled", "unavailable", "clear"]
+        .iter()
+        .filter(|key| params.get(**key).is_some())
+        .count();
     if forms + usize::from(paths.is_some() || button.is_some()) != 1 {
         return Err(OVERRIDE_FORMS.into());
     }
@@ -140,16 +159,31 @@ fn parse_scripted(params: &Value) -> Result<Scripted, String> {
         if flag != true {
             return Err(OVERRIDE_FORMS.into());
         }
-        return Ok(if params.get("clear").is_some() { Scripted::Native } else { Scripted::Cancelled });
+        return Ok(if params.get("clear").is_some() {
+            Scripted::Native
+        } else {
+            Scripted::Cancelled
+        });
     }
     if let Some(why) = params.get("unavailable") {
-        return why.as_str().map(|w| Scripted::Unavailable(w.to_owned())).ok_or_else(|| "unavailable must be a string".to_string());
+        return why
+            .as_str()
+            .map(|w| Scripted::Unavailable(w.to_owned()))
+            .ok_or_else(|| "unavailable must be a string".to_string());
     }
     let paths = paths
         .map(|raw| {
-            let list = raw.as_array().filter(|l| !l.is_empty()).ok_or("paths must be a non-empty array of absolute paths")?;
+            let list = raw
+                .as_array()
+                .filter(|l| !l.is_empty())
+                .ok_or("paths must be a non-empty array of absolute paths")?;
             list.iter()
-                .map(|p| p.as_str().map(PathBuf::from).filter(|pb| pb.is_absolute()).ok_or("paths must be a non-empty array of absolute paths"))
+                .map(|p| {
+                    p.as_str()
+                        .map(PathBuf::from)
+                        .filter(|pb| pb.is_absolute())
+                        .ok_or("paths must be a non-empty array of absolute paths")
+                })
                 .collect::<Result<Vec<_>, _>>()
         })
         .transpose()?;
@@ -175,8 +209,12 @@ fn override_for(scripted: Scripted) -> Option<Override> {
         })),
         Scripted::Unavailable(why) => Some(Box::new(move |_| Answer::Unavailable(why.clone()))),
         Scripted::Answers { paths, button } => Some(Box::new(move |request| match request {
-            Request::File(_) => paths.clone().map_or_else(|| Answer::Unavailable("the override has no paths for a file dialog".into()), Answer::Paths),
-            Request::Message(_) => button.clone().map_or_else(|| Answer::Unavailable("the override has no button for a message box".into()), Answer::Message),
+            Request::File(_) => paths
+                .clone()
+                .map_or_else(|| Answer::Unavailable("the override has no paths for a file dialog".into()), Answer::Paths),
+            Request::Message(_) => button
+                .clone()
+                .map_or_else(|| Answer::Unavailable("the override has no button for a message box".into()), Answer::Message),
         })),
     }
 }

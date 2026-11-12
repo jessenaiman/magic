@@ -26,7 +26,7 @@ Nice-to-have control methods and runtime flags identified when cross-checking `a
 ## 3. Sibling ArtCraft CLI Host Verification (`// TODO:` Hooks)
 
 - [ ] Confirm exact `vectorcraft-cli` flat PNG export command (`export` vs `document.export`) against `vectorcraft-cli commands` in `crates/engine/src/cmd/storyboard/crud.rs` (`resolve_flat_image_and_ref`).
-- [ ] Verify headless `anicraft-cli` sprite-sheet and frame-sequence CLI flags across new `AniCraft` pre-alpha builds while keeping `CraftTarget::Ani.allows_live_ui() == false` locked until `AniCraft` reaches beta stability.
+- [ ] Verify headless `anicraft-cli` sprite-sheet and frame-sequence CLI flags across new `AniCraft` pre-alpha builds while keeping `craft-doc::Ani.allows_live_ui() == false` locked until `AniCraft` reaches beta stability.
 - [ ] Add automated integration smoke tests in `crates/engine/tests/` that run skipped-unless-installed checks against real `designcraft-cli`, `photocraft-cli`, `vectorcraft-cli`, `effectcraft-cli`, and `filmcraft-cli` binaries.
 
 ## 4. Audio Transcription, Lip-Sync & Music Timing

@@ -14,8 +14,8 @@ name = "magic-tui"
 path = "src/main.rs"
 
 [dependencies]
-magic-mcp = { workspace = true }
 clap = { workspace = true }
 magic = { workspace = true }
+magic-mcp = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
