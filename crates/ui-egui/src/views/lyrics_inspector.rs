@@ -120,6 +120,9 @@ pub fn draw_craft_typography_effects_browser(ui: &mut Ui, ctx: &mut ViewCtx<'_>,
         {
             ctx.exec("words.effects", json!({"refresh": true}), Some("Queried Craft --control API for typography effects"));
         }
+    });
+    // TODO(MAGIC-REVIEW): KEEP Save on its own row so the handoff control fits narrow inspectors.
+    ui.horizontal_wrapped(|ui| {
         if action_button(
             ui,
             ctx.reg,
