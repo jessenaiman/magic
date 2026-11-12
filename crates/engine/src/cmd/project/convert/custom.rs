@@ -6,10 +6,7 @@ use std::path::Path;
 
 use serde_json::{Value, json};
 
-use super::{
-    BaseConverter, ConversionPlan, ConvertKind, DiscoveredAsset, HardWallIssue, LegacyConverter,
-    MissingAssetNotice, collect_files_filtered,
-};
+use super::{BaseConverter, ConversionPlan, ConvertKind, DiscoveredAsset, HardWallIssue, LegacyConverter, MissingAssetNotice, collect_files_filtered};
 use crate::Result;
 
 pub struct CustomConverter;
@@ -44,10 +41,8 @@ impl LegacyConverter for CustomConverter {
                             referenced_path: rel.to_owned(),
                             referenced_in: mpath.display().to_string(),
                             kind_hint: asset["kind"].as_str().unwrap_or("asset").to_owned(),
-                            suggested_project_dest: format!(
-                                "assets/images/{}",
-                                Path::new(rel).file_name().and_then(|n| n.to_str()).unwrap_or("asset.png")
-                            ),
+                            suggested_project_dest: format!("assets/images/{}", Path::new(rel).file_name().and_then(|n| n.to_str()).unwrap_or("asset.png")),
+                            // TODO(MAGIC-REVIEW): CHANGE missing-asset recovery to verified imports; this message is not a completed import.
                             resolution_step: format!(
                                 concat!(
                                     "Legacy `.magic` referenced missing custom asset `{rel}`; ",
@@ -64,10 +59,8 @@ impl LegacyConverter for CustomConverter {
         let fcprojs = collect_files_filtered(source_dir, &["fcproj"]);
         if let Some(fc) = fcprojs.first() {
             plan.existing_fcproj = Some(fc.clone());
-            plan.notes.push(format!(
-                "Linked existing FilmCraft timeline `{}` into `film/`",
-                fc.file_name().and_then(|n| n.to_str()).unwrap_or("project.fcproj")
-            ));
+            plan.notes
+                .push(format!("Linked existing FilmCraft timeline `{}` into `film/`", fc.file_name().and_then(|n| n.to_str()).unwrap_or("project.fcproj")));
         }
 
         for audio in collect_files_filtered(source_dir, &["wav", "mp3", "flac", "m4a", "ogg"]) {
@@ -82,7 +75,8 @@ impl LegacyConverter for CustomConverter {
                 resolution_step: concat!(
                     "No master audio file was found inside this custom folder; ",
                     "attach via `magic-cli exec workshop.set_audio path=<audio.wav>`."
-                ).into(),
+                )
+                .into(),
             });
         }
 
@@ -95,19 +89,19 @@ impl LegacyConverter for CustomConverter {
                     retired.file_name().and_then(|n| n.to_str()).unwrap_or("legacy")
                 ),
                 source_file: retired.display().to_string(),
-                agent_steps: vec![
-                    if ext == "blend" {
-                        concat!(
-                            "Export 3D geometry to `.glb` and import into `<project>/assets/3d/` ",
-                            "(`project.save_asset kind=model_3d`) instead of Blender scripts."
-                        ).into()
-                    } else {
-                        concat!(
-                            "Populate printable `storyboard.pdf` via `magic-cli exec storyboard.wizard` ",
-                            "and `storyboard.set` instead of legacy slide decks."
-                        ).into()
-                    },
-                ],
+                agent_steps: vec![if ext == "blend" {
+                    concat!(
+                        "Export 3D geometry to `.glb` and import into `<project>/assets/3d/` ",
+                        "(`project.save_asset kind=model_3d`) instead of Blender scripts."
+                    )
+                    .into()
+                } else {
+                    concat!(
+                        "Populate printable `storyboard.pdf` via `magic-cli exec storyboard.wizard` ",
+                        "and `storyboard.set` instead of legacy slide decks."
+                    )
+                    .into()
+                }],
                 doc_links: vec![
                     ("FilmCraft Control Protocol", "https://github.com/storytold/filmcraft/blob/main/docs/control-protocol.md"),
                     ("EffectCraft Control Protocol", "https://github.com/storytold/effectcraft/blob/main/docs/control-protocol.md"),
@@ -116,23 +110,13 @@ impl LegacyConverter for CustomConverter {
         }
 
         for ec in collect_files_filtered(source_dir, &["ecproj", "ectemplate"]) {
-            plan.discovered_assets.push(DiscoveredAsset {
-                source_path: ec,
-                bucket: "animations".into(),
-                character_id: None,
-                promote_shared: false,
-            });
+            plan.discovered_assets.push(DiscoveredAsset { source_path: ec, bucket: "animations".into(), character_id: None, promote_shared: false });
         }
 
         for rig_json in collect_files_filtered(source_dir, &["json"]) {
             let fname = rig_json.file_name().and_then(|n| n.to_str()).unwrap_or_default();
             if fname == "rig.json" || fname == "parts.json" {
-                let cid = rig_json
-                    .parent()
-                    .and_then(|p| p.file_name())
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("character")
-                    .to_owned();
+                let cid = rig_json.parent().and_then(|p| p.file_name()).and_then(|n| n.to_str()).unwrap_or("character").to_owned();
                 plan.character_rigs.push(json!({
                     "character": cid,
                     "source_manifest": rig_json,
@@ -166,12 +150,7 @@ impl LegacyConverter for CustomConverter {
             } else {
                 ("images", None, false)
             };
-            plan.discovered_assets.push(DiscoveredAsset {
-                source_path: asset,
-                bucket: bucket.into(),
-                character_id: cid,
-                promote_shared: promote,
-            });
+            plan.discovered_assets.push(DiscoveredAsset { source_path: asset, bucket: bucket.into(), character_id: cid, promote_shared: promote });
         }
         Ok(plan)
     }

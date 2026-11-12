@@ -7,8 +7,8 @@ use std::path::{Path, PathBuf};
 use serde_json::{Value, json};
 
 use super::{
-    cmd_project_import_file, create_initial_project_file, project_mode, project_slug, recent_warning,
-    reset_for_project, validate_project_name, write_project_file,
+    cmd_project_import_file, create_initial_project_file, project_mode, project_slug, recent_warning, reset_for_project, validate_project_name,
+    write_project_file,
 };
 use crate::{EngineError, Result, Session};
 
@@ -38,10 +38,7 @@ fn parent_has_other_magic_file(parent: &Path, target_file_name: &str) -> bool {
     };
     for entry in entries.flatten() {
         let p = entry.path();
-        if p.is_file()
-            && p.extension().is_some_and(|e| e.eq_ignore_ascii_case("magic"))
-            && p.file_name().and_then(|n| n.to_str()) != Some(target_file_name)
-        {
+        if p.is_file() && p.extension().is_some_and(|e| e.eq_ignore_ascii_case("magic")) && p.file_name().and_then(|n| n.to_str()) != Some(target_file_name) {
             return true;
         }
     }
@@ -70,34 +67,27 @@ fn new_project_file_path(s: &Session, params: &Value, mode: Option<&str>) -> Res
             .ok_or_else(|| EngineError::InvalidParams("project path must include a project name".into()))?;
         let slug = validate_project_name(&stem)?;
         if !has_magic_ext {
-            let dir_matches = resolved
-                .file_name()
-                .and_then(|n| n.to_str())
-                .is_some_and(|n| n.eq_ignore_ascii_case(&slug) || n.eq_ignore_ascii_case(&stem));
+            let dir_matches = resolved.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.eq_ignore_ascii_case(&slug) || n.eq_ignore_ascii_case(&stem));
             let proj_dir = if dir_matches { resolved } else { resolved.join(&slug) };
             return Ok(proj_dir.join(format!("{stem}.magic")));
         }
         let fname = format!("{stem}.magic");
         let parent = resolved.parent().unwrap_or(Path::new("."));
-        let parent_matches_project = parent
-            .file_name()
-            .and_then(|n| n.to_str())
-            .is_some_and(|n| n.eq_ignore_ascii_case(&slug) || n.eq_ignore_ascii_case(&stem));
+        let parent_matches_project =
+            parent.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.eq_ignore_ascii_case(&slug) || n.eq_ignore_ascii_case(&stem));
         if parent_matches_project && !parent_has_other_magic_file(parent, &fname) {
             return Ok(parent.join(fname));
         }
         return Ok(parent.join(&slug).join(fname));
     }
 
-    let name = explicit_name.ok_or_else(|| {
-        EngineError::InvalidParams("project.new requires `name` (optionally with `root`), or `path`".into())
-    })?;
+    let name = explicit_name.ok_or_else(|| EngineError::InvalidParams("project.new requires `name` (optionally with `root`), or `path`".into()))?;
     let slug = validate_project_name(name)?;
     let base_root = match text("root") {
         Some(raw_root) => {
             let resolved = crate::workspace::resolve_workspace_path(s, raw_root);
-            let is_magic_ws = resolved.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.eq_ignore_ascii_case("magic"))
-                || resolved.join("workspace.json").is_file();
+            let is_magic_ws =
+                resolved.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.eq_ignore_ascii_case("magic")) || resolved.join("workspace.json").is_file();
             if is_magic_ws {
                 let layout = super::workspace_layout::ensure_magic_workspace(&resolved)?;
                 if mode == Some("animation") { layout.animations_dir } else { layout.projects_dir }
@@ -126,22 +116,14 @@ fn scaffold_project_dirs(project_dir: &Path, mode: Option<&str>) -> Result<Vec<S
 pub(crate) fn copy_audio_into_project(project_dir: &Path, source_audio: &Path, overwrite: bool) -> Result<(PathBuf, bool)> {
     let audio_dir = project_dir.join("audio");
     std::fs::create_dir_all(&audio_dir)?;
-    let file_name = source_audio
-        .file_name()
-        .ok_or_else(|| EngineError::InvalidParams(format!("invalid audio file name: {}", source_audio.display())))?;
+    let file_name = source_audio.file_name().ok_or_else(|| EngineError::InvalidParams(format!("invalid audio file name: {}", source_audio.display())))?;
     let dest = audio_dir.join(file_name);
     let was_external = source_audio.canonicalize().ok() != dest.canonicalize().ok();
     let bytes = crate::doc_state::atomic_copy_file(source_audio, &dest, overwrite)?;
     if was_external {
-        let unix = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
+        let unix = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
         let prov_path = audio_dir.join("provenance.json");
-        let mut doc: Value = std::fs::read_to_string(&prov_path)
-            .ok()
-            .and_then(|t| serde_json::from_str(&t).ok())
-            .unwrap_or_else(|| json!({"files": []}));
+        let mut doc: Value = std::fs::read_to_string(&prov_path).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_else(|| json!({"files": []}));
         if !doc["files"].is_array() {
             doc["files"] = json!([]);
         }
@@ -169,21 +151,13 @@ fn copy_supporting_input(s: &Session, project_dir: &Path, raw: &str, subdir: &st
     }
     let target_dir = project_dir.join(subdir);
     std::fs::create_dir_all(&target_dir)?;
-    let fname = src
-        .file_name()
-        .ok_or_else(|| EngineError::InvalidParams(format!("invalid file name: {}", src.display())))?;
+    let fname = src.file_name().ok_or_else(|| EngineError::InvalidParams(format!("invalid file name: {}", src.display())))?;
     let dest = target_dir.join(fname);
     crate::doc_state::atomic_copy_file(&src, &dest, overwrite)?;
     Ok(dest)
 }
 
-fn copy_initial_project_collections(
-    s: &mut Session,
-    params: &Value,
-    overwrite: bool,
-    copied: &mut Vec<PathBuf>,
-    steps: &mut Vec<Value>,
-) {
+fn copy_initial_project_collections(s: &mut Session, params: &Value, overwrite: bool, copied: &mut Vec<PathBuf>, steps: &mut Vec<Value>) {
     for (param_key, workshop_kind) in [("assets", "assets"), ("panels", "panels"), ("liner_notes", "liner_notes")] {
         let Some(items) = params.get(param_key).and_then(Value::as_array).filter(|a| !a.is_empty()) else {
             continue;
@@ -211,21 +185,10 @@ fn copy_initial_project_collections(
     }
 }
 
-fn bootstrap_new_project_workshop(
-    s: &mut Session,
-    path: &Path,
-    project_dir: &Path,
-    params: &Value,
-    overwrite: bool,
-    copied: &mut Vec<PathBuf>,
-) -> Vec<Value> {
+fn bootstrap_new_project_workshop(s: &mut Session, path: &Path, project_dir: &Path, params: &Value, overwrite: bool, copied: &mut Vec<PathBuf>) -> Vec<Value> {
     let mut steps = Vec::new();
-    let project_title = params
-        .get("title")
-        .or_else(|| params.get("name"))
-        .and_then(Value::as_str)
-        .or_else(|| path.file_stem().and_then(|n| n.to_str()))
-        .unwrap_or("Untitled");
+    let project_title =
+        params.get("title").or_else(|| params.get("name")).and_then(Value::as_str).or_else(|| path.file_stem().and_then(|n| n.to_str())).unwrap_or("Untitled");
 
     copy_initial_project_collections(s, params, overwrite, copied, &mut steps);
 
@@ -307,10 +270,7 @@ fn bootstrap_new_project_workshop(
 
 fn check_overwrite(path: &Path, overwrite: bool) -> Result<()> {
     if path.exists() && !overwrite {
-        return Err(EngineError::InvalidParams(format!(
-            "project already exists: {} (pass \"overwrite\": true to replace it)",
-            path.display()
-        )));
+        return Err(EngineError::InvalidParams(format!("project already exists: {} (pass \"overwrite\": true to replace it)", path.display())));
     }
     Ok(())
 }
@@ -322,7 +282,8 @@ fn project_audio_source(s: &Session, params: &Value, require_audio: bool) -> Res
             concat!(
                 "project.new requires `audio` (<song file>) so Magic can copy the recording into `<project>/audio/`, ",
                 "initialize the FilmCraft timeline, and create `storyboard.pdf` (or pass mode=\"animation\" for a standalone character study)"
-            ).into(),
+            )
+            .into(),
         )),
         None => Ok(None),
     }
@@ -339,9 +300,7 @@ pub fn cmd_project_new(s: &mut Session, params: &Value) -> Result<Value> {
     let require_audio = mode.is_none() && !is_isolated_scratch;
     let source_audio = project_audio_source(s, params, require_audio)?;
 
-    let raw_dir = raw_target
-        .parent()
-        .ok_or_else(|| EngineError::InvalidParams("project path must reside inside a directory".into()))?;
+    let raw_dir = raw_target.parent().ok_or_else(|| EngineError::InvalidParams("project path must reside inside a directory".into()))?;
     let directories = if is_isolated_scratch {
         std::fs::create_dir_all(raw_dir)?;
         Vec::new()
@@ -350,9 +309,7 @@ pub fn cmd_project_new(s: &mut Session, params: &Value) -> Result<Value> {
     };
 
     let project_dir = std::fs::canonicalize(raw_dir).unwrap_or_else(|_| raw_dir.to_path_buf());
-    let file_name = raw_target
-        .file_name()
-        .ok_or_else(|| EngineError::InvalidParams("missing `.magic` project file name".into()))?;
+    let file_name = raw_target.file_name().ok_or_else(|| EngineError::InvalidParams("missing `.magic` project file name".into()))?;
     let path = project_dir.join(file_name);
     check_overwrite(&path, overwrite)?;
 
@@ -369,13 +326,7 @@ pub fn cmd_project_new(s: &mut Session, params: &Value) -> Result<Value> {
     reset_for_project(s, path.clone(), Vec::new());
     s.song_audio = local_audio;
     s.project_mode = mode;
-    if let Some(title) = params
-        .get("title")
-        .or_else(|| params.get("name"))
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|t| !t.is_empty())
-    {
+    if let Some(title) = params.get("title").or_else(|| params.get("name")).and_then(Value::as_str).map(str::trim).filter(|t| !t.is_empty()) {
         s.song.title = title.to_owned();
     }
 
@@ -420,18 +371,15 @@ pub fn cmd_project_new(s: &mut Session, params: &Value) -> Result<Value> {
 mod tests {
     use image::ImageEncoder;
 
-    use std::path::PathBuf;
-    use serde_json::json;
     use super::cmd_project_new;
     use crate::Session;
     use crate::cmd::project::write_project_file;
     use crate::cmd::project::{cmd_project_autosave, read_project_document};
+    use serde_json::json;
+    use std::path::PathBuf;
 
     fn temp_sandbox(label: &str) -> PathBuf {
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
+        let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
         let dir = std::env::temp_dir().join(format!("magic_project_new_{label}_{}_{nanos}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         dir
@@ -467,9 +415,7 @@ mod tests {
         crate::doc_state::write_file(&ext_wav, minimal_wav_bytes()).unwrap();
         let ext_png = external_src.join("cover.png");
         let mut png_bytes = Vec::new();
-        image::codecs::png::PngEncoder::new(&mut png_bytes)
-            .write_image(&[255_u8, 128, 64, 255], 1, 1, image::ColorType::Rgba8.into())
-            .unwrap();
+        image::codecs::png::PngEncoder::new(&mut png_bytes).write_image(&[255_u8, 128, 64, 255], 1, 1, image::ColorType::Rgba8.into()).unwrap();
         crate::doc_state::write_file(&ext_png, &png_bytes).unwrap();
 
         let mut session = Session::default();
@@ -562,9 +508,7 @@ mod tests {
         crate::doc_state::write_file(&ext_wav, minimal_wav_bytes()).unwrap();
         let ext_png = ext_src.join("hero.png");
         let mut png_bytes = Vec::new();
-        image::codecs::png::PngEncoder::new(&mut png_bytes)
-            .write_image(&[40_u8, 200, 160, 255], 1, 1, image::ColorType::Rgba8.into())
-            .unwrap();
+        image::codecs::png::PngEncoder::new(&mut png_bytes).write_image(&[40_u8, 200, 160, 255], 1, 1, image::ColorType::Rgba8.into()).unwrap();
         crate::doc_state::write_file(&ext_png, &png_bytes).unwrap();
 
         let mut session = Session::default();

@@ -22,9 +22,7 @@ fn absolute(value: &str) -> Result<PathBuf> {
 }
 
 fn default_magic_workspace_base() -> Result<PathBuf> {
-    crate::workspace::user_data_dir()
-        .map(|root| root.join("magic"))
-        .ok_or_else(|| invalid("Project root unavailable; configure XDG_DATA_HOME or HOME"))
+    crate::workspace::user_data_dir().map(|root| root.join("magic")).ok_or_else(|| invalid("Project root unavailable; configure XDG_DATA_HOME or HOME"))
 }
 
 fn configured_root(prefs: &MagicPrefs) -> Result<PathBuf> {

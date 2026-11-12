@@ -6,10 +6,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Mutex, OnceLock};
 
-use egui::{
-    Align, Align2, Color32, CornerRadius, FontId, Image, Layout, Pos2, Rect, Sense, Shape, Stroke,
-    StrokeKind, Ui, Vec2,
-};
+use egui::{Align, Align2, Color32, CornerRadius, FontId, Image, Layout, Pos2, Rect, Sense, Shape, Stroke, StrokeKind, Ui, Vec2};
 
 use crate::controls::badge_accent_color;
 use crate::theme::MagicPalette;
@@ -29,24 +26,15 @@ pub struct FilmbarStyle<'a> {
 }
 
 /// Create a clipped top-down child `Ui` inside `rect` without advancing the parent cursor prematurely.
+// TODO(MAGIC-REVIEW): CHANGE film previews to verified target-app output; egui API compatibility does not prove a render.
 pub fn child_pane(ui: &mut Ui, rect: Rect, salt: &str) -> Ui {
-    let mut child = ui.new_child(
-        egui::UiBuilder::new()
-            .max_rect(rect)
-            .layout(Layout::top_down(Align::Min))
-            .scope_id(ui.scope_id().with(salt)),
-    );
+    let mut child = ui.new_child(egui::UiBuilder::new().max_rect(rect).layout(Layout::top_down(Align::Min)).scope_id(ui.scope_id().with(salt)));
     child.set_clip_rect(rect);
     child
 }
 
 /// Render a panel card with guaranteed vertical interior layout across the available pane width.
-pub fn fill_card<R>(
-    ui: &mut Ui,
-    pal: &MagicPalette,
-    stretch_height: bool,
-    add_contents: impl FnOnce(&mut Ui) -> R,
-) -> egui::InnerResponse<R> {
+pub fn fill_card<R>(ui: &mut Ui, pal: &MagicPalette, stretch_height: bool, add_contents: impl FnOnce(&mut Ui) -> R) -> egui::InnerResponse<R> {
     let avail = ui.available_size();
     pal.card_frame().show(ui, |ui| {
         let inner_w = (avail.x - 22.0).max(64.0);
@@ -103,11 +91,7 @@ pub fn local_image_uri(path: &str) -> Option<String> {
     }
     let abs = p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
     let display = abs.to_string_lossy();
-    if display.starts_with('/') {
-        Some(format!("file://{display}"))
-    } else {
-        Some(format!("file:///{}", display.replace('\\', "/")))
-    }
+    if display.starts_with('/') { Some(format!("file://{display}")) } else { Some(format!("file:///{}", display.replace('\\', "/"))) }
 }
 
 fn parse_svg_aspect(path: &Path) -> Option<f32> {
@@ -118,11 +102,7 @@ fn parse_svg_aspect(path: &Path) -> Option<f32> {
         let quote = rest.chars().next()?;
         if quote == '"' || quote == '\'' {
             let inner = rest[1..].split(quote).next()?;
-            let nums: Vec<f32> = inner
-                .split(|c: char| c.is_whitespace() || c == ',')
-                .filter(|s| !s.is_empty())
-                .filter_map(|s| s.parse::<f32>().ok())
-                .collect();
+            let nums: Vec<f32> = inner.split(|c: char| c.is_whitespace() || c == ',').filter(|s| !s.is_empty()).filter_map(|s| s.parse::<f32>().ok()).collect();
             if nums.len() == 4 && nums[2] > 0.0 && nums[3] > 0.0 {
                 return Some(nums[2] / nums[3]);
             }
@@ -148,10 +128,7 @@ pub fn cached_image_aspect(path: &str) -> Option<f32> {
     let computed = if p.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("svg")) {
         parse_svg_aspect(p)
     } else {
-        image::image_dimensions(p)
-            .ok()
-            .filter(|&(w, h)| w > 0 && h > 0)
-            .map(|(w, h)| (w as f32) / (h as f32))
+        image::image_dimensions(p).ok().filter(|&(w, h)| w > 0 && h > 0).map(|(w, h)| (w as f32) / (h as f32))
     };
     if let Ok(mut guard) = cache.lock() {
         if guard.len() > 2048 {
@@ -178,13 +155,7 @@ fn fit_contain_rect(bounds: Rect, aspect: f32) -> Rect {
 }
 
 /// Paint a local image inside `rect` preserving native aspect ratio (`contain`), returning `true` when drawn.
-pub fn paint_local_image(
-    ui: &mut Ui,
-    rect: Rect,
-    path: Option<&str>,
-    bg_fill: Color32,
-    corner_radius: u8,
-) -> bool {
+pub fn paint_local_image(ui: &mut Ui, rect: Rect, path: Option<&str>, bg_fill: Color32, corner_radius: u8) -> bool {
     if bg_fill != Color32::TRANSPARENT {
         ui.painter().rect_filled(rect, CornerRadius::same(corner_radius), bg_fill);
     }
@@ -199,51 +170,27 @@ pub fn paint_local_image(
         return false;
     }
     let img = Image::from_uri(uri);
-    let aspect = cached_image_aspect(raw_path).or_else(|| {
-        match img.load_for_size(ui.ctx(), inner.size()) {
-            Ok(egui::load::TexturePoll::Ready { texture }) if texture.size.y > 0 => {
-                Some((texture.size.x as f32) / (texture.size.y as f32))
-            }
-            _ => None,
-        }
+    let aspect = cached_image_aspect(raw_path).or_else(|| match img.load_for_size(ui.ctx(), inner.size()) {
+        Ok(egui::load::TexturePoll::Ready { texture }) if texture.size.y > 0.0 => Some((texture.size.x as f32) / (texture.size.y as f32)),
+        _ => None,
     });
     let target = aspect.map_or(inner, |ar| fit_contain_rect(inner, ar));
     let mut clipped = ui.new_child(egui::UiBuilder::new().max_rect(inner));
     clipped.set_clip_rect(inner);
-    img.corner_radius(CornerRadius::same(corner_radius.saturating_sub(1)))
-        .paint_at(&mut clipped, target);
+    img.corner_radius(CornerRadius::same(corner_radius.saturating_sub(1))).paint_at(&mut clipped, target);
     true
 }
 
 /// Honest Craft project document state inside `rect` when no rendered `.png`/`.svg` frame exists yet on disk.
-pub fn paint_craft_doc_card(
-    ui: &mut Ui,
-    rect: Rect,
-    pal: &MagicPalette,
-    badge: &str,
-    craft_file: &str,
-    detail: &str,
-) {
-    ui.painter().rect(
-        rect,
-        CornerRadius::same(4),
-        pal.bg_stage,
-        Stroke::new(1.0, pal.border_subtle),
-        StrokeKind::Inside,
-    );
+pub fn paint_craft_doc_card(ui: &mut Ui, rect: Rect, pal: &MagicPalette, badge: &str, craft_file: &str, detail: &str) {
+    ui.painter().rect(rect, CornerRadius::same(4), pal.bg_stage, Stroke::new(1.0, pal.border_subtle), StrokeKind::Inside);
     let clipped = ui.painter().with_clip_rect(rect.shrink(2.0));
     let bcol = badge_accent_color(pal, badge);
     let chip_w = (badge.len() as f32 * 7.0 + 14.0).clamp(28.0, (rect.width() - 8.0).max(28.0));
     let cy = rect.center().y;
     let y_shift = if detail.is_empty() || rect.height() <= 54.0 { 8.0 } else { 13.0 };
     let chip = Rect::from_center_size(Pos2::new(rect.center().x, cy - y_shift), Vec2::new(chip_w, 17.0));
-    clipped.rect(
-        chip,
-        CornerRadius::same(5),
-        bcol.gamma_multiply(0.18),
-        Stroke::new(1.0, bcol.gamma_multiply(0.75)),
-        StrokeKind::Inside,
-    );
+    clipped.rect(chip, CornerRadius::same(5), bcol.gamma_multiply(0.18), Stroke::new(1.0, bcol.gamma_multiply(0.75)), StrokeKind::Inside);
     clipped.text(chip.center(), Align2::CENTER_CENTER, badge, FontId::monospace(9.0), bcol);
     let max_chars = ((rect.width() / 6.2) as usize).max(6);
     let file_lbl = if craft_file.chars().count() > max_chars {
@@ -269,13 +216,7 @@ pub fn paint_craft_doc_card(
         } else {
             detail.to_owned()
         };
-        clipped.text(
-            Pos2::new(rect.center().x, cy + 18.0),
-            Align2::CENTER_CENTER,
-            &det_lbl,
-            FontId::proportional(9.5),
-            pal.text_muted,
-        );
+        clipped.text(Pos2::new(rect.center().x, cy + 18.0), Align2::CENTER_CENTER, &det_lbl, FontId::proportional(9.5), pal.text_muted);
     }
 }
 
@@ -298,21 +239,12 @@ pub fn paint_cubic_bezier(painter: &egui::Painter, pts: [Pos2; 4], stroke: Strok
 }
 
 /// Paint real SVG `d` path coordinates read from an authored `motion/svg/*.svg` or `motion/actions.json` cue.
-pub fn paint_svg_path_preview(
-    ui: &mut Ui,
-    rect: Rect,
-    svg_d: &str,
-    stroke: Stroke,
-    handle_accent: Option<Color32>,
-) {
+pub fn paint_svg_path_preview(ui: &mut Ui, rect: Rect, svg_d: &str, stroke: Stroke, handle_accent: Option<Color32>) {
     let parsed = parse_svg_coords(svg_d);
     if parsed.len() < 2 {
         return;
     }
-    let points = fit_points_into_rect(
-        &parsed,
-        rect.shrink2(Vec2::new(rect.width() * 0.10, rect.height() * 0.14)),
-    );
+    let points = fit_points_into_rect(&parsed, rect.shrink2(Vec2::new(rect.width() * 0.10, rect.height() * 0.14)));
     if points.len() < 2 {
         return;
     }
@@ -332,11 +264,8 @@ fn parse_svg_coords(raw: &str) -> Vec<(f32, f32)> {
     if !raw.contains('M') && !raw.contains('L') && !raw.contains('C') && !raw.contains('Q') {
         return Vec::new();
     }
-    let nums: Vec<f32> = raw
-        .split(|c: char| !c.is_ascii_digit() && c != '.' && c != '-')
-        .filter(|tok| !tok.is_empty())
-        .filter_map(|tok| tok.parse::<f32>().ok())
-        .collect();
+    let nums: Vec<f32> =
+        raw.split(|c: char| !c.is_ascii_digit() && c != '.' && c != '-').filter(|tok| !tok.is_empty()).filter_map(|tok| tok.parse::<f32>().ok()).collect();
     nums.chunks_exact(2).map(|pair| (pair[0], pair[1])).collect()
 }
 
@@ -354,24 +283,14 @@ fn fit_points_into_rect(pts: &[(f32, f32)], target: Rect) -> Vec<Pos2> {
     let span_x = (max_x - min_x).max(1.0);
     let span_y = (max_y - min_y).max(1.0);
     pts.iter()
-        .map(|&(x, y)| {
-            Pos2::new(
-                target.min.x + ((x - min_x) / span_x) * target.width(),
-                target.min.y + ((y - min_y) / span_y) * target.height(),
-            )
-        })
+        .map(|&(x, y)| Pos2::new(target.min.x + ((x - min_x) / span_x) * target.width(), target.min.y + ((y - min_y) / span_y) * target.height()))
         .collect()
 }
 
 /// Paint a 35mm film-sprocket (`filmbar`) border matching `2. 35mm Filmbar Border Frames` in `00-figma-component-system-sheet.jpg`.
 pub fn paint_filmbar_frame(ui: &mut Ui, rect: Rect, pal: &MagicPalette, style: FilmbarStyle<'_>) -> Rect {
     let (rail_fill, border_col, hole_col, stroke_w) = if style.selected {
-        (
-            pal.accent_emerald,
-            pal.accent_mint,
-            Color32::from_rgb(0x0a, 0x11, 0x16),
-            1.6,
-        )
+        (pal.accent_emerald, pal.accent_mint, Color32::from_rgb(0x0a, 0x11, 0x16), 1.6)
     } else if style.hovered {
         (
             if pal.dark { Color32::from_rgb(0x2d, 0x39, 0x4d) } else { pal.bg_hover },
@@ -389,15 +308,9 @@ pub fn paint_filmbar_frame(ui: &mut Ui, rect: Rect, pal: &MagicPalette, style: F
     };
 
     if style.selected {
-        ui.painter().rect_stroke(
-            rect.expand(1.5),
-            CornerRadius::same(7),
-            Stroke::new(2.0, pal.accent_emerald.gamma_multiply(0.26)),
-            StrokeKind::Outside,
-        );
+        ui.painter().rect_stroke(rect.expand(1.5), CornerRadius::same(7), Stroke::new(2.0, pal.accent_emerald.gamma_multiply(0.26)), StrokeKind::Outside);
     }
-    ui.painter()
-        .rect(rect, CornerRadius::same(6), rail_fill, Stroke::new(stroke_w, border_col), StrokeKind::Inside);
+    ui.painter().rect(rect, CornerRadius::same(6), rail_fill, Stroke::new(stroke_w, border_col), StrokeKind::Inside);
 
     let inner = match style.orientation {
         FilmbarOrientation::Vertical => {
@@ -410,10 +323,7 @@ pub fn paint_filmbar_frame(ui: &mut Ui, rect: Rect, pal: &MagicPalette, style: F
                 ui.painter().rect_filled(right_hole, CornerRadius::same(1), hole_col);
                 y += 9.5;
             }
-            Rect::from_min_max(
-                Pos2::new(rect.min.x + rail_w, rect.min.y + 2.5),
-                Pos2::new(rect.max.x - rail_w, rect.max.y - 2.5),
-            )
+            Rect::from_min_max(Pos2::new(rect.min.x + rail_w, rect.min.y + 2.5), Pos2::new(rect.max.x - rail_w, rect.max.y - 2.5))
         }
         FilmbarOrientation::Horizontal => {
             let rail_h = 11.0;
@@ -425,10 +335,7 @@ pub fn paint_filmbar_frame(ui: &mut Ui, rect: Rect, pal: &MagicPalette, style: F
                 ui.painter().rect_filled(bot_hole, CornerRadius::same(1), hole_col);
                 x += 10.0;
             }
-            Rect::from_min_max(
-                Pos2::new(rect.min.x + 2.5, rect.min.y + rail_h),
-                Pos2::new(rect.max.x - 2.5, rect.max.y - rail_h),
-            )
+            Rect::from_min_max(Pos2::new(rect.min.x + 2.5, rect.min.y + rail_h), Pos2::new(rect.max.x - 2.5, rect.max.y - rail_h))
         }
     };
 
@@ -447,17 +354,10 @@ pub fn paint_filmbar_frame(ui: &mut Ui, rect: Rect, pal: &MagicPalette, style: F
 
 /// Paint a translucent monospace timecode pill in the bottom-right corner of `inner`.
 pub fn paint_timecode_pill(ui: &mut Ui, inner: Rect, pal: &MagicPalette, tc: &str) {
-    let galley = ui
-        .painter()
-        .layout_no_wrap(tc.to_owned(), FontId::monospace(9.5), pal.text_primary);
-    let badge = Rect::from_min_size(
-        Pos2::new(inner.max.x - galley.size().x - 12.0, inner.max.y - 17.0),
-        Vec2::new(galley.size().x + 8.0, 14.0),
-    );
-    ui.painter()
-        .rect_filled(badge, CornerRadius::same(4), Color32::from_rgba_unmultiplied(10, 14, 21, 220));
-    ui.painter()
-        .text(badge.center(), Align2::CENTER_CENTER, tc, FontId::monospace(9.5), pal.text_primary);
+    let galley = ui.painter().layout_no_wrap(tc.to_owned(), FontId::monospace(9.5), pal.text_primary);
+    let badge = Rect::from_min_size(Pos2::new(inner.max.x - galley.size().x - 12.0, inner.max.y - 17.0), Vec2::new(galley.size().x + 8.0, 14.0));
+    ui.painter().rect_filled(badge, CornerRadius::same(4), Color32::from_rgba_unmultiplied(10, 14, 21, 220));
+    ui.painter().text(badge.center(), Align2::CENTER_CENTER, tc, FontId::monospace(9.5), pal.text_primary);
 }
 
 /// Paint a Craft domain / extension badge (`5. Craft File Badges` in `00` and middle column of `02`).
@@ -466,21 +366,11 @@ pub fn paint_craft_badge(ui: &mut Ui, pal: &MagicPalette, label: &str, stadium: 
     let upper = norm.to_ascii_uppercase();
     let clean = upper.trim_start_matches('.');
     let (fill, border, fg) = match clean {
-        "FC" | "DC" | "EC" | "PCRAFT" | "VCRAFT" | "PC" | "VC" | "VECTORCRAFT" => (
-            Color32::from_rgba_unmultiplied(0x52, 0x3f, 0x1c, 165),
-            Color32::from_rgb(0xc6, 0x9b, 0x4b),
-            pal.accent_amber,
-        ),
-        "FCPROJ" | "PCPROJ" => (
-            pal.accent_emerald_bg,
-            pal.accent_emerald,
-            pal.accent_emerald,
-        ),
-        _ => (
-            Color32::from_rgba_unmultiplied(0x28, 0x33, 0x45, 200),
-            Color32::from_rgb(0x4b, 0x5c, 0x78),
-            pal.text_secondary,
-        ),
+        "FC" | "DC" | "EC" | "PCRAFT" | "VCRAFT" | "PC" | "VC" | "VECTORCRAFT" => {
+            (Color32::from_rgba_unmultiplied(0x52, 0x3f, 0x1c, 165), Color32::from_rgb(0xc6, 0x9b, 0x4b), pal.accent_amber)
+        }
+        "FCPROJ" | "PCPROJ" => (pal.accent_emerald_bg, pal.accent_emerald, pal.accent_emerald),
+        _ => (Color32::from_rgba_unmultiplied(0x28, 0x33, 0x45, 200), Color32::from_rgb(0x4b, 0x5c, 0x78), pal.text_secondary),
     };
     let font = FontId::monospace(10.0);
     let galley = ui.painter().layout_no_wrap(norm.to_owned(), font.clone(), fg);

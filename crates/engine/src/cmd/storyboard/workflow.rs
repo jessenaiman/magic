@@ -9,8 +9,8 @@ use serde_json::{Value, json};
 
 use super::crud::cmd_storyboard_set;
 use super::{
-    PDF_TEMPLATE, PageInfo, bad, doc_path, fail, field_key, human_slot_title, load_field_state,
-    master_sections, parse_storyboard_pages, save_field_state, storyboard_media_references_for,
+    PDF_TEMPLATE, PageInfo, bad, doc_path, fail, field_key, human_slot_title, load_field_state, master_sections, parse_storyboard_pages, save_field_state,
+    storyboard_media_references_for,
 };
 use crate::{Result, Session};
 
@@ -101,11 +101,7 @@ pub fn cmd_storyboard_check(s: &mut Session, p: &Value) -> Result<Value> {
 
     let mut sections = Vec::with_capacity(sec_names.len());
     for sec_name in &sec_names {
-        let sec_reqs: Vec<Value> = requirements
-            .iter()
-            .filter(|r| r["section"].as_str() == Some(sec_name.as_str()))
-            .cloned()
-            .collect();
+        let sec_reqs: Vec<Value> = requirements.iter().filter(|r| r["section"].as_str() == Some(sec_name.as_str())).cloned().collect();
         let sec_pages: Vec<usize> = pages.iter().filter(|pg| &pg.section == sec_name).map(|pg| pg.index).collect();
         let total_req = sec_reqs.len();
         let filled_req = sec_reqs.iter().filter(|r| r["filled"] == true).count();
@@ -128,10 +124,8 @@ pub fn cmd_storyboard_check(s: &mut Session, p: &Value) -> Result<Value> {
     let missing_total = total_required.saturating_sub(filled_total);
     let production_ready = missing_total == 0 && total_required > 0;
     let title_sections_complete = sections.iter().take(3).all(|sec| sec["light"] == "green");
-    let scenes_complete = sections
-        .iter()
-        .find(|sec| sec["section"].as_str().is_some_and(|n| n.eq_ignore_ascii_case("scenes")))
-        .is_some_and(|sec| sec["light"] == "green");
+    let scenes_complete =
+        sections.iter().find(|sec| sec["section"].as_str().is_some_and(|n| n.eq_ignore_ascii_case("scenes"))).is_some_and(|sec| sec["light"] == "green");
 
     Ok(json!({
         "ok": true,
@@ -176,10 +170,7 @@ pub fn cmd_storyboard_wizard(s: &mut Session, p: &Value) -> Result<Value> {
         ("character", "char_exact_prompt"),
         ("motion", "motion_subheading"),
     ] {
-        if let (Some(val), Some(pg_idx)) = (
-            p.get(param).and_then(Value::as_str).filter(|v| !v.trim().is_empty()),
-            find_slot_page(slot),
-        ) {
+        if let (Some(val), Some(pg_idx)) = (p.get(param).and_then(Value::as_str).filter(|v| !v.trim().is_empty()), find_slot_page(slot)) {
             let mut fields = serde_json::Map::new();
             fields.insert(slot.into(), json!(val));
             batch.push(json!({"page": pg_idx, "fields": fields}));
@@ -200,7 +191,8 @@ fn build_grade_actions(p: &Value) -> Result<Value> {
         actions.push(json!({"command": "image.autoTone", "params": {}}));
     }
     if let Some(vib) = p["vibrance"].as_f64() {
-        actions.push(json!({"command": "layer.newAdjustmentLayer.vibrance", "params": {"vibrance": vib, "saturation": p["saturation"].as_f64().unwrap_or(0.0)}}));
+        actions
+            .push(json!({"command": "layer.newAdjustmentLayer.vibrance", "params": {"vibrance": vib, "saturation": p["saturation"].as_f64().unwrap_or(0.0)}}));
     }
     if let Some(pts) = p["curves"].as_array().filter(|a| !a.is_empty()) {
         actions.push(json!({"command": "layer.newAdjustmentLayer.curves", "params": {"points": pts}}));

@@ -24,10 +24,7 @@ pub fn dispatch_frame_keys(ctx: &egui::Context, dispatcher: &mut Dispatcher, mod
         return Vec::new();
     }
     craft_menu::bar::leave_for_shortcut(ctx);
-    let active = Active {
-        typing: ctx.egui_wants_keyboard_input(),
-        ..Active::NONE
-    };
+    let active = Active { typing: ctx.egui_wants_keyboard_input(), ..Active::NONE };
     let hits = ctx.input_mut(|input| dispatcher.dispatch(input, catalog_keymap(), &active));
     hits.into_iter().map(|hit| hit.command).collect()
 }

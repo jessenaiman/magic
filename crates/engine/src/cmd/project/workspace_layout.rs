@@ -36,11 +36,7 @@ pub fn resolve_magic_root(raw: &Path, create_named_magic_subdir: bool) -> PathBu
     if raw.join("projects").is_dir() && (raw.join("assets").is_dir() || raw.join("animations").is_dir()) {
         return raw.to_path_buf();
     }
-    if create_named_magic_subdir {
-        raw.join("magic")
-    } else {
-        raw.to_path_buf()
-    }
+    if create_named_magic_subdir { raw.join("magic") } else { raw.to_path_buf() }
 }
 
 /// Ensure `<magic_root>/projects`, `<magic_root>/assets` (with typed buckets + `catalog.json`),
@@ -134,20 +130,14 @@ pub fn promote_asset_to_workspace(
     let safe_bucket = if SHARED_ASSET_BUCKETS.contains(&bucket) { bucket } else { "images" };
     let dest_dir = layout.assets_dir.join(safe_bucket).join(asset_id);
     std::fs::create_dir_all(&dest_dir)?;
-    let fname = source_file
-        .file_name()
-        .ok_or_else(|| EngineError::InvalidParams(format!("invalid asset file name: {}", source_file.display())))?;
+    let fname = source_file.file_name().ok_or_else(|| EngineError::InvalidParams(format!("invalid asset file name: {}", source_file.display())))?;
     let dest = dest_dir.join(fname);
     if source_file.is_dir() {
         crate::doc_state::atomic_copy_dir(source_file, &dest, overwrite)?;
     } else {
         crate::doc_state::atomic_copy_file(source_file, &dest, overwrite)?;
     }
-    let rel = dest
-        .strip_prefix(&layout.assets_dir)
-        .unwrap_or(&dest)
-        .to_string_lossy()
-        .replace('\\', "/");
+    let rel = dest.strip_prefix(&layout.assets_dir).unwrap_or(&dest).to_string_lossy().replace('\\', "/");
 
     let mut cat: Value = std::fs::read_to_string(&layout.catalog_file)
         .ok()

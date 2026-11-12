@@ -97,11 +97,13 @@ pub(crate) fn discover_character_folders(project_dir: &Path) -> Vec<(String, Opt
             || entry.join("rig").is_dir()
             || entry.join("parts.json").is_file()
             || entry.join("character.magic").is_file()
-            || std::fs::read_dir(&entry)
-                .into_iter()
-                .flatten()
-                .flatten()
-                .any(|f| magic_util::media::is_craft_doc_path(&f.path()) && crate::workspace::has_extension(&f.path(), &["pcraft", "psd", "psb", "ora", "xcf", "kra", "ecproj", "vectorcraft", "svg", "ai", "anicraft", "png", "webp", "jpg", "jpeg"]));
+            || std::fs::read_dir(&entry).into_iter().flatten().flatten().any(|f| {
+                magic_util::media::is_craft_doc_path(&f.path())
+                    && crate::workspace::has_extension(
+                        &f.path(),
+                        &["pcraft", "psd", "psb", "ora", "xcf", "kra", "ecproj", "vectorcraft", "svg", "ai", "anicraft", "png", "webp", "jpg", "jpeg"],
+                    )
+            });
         if direct_has_craft {
             out.push((name.to_owned(), None, entry));
             continue;
@@ -118,10 +120,7 @@ pub(crate) fn discover_character_folders(project_dir: &Path) -> Vec<(String, Opt
         }
     }
 
-    for anim_chars_root in [
-        project_dir.join("animations/characters"),
-        project_dir.join("assets/animations/characters"),
-    ] {
+    for anim_chars_root in [project_dir.join("animations/characters"), project_dir.join("assets/animations/characters")] {
         let mut anim_entries: Vec<PathBuf> =
             std::fs::read_dir(&anim_chars_root).into_iter().flatten().flatten().map(|e| e.path()).filter(|p| p.is_dir()).collect();
         anim_entries.sort();
@@ -400,10 +399,7 @@ pub(crate) fn effectcraft_frame(project: &Path, _comp: &str, _seconds: f64, max_
     if crate::native_media::extract_or_copy_preview(project, output, side)? {
         return Ok(());
     }
-    Err(crate::EngineError::InvalidParams(format!(
-        "no embedded preview found in {}; render frames directly via `effectcraft-cli`",
-        project.display()
-    )))
+    Err(crate::EngineError::InvalidParams(format!("no embedded preview found in {}; render frames directly via `effectcraft-cli`", project.display())))
 }
 
 pub(crate) fn effectcraft_render(project: &Path, params: Value) -> Result<Value> {

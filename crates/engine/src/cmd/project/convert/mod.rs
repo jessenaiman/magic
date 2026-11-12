@@ -150,10 +150,7 @@ impl BaseConverter {
         let project_dir = ws.projects_dir.join(&slug);
         let magic_file = project_dir.join(format!("{}.magic", plan.title));
         if magic_file.exists() && !self.overwrite {
-            return Err(EngineError::InvalidParams(format!(
-                "converted project already exists: {} (pass overwrite=true to replace)",
-                magic_file.display()
-            )));
+            return Err(EngineError::InvalidParams(format!("converted project already exists: {} (pass overwrite=true to replace)", magic_file.display())));
         }
 
         scaffold_converted_project(&project_dir)?;
@@ -170,10 +167,7 @@ impl BaseConverter {
         write_project_file(s)?;
 
         let sb_pdf = project_dir.join("storyboard.pdf");
-        let _ = crate::cmd::storyboard::cmd_storyboard_new(
-            s,
-            &json!({"path": sb_pdf, "overwrite": self.overwrite, "title": plan.title}),
-        );
+        let _ = crate::cmd::storyboard::cmd_storyboard_new(s, &json!({"path": sb_pdf, "overwrite": self.overwrite, "title": plan.title}));
 
         let playbook = format_terminal_playbook(&plan, &magic_file, &archive_receipt);
         stamp_conversion_metadata(&magic_file, &plan, &archive_receipt, &playbook)?;
@@ -239,12 +233,7 @@ fn stage_converted_audio(project_dir: &Path, plan: &ConversionPlan, overwrite: b
     Ok(Some(copied))
 }
 
-fn stage_converted_assets(
-    ws: &MagicWorkspaceLayout,
-    project_dir: &Path,
-    plan: &ConversionPlan,
-    overwrite: bool,
-) -> Result<Vec<ProjectAsset>> {
+fn stage_converted_assets(ws: &MagicWorkspaceLayout, project_dir: &Path, plan: &ConversionPlan, overwrite: bool) -> Result<Vec<ProjectAsset>> {
     let mut out = Vec::new();
     for (idx, item) in plan.discovered_assets.iter().enumerate() {
         let Some(fname) = item.source_path.file_name() else {
@@ -275,14 +264,7 @@ fn stage_converted_assets(
         if item.promote_shared && dest.exists() {
             let _ = promote_asset_to_workspace(&ws.magic_root, &id, stem, kind, &item.bucket, &dest, true);
         }
-        out.push(ProjectAsset {
-            id,
-            name: stem.to_owned(),
-            preset: None,
-            path: Some(dest),
-            kind: kind.to_owned(),
-            extra: Default::default(),
-        });
+        out.push(ProjectAsset { id, name: stem.to_owned(), preset: None, path: Some(dest), kind: kind.to_owned(), extra: Default::default() });
     }
     Ok(out)
 }
@@ -359,12 +341,7 @@ fn seed_filmcraft_project(s: &mut Session, project_dir: &Path, plan: &Conversion
     Ok(fcproj_dest)
 }
 
-fn stamp_conversion_metadata(
-    magic_file: &Path,
-    plan: &ConversionPlan,
-    receipt: &archive::LegacyArchiveReceipt,
-    playbook: &str,
-) -> Result<()> {
+fn stamp_conversion_metadata(magic_file: &Path, plan: &ConversionPlan, receipt: &archive::LegacyArchiveReceipt, playbook: &str) -> Result<()> {
     let mut doc = read_project_document(magic_file)?;
     doc["legacy"] = json!({
         "tag": "legacy",
@@ -375,11 +352,7 @@ fn stamp_conversion_metadata(
         "raw_bytes": receipt.raw_bytes,
         "compressed_bytes": receipt.compressed_bytes,
     });
-    doc["integration_status"] = json!(if !plan.missing_assets.is_empty() || !plan.hard_walls.is_empty() {
-        "needs_agent_remediation"
-    } else {
-        "ready"
-    });
+    doc["integration_status"] = json!(if !plan.missing_assets.is_empty() || !plan.hard_walls.is_empty() { "needs_agent_remediation" } else { "ready" });
     doc["missing_assets"] = json!(plan.missing_assets);
     doc["hard_walls"] = json!(plan.hard_walls);
     doc["agent_next_steps_summary"] = json!(playbook);
@@ -391,11 +364,7 @@ fn format_terminal_playbook(plan: &ConversionPlan, magic_file: &Path, receipt: &
     let mut out = String::new();
     let _ = writeln!(out, "=== MAGIC CONVERTER REPORT ({}) ===", plan.kind.as_str().to_ascii_uppercase());
     let _ = writeln!(out, "Project: {}", magic_file.display());
-    let _ = writeln!(
-        out,
-        "Legacy Archive (\"legacy\"): {} ({} bytes -> {} bytes gzip)",
-        receipt.archive_rel, receipt.raw_bytes, receipt.compressed_bytes
-    );
+    let _ = writeln!(out, "Legacy Archive (\"legacy\"): {} ({} bytes -> {} bytes gzip)", receipt.archive_rel, receipt.raw_bytes, receipt.compressed_bytes);
 
     if !plan.missing_assets.is_empty() {
         let _ = writeln!(out, "\n[MISSING CUSTOM ASSETS — {} item(s) flagged in .magic]", plan.missing_assets.len());
@@ -534,13 +503,7 @@ pub fn cmd_project_convert(s: &mut Session, params: &Value) -> Result<Value> {
         }
     };
 
-    let explicit_name = params
-        .get("name")
-        .or_else(|| params.get("title"))
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|v| !v.is_empty())
-        .map(str::to_owned);
+    let explicit_name = params.get("name").or_else(|| params.get("title")).and_then(Value::as_str).map(str::trim).filter(|v| !v.is_empty()).map(str::to_owned);
     let overwrite = params["overwrite"].as_bool().unwrap_or(false);
     let emit_terminal = params["emit_terminal"].as_bool().unwrap_or(true);
 
@@ -563,9 +526,7 @@ pub fn cmd_project_convert(s: &mut Session, params: &Value) -> Result<Value> {
             }
         }
         other => {
-            return Err(EngineError::InvalidParams(format!(
-                "unknown converter kind `{other}` (expected hyperframes | remotion | custom | auto)"
-            )));
+            return Err(EngineError::InvalidParams(format!("unknown converter kind `{other}` (expected hyperframes | remotion | custom | auto)")));
         }
     };
 
@@ -606,11 +567,9 @@ mod tests {
         crate::doc_state::write_file(&hf_src.join("film.js"), b"window.__hf = { renderAt(t) {} };").unwrap();
 
         let mut s = Session::default();
-        let hf_res = cmd_project_convert(
-            &mut s,
-            &json!({"kind": "auto", "source": hf_src, "magic_root": magic_root, "name": "HF Song", "emit_terminal": false}),
-        )
-        .unwrap();
+        let hf_res =
+            cmd_project_convert(&mut s, &json!({"kind": "auto", "source": hf_src, "magic_root": magic_root, "name": "HF Song", "emit_terminal": false}))
+                .unwrap();
         assert_eq!(hf_res["converter"], "hyperframes");
         let hf_magic = PathBuf::from(hf_res["project"].as_str().unwrap());
         let hf_doc = read_project_document(&hf_magic).unwrap();
@@ -629,14 +588,13 @@ mod tests {
                 "import {Composition, staticFile, useCurrentFrame} from 'remotion'; ",
                 "const a = staticFile('dino.png'); function poseAt(t:number){return Math.sin(t);} ",
                 "export const R = () => <Composition id=\"Main\" width={1920} height={1080} fps={24} durationInFrames={240} />;"
-            ).as_bytes(),
+            )
+            .as_bytes(),
         )
         .unwrap();
-        let rem_res = cmd_project_convert(
-            &mut s,
-            &json!({"kind": "auto", "source": rem_src, "magic_root": magic_root, "name": "Dino Remotion", "emit_terminal": false}),
-        )
-        .unwrap();
+        let rem_res =
+            cmd_project_convert(&mut s, &json!({"kind": "auto", "source": rem_src, "magic_root": magic_root, "name": "Dino Remotion", "emit_terminal": false}))
+                .unwrap();
         assert_eq!(rem_res["converter"], "remotion");
         assert!(magic_root.join("projects/dino-remotion/film/Dino Remotion.fcproj").is_file());
         assert!(magic_root.join("projects/dino-remotion/storyboard.pdf").is_file());

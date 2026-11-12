@@ -9,20 +9,10 @@ use super::{bad, effectcraft, step};
 use crate::{Result, Session};
 
 pub(crate) fn sprite_dir(s: &Session, id: &str, name: &str) -> Result<PathBuf> {
-    Ok(crate::workshop::project_dir(s)?
-        .join("assets/characters")
-        .join(id)
-        .join("sprites")
-        .join(name))
+    Ok(crate::workshop::project_dir(s)?.join("assets/characters").join(id).join("sprites").join(name))
 }
 
-fn crop_frames(
-    dir: &Path,
-    sheet: &Path,
-    grid: (u32, u32),
-    lock_baseline: bool,
-    chroma_hex: Option<&str>,
-) -> Result<Vec<PathBuf>> {
+fn crop_frames(dir: &Path, sheet: &Path, grid: (u32, u32), lock_baseline: bool, chroma_hex: Option<&str>) -> Result<Vec<PathBuf>> {
     let clean_sheet = dir.join("sheet-cutout.png");
     crate::native_media::isolate_subject_rgba(sheet, &clean_sheet, chroma_hex, 0.8)?;
     let rgba = crate::native_media::load_rgba(&clean_sheet)?;
@@ -44,24 +34,15 @@ fn crop_frames(
 }
 
 pub fn cmd_character_sprite(s: &mut Session, p: &Value) -> Result<Value> {
-    let id = p["character"]
-        .as_str()
-        .map(crate::workspace::sanitize_asset_id)
-        .ok_or_else(|| bad("character=<id> is required"))?;
-    let action = p["action"]
-        .as_str()
-        .or_else(|| p["name"].as_str())
-        .ok_or_else(|| bad("action=<walk|jump|…> is required"))?;
+    let id = p["character"].as_str().map(crate::workspace::sanitize_asset_id).ok_or_else(|| bad("character=<id> is required"))?;
+    let action = p["action"].as_str().or_else(|| p["name"].as_str()).ok_or_else(|| bad("action=<walk|jump|…> is required"))?;
     let name = p["name"].as_str().unwrap_or(action).to_string();
     let sheet = p["sheet"]
         .as_str()
         .map(|f| crate::workspace::resolve_workspace_path(s, f))
         .filter(|f| f.is_file())
         .ok_or_else(|| bad("sheet=<action sheet PNG> is required"))?;
-    let grid = (
-        p["columns"].as_u64().or_else(|| p["cols"].as_u64()).unwrap_or(4).clamp(1, 16) as u32,
-        p["rows"].as_u64().unwrap_or(2).clamp(1, 16) as u32,
-    );
+    let grid = (p["columns"].as_u64().or_else(|| p["cols"].as_u64()).unwrap_or(4).clamp(1, 16) as u32, p["rows"].as_u64().unwrap_or(2).clamp(1, 16) as u32);
     let fps = p["fps"].as_u64().unwrap_or(12).clamp(1, 60);
     let duration = p["duration"].as_f64().unwrap_or(4.0).clamp(0.5, 600.0);
     let chroma = p["chroma"].as_str().filter(|v| !v.trim().is_empty());
@@ -86,6 +67,7 @@ pub fn cmd_character_sprite(s: &mut Session, p: &Value) -> Result<Value> {
         step("layer.quickSetAnchor", json!({"layers": [1], "point": if lock_baseline { "bottomCenter" } else { "center" }})),
         step("layer.enableTimeRemap", json!({"layers": [1], "value": true})),
         step("layer.timing", json!({"layers": [1], "out": duration})),
+        // TODO(MAGIC-REVIEW): CHANGE execution to the installed EffectCraft session; this only corrects expression syntax.
         step("prop.setExpression", json!({"layer": 1, "path": "timeRemap", "expression": r#"loopOut("cycle")"#})),
     ];
     if p["mirror"] == true {

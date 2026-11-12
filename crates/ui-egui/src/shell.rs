@@ -4,65 +4,35 @@
 //! `#app-footer` readiness rail + 3 layout-pane toggles).
 
 use craft_keymap::Keymap;
-use egui::{
-    Align, Align2, Color32, CornerRadius, FontId, Layout, Pos2, Rect, RichText, ScrollArea, Sense,
-    Stroke, StrokeKind, Ui, Vec2,
-};
+use egui::{Align, Align2, Color32, CornerRadius, FontId, Layout, Pos2, Rect, RichText, ScrollArea, Sense, Stroke, StrokeKind, Ui, Vec2};
 use serde_json::{Value, json};
 
 use crate::controls::{craft_swatch_button, paint_local_image};
 use crate::menus::{build_menu_bar, draw_in_window_bar, translate_menu_command};
 use crate::options_modal::{draw_command_palette_popup, draw_fidget_stager_window};
-use crate::shell_bridge::{
-    draw_footer_session_pills, draw_history_recovery_window, draw_modal, draw_toast_if_active,
-};
+use crate::shell_bridge::{draw_footer_session_pills, draw_history_recovery_window, draw_modal, draw_toast_if_active};
 use crate::state::{ActiveModal, PickerTarget, UiAction, ViewCtx, ViewMode};
 use crate::theme::paint_aurora_wave;
 use crate::views;
-use crate::widgets::{
-    BtnSpec, action_button, companion_button, mode_tab, project_pill_button, status_pill,
-    text_input,
-};
+use crate::widgets::{BtnSpec, action_button, companion_button, mode_tab, project_pill_button, status_pill, text_input};
 
-const CAPSULE_TABS: [ViewMode; 5] = [
-    ViewMode::Storyboard,
-    ViewMode::Animation,
-    ViewMode::Design,
-    ViewMode::Motion,
-    ViewMode::Studio,
-];
+const CAPSULE_TABS: [ViewMode; 5] = [ViewMode::Storyboard, ViewMode::Animation, ViewMode::Design, ViewMode::Motion, ViewMode::Studio];
 
-pub fn draw_workstation(
-    ui: &mut Ui,
-    ctx: &mut ViewCtx<'_>,
-    keymap: &Keymap,
-    show_in_window_menus: bool,
-    is_enabled: impl Fn(&str) -> bool,
-) {
+pub fn draw_workstation(ui: &mut Ui, ctx: &mut ViewCtx<'_>, keymap: &Keymap, show_in_window_menus: bool, is_enabled: impl Fn(&str) -> bool) {
     let modal_open = ctx.state.active_modal.is_some();
     let mut cmd_search_rect = Rect::NOTHING;
 
     if show_in_window_menus {
         let bar = build_menu_bar(ctx.state, keymap, &is_enabled);
         egui::Panel::top("magic_menu_bar")
-            .frame(
-                egui::Frame::new()
-                    .fill(ctx.pal.bg_stage)
-                    .inner_margin(egui::Margin::symmetric(8, 2))
-                    .stroke(Stroke::new(1.0, ctx.pal.border_subtle)),
-            )
+            .frame(egui::Frame::new().fill(ctx.pal.bg_stage).inner_margin(egui::Margin::symmetric(8, 2)).stroke(Stroke::new(1.0, ctx.pal.border_subtle)))
             .show(ui, |ui| {
                 cmd_search_rect = draw_top_menu_and_utilities(ui, ctx, &bar, modal_open);
             });
     }
 
     let top_resp = egui::Panel::top("magic_app_bar")
-        .frame(
-            egui::Frame::new()
-                .fill(ctx.pal.bg_stage)
-                .inner_margin(egui::Margin::symmetric(10, 5))
-                .stroke(Stroke::new(1.0, ctx.pal.border)),
-        )
+        .frame(egui::Frame::new().fill(ctx.pal.bg_stage).inner_margin(egui::Margin::symmetric(10, 5)).stroke(Stroke::new(1.0, ctx.pal.border)))
         .show(ui, |ui| {
             craft_window::title_bar::empty_area(ui, ui.max_rect());
             draw_app_bar(ui, ctx);
@@ -75,17 +45,10 @@ pub fn draw_workstation(
     if ctx.state.project_path.is_some()
         && active_view != ViewMode::Home
         && active_view != ViewMode::Project
-        && ((stage_uses_asset_bar && ctx.state.show_nav_rail)
-            || ctx.state.assets_drawer_open
-            || ctx.state.assets_drawer_pinned)
+        && ((stage_uses_asset_bar && ctx.state.show_nav_rail) || ctx.state.assets_drawer_open || ctx.state.assets_drawer_pinned)
     {
         let assets_resp = egui::Panel::top("magic_stage_assets")
-            .frame(
-                egui::Frame::new()
-                    .fill(ctx.pal.bg_panel)
-                    .inner_margin(egui::Margin::symmetric(10, 4))
-                    .stroke(Stroke::new(1.0, ctx.pal.border_subtle)),
-            )
+            .frame(egui::Frame::new().fill(ctx.pal.bg_panel).inner_margin(egui::Margin::symmetric(10, 4)).stroke(Stroke::new(1.0, ctx.pal.border_subtle)))
             .show(ui, |ui| {
                 draw_stage_assets_drawer(ui, ctx);
             });
@@ -94,12 +57,7 @@ pub fn draw_workstation(
     }
 
     let foot_resp = egui::Panel::bottom("magic_app_footer")
-        .frame(
-            egui::Frame::new()
-                .fill(ctx.pal.bg_stage)
-                .inner_margin(egui::Margin::symmetric(10, 4))
-                .stroke(Stroke::new(1.0, ctx.pal.border)),
-        )
+        .frame(egui::Frame::new().fill(ctx.pal.bg_stage).inner_margin(egui::Margin::symmetric(10, 4)).stroke(Stroke::new(1.0, ctx.pal.border)))
         .show(ui, |ui| {
             draw_footer(ui, ctx);
         });
@@ -108,31 +66,24 @@ pub fn draw_workstation(
 
     if !ctx.state.dirty_tracks.is_empty() && !ctx.state.update_banner_dismissed {
         egui::Panel::bottom("magic_sync_banner")
-            .frame(
-                egui::Frame::new()
-                    .fill(ctx.pal.bg_panel)
-                    .inner_margin(egui::Margin::symmetric(12, 4))
-                    .stroke(Stroke::new(1.0, ctx.pal.border)),
-            )
+            .frame(egui::Frame::new().fill(ctx.pal.bg_panel).inner_margin(egui::Margin::symmetric(12, 4)).stroke(Stroke::new(1.0, ctx.pal.border)))
             .show(ui, |ui| {
                 draw_sync_info_banner(ui, ctx);
             });
     }
 
-    let central_resp = egui::CentralPanel::default()
-        .frame(egui::Frame::new().fill(ctx.pal.bg_canvas).inner_margin(egui::Margin::same(10)))
-        .show(ui, |ui| {
-            paint_aurora_wave(ui, ui.max_rect(), ctx.pal);
-            match active_view {
-                ViewMode::Home => views::home::show(ui, ctx),
-                ViewMode::Project => views::project::show(ui, ctx),
-                ViewMode::Storyboard => views::storyboard::show(ui, ctx),
-                ViewMode::Animation => views::animation::show(ui, ctx),
-                ViewMode::Design => views::lyrics::show(ui, ctx),
-                ViewMode::Motion => views::motion::show(ui, ctx),
-                ViewMode::Studio => views::studio::show(ui, ctx),
-            }
-        });
+    let central_resp = egui::CentralPanel::default().frame(egui::Frame::new().fill(ctx.pal.bg_canvas).inner_margin(egui::Margin::same(10))).show(ui, |ui| {
+        paint_aurora_wave(ui, ui.max_rect(), ctx.pal);
+        match active_view {
+            ViewMode::Home => views::home::show(ui, ctx),
+            ViewMode::Project => views::project::show(ui, ctx),
+            ViewMode::Storyboard => views::storyboard::show(ui, ctx),
+            ViewMode::Animation => views::animation::show(ui, ctx),
+            ViewMode::Design => views::lyrics::show(ui, ctx),
+            ViewMode::Motion => views::motion::show(ui, ctx),
+            ViewMode::Studio => views::studio::show(ui, ctx),
+        }
+    });
     let (root_id, root_lbl) = active_view.root_automation_id();
     ctx.reg.record(root_id, root_lbl, &central_resp.response, None);
     ctx.reg.record_panel("central", central_resp.response.rect);
@@ -150,12 +101,7 @@ pub fn draw_workstation(
     draw_toast_if_active(ui.ctx(), ctx);
 }
 
-fn draw_top_menu_and_utilities(
-    ui: &mut Ui,
-    ctx: &mut ViewCtx<'_>,
-    bar: &craft_menu::MenuBar,
-    modal_open: bool,
-) -> Rect {
+fn draw_top_menu_and_utilities(ui: &mut Ui, ctx: &mut ViewCtx<'_>, bar: &craft_menu::MenuBar, modal_open: bool) -> Rect {
     let mut search_rect = Rect::NOTHING;
     let wide = ui.available_width() >= 1120.0;
     ui.horizontal(|ui| {
@@ -173,8 +119,7 @@ fn draw_top_menu_and_utilities(
         };
         if action_button(ui, ctx.reg, ctx.pal, hist_spec.selected(ctx.state.history_popup_open)).clicked() {
             ctx.state.history_popup_open = !ctx.state.history_popup_open;
-            if ctx.state.history_popup_open {
-            }
+            if ctx.state.history_popup_open {}
         }
         let clicked = draw_in_window_bar(ui, bar, modal_open, ctx.reg);
         for cmd in clicked {
@@ -208,15 +153,7 @@ fn draw_top_menu_and_utilities(
                 ctx.push(UiAction::OpenReportProblem);
             }
             let search_w = if wide { 168.0 } else { 116.0 };
-            let sresp = text_input(
-                ui,
-                ctx.reg,
-                "command-search-input",
-                "Search commands",
-                &mut ctx.state.command_search,
-                "Search commands…",
-                search_w,
-            );
+            let sresp = text_input(ui, ctx.reg, "command-search-input", "Search commands", &mut ctx.state.command_search, "Search commands…", search_w);
             search_rect = sresp.rect;
         });
     });
@@ -225,10 +162,7 @@ fn draw_top_menu_and_utilities(
 
 fn draw_sync_info_banner(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     let tracks: Vec<&str> = ctx.state.dirty_tracks.iter().map(String::as_str).collect();
-    let msg = format!(
-        "Craft tracks ({}) were updated on disk. Re-assemble your FilmCraft Studio timeline now?",
-        tracks.join(", ")
-    );
+    let msg = format!("Craft tracks ({}) were updated on disk. Re-assemble your FilmCraft Studio timeline now?", tracks.join(", "));
     ui.horizontal(|ui| {
         let _ = action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("banner-info-icon", "info", "Timeline sync notice"));
         ui.label(RichText::new(msg).size(11.5).color(ctx.pal.text_secondary));
@@ -236,14 +170,7 @@ fn draw_sync_info_banner(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("banner-dismiss", "No", "Dismiss notice")).clicked() {
                 ctx.state.update_banner_dismissed = true;
             }
-            if action_button(
-                ui,
-                ctx.reg,
-                ctx.pal,
-                BtnSpec::label_only("banner-sync-yes", "Yes", "Assemble FilmCraft sequence now").primary(),
-            )
-            .clicked()
-            {
+            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("banner-sync-yes", "Yes", "Assemble FilmCraft sequence now").primary()).clicked() {
                 ctx.state.dirty_tracks.clear();
                 ctx.exec("video.assemble", json!({}), Some("Synchronized FilmCraft sequence"));
             }
@@ -272,14 +199,8 @@ fn clamp_title(raw: &str, max_chars: usize) -> String {
 
 fn storyboard_dot_color(ctx: &ViewCtx<'_>) -> Color32 {
     let sb = &ctx.state.cache.snapshot["data"]["storyboard"];
-    let light = sb["light"]
-        .as_str()
-        .or_else(|| ctx.state.cache.storyboard_check["light"].as_str())
-        .unwrap_or("red");
-    if sb["production_ready"].as_bool() == Some(true)
-        || ctx.state.cache.storyboard_check["production_ready"].as_bool() == Some(true)
-        || light == "green"
-    {
+    let light = sb["light"].as_str().or_else(|| ctx.state.cache.storyboard_check["light"].as_str()).unwrap_or("red");
+    if sb["production_ready"].as_bool() == Some(true) || ctx.state.cache.storyboard_check["production_ready"].as_bool() == Some(true) || light == "green" {
         ctx.pal.accent_emerald
     } else if light == "amber" || sb["title_sections_complete"].as_bool() == Some(true) {
         ctx.pal.accent_amber
@@ -295,24 +216,13 @@ fn draw_app_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     let compact = bar_w < 1160.0;
     let (bar_rect, _) = ui.allocate_exact_size(Vec2::new(bar_w, 32.0), Sense::hover());
 
-    let capsule_w = if has_proj {
-        if compact { 378.0 } else { 414.0 }
-    } else {
-        0.0
-    };
+    let capsule_w = if has_proj { if compact { 378.0 } else { 414.0 } } else { 0.0 };
     let right_reserve = if has_proj && !compact { 338.0 } else { 256.0 };
-    let left_limit = if has_proj {
-        (bar_rect.max.x - right_reserve - capsule_w - 16.0).max(bar_rect.min.x + 170.0)
-    } else {
-        bar_rect.max.x - right_reserve - 8.0
-    };
+    let left_limit =
+        if has_proj { (bar_rect.max.x - right_reserve - capsule_w - 16.0).max(bar_rect.min.x + 170.0) } else { bar_rect.max.x - right_reserve - 8.0 };
     let left_rect = Rect::from_min_max(bar_rect.min, Pos2::new(left_limit, bar_rect.max.y));
-    let mut left_ui = ui.new_child(
-        egui::UiBuilder::new()
-            .max_rect(left_rect)
-            .layout(Layout::left_to_right(Align::Center))
-            .scope_id(ui.scope_id().with("app_bar_left")),
-    );
+    let mut left_ui =
+        ui.new_child(egui::UiBuilder::new().max_rect(left_rect).layout(Layout::left_to_right(Align::Center)).scope_id(ui.scope_id().with("app_bar_left")));
     left_ui.spacing_mut().item_spacing.x = 4.0;
 
     if has_proj {
@@ -320,8 +230,7 @@ fn draw_app_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             &mut left_ui,
             ctx.reg,
             ctx.pal,
-            BtnSpec::icon_only("tab-home", "brand", "Return to Magic Studio Home Catalog")
-                .selected(active_view == ViewMode::Home),
+            BtnSpec::icon_only("tab-home", "brand", "Return to Magic Studio Home Catalog").selected(active_view == ViewMode::Home),
         )
         .clicked()
         {
@@ -344,36 +253,16 @@ fn draw_app_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             ctx.push(UiAction::SwitchView(ViewMode::Project));
         }
 
-        if action_button(
-            &mut left_ui,
-            ctx.reg,
-            ctx.pal,
-            BtnSpec::icon_only("project-close", "close", "Close active project"),
-        )
-        .clicked()
-        {
+        if action_button(&mut left_ui, ctx.reg, ctx.pal, BtnSpec::icon_only("project-close", "close", "Close active project")).clicked() {
             ctx.push(UiAction::CloseProject);
         }
     } else {
-        let _ = action_button(
-            &mut left_ui,
-            ctx.reg,
-            ctx.pal,
-            BtnSpec::new("brand", "brand", "Magic Studio", "Magic Studio Home Catalog").selected(true),
-        );
+        let _ = action_button(&mut left_ui, ctx.reg, ctx.pal, BtnSpec::new("brand", "brand", "Magic Studio", "Magic Studio Home Catalog").selected(true));
         let lbl = left_ui.label(RichText::new("No project open").size(12.0).color(ctx.pal.text_muted));
         ctx.reg.record("project-name", "No project open", &lbl, None);
     }
 
-    if !compact
-        && action_button(
-            &mut left_ui,
-            ctx.reg,
-            ctx.pal,
-            BtnSpec::icon_only("window-snap", "external", "Snap / detach window"),
-        )
-        .clicked()
-    {
+    if !compact && action_button(&mut left_ui, ctx.reg, ctx.pal, BtnSpec::icon_only("window-snap", "external", "Snap / detach window")).clicked() {
         ctx.push(UiAction::SnapWindow);
     }
 
@@ -420,12 +309,8 @@ fn draw_app_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
 
     let right_min_x = (cap_max_x + 6.0).min(bar_rect.max.x - 160.0);
     let right_rect = Rect::from_min_max(Pos2::new(right_min_x, bar_rect.min.y), bar_rect.max);
-    let mut right_ui = ui.new_child(
-        egui::UiBuilder::new()
-            .max_rect(right_rect)
-            .layout(Layout::right_to_left(Align::Center))
-            .scope_id(ui.scope_id().with("app_bar_right")),
-    );
+    let mut right_ui =
+        ui.new_child(egui::UiBuilder::new().max_rect(right_rect).layout(Layout::right_to_left(Align::Center)).scope_id(ui.scope_id().with("app_bar_right")));
     right_ui.spacing_mut().item_spacing.x = 4.0;
 
     if action_button(
@@ -440,29 +325,13 @@ fn draw_app_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         ctx.push(UiAction::OpenPreferences);
     }
 
-    if companion_button(
-        &mut right_ui,
-        ctx.reg,
-        ctx.pal,
-        "scribbles-toggle",
-        "scribbles_work",
-        "Open Scribbles character & asset studio",
-        ctx.state.fidget_open,
-    )
-    .clicked()
+    if companion_button(&mut right_ui, ctx.reg, ctx.pal, "scribbles-toggle", "scribbles_work", "Open Scribbles character & asset studio", ctx.state.fidget_open)
+        .clicked()
     {
         ctx.state.fidget_open = true;
     }
-    if companion_button(
-        &mut right_ui,
-        ctx.reg,
-        ctx.pal,
-        "fidget-toggle",
-        "fidget_work",
-        "Toggle Fidget & Scribbles prompt stager",
-        ctx.state.fidget_open,
-    )
-    .clicked()
+    if companion_button(&mut right_ui, ctx.reg, ctx.pal, "fidget-toggle", "fidget_work", "Toggle Fidget & Scribbles prompt stager", ctx.state.fidget_open)
+        .clicked()
     {
         ctx.state.fidget_open = !ctx.state.fidget_open;
     }
@@ -500,9 +369,7 @@ fn draw_stage_assets_drawer(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     let drawer = &ctx.state.cache.snapshot["data"]["drawer"];
     let char_cards = drawer["characters"].as_array().cloned().unwrap_or_default();
     let bg_cards = drawer["backgrounds"].as_array().cloned().unwrap_or_default();
-    let total = drawer["total"]
-        .as_u64()
-        .map_or(char_cards.len() + bg_cards.len(), |n| n as usize);
+    let total = drawer["total"].as_u64().map_or(char_cards.len() + bg_cards.len(), |n| n as usize);
 
     if ctx.state.assets_drawer_tab.is_empty() {
         ctx.state.assets_drawer_tab = "characters".into();
@@ -515,21 +382,14 @@ fn draw_stage_assets_drawer(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             ui,
             ctx.reg,
             ctx.pal,
-            BtnSpec::new("stage-assets-toggle", icon, &assets_lbl, "Toggle project asset shelf")
-                .selected(ctx.state.assets_drawer_open),
+            BtnSpec::new("stage-assets-toggle", icon, &assets_lbl, "Toggle project asset shelf").selected(ctx.state.assets_drawer_open),
         )
         .clicked()
         {
             ctx.state.assets_drawer_open = !ctx.state.assets_drawer_open;
         }
-        if action_button(
-            ui,
-            ctx.reg,
-            ctx.pal,
-            BtnSpec::icon_only("stage-assets-pin", "pin", "Pin asset shelf open")
-                .selected(ctx.state.assets_drawer_pinned),
-        )
-        .clicked()
+        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("stage-assets-pin", "pin", "Pin asset shelf open").selected(ctx.state.assets_drawer_pinned))
+            .clicked()
         {
             ctx.state.assets_drawer_pinned = !ctx.state.assets_drawer_pinned;
             if ctx.state.assets_drawer_pinned {
@@ -561,26 +421,11 @@ fn draw_stage_assets_drawer(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         }
 
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            if action_button(
-                ui,
-                ctx.reg,
-                ctx.pal,
-                BtnSpec::new("stage-assets-add", "plus", "Add Asset", "Add project artwork").primary(),
-            )
-            .clicked()
-            {
+            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("stage-assets-add", "plus", "Add Asset", "Add project artwork").primary()).clicked() {
                 ctx.push(UiAction::PickFile {
                     target: PickerTarget::AddProjectAsset,
                     title: "Add Project Artwork".into(),
-                    extensions: vec![
-                        "png".into(),
-                        "jpg".into(),
-                        "jpeg".into(),
-                        "webp".into(),
-                        "pcraft".into(),
-                        "ecproj".into(),
-                        "vectorcraft".into(),
-                    ],
+                    extensions: vec!["png".into(), "jpg".into(), "jpeg".into(), "webp".into(), "pcraft".into(), "ecproj".into(), "vectorcraft".into()],
                     directory: false,
                     save: false,
                 });
@@ -588,11 +433,7 @@ fn draw_stage_assets_drawer(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         });
     });
 
-    let active_cards = if ctx.state.assets_drawer_tab == "backgrounds" {
-        &bg_cards
-    } else {
-        &char_cards
-    };
+    let active_cards = if ctx.state.assets_drawer_tab == "backgrounds" { &bg_cards } else { &char_cards };
     if (ctx.state.assets_drawer_open || ctx.state.assets_drawer_pinned) && !active_cards.is_empty() {
         ui.add_space(4.0);
         ScrollArea::horizontal().id_salt("stage_assets_strip").show(ui, |ui| {
@@ -606,28 +447,15 @@ fn draw_stage_assets_drawer(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
 }
 
 fn draw_asset_shelf_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>, card: &Value) {
-    let cid = card["char_id"]
-        .as_str()
-        .or_else(|| card["id"].as_str())
-        .unwrap_or("asset");
+    let cid = card["char_id"].as_str().or_else(|| card["id"].as_str()).unwrap_or("asset");
     let raw_name = card["name"].as_str().unwrap_or(cid);
     let name = if raw_name.eq_ignore_ascii_case("parts") { cid } else { raw_name };
     let badge = card["badge"].as_str().unwrap_or("Asset");
     let thumb = card["thumb"].as_str();
     let sel = ctx.state.selected_character_id.as_deref() == Some(cid);
     let (crect, resp) = ui.allocate_exact_size(Vec2::new(156.0, 44.0), Sense::click());
-    let stroke = if sel {
-        Stroke::new(1.5, ctx.pal.accent_emerald)
-    } else {
-        Stroke::new(1.0, ctx.pal.border)
-    };
-    ui.painter().rect(
-        crect,
-        CornerRadius::same(7),
-        if sel { ctx.pal.accent_emerald_bg } else { ctx.pal.bg_input },
-        stroke,
-        StrokeKind::Inside,
-    );
+    let stroke = if sel { Stroke::new(1.5, ctx.pal.accent_emerald) } else { Stroke::new(1.0, ctx.pal.border) };
+    ui.painter().rect(crect, CornerRadius::same(7), if sel { ctx.pal.accent_emerald_bg } else { ctx.pal.bg_input }, stroke, StrokeKind::Inside);
     let img_rect = Rect::from_min_size(Pos2::new(crect.min.x + 4.0, crect.min.y + 4.0), Vec2::new(44.0, 36.0));
     if !paint_local_image(ui, img_rect, thumb, ctx.pal.bg_stage, 5) {
         ui.painter().text(img_rect.center(), Align2::CENTER_CENTER, "IMG", FontId::monospace(9.0), ctx.pal.text_muted);
@@ -639,18 +467,9 @@ fn draw_asset_shelf_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>, card: &Value) {
         FontId::proportional(11.0),
         ctx.pal.text_primary,
     );
-    ui.painter().text(
-        Pos2::new(img_rect.max.x + 6.0, crect.min.y + 29.0),
-        Align2::LEFT_CENTER,
-        badge,
-        FontId::monospace(9.5),
-        ctx.pal.accent_emerald,
-    );
+    ui.painter().text(Pos2::new(img_rect.max.x + 6.0, crect.min.y + 29.0), Align2::LEFT_CENTER, badge, FontId::monospace(9.5), ctx.pal.accent_emerald);
     if resp.clicked() {
-        ctx.push(UiAction::SelectCharacter {
-            id: cid.to_owned(),
-            jump_animation: false,
-        });
+        ctx.push(UiAction::SelectCharacter { id: cid.to_owned(), jump_animation: false });
     }
     ctx.reg.record(format!("asset-card-{cid}"), name, &resp, None);
 }
@@ -662,13 +481,7 @@ fn draw_footer(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     let sb_ok = sb["production_ready"].as_bool() == Some(true);
     let status = &ctx.state.cache.snapshot["data"]["status"];
     let lyrics_ok = status["lyrics_ready"].as_bool().unwrap_or(has_proj);
-    let chars_ok = ctx
-        .state
-        .cache
-        .snapshot
-        .pointer("/data/characters")
-        .and_then(Value::as_array)
-        .is_some_and(|c| !c.is_empty());
+    let chars_ok = ctx.state.cache.snapshot.pointer("/data/characters").and_then(Value::as_array).is_some_and(|c| !c.is_empty());
     let studio_ok = status["video_project_exists"].as_bool().unwrap_or(has_proj);
 
     let bar_w = ui.available_width().max(320.0);
@@ -681,34 +494,19 @@ fn draw_footer(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             .layout(Layout::left_to_right(Align::Center))
             .scope_id(ui.scope_id().with("footer_left")),
     );
-    for (label, ready) in [
-        ("Song", has_song),
-        ("Lyrics", lyrics_ok),
-        ("Transcript", has_song),
-        ("Storyboard", sb_ok),
-        ("Animate", chars_ok),
-        ("Studio", studio_ok),
-    ] {
+    for (label, ready) in
+        [("Song", has_song), ("Lyrics", lyrics_ok), ("Transcript", has_song), ("Storyboard", sb_ok), ("Animate", chars_ok), ("Studio", studio_ok)]
+    {
         let dot_col = if ready { ctx.pal.accent_emerald } else { ctx.pal.border };
         let (drect, _) = left_ui.allocate_exact_size(egui::vec2(8.0, 14.0), Sense::hover());
         left_ui.painter().circle_filled(drect.center(), 3.2, dot_col);
-        left_ui.label(
-            RichText::new(label)
-                .size(10.5)
-                .color(if ready { ctx.pal.text_secondary } else { ctx.pal.text_muted }),
-        );
+        left_ui.label(RichText::new(label).size(10.5).color(if ready { ctx.pal.text_secondary } else { ctx.pal.text_muted }));
         left_ui.add_space(3.0);
     }
 
     if bar_w >= 1040.0 {
         let center_msg = if has_proj {
-            let summary = ctx
-                .state
-                .cache
-                .snapshot
-                .pointer("/data/footer/summary")
-                .and_then(Value::as_str)
-                .filter(|s| !s.is_empty());
+            let summary = ctx.state.cache.snapshot.pointer("/data/footer/summary").and_then(Value::as_str).filter(|s| !s.is_empty());
             match summary {
                 Some(extra) => format!("{} · {} · {extra}", ctx.state.project_name(), ctx.state.effective_view().tab_label()),
                 None => format!("{} · {}", ctx.state.project_name(), ctx.state.effective_view().tab_label()),
@@ -716,13 +514,7 @@ fn draw_footer(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         } else {
             "Choose a project or start a new song".into()
         };
-        ui.painter().text(
-            frect.center(),
-            Align2::CENTER_CENTER,
-            &center_msg,
-            FontId::proportional(10.5),
-            ctx.pal.text_muted,
-        );
+        ui.painter().text(frect.center(), Align2::CENTER_CENTER, &center_msg, FontId::proportional(10.5), ctx.pal.text_muted);
     }
 
     let right_w = 400.0_f32.min(bar_w - left_w - 8.0).max(200.0);
@@ -738,8 +530,7 @@ fn draw_footer(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         &mut right_ui,
         ctx.reg,
         ctx.pal,
-        BtnSpec::icon_only("footer-toggle-inspector", "inspector", "Toggle right inspector rail")
-            .selected(ctx.state.show_right_inspector),
+        BtnSpec::icon_only("footer-toggle-inspector", "inspector", "Toggle right inspector rail").selected(ctx.state.show_right_inspector),
     )
     .clicked()
     {
@@ -749,8 +540,7 @@ fn draw_footer(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         &mut right_ui,
         ctx.reg,
         ctx.pal,
-        BtnSpec::icon_only("footer-toggle-dock", "dockBottom", "Toggle bottom timeline / theatre dock")
-            .selected(ctx.state.show_bottom_dock),
+        BtnSpec::icon_only("footer-toggle-dock", "dockBottom", "Toggle bottom timeline / theatre dock").selected(ctx.state.show_bottom_dock),
     )
     .clicked()
     {
@@ -760,8 +550,7 @@ fn draw_footer(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         &mut right_ui,
         ctx.reg,
         ctx.pal,
-        BtnSpec::icon_only("footer-toggle-sidebar", "sidebar", "Toggle left rail & stage assets")
-            .selected(ctx.state.show_nav_rail),
+        BtnSpec::icon_only("footer-toggle-sidebar", "sidebar", "Toggle left rail & stage assets").selected(ctx.state.show_nav_rail),
     )
     .clicked()
     {

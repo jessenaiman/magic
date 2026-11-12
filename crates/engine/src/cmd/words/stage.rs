@@ -541,7 +541,8 @@ fn apply_word_edits(anim: &mut Value, id: &str, edits: &[Value]) -> Result<()> {
 
 fn apply_line_designs(anim: &mut Value, id: &str, designs: &Value) -> Result<()> {
     for (line_id, design) in designs.as_object().ok_or_else(|| invalid("design must be an object of line_id: design"))? {
-        let words: Vec<Value> = anim["words"].as_array().into_iter().flatten().filter(|w| w["word_id"].is_string() && w["line_id"] == json!(line_id)).cloned().collect();
+        let words: Vec<Value> =
+            anim["words"].as_array().into_iter().flatten().filter(|w| w["word_id"].is_string() && w["line_id"] == json!(line_id)).cloned().collect();
         if words.is_empty() {
             return Err(invalid(format!("{line_id} is not a line of {id}")));
         }

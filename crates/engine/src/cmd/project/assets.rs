@@ -9,10 +9,42 @@ use super::{cmd_project_save, ensure_default_asset_project};
 use crate::{EngineError, Result, Session};
 
 const IMAGE_EXTENSIONS: &[&str; 36] = &[
-    "png", "jpg", "jpeg", "webp", "svg", "svgz", "gif", "bmp", "tif", "tiff", "exr", "hdr",
-    "fits", "qoi", "tga", "heic", "heif", "pcraft", "psd", "psb", "pdn", "ora", "xcf", "kra",
-    "af", "afdesign", "afphoto", "afpub", "vectorcraft", "vcraft", "drawcraft", "ai", "eps",
-    "emf", "wmf", "dxf",
+    "png",
+    "jpg",
+    "jpeg",
+    "webp",
+    "svg",
+    "svgz",
+    "gif",
+    "bmp",
+    "tif",
+    "tiff",
+    "exr",
+    "hdr",
+    "fits",
+    "qoi",
+    "tga",
+    "heic",
+    "heif",
+    "pcraft",
+    "psd",
+    "psb",
+    "pdn",
+    "ora",
+    "xcf",
+    "kra",
+    "af",
+    "afdesign",
+    "afphoto",
+    "afpub",
+    "vectorcraft",
+    "vcraft",
+    "drawcraft",
+    "ai",
+    "eps",
+    "emf",
+    "wmf",
+    "dxf",
 ];
 const MODEL_EXTENSIONS: &[&str; 2] = &["glb", "gltf"];
 
@@ -44,21 +76,15 @@ fn preview_is_fresh(source: &Path, preview: &Path) -> bool {
 /// Resolve the flat project preview `.png` and linked Craft file metadata for any project asset
 /// (`.pcraft` ZIP or directory bundle, `.psd`/`.psb`/`.ora`/`.xcf`/`.kra`/`.pdn`/`.af*`,
 /// `.vectorcraft`/`.ai`/`.eps`, `.ecproj`/`.ectemplate`, `.fcproj`, or image with sibling Craft project).
-pub(crate) fn resolve_asset_project_image(
-    project_dir: Option<&Path>,
-    asset_path: &Path,
-) -> (PathBuf, Option<String>, Option<String>) {
+pub(crate) fn resolve_asset_project_image(project_dir: Option<&Path>, asset_path: &Path) -> (PathBuf, Option<String>, Option<String>) {
     let ext = asset_path.extension().and_then(|e| e.to_str()).unwrap_or_default().to_ascii_lowercase();
     let stem = asset_path.file_stem().and_then(|n| n.to_str()).unwrap_or("asset");
-    let previews_dir = project_dir
-        .map(|d| d.join("assets/.previews"))
-        .unwrap_or_else(|| asset_path.parent().unwrap_or(Path::new(".")).join(".previews"));
+    let previews_dir = project_dir.map(|d| d.join("assets/.previews")).unwrap_or_else(|| asset_path.parent().unwrap_or(Path::new(".")).join(".previews"));
     let preview_png = previews_dir.join(format!("{stem}.png"));
     let linked_str = Some(asset_path.to_string_lossy().into_owned());
 
     match ext.as_str() {
-        "pcraft" | "psd" | "psb" | "pdn" | "ora" | "xcf" | "kra" | "afphoto" | "exr" | "hdr"
-        | "fits" | "qoi" | "tga" | "heic" | "heif" => {
+        "pcraft" | "psd" | "psb" | "pdn" | "ora" | "xcf" | "kra" | "afphoto" | "exr" | "hdr" | "fits" | "qoi" | "tga" | "heic" | "heif" => {
             if preview_is_fresh(asset_path, &preview_png) {
                 return (preview_png, linked_str, Some("photocraft".into()));
             }
@@ -67,8 +93,7 @@ pub(crate) fn resolve_asset_project_image(
             }
             (asset_path.to_path_buf(), linked_str, Some("photocraft".into()))
         }
-        "vectorcraft" | "vcraft" | "drawcraft" | "svgz" | "ai" | "eps" | "dxf" | "emf" | "wmf"
-        | "af" | "afdesign" | "afpub" => {
+        "vectorcraft" | "vcraft" | "drawcraft" | "svgz" | "ai" | "eps" | "dxf" | "emf" | "wmf" | "af" | "afdesign" | "afpub" => {
             if preview_is_fresh(asset_path, &preview_png) {
                 return (preview_png, linked_str, Some("vectorcraft".into()));
             }
@@ -87,10 +112,7 @@ pub(crate) fn resolve_asset_project_image(
             if preview_is_fresh(asset_path, &preview_png) {
                 return (preview_png, linked_str, Some("effectcraft".into()));
             }
-            for sib in [
-                asset_path.with_file_name(format!("{stem}-preview.png")),
-                asset_path.with_extension("png"),
-            ] {
+            for sib in [asset_path.with_file_name(format!("{stem}-preview.png")), asset_path.with_extension("png")] {
                 if sib.is_file() {
                     return (sib, linked_str, Some("effectcraft".into()));
                 }
@@ -106,13 +128,9 @@ pub(crate) fn resolve_asset_project_image(
             (img, linked_str, Some("filmcraft".into()))
         }
         _ => {
-            for (cand_ext, app) in [
-                ("pcraft", "photocraft"),
-                ("psd", "photocraft"),
-                ("vectorcraft", "vectorcraft"),
-                ("ecproj", "effectcraft"),
-                ("fcproj", "filmcraft"),
-            ] {
+            for (cand_ext, app) in
+                [("pcraft", "photocraft"), ("psd", "photocraft"), ("vectorcraft", "vectorcraft"), ("ecproj", "effectcraft"), ("fcproj", "filmcraft")]
+            {
                 let cand = asset_path.with_extension(cand_ext);
                 if cand.exists() {
                     return (asset_path.to_path_buf(), Some(cand.to_string_lossy().into_owned()), Some(app.into()));
@@ -184,11 +202,9 @@ fn asset_kind<'a>(requested: &'a str, path: &Path) -> Result<&'a str> {
     match (requested, found) {
         ("auto", Some(kind)) => Ok(kind),
         ("image", Some("image")) | ("model_3d", Some("model_3d")) => Ok(requested),
-        ("image", _) => Err(EngineError::InvalidParams(format!(
-            "{} is not a supported image or Craft artwork ({})",
-            path.display(),
-            IMAGE_EXTENSIONS.join(", ")
-        ))),
+        ("image", _) => {
+            Err(EngineError::InvalidParams(format!("{} is not a supported image or Craft artwork ({})", path.display(), IMAGE_EXTENSIONS.join(", "))))
+        }
         ("model_3d", _) => Err(EngineError::InvalidParams(format!("{} is not a 3D model ({})", path.display(), MODEL_EXTENSIONS.join(", ")))),
         (kind, _) => Ok(kind),
     }
@@ -256,9 +272,7 @@ fn asset_destination_folder(dir: &Path, params: &Value, source: &Path, kind: &st
         }
         (None, None, None) => {}
         _ => {
-            return Err(EngineError::InvalidParams(
-                "specify at most one destination bucket (`character`, `background`, or `image`)".into(),
-            ));
+            return Err(EngineError::InvalidParams("specify at most one destination bucket (`character`, `background`, or `image`)".into()));
         }
     }
     let ext = source.extension().and_then(|e| e.to_str()).unwrap_or_default().to_ascii_lowercase();
@@ -274,10 +288,7 @@ fn asset_destination_folder(dir: &Path, params: &Value, source: &Path, kind: &st
         let folder = dir.join("film");
         return Ok((folder.clone(), folder));
     }
-    if matches!(
-        ext.as_str(),
-        "vectorcraft" | "vcraft" | "drawcraft" | "svg" | "svgz" | "ai" | "eps" | "emf" | "wmf" | "dxf"
-    ) {
+    if matches!(ext.as_str(), "vectorcraft" | "vcraft" | "drawcraft" | "svg" | "svgz" | "ai" | "eps" | "emf" | "wmf" | "dxf") {
         let folder = dir.join("assets/vectors");
         return Ok((folder.clone(), folder));
     }
@@ -488,9 +499,8 @@ pub fn cmd_project_save_asset(s: &mut Session, params: &Value) -> Result<Value> 
     if merged.get("path").is_none()
         && let Some(ws_id) = params.get("workspace_asset").and_then(Value::as_str).map(str::trim).filter(|v| !v.is_empty())
     {
-        let magic_root = super::workspace_layout::enclosing_magic_root(&proj_dir).ok_or_else(|| {
-            EngineError::InvalidParams("project is not inside a magic/projects or magic/animations workspace".into())
-        })?;
+        let magic_root = super::workspace_layout::enclosing_magic_root(&proj_dir)
+            .ok_or_else(|| EngineError::InvalidParams("project is not inside a magic/projects or magic/animations workspace".into()))?;
         let (ws_file, ws_entry) = super::workspace_layout::find_workspace_catalog_asset(&magic_root, ws_id)
             .ok_or_else(|| EngineError::InvalidParams(format!("workspace asset '{ws_id}' not found in magic/assets/catalog.json")))?;
         merged["path"] = json!(ws_file);
@@ -503,10 +513,7 @@ pub fn cmd_project_save_asset(s: &mut Session, params: &Value) -> Result<Value> 
     merged["save"] = json!(true);
     let mut added = cmd_project_add_asset(s, &merged)?;
 
-    let promote = params["promote_to_workspace"]
-        .as_bool()
-        .or_else(|| params["share_to_workspace"].as_bool())
-        .unwrap_or(false);
+    let promote = params["promote_to_workspace"].as_bool().or_else(|| params["share_to_workspace"].as_bool()).unwrap_or(false);
     if promote
         && let Some(local_str) = added["path"].as_str()
         && let Some(magic_root) = super::workspace_layout::enclosing_magic_root(&proj_dir)
@@ -523,15 +530,7 @@ pub fn cmd_project_save_asset(s: &mut Session, params: &Value) -> Result<Value> 
             "images"
         };
         let overwrite = merged["overwrite"].as_bool().unwrap_or(true);
-        let shared = super::workspace_layout::promote_asset_to_workspace(
-            &magic_root,
-            asset_id,
-            name,
-            kind,
-            bucket,
-            &local_path,
-            overwrite,
-        )?;
+        let shared = super::workspace_layout::promote_asset_to_workspace(&magic_root, asset_id, name, kind, bucket, &local_path, overwrite)?;
         added["workspace_asset"] = json!(shared);
     }
     Ok(added)

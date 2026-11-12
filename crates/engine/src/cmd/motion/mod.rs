@@ -262,14 +262,10 @@ pub fn cmd_motion_read(s: &mut Session, _p: &Value) -> Result<Value> {
     let (svg_files, vectorcraft_files, preview_frames) = collect_motion_craft_files(&dir);
     for cue in &mut cues {
         let cue_id = cue["id"].as_str().unwrap_or("action");
-        let svg_file = cue["svg_path"]
-            .as_str()
-            .map(PathBuf::from)
-            .filter(|p| p.is_file())
-            .or_else(|| {
-                let candidate = dir.join("motion/svg").join(format!("{cue_id}.svg"));
-                candidate.is_file().then_some(candidate)
-            });
+        let svg_file = cue["svg_path"].as_str().map(PathBuf::from).filter(|p| p.is_file()).or_else(|| {
+            let candidate = dir.join("motion/svg").join(format!("{cue_id}.svg"));
+            candidate.is_file().then_some(candidate)
+        });
         cue["svg_file"] = json!(svg_file);
         let st_ms = (cue["start"].as_f64().unwrap_or(0.0).max(0.0) * 1000.0).round() as u64;
         let en_ms = (cue["end"].as_f64().unwrap_or(1.5).max(0.1) * 1000.0).round() as u64;
@@ -426,7 +422,10 @@ pub fn cmd_motion_save(s: &mut Session, p: &Value) -> Result<Value> {
     let mut studio = None;
     if p["render"].as_bool() == Some(true) || p["studio"].as_bool() == Some(true) {
         let out_mov = dir.join("motion/actions.mov");
-        crate::native_media::write_staged_steps(&ecproj, &json!({"comp": COMP_NAME, "output": out_mov, "format": "prores", "proresProfile": "4444", "channels": "rgba"}))?;
+        crate::native_media::write_staged_steps(
+            &ecproj,
+            &json!({"comp": COMP_NAME, "output": out_mov, "format": "prores", "proresProfile": "4444", "channels": "rgba"}),
+        )?;
         if p["studio"].as_bool() == Some(true) {
             studio = Some(crate::cmd::film::publish_motion(s, &out_mov)?);
         }
@@ -452,7 +451,10 @@ pub fn cmd_motion_publish(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let out_mov = p["path"].as_str().map(|raw| crate::workspace::resolve_workspace_path(s, raw)).unwrap_or_else(|| dir.join("motion/actions.mov"));
     if p["render"].as_bool().unwrap_or(!out_mov.is_file()) {
-        crate::native_media::write_staged_steps(&ecproj, &json!({"comp": COMP_NAME, "output": out_mov, "format": "prores", "proresProfile": "4444", "channels": "rgba"}))?;
+        crate::native_media::write_staged_steps(
+            &ecproj,
+            &json!({"comp": COMP_NAME, "output": out_mov, "format": "prores", "proresProfile": "4444", "channels": "rgba"}),
+        )?;
     }
     let studio = crate::cmd::film::publish_motion(s, &out_mov)?;
     Ok(json!({ "ok": true, "ecproj": ecproj, "render": out_mov, "track": "Action Motion", "studio": studio }))

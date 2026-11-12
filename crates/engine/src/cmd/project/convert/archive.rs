@@ -12,17 +12,7 @@ use sha2::{Digest, Sha256};
 
 use crate::{EngineError, Result};
 
-const SKIP_DIRS: &[&str] = &[
-    "node_modules",
-    ".git",
-    "target",
-    "dist",
-    "build",
-    ".next",
-    ".turbo",
-    ".cache",
-    "__pycache__",
-];
+const SKIP_DIRS: &[&str] = &["node_modules", ".git", "target", "dist", "build", ".next", ".turbo", ".cache", "__pycache__"];
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LegacyArchiveReceipt {
@@ -61,11 +51,7 @@ fn collect_source_files(root: &Path, cur: &Path, out: &mut Vec<(String, PathBuf,
             collect_source_files(root, &entry, out)?;
         } else if entry.is_file() {
             let len = std::fs::metadata(&entry).map(|m| m.len()).unwrap_or(0);
-            let rel = entry
-                .strip_prefix(root)
-                .unwrap_or(&entry)
-                .to_string_lossy()
-                .replace('\\', "/");
+            let rel = entry.strip_prefix(root).unwrap_or(&entry).to_string_lossy().replace('\\', "/");
             out.push((rel, entry, len));
         }
     }

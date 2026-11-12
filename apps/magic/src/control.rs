@@ -30,9 +30,7 @@ pub fn parse_control_addr(spec: &str) -> Result<SocketAddr, String> {
     } else {
         format!("127.0.0.1:{trimmed}")
     };
-    let addr: SocketAddr = normalized
-        .parse()
-        .map_err(|_| "--control requires a port (0..=65535) or 127.0.0.1:PORT")?;
+    let addr: SocketAddr = normalized.parse().map_err(|_| "--control requires a port (0..=65535) or 127.0.0.1:PORT")?;
     if addr.ip() != IpAddr::V4(Ipv4Addr::LOCALHOST) {
         return Err("--control must bind strictly to 127.0.0.1".into());
     }
@@ -55,11 +53,7 @@ pub fn start(spec: &str, token: Option<&str>, dispatch: Dispatch) -> Result<Sock
                 let _ = stream.set_write_timeout(Some(Duration::from_secs(30)));
                 if active.fetch_add(1, Ordering::SeqCst) >= MAX_CONNECTIONS {
                     active.fetch_sub(1, Ordering::SeqCst);
-                    let _ = writeln!(
-                        stream,
-                        "{}",
-                        json!({"id":null,"ok":false,"error":"busy: control connection limit reached; closing the connection"})
-                    );
+                    let _ = writeln!(stream, "{}", json!({"id":null,"ok":false,"error":"busy: control connection limit reached; closing the connection"}));
                     continue;
                 }
                 let active_worker = active.clone();
@@ -69,12 +63,7 @@ pub fn start(spec: &str, token: Option<&str>, dispatch: Dispatch) -> Result<Sock
                     .name("magic-control-client".into())
                     .spawn(move || {
                         if let Ok(reader) = stream.try_clone() {
-                            serve_lines(
-                                BufReader::new(reader),
-                                &mut stream,
-                                expected.as_deref(),
-                                |m, p| dispatch(m, p),
-                            );
+                            serve_lines(BufReader::new(reader), &mut stream, expected.as_deref(), |m, p| dispatch(m, p));
                         }
                         active_worker.fetch_sub(1, Ordering::SeqCst);
                     })
@@ -88,12 +77,7 @@ pub fn start(spec: &str, token: Option<&str>, dispatch: Dispatch) -> Result<Sock
     Ok(bound)
 }
 
-fn serve_lines<R: BufRead, W: Write>(
-    mut reader: R,
-    mut writer: W,
-    expected_token: Option<&str>,
-    dispatch: impl Fn(&str, Value) -> Result<Value, String>,
-) {
+fn serve_lines<R: BufRead, W: Write>(mut reader: R, mut writer: W, expected_token: Option<&str>, dispatch: impl Fn(&str, Value) -> Result<Value, String>) {
     loop {
         let mut line = Vec::new();
         let read = reader.by_ref().take((MAX_LINE + 1) as u64).read_until(b'\n', &mut line);
@@ -106,23 +90,21 @@ fn serve_lines<R: BufRead, W: Write>(
         } else if line.iter().all(u8::is_ascii_whitespace) {
             continue;
         } else {
-            serde_json::from_slice::<Value>(&line)
-                .map_err(|_| "invalid JSON request; closing the connection")
-                .and_then(|v| {
-                    if !v.is_object() || v["method"].as_str().is_none() {
-                        return Err("request requires a string `method`; closing the connection");
+            serde_json::from_slice::<Value>(&line).map_err(|_| "invalid JSON request; closing the connection").and_then(|v| {
+                if !v.is_object() || v["method"].as_str().is_none() {
+                    return Err("request requires a string `method`; closing the connection");
+                }
+                if let Some(expected) = expected_token {
+                    let given = v["token"].as_str().unwrap_or_default();
+                    if !bool::from(given.as_bytes().ct_eq(expected.as_bytes())) {
+                        return Err("unauthorized control token; closing the connection");
                     }
-                    if let Some(expected) = expected_token {
-                        let given = v["token"].as_str().unwrap_or_default();
-                        if !bool::from(given.as_bytes().ct_eq(expected.as_bytes())) {
-                            return Err("unauthorized control token; closing the connection");
-                        }
-                    }
-                    if v.get("params").is_some_and(|p| !p.is_object()) {
-                        return Err("params must be an object; closing the connection");
-                    }
-                    Ok(v)
-                })
+                }
+                if v.get("params").is_some_and(|p| !p.is_object()) {
+                    return Err("params must be an object; closing the connection");
+                }
+                Ok(v)
+            })
         };
         let request = match parsed {
             Ok(v) => v,

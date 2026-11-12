@@ -1,10 +1,7 @@
 //! `07 Studio` (`film/<song>.fcproj`) NLE Editing, Trim, 32f Linear Color, Scopes, & 90+ Video FX
 //! panels (`Sheet 08` Zone E — `T32`–`T38`), wired 1:1 to `crates/engine/src/cmd/film/finishing.rs`.
 
-use egui::{
-    Align2, Color32, CornerRadius, FontId, Pos2, Rect, RichText, ScrollArea, Sense, Stroke,
-    StrokeKind, Ui, Vec2,
-};
+use egui::{Align2, Color32, CornerRadius, FontId, Pos2, Rect, RichText, ScrollArea, Sense, Stroke, StrokeKind, Ui, Vec2};
 use magic::craft_effects::FILMCRAFT_27_BLEND_MODES;
 use serde_json::{Value, json};
 
@@ -85,13 +82,11 @@ pub fn draw_program_trim_and_three_point_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>)
             }
         }
         let sc_on = ctx.state.studio.scopes_visible;
-        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("fc-scopes-toggle", "Scopes", "Toggle Linear-Light Graded Scopes (T37)").selected(sc_on)).clicked() {
+        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("fc-scopes-toggle", "Scopes", "Toggle Linear-Light Graded Scopes (T37)").selected(sc_on))
+            .clicked()
+        {
             ctx.state.studio.scopes_visible = !sc_on;
-            ctx.exec(
-                "video.finish",
-                json!({"op": "scopes", "shown": ["waveform", "vectorscopeYuv"], "color_space": ctx.state.studio.color_space_mode}),
-                None,
-            );
+            ctx.exec("video.finish", json!({"op": "scopes", "shown": ["waveform", "vectorscopeYuv"], "color_space": ctx.state.studio.color_space_mode}), None);
         }
     });
 }
@@ -105,12 +100,7 @@ pub fn draw_graded_scopes_strip(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     ctx.pal.inset_frame().show(ui, |ui| {
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing.x = 4.0;
-            for (sm, lbl) in [
-                ("waveform", "Waveform IRE"),
-                ("parade", "RGB Parade"),
-                ("vectorscopeYuv", "Vectorscope"),
-                ("histogram", "Histogram"),
-            ] {
+            for (sm, lbl) in [("waveform", "Waveform IRE"), ("parade", "RGB Parade"), ("vectorscopeYuv", "Vectorscope"), ("histogram", "Histogram")] {
                 let id = format!("fc-scope-mode-{sm}");
                 let sel = ctx.state.studio.scopes_mode == sm;
                 if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, lbl, "Select graded linear-light scope").selected(sel)).clicked() {
@@ -180,12 +170,7 @@ pub fn draw_edit_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     });
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
-        for (id, lbl, frames) in [
-            ("fc-nudge-m5", "-5f", -5),
-            ("fc-nudge-m1", "-1f", -1),
-            ("fc-nudge-p1", "+1f", 1),
-            ("fc-nudge-p5", "+5f", 5),
-        ] {
+        for (id, lbl, frames) in [("fc-nudge-m5", "-5f", -5), ("fc-nudge-m1", "-1f", -1), ("fc-nudge-p1", "+1f", 1), ("fc-nudge-p5", "+5f", 5)] {
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(id, lbl, "Frame-accurate trim.nudge")).clicked() {
                 ctx.exec("video.finish", json!({"op": "trim_nudge", "frames": frames}), None);
             }
@@ -197,7 +182,13 @@ pub fn draw_edit_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             ctx.exec("video.finish", json!({"op": "ripple_to_playhead", "side": "next", "seconds": ctx.state.studio.seek_seconds}), None);
         }
     });
-    ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("fc-speed-pct", "Clip Speed (WSOLA)", 25.0..=400.0, "%", ctx.pal.accent_amber), &mut ctx.state.studio.speed_pct);
+    ring_slider_h(
+        ui,
+        ctx.reg,
+        ctx.pal,
+        ScalarSpec::new("fc-speed-pct", "Clip Speed (WSOLA)", 25.0..=400.0, "%", ctx.pal.accent_amber),
+        &mut ctx.state.studio.speed_pct,
+    );
     pill_toggle(ui, ctx.reg, ctx.pal, "fc-opt-flow", "Optical Flow Interpolation", &mut ctx.state.studio.optical_flow, ctx.pal.accent_emerald);
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
@@ -219,7 +210,9 @@ pub fn draw_edit_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
 
     ui.separator();
     ui.label(RichText::new("Proxies, Markers & Rational FPS (T10, T35)").size(11.5).strong().color(ctx.pal.accent_amber));
-    if pill_toggle(ui, ctx.reg, ctx.pal, "fc-proxies", "Low-Res Proxy Editing (Full-Res Export)", &mut ctx.state.studio.proxies_enabled, ctx.pal.accent_emerald).changed() {
+    if pill_toggle(ui, ctx.reg, ctx.pal, "fc-proxies", "Low-Res Proxy Editing (Full-Res Export)", &mut ctx.state.studio.proxies_enabled, ctx.pal.accent_emerald)
+        .changed()
+    {
         ctx.exec("video.finish", json!({"op": "toggle_proxies", "enabled": ctx.state.studio.proxies_enabled}), Some("Toggled FilmCraft proxy workflow"));
     }
     ui.horizontal_wrapped(|ui| {
@@ -247,11 +240,7 @@ pub fn draw_color_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     ui.label(RichText::new("32f Linear Color Space & 9 Log Curves (T36)").size(11.5).strong().color(ctx.pal.accent_emerald));
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
-        for (cs, lbl, hdr) in [
-            ("rec709", "Rec.709 SDR", false),
-            ("rec2100_pq", "Rec.2100 PQ", true),
-            ("rec2100_hlg", "Rec.2100 HLG", true),
-        ] {
+        for (cs, lbl, hdr) in [("rec709", "Rec.709 SDR", false), ("rec2100_pq", "Rec.2100 PQ", true), ("rec2100_hlg", "Rec.2100 HLG", true)] {
             let id = format!("fc-cs-{cs}");
             let sel = ctx.state.studio.color_space_mode == cs;
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, lbl, "sequence.colorSettings 203 nits").selected(sel)).clicked() {
@@ -267,10 +256,9 @@ pub fn draw_color_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
         ui.spacing_mut().item_spacing.y = 4.0;
-        for log_c in [
-            "Sony S-Log3", "ARRI LogC3", "ARRI LogC4", "RED Log3G10", "Canon Log 3",
-            "Panasonic V-Log", "BMD Film Gen5", "Apple Log", "Fujifilm F-Log2",
-        ] {
+        for log_c in
+            ["Sony S-Log3", "ARRI LogC3", "ARRI LogC4", "RED Log3G10", "Canon Log 3", "Panasonic V-Log", "BMD Film Gen5", "Apple Log", "Fujifilm F-Log2"]
+        {
             let id = format!("fc-log-{log_c}");
             let sel = ctx.state.studio.log_curve == log_c;
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, log_c, "clip.interpretFootage camera log").selected(sel)).clicked() {
@@ -307,10 +295,28 @@ pub fn draw_color_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     draw_three_way_wheels(ui, ctx);
     draw_monotone_cubic_curves(ui, ctx);
 
-    ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("fc-col-exp", "Exposure", -4.0..=4.0, "EV", ctx.pal.accent_amber), &mut ctx.state.studio.color_exposure);
-    ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("fc-col-temp", "Temperature", -100.0..=100.0, "", ctx.pal.accent_amber), &mut ctx.state.studio.color_temp);
+    ring_slider_h(
+        ui,
+        ctx.reg,
+        ctx.pal,
+        ScalarSpec::new("fc-col-exp", "Exposure", -4.0..=4.0, "EV", ctx.pal.accent_amber),
+        &mut ctx.state.studio.color_exposure,
+    );
+    ring_slider_h(
+        ui,
+        ctx.reg,
+        ctx.pal,
+        ScalarSpec::new("fc-col-temp", "Temperature", -100.0..=100.0, "", ctx.pal.accent_amber),
+        &mut ctx.state.studio.color_temp,
+    );
     ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("fc-col-sat", "Saturation", 0.0..=200.0, "%", ctx.pal.accent_emerald), &mut ctx.state.studio.color_sat);
-    ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("fc-col-vig", "Vignette", -100.0..=100.0, "", ctx.pal.accent_sky), &mut ctx.state.studio.color_vignette);
+    ring_slider_h(
+        ui,
+        ctx.reg,
+        ctx.pal,
+        ScalarSpec::new("fc-col-vig", "Vignette", -100.0..=100.0, "", ctx.pal.accent_sky),
+        &mut ctx.state.studio.color_vignette,
+    );
 
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
@@ -352,13 +358,10 @@ fn draw_three_way_wheels(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     let wheel_w = ((ui.available_width() - 12.0) / 3.0).floor().clamp(80.0, 118.0);
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
-        for (idx, (wname, lbl, col)) in [
-            ("shadows", "Shadows", ctx.pal.accent_sky),
-            ("midtones", "Midtones", ctx.pal.accent_amber),
-            ("highlights", "Highlights", ctx.pal.accent_emerald),
-        ]
-        .into_iter()
-        .enumerate()
+        for (idx, (wname, lbl, col)) in
+            [("shadows", "Shadows", ctx.pal.accent_sky), ("midtones", "Midtones", ctx.pal.accent_amber), ("highlights", "Highlights", ctx.pal.accent_emerald)]
+                .into_iter()
+                .enumerate()
         {
             let (rect, resp) = ui.allocate_exact_size(Vec2::new(wheel_w, 108.0), Sense::click_and_drag());
             let c = Pos2::new(rect.center().x, rect.min.y + 54.0);
@@ -385,16 +388,9 @@ fn draw_three_way_wheels(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             }
             if resp.drag_stopped() || resp.clicked() {
                 let w = ctx.state.studio.wheels[idx];
-                ctx.exec(
-                    "video.finish",
-                    json!({"op": "lumetri_wheel", "wheel": wname, "x": w[0], "y": w[1], "luma": w[2]}),
-                    None,
-                );
+                ctx.exec("video.finish", json!({"op": "lumetri_wheel", "wheel": wname, "x": w[0], "y": w[1], "luma": w[2]}), None);
             }
-            let puck = Pos2::new(
-                c.x + ctx.state.studio.wheels[idx][0] * (r - 4.0),
-                c.y - ctx.state.studio.wheels[idx][1] * (r - 4.0),
-            );
+            let puck = Pos2::new(c.x + ctx.state.studio.wheels[idx][0] * (r - 4.0), c.y - ctx.state.studio.wheels[idx][1] * (r - 4.0));
             ui.painter().circle_filled(puck, 4.6, col);
             ui.painter().text(Pos2::new(c.x, rect.max.y - 8.0), Align2::CENTER_CENTER, lbl, FontId::proportional(10.2), ctx.pal.text_secondary);
             ctx.reg.record(format!("fc-wheel-{wname}"), lbl, &resp, None);
@@ -406,26 +402,14 @@ fn draw_monotone_cubic_curves(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     ui.add_space(4.0);
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
-        for (ch, lbl) in [
-            ("rgb", "RGB"),
-            ("hueVsSat", "H×S"),
-            ("hueVsHue", "H×H"),
-            ("hueVsLuma", "H×L"),
-            ("lumaVsSat", "L×S"),
-            ("satVsSat", "S×S"),
-        ] {
+        for (ch, lbl) in [("rgb", "RGB"), ("hueVsSat", "H×S"), ("hueVsHue", "H×H"), ("hueVsLuma", "H×L"), ("lumaVsSat", "L×S"), ("satVsSat", "S×S")] {
             let id = format!("fc-curve-ch-{ch}");
             let sel = ctx.state.studio.curve_channel == ch;
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, lbl, "Select monotone-cubic curve").selected(sel)).clicked() {
                 ctx.state.studio.curve_channel = ch.into();
             }
         }
-        ui.label(
-            RichText::new(format!("Mid {:.0}% IRE", ctx.state.studio.curve_mid_y * 100.0))
-                .monospace()
-                .size(9.2)
-                .color(ctx.pal.accent_amber),
-        );
+        ui.label(RichText::new(format!("Mid {:.0}% IRE", ctx.state.studio.curve_mid_y * 100.0)).monospace().size(9.2).color(ctx.pal.accent_amber));
     });
     let w = (ui.available_width() - 4.0).max(180.0);
     let (rect, resp) = ui.allocate_exact_size(Vec2::new(w, 120.0), Sense::click_and_drag());
@@ -527,8 +511,20 @@ pub fn draw_fx_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             }
         });
     });
-    ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("fc-antiflicker", "Anti-Flicker Filter", 0.0..=1.0, "", ctx.pal.accent_amber), &mut ctx.state.studio.anti_flicker);
-    ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("fc-stab-smooth", "Stabilizer Smoothness", 0.0..=100.0, "%", ctx.pal.accent_emerald), &mut ctx.state.studio.stabilize_smooth);
+    ring_slider_h(
+        ui,
+        ctx.reg,
+        ctx.pal,
+        ScalarSpec::new("fc-antiflicker", "Anti-Flicker Filter", 0.0..=1.0, "", ctx.pal.accent_amber),
+        &mut ctx.state.studio.anti_flicker,
+    );
+    ring_slider_h(
+        ui,
+        ctx.reg,
+        ctx.pal,
+        ScalarSpec::new("fc-stab-smooth", "Stabilizer Smoothness", 0.0..=100.0, "%", ctx.pal.accent_emerald),
+        &mut ctx.state.studio.stabilize_smooth,
+    );
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("fc-motion-apply", "Apply Clip Motion", "clip.motion").primary()).clicked() {

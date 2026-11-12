@@ -55,12 +55,7 @@ pub fn load_rgba(input: &Path) -> Result<RgbaImage> {
 }
 
 /// Pure-Rust chroma/corner background alpha isolation written atomically to `output` (never in-place).
-pub fn isolate_subject_rgba(
-    input: &Path,
-    output: &Path,
-    chroma_hex: Option<&str>,
-    feather_px: f64,
-) -> Result<Value> {
+pub fn isolate_subject_rgba(input: &Path, output: &Path, chroma_hex: Option<&str>, feather_px: f64) -> Result<Value> {
     if input == output {
         return Err(bad(format!("refusing to overwrite source image {}", input.display())));
     }
@@ -102,12 +97,7 @@ pub fn isolate_subject_rgba(
 }
 
 /// Crop a rectangle `[x, y, cw, ch]`, optionally trim transparent bounds, and anchor inside `(cw, ch)`.
-pub fn crop_and_anchor_cell(
-    src: &RgbaImage,
-    rect: [u32; 4],
-    anchor_bottom: bool,
-    out_png: &Path,
-) -> Result<()> {
+pub fn crop_and_anchor_cell(src: &RgbaImage, rect: [u32; 4], anchor_bottom: bool, out_png: &Path) -> Result<()> {
     let (img_w, img_h) = src.dimensions();
     let x = rect[0].min(img_w.saturating_sub(1));
     let y = rect[1].min(img_h.saturating_sub(1));
@@ -135,32 +125,20 @@ pub fn crop_and_anchor_cell(
         let th = max_y - min_y + 1;
         let trimmed = image::imageops::crop_imm(&sub, min_x, min_y, tw, th).to_image();
         let dest_x = i64::from((cw.saturating_sub(tw)) / 2);
-        let dest_y = if anchor_bottom {
-            i64::from(ch.saturating_sub(th))
-        } else {
-            i64::from((ch.saturating_sub(th)) / 2)
-        };
+        let dest_y = if anchor_bottom { i64::from(ch.saturating_sub(th)) } else { i64::from((ch.saturating_sub(th)) / 2) };
         image::imageops::overlay(&mut canvas, &trimmed, dest_x, dest_y);
     }
     encode_png_atomic(&canvas, out_png)
 }
 
 /// Split a 3x3 Moppet anatomical parts sheet into individual transparent PNG part cutouts.
-pub fn split_parts_sheet(
-    sheet_png: &Path,
-    view_dir: &Path,
-    char_id: &str,
-    view: &str,
-    chroma_hex: Option<&str>,
-) -> Result<Value> {
+pub fn split_parts_sheet(sheet_png: &Path, view_dir: &Path, char_id: &str, view: &str, chroma_hex: Option<&str>) -> Result<Value> {
     std::fs::create_dir_all(view_dir)?;
     let clean_path = view_dir.join(format!("{char_id}-{view}-clean.png"));
     let _ = isolate_subject_rgba(sheet_png, &clean_path, chroma_hex, 0.8)?;
     let clean = load_rgba(&clean_path)?;
     let (w, h) = clean.dimensions();
-    let names = [
-        "head", "torso", "hips", "arm_l", "hand_l", "leg_l", "arm_r", "hand_r", "leg_r",
-    ];
+    let names = ["head", "torso", "hips", "arm_l", "hand_l", "leg_l", "arm_r", "hand_r", "leg_r"];
     let mut parts_out = Vec::new();
     for (idx, part_name) in names.iter().enumerate() {
         let rect = magic_scribbles::sprite_cell_rect(w, h, (3, 3), idx as u32);
@@ -178,12 +156,8 @@ pub fn split_parts_sheet(
 }
 
 /// Extract a clean bounding-contour polygon SVG (and return normalized silhouette points around center).
-pub fn trace_silhouette_svg(
-    input: &Path,
-    out_svg: &Path,
-    offset_px: f64,
-    strokes: bool,
-) -> Result<(Value, Vec<[f64; 2]>)> {
+// TODO(MAGIC-REVIEW): REPLACE this bounding rectangle with real outline tracing; a valid SVG is not proof of a silhouette.
+pub fn trace_silhouette_svg(input: &Path, out_svg: &Path, offset_px: f64, strokes: bool) -> Result<(Value, Vec<[f64; 2]>)> {
     let rgba = load_rgba(input)?;
     let (w, h) = rgba.dimensions();
     let mut min_x = w;
@@ -214,17 +188,8 @@ pub fn trace_silhouette_svg(
     let y1 = (f64::from(max_y) + pad).min(f64::from(h));
     let cx = f64::from(w) / 2.0;
     let cy = f64::from(h) / 2.0;
-    let pts = vec![
-        [x0 - cx, y0 - cy],
-        [x1 - cx, y0 - cy],
-        [x1 - cx, y1 - cy],
-        [x0 - cx, y1 - cy],
-    ];
-    let paint_attr = if strokes {
-        "fill=\"none\" stroke=\"#111827\" stroke-width=\"2\""
-    } else {
-        "fill=\"#111827\" stroke=\"none\""
-    };
+    let pts = vec![[x0 - cx, y0 - cy], [x1 - cx, y0 - cy], [x1 - cx, y1 - cy], [x0 - cx, y1 - cy]];
+    let paint_attr = if strokes { "fill=\"none\" stroke=\"#111827\" stroke-width=\"2\"" } else { "fill=\"#111827\" stroke=\"none\"" };
     let svg = format!(
         "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 {w} {h}\" width=\"{w}\" height=\"{h}\">\n  <path d=\"M {x0:.1} {y0:.1} L {x1:.1} {y0:.1} L {x1:.1} {y1:.1} L {x0:.1} {y1:.1} Z\" {paint_attr}/>\n</svg>\n"
     );
@@ -255,11 +220,7 @@ pub fn extract_or_copy_preview(src: &Path, out_png: &Path, max_side: u32) -> Res
     }
     if let Ok(img) = image::open(src) {
         let (w, h) = img.dimensions();
-        let out_img = if max_side > 0 && w.max(h) > max_side {
-            img.thumbnail(max_side, max_side).to_rgba8()
-        } else {
-            img.to_rgba8()
-        };
+        let out_img = if max_side > 0 && w.max(h) > max_side { img.thumbnail(max_side, max_side).to_rgba8() } else { img.to_rgba8() };
         encode_png_atomic(&out_img, out_png)?;
         return Ok(true);
     }
@@ -281,17 +242,13 @@ pub fn probe_media_in_process(path: &Path) -> Result<Value> {
     if let Ok(container) = magic_util::media::probe_container_in_process(path) {
         return Ok(container);
     }
-    magic_util::media::probe_audio_in_process(path)
-        .map_err(|e| bad(format!("unable to probe media {}: {e}", path.display())))
+    magic_util::media::probe_audio_in_process(path).map_err(|e| bad(format!("unable to probe media {}: {e}", path.display())))
 }
 
 /// Persist staged Craft command steps alongside a target document path so the user or target app's
 /// own MCP server (`effectcraft-cli mcp`, `filmcraft-cli mcp`, etc.) can inspect or apply them.
 pub fn write_staged_steps(target_doc: &Path, steps: &Value) -> Result<PathBuf> {
-    let file_name = target_doc
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("staged");
+    let file_name = target_doc.file_name().and_then(|n| n.to_str()).unwrap_or("staged");
     let sidecar = target_doc.with_file_name(format!(".{file_name}.steps.json"));
     if let Some(parent) = sidecar.parent() {
         std::fs::create_dir_all(parent)?;

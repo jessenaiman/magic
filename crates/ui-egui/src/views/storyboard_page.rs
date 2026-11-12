@@ -2,10 +2,7 @@
 //! click-in-place text editing, drag-and-drop / Wayland paste / click image placement, and
 //! right-click handoff to `PhotoCraft`, `VectorCraft`, or `EffectCraft` for linked Craft files.
 
-use egui::{
-    Align2, Color32, CornerRadius, Event, FontFamily, FontId, Id, Key, Pos2, Rect, Sense, Stroke,
-    StrokeKind, TextEdit, Ui, Vec2,
-};
+use egui::{Align2, Color32, CornerRadius, Event, FontFamily, FontId, Key, Pos2, Rect, Sense, Stroke, StrokeKind, TextEdit, Ui, Vec2};
 use serde_json::{Value, json};
 
 use crate::controls::paint_local_image;
@@ -15,8 +12,26 @@ pub const PAGE_W_PT: f32 = 612.0;
 pub const PAGE_H_PT: f32 = 792.0;
 
 const SLOT_PICKER_EXTS: &[&str] = &[
-    "png", "jpg", "jpeg", "webp", "pcraft", "psd", "psb", "ora", "xcf", "kra", "pdn",
-    "vectorcraft", "svg", "svgz", "ai", "eps", "af", "afdesign", "afphoto", "ecproj",
+    "png",
+    "jpg",
+    "jpeg",
+    "webp",
+    "pcraft",
+    "psd",
+    "psb",
+    "ora",
+    "xcf",
+    "kra",
+    "pdn",
+    "vectorcraft",
+    "svg",
+    "svgz",
+    "ai",
+    "eps",
+    "af",
+    "afdesign",
+    "afphoto",
+    "ecproj",
 ];
 
 pub struct PageSummary {
@@ -79,6 +94,7 @@ fn pasted_file_path(ui: &Ui) -> Option<String> {
 }
 
 /// Draw a compact miniature page preview (`2-up` left section rail).
+// TODO(MAGIC-REVIEW): CHANGE storyboard edit verification to real saved document readback; these egui fixes only restore compilation.
 pub fn paint_mini_page(ui: &mut Ui, rect: Rect, page: &PageSummary, selected: bool, accent: Color32) {
     let paper = Color32::from_rgb(247, 243, 234);
     ui.painter().rect_filled(rect, CornerRadius::same(3), paper);
@@ -117,11 +133,7 @@ pub fn paint_mini_page(ui: &mut Ui, rect: Rect, page: &PageSummary, selected: bo
             }
         }
     }
-    let border = if selected {
-        Stroke::new(2.0, accent)
-    } else {
-        Stroke::new(1.0, Color32::from_rgb(185, 179, 168))
-    };
+    let border = if selected { Stroke::new(2.0, accent) } else { Stroke::new(1.0, Color32::from_rgb(185, 179, 168)) };
     ui.painter().rect_stroke(rect, CornerRadius::same(3), border, StrokeKind::Inside);
 }
 
@@ -130,20 +142,9 @@ pub fn paint_mini_page(ui: &mut Ui, rect: Rect, page: &PageSummary, selected: bo
 /// - Unlocked text fields become live inline `TextEdit` widgets directly on the page when clicked.
 /// - Unlocked image slots accept OS drag-and-drop, Wayland clipboard file paste (`Ctrl+V` / `⌘V`),
 ///   click-to-pick (`craft-dialogs`), and right-click to open linked `.pcraft`/`.vectorcraft`/`.ecproj`.
-pub fn draw_interactive_page(
-    ui: &mut Ui,
-    ctx: &mut ViewCtx<'_>,
-    page: &PageSummary,
-    page_size: Vec2,
-    dropped_paths: &[String],
-) -> Rect {
+pub fn draw_interactive_page(ui: &mut Ui, ctx: &mut ViewCtx<'_>, page: &PageSummary, page_size: Vec2, dropped_paths: &[String]) -> Rect {
     let (page_rect, page_resp) = ui.allocate_exact_size(page_size, Sense::click());
-    ctx.reg.record(
-        &format!("sb-page-{:02}", page.index + 1),
-        &format!("Storyboard Page {:02} ({})", page.index + 1, page.section),
-        &page_resp,
-        None,
-    );
+    ctx.reg.record(&format!("sb-page-{:02}", page.index + 1), &format!("Storyboard Page {:02} ({})", page.index + 1, page.section), &page_resp, None);
     if page_resp.clicked() {
         ctx.state.storyboard.current_page = page.index;
     }
@@ -163,11 +164,7 @@ pub fn draw_interactive_page(
     draw_interactive_slots_on_page(ui, ctx, page_rect, page, scale, has_raster_bg, dropped_paths);
 
     let is_active = ctx.state.storyboard.current_page == page.index;
-    let frame_stroke = if is_active {
-        Stroke::new(1.8, ctx.pal.accent)
-    } else {
-        Stroke::new(1.0, Color32::from_rgb(196, 190, 178))
-    };
+    let frame_stroke = if is_active { Stroke::new(1.8, ctx.pal.accent_emerald) } else { Stroke::new(1.0, Color32::from_rgb(196, 190, 178)) };
     ui.painter().rect_stroke(page_rect, CornerRadius::same(3), frame_stroke, StrokeKind::Inside);
     page_rect
 }
@@ -209,13 +206,7 @@ fn paint_readonly_master_chrome(ui: &mut Ui, page_rect: Rect, page: &PageSummary
                 if y + pt > rect.max.y + 4.0 {
                     break;
                 }
-                clip_painter.text(
-                    Pos2::new(rect.min.x + 1.0, y),
-                    Align2::LEFT_TOP,
-                    line,
-                    FontId::new(pt, FontFamily::Proportional),
-                    col,
-                );
+                clip_painter.text(Pos2::new(rect.min.x + 1.0, y), Align2::LEFT_TOP, line, FontId::new(pt, FontFamily::Proportional), col);
                 y += line_h;
             }
         }
@@ -246,37 +237,27 @@ fn draw_interactive_slots_on_page(
             continue;
         }
 
-        let is_editing = ctx.state.storyboard.editing_page == Some(page.index)
-            && ctx.state.storyboard.editing_slot.as_deref() == Some(label);
+        let is_editing = ctx.state.storyboard.editing_page == Some(page.index) && ctx.state.storyboard.editing_slot.as_deref() == Some(label);
 
         if kind == "text" {
             if is_editing {
                 draw_inline_text_editor(ui, ctx, rect, page.index, label, scale);
             } else {
-                let resp = ui.interact(rect, Id::new(("sb_txt_slot", page.index, label)), Sense::click());
-                ctx.reg.record(
-                    &format!("sb-field-p{:02}-{label}", page.index),
-                    &format!("Edit {} (Page {})", label, page.index + 1),
-                    &resp,
-                    None,
-                );
+                let resp = ui.interact(rect, ui.make_persistent_id(("sb_txt_slot", page.index, label)), Sense::click());
+                ctx.reg.record(&format!("sb-field-p{:02}-{label}", page.index), &format!("Edit {} (Page {})", label, page.index + 1), &resp, None);
                 let val_str = slot["text"].as_str().unwrap_or("");
                 if !has_raster_bg {
                     paint_text_slot_value(ui, rect, val_str, filled, required, resp.hovered(), scale);
                 } else if resp.hovered() || (required && !filled) {
                     let outline = if resp.hovered() {
-                        Stroke::new(1.5, ctx.pal.accent)
+                        Stroke::new(1.5, ctx.pal.accent_emerald)
                     } else {
                         Stroke::new(1.0, Color32::from_rgba_unmultiplied(210, 72, 62, 140))
                     };
                     ui.painter().rect_stroke(rect, CornerRadius::same(2), outline, StrokeKind::Inside);
                 }
                 if resp.clicked() {
-                    let clean_initial = if val_str.contains('[') && val_str.contains(']') {
-                        String::new()
-                    } else {
-                        val_str.to_owned()
-                    };
+                    let clean_initial = if val_str.contains('[') && val_str.contains(']') { String::new() } else { val_str.to_owned() };
                     ctx.state.storyboard.current_page = page.index;
                     ctx.state.storyboard.editing_page = Some(page.index);
                     ctx.state.storyboard.editing_slot = Some(label.to_owned());
@@ -286,13 +267,8 @@ fn draw_interactive_slots_on_page(
                 resp.on_hover_text(format!("Click to edit `{label}` in storyboard.pdf"));
             }
         } else {
-            let resp = ui.interact(rect, Id::new(("sb_img_slot", page.index, label)), Sense::click());
-            ctx.reg.record(
-                &format!("sb-img-p{:02}-{label}", page.index),
-                &format!("Image Slot {} (Page {})", label, page.index + 1),
-                &resp,
-                None,
-            );
+            let resp = ui.interact(rect, ui.make_persistent_id(("sb_img_slot", page.index, label)), Sense::click());
+            ctx.reg.record(&format!("sb-img-p{:02}-{label}", page.index), &format!("Image Slot {} (Page {})", label, page.index + 1), &resp, None);
             let img_path = slot["image"].as_str().filter(|p| !p.trim().is_empty());
             if !has_raster_bg || img_path.is_some() {
                 let slot_bg = Color32::from_rgb(234, 229, 218);
@@ -319,15 +295,9 @@ fn draw_interactive_slots_on_page(
             let linked_meta = slot["linked_file"].as_str().filter(|l| !l.is_empty());
             let app_meta = slot["craft_app"].as_str().filter(|a| !a.is_empty());
 
-            if hovered
-                && let Some(dropped) = dropped_paths.first().or(pasted.as_ref())
-            {
+            if hovered && let Some(dropped) = dropped_paths.first().or(pasted.as_ref()) {
                 ctx.state.storyboard.current_page = page.index;
-                ctx.exec(
-                    "storyboard.set",
-                    json!({"page": page.index, "label": label, "image": dropped}),
-                    Some("Placed artwork onto storyboard.pdf"),
-                );
+                ctx.exec("storyboard.set", json!({"page": page.index, "label": label, "image": dropped}), Some("Placed artwork onto storyboard.pdf"));
             } else if resp.secondary_clicked()
                 && let Some(linked_path) = linked_meta
             {
@@ -341,10 +311,7 @@ fn draw_interactive_slots_on_page(
                 ctx.state.storyboard.editing_page = Some(page.index);
                 ctx.state.storyboard.editing_slot = Some(label.to_owned());
                 ctx.push(UiAction::PickFile {
-                    target: PickerTarget::StoryboardSlotImage {
-                        page: page.index,
-                        slot: label.to_owned(),
-                    },
+                    target: PickerTarget::StoryboardSlotImage { page: page.index, slot: label.to_owned() },
                     title: format!("Choose Artwork for {label} (Page {:02})", page.index + 1),
                     extensions: SLOT_PICKER_EXTS.iter().map(|s| (*s).to_owned()).collect(),
                     directory: false,
@@ -390,15 +357,7 @@ fn draw_interactive_slots_on_page(
     }
 }
 
-fn paint_text_slot_value(
-    ui: &mut Ui,
-    rect: Rect,
-    val_str: &str,
-    filled: bool,
-    required: bool,
-    hovered: bool,
-    scale: f32,
-) {
+fn paint_text_slot_value(ui: &mut Ui, rect: Rect, val_str: &str, filled: bool, required: bool, hovered: bool, scale: f32) {
     let bg = if hovered {
         Color32::from_rgb(255, 252, 242)
     } else if required && !filled {
@@ -423,16 +382,8 @@ fn paint_text_slot_value(
         return;
     }
     let is_title = rect.height() >= 34.0 * scale && val_str.len() <= 36;
-    let pt = if is_title {
-        (22.0 * scale).clamp(11.0, 32.0)
-    } else {
-        (9.5 * scale).clamp(7.5, 13.5)
-    };
-    let col = if filled {
-        Color32::from_rgb(30, 29, 27)
-    } else {
-        Color32::from_rgb(132, 124, 114)
-    };
+    let pt = if is_title { (22.0 * scale).clamp(11.0, 32.0) } else { (9.5 * scale).clamp(7.5, 13.5) };
+    let col = if filled { Color32::from_rgb(30, 29, 27) } else { Color32::from_rgb(132, 124, 114) };
     let clip = ui.painter().with_clip_rect(rect.shrink(1.0));
     let mut y = rect.min.y + 1.5;
     let line_h = (pt * 1.2).max(9.0);
@@ -440,64 +391,34 @@ fn paint_text_slot_value(
         if y + pt > rect.max.y + 4.0 {
             break;
         }
-        clip.text(
-            Pos2::new(rect.min.x + 2.0, y),
-            Align2::LEFT_TOP,
-            line,
-            FontId::new(pt, FontFamily::Proportional),
-            col,
-        );
+        clip.text(Pos2::new(rect.min.x + 2.0, y), Align2::LEFT_TOP, line, FontId::new(pt, FontFamily::Proportional), col);
         y += line_h;
     }
 }
 
-fn draw_inline_text_editor(
-    ui: &mut Ui,
-    ctx: &mut ViewCtx<'_>,
-    rect: Rect,
-    page_idx: usize,
-    label: &str,
-    scale: f32,
-) {
-    let edit_rect = Rect::from_min_size(
-        rect.min,
-        Vec2::new(rect.width().max(110.0), rect.height().max(22.0)),
-    );
-    ui.painter()
-        .rect_filled(edit_rect, CornerRadius::same(3), Color32::from_rgb(255, 253, 247));
-    ui.painter().rect_stroke(
-        edit_rect,
-        CornerRadius::same(3),
-        Stroke::new(1.8, ctx.pal.accent),
-        StrokeKind::Inside,
-    );
+fn draw_inline_text_editor(ui: &mut Ui, ctx: &mut ViewCtx<'_>, rect: Rect, page_idx: usize, label: &str, scale: f32) {
+    let edit_rect = Rect::from_min_size(rect.min, Vec2::new(rect.width().max(110.0), rect.height().max(22.0)));
+    ui.painter().rect_filled(edit_rect, CornerRadius::same(3), Color32::from_rgb(255, 253, 247));
+    ui.painter().rect_stroke(edit_rect, CornerRadius::same(3), Stroke::new(1.8, ctx.pal.accent_emerald), StrokeKind::Inside);
 
     let multiline = rect.height() >= 28.0 * scale;
     let font_pt = (10.5 * scale).clamp(9.0, 15.0);
     let mut commit = false;
     let mut cancel = false;
 
-    let mut child = ui.new_child(
-        egui::UiBuilder::new()
-            .max_rect(edit_rect.shrink(2.0))
-            .id_salt(("sb_inline_editor", page_idx, label)),
-    );
+    let mut child = ui.new_child(egui::UiBuilder::new().max_rect(edit_rect.shrink(2.0)).id_salt(("sb_inline_editor", page_idx, label)));
     child.style_mut().visuals.extreme_bg_color = Color32::from_rgb(255, 253, 247);
     child.style_mut().visuals.override_text_color = Some(Color32::from_rgb(24, 24, 22));
 
     let resp = if multiline {
         child.add_sized(
             edit_rect.shrink(2.0).size(),
-            TextEdit::multiline(&mut ctx.state.storyboard.draft_text)
-                .font(FontId::new(font_pt, FontFamily::Proportional))
-                .frame(false),
+            TextEdit::multiline(&mut ctx.state.storyboard.draft_text).font(FontId::new(font_pt, FontFamily::Proportional)).frame(egui::Frame::NONE),
         )
     } else {
         child.add_sized(
             edit_rect.shrink(2.0).size(),
-            TextEdit::singleline(&mut ctx.state.storyboard.draft_text)
-                .font(FontId::new(font_pt, FontFamily::Proportional))
-                .frame(false),
+            TextEdit::singleline(&mut ctx.state.storyboard.draft_text).font(FontId::new(font_pt, FontFamily::Proportional)).frame(egui::Frame::NONE),
         )
     };
 
@@ -506,9 +427,7 @@ fn draw_inline_text_editor(
         ctx.state.storyboard.focus_requested = false;
     }
 
-    let enter_commit = ui.input(|i| {
-        i.key_pressed(Key::Enter) && (!multiline || i.modifiers.command || i.modifiers.ctrl)
-    });
+    let enter_commit = ui.input(|i| i.key_pressed(Key::Enter) && (!multiline || i.modifiers.command || i.modifiers.ctrl));
     let esc_pressed = ui.input(|i| i.key_pressed(Key::Escape));
 
     if esc_pressed {
@@ -524,10 +443,6 @@ fn draw_inline_text_editor(
         let new_val = ctx.state.storyboard.draft_text.trim().to_owned();
         ctx.state.storyboard.editing_page = None;
         ctx.state.storyboard.editing_slot = None;
-        ctx.exec(
-            "storyboard.set",
-            json!({"page": page_idx, "label": label, "text": new_val}),
-            Some("Updated storyboard.pdf field"),
-        );
+        ctx.exec("storyboard.set", json!({"page": page_idx, "label": label, "text": new_val}), Some("Updated storyboard.pdf field"));
     }
 }
