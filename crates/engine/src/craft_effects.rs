@@ -50,22 +50,75 @@ pub const EFFECTCRAFT_19_CATEGORIES: &[(&str, &str)] = &[
 
 /// All 38 EffectCraft layer blend modes (`T29`).
 pub const EFFECTCRAFT_38_BLEND_MODES: &[&str] = &[
-    "normal", "dissolve", "dancingDissolve",
-    "darken", "multiply", "colorBurn", "classicColorBurn", "linearBurn", "darkerColor",
-    "add", "lighten", "screen", "colorDodge", "classicColorDodge", "linearDodge", "lighterColor",
-    "overlay", "softLight", "hardLight", "linearLight", "vividLight", "pinLight", "hardMix",
-    "difference", "classicDifference", "exclusion", "subtract", "divide",
-    "hue", "saturation", "color", "luminosity",
-    "stencilAlpha", "stencilLuma", "silhouetteAlpha", "silhouetteLuma", "alphaAdd", "luminescentPremul",
+    "normal",
+    "dissolve",
+    "dancingDissolve",
+    "darken",
+    "multiply",
+    "colorBurn",
+    "classicColorBurn",
+    "linearBurn",
+    "darkerColor",
+    "add",
+    "lighten",
+    "screen",
+    "colorDodge",
+    "classicColorDodge",
+    "linearDodge",
+    "lighterColor",
+    "overlay",
+    "softLight",
+    "hardLight",
+    "linearLight",
+    "vividLight",
+    "pinLight",
+    "hardMix",
+    "difference",
+    "classicDifference",
+    "exclusion",
+    "subtract",
+    "divide",
+    "hue",
+    "saturation",
+    "color",
+    "luminosity",
+    "stencilAlpha",
+    "stencilLuma",
+    "silhouetteAlpha",
+    "silhouetteLuma",
+    "alphaAdd",
+    "luminescentPremul",
 ];
 
 /// All 27 FilmCraft GPU linear-light blend modes (`T38`).
 pub const FILMCRAFT_27_BLEND_MODES: &[&str] = &[
-    "Normal", "Dissolve", "Darken", "Multiply", "Color Burn", "Linear Burn", "Darker Color",
-    "Lighten", "Screen", "Color Dodge", "Linear Dodge (Add)", "Lighter Color",
-    "Overlay", "Soft Light", "Hard Light", "Vivid Light", "Linear Light", "Pin Light", "Hard Mix",
-    "Difference", "Exclusion", "Subtract", "Divide",
-    "Hue", "Saturation", "Color", "Luminosity",
+    "Normal",
+    "Dissolve",
+    "Darken",
+    "Multiply",
+    "Color Burn",
+    "Linear Burn",
+    "Darker Color",
+    "Lighten",
+    "Screen",
+    "Color Dodge",
+    "Linear Dodge (Add)",
+    "Lighter Color",
+    "Overlay",
+    "Soft Light",
+    "Hard Light",
+    "Vivid Light",
+    "Linear Light",
+    "Pin Light",
+    "Hard Mix",
+    "Difference",
+    "Exclusion",
+    "Subtract",
+    "Divide",
+    "Hue",
+    "Saturation",
+    "Color",
+    "Luminosity",
 ];
 
 pub const LYRICS_EFFECTS: &[MappedEffect] = &[
@@ -428,27 +481,16 @@ fn installed_apps_status() -> &'static Value {
     })
 }
 
-fn filter_effects_value_list(
-    items: Vec<Value>,
-    app_filter: Option<&str>,
-    cat_filter: Option<&str>,
-    text_filter: Option<&str>,
-) -> Vec<Value> {
+fn filter_effects_value_list(items: Vec<Value>, app_filter: Option<&str>, cat_filter: Option<&str>, text_filter: Option<&str>) -> Vec<Value> {
     let q = text_filter.unwrap_or_default().trim().to_ascii_lowercase();
     items
         .into_iter()
         .filter(|e| {
             app_filter.is_none_or(|a| {
-                e["craft_app"].as_str().is_some_and(|ca| ca.eq_ignore_ascii_case(a))
-                    || e["badge"].as_str().is_some_and(|b| b.eq_ignore_ascii_case(a))
+                e["craft_app"].as_str().is_some_and(|ca| ca.eq_ignore_ascii_case(a)) || e["badge"].as_str().is_some_and(|b| b.eq_ignore_ascii_case(a))
             })
         })
-        .filter(|e| {
-            cat_filter.is_none_or(|c| {
-                c.eq_ignore_ascii_case("all")
-                    || e["category"].as_str().is_some_and(|cat| cat.eq_ignore_ascii_case(c))
-            })
-        })
+        .filter(|e| cat_filter.is_none_or(|c| c.eq_ignore_ascii_case("all") || e["category"].as_str().is_some_and(|cat| cat.eq_ignore_ascii_case(c))))
         .filter(|e| {
             q.is_empty()
                 || e["id"].as_str().is_some_and(|s| s.to_ascii_lowercase().contains(&q))
@@ -544,10 +586,7 @@ pub fn query_motion_effects(params: &Value) -> Value {
     let filter = params.get("filter").and_then(Value::as_str);
     let merged = serialize_table(MOTION_EFFECTS, &[&vc_live, &ec_live]);
     let effects = filter_effects_value_list(merged, app, category, filter);
-    let categories_19: Vec<Value> = EFFECTCRAFT_19_CATEGORIES
-        .iter()
-        .map(|(id, lbl)| json!({"id": id, "label": lbl}))
-        .collect();
+    let categories_19: Vec<Value> = EFFECTCRAFT_19_CATEGORIES.iter().map(|(id, lbl)| json!({"id": id, "label": lbl})).collect();
     let live_connected = endpoints["vectorcraft"]["connected"] == true || endpoints["effectcraft"]["connected"] == true;
     json!({
         "ok": true,

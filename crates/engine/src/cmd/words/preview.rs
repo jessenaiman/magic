@@ -9,10 +9,8 @@ pub fn frame(s: &mut Session, p: &Value) -> Result<Value> {
     if kind == "motion" {
         return crate::cmd::motion::cmd_motion_preview_frame(s, p);
     }
-    let time = p["time"]
-        .as_f64()
-        .filter(|v| v.is_finite() && *v >= 0.0)
-        .ok_or_else(|| EngineError::InvalidParams("time must be nonnegative seconds".into()))?;
+    let time =
+        p["time"].as_f64().filter(|v| v.is_finite() && *v >= 0.0).ok_or_else(|| EngineError::InvalidParams("time must be nonnegative seconds".into()))?;
     if !matches!(kind, "lyrics" | "stage") {
         return Err(EngineError::InvalidParams("kind must be lyrics, motion, or stage".into()));
     }

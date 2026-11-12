@@ -7,8 +7,8 @@ use std::path::Path;
 use serde_json::{Value, json};
 
 use super::{
-    BaseConverter, ConversionPlan, ConvertKind, DiscoveredAsset, HardWallIssue, LegacyConverter,
-    MissingAssetNotice, collect_files_filtered, extract_attr, extract_static_file_calls,
+    BaseConverter, ConversionPlan, ConvertKind, DiscoveredAsset, HardWallIssue, LegacyConverter, MissingAssetNotice, collect_files_filtered, extract_attr,
+    extract_static_file_calls,
 };
 use crate::Result;
 
@@ -109,10 +109,7 @@ fn inspect_remotion_tsx(rem_root: &Path, tsx_path: &Path, code: &str, plan: &mut
         let public_cand = rem_root.join("public").join(rel.trim_start_matches('/'));
         let direct_cand = rem_root.join(rel.trim_start_matches('/'));
         if !public_cand.is_file() && !direct_cand.is_file() {
-            let is_audio = matches!(
-                Path::new(&rel).extension().and_then(|e| e.to_str()).unwrap_or_default(),
-                "wav" | "mp3" | "m4a" | "flac" | "ogg"
-            );
+            let is_audio = matches!(Path::new(&rel).extension().and_then(|e| e.to_str()).unwrap_or_default(), "wav" | "mp3" | "m4a" | "flac" | "ogg");
             plan.missing_assets.push(MissingAssetNotice {
                 referenced_path: format!("public/{rel}"),
                 referenced_in: tsx_path.display().to_string(),
@@ -123,6 +120,8 @@ fn inspect_remotion_tsx(rem_root: &Path, tsx_path: &Path, code: &str, plan: &mut
                         "Missing `staticFile(\"{rel}\")` in `{fname}`; ",
                         "save via `magic-cli exec project.save_asset path=<file>` (https://www.remotion.dev/docs/staticfile)"
                     ),
+                    rel = rel,
+                    fname = fname,
                 ),
             });
         }
@@ -207,11 +206,6 @@ fn collect_remotion_media(source_dir: &Path, rem_root: &Path, plan: &mut Convers
         } else {
             ("images", None, false)
         };
-        plan.discovered_assets.push(DiscoveredAsset {
-            source_path: asset,
-            bucket: bucket.into(),
-            character_id: cid,
-            promote_shared: promote,
-        });
+        plan.discovered_assets.push(DiscoveredAsset { source_path: asset, bucket: bucket.into(), character_id: cid, promote_shared: promote });
     }
 }
