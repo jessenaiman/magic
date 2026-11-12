@@ -73,8 +73,7 @@ fn inspect_pcraft_dir_bundle(dir: &Path) -> Option<Value> {
         }));
     }
     let manifest_bytes = std::fs::read(dir.join(MANIFEST)).ok()?;
-    let manifest_str = std::str::from_utf8(&manifest_bytes).ok()?;
-    match read_manifest::<IgnoredAny>(manifest_str, &PcraftLimits::default(), PCRAFT_STEPS, PCRAFT_VERSION) {
+    match read_manifest::<IgnoredAny, craft_pcraft_format::Error>(&manifest_bytes, &PcraftLimits::default(), PCRAFT_STEPS, PCRAFT_VERSION) {
         Ok(m) => Some(json!({
             "kind": "pcraft",
             "bundle": "directory",
@@ -177,9 +176,9 @@ pub fn extract_craft_preview(path: &Path, out_png: &Path) -> Result<bool> {
         if path.join(SAVE_LOCK).exists() {
             return Ok(false);
         }
-        let manifest_ok = std::fs::read_to_string(path.join(MANIFEST))
+        let manifest_ok = std::fs::read(path.join(MANIFEST))
             .ok()
-            .and_then(|raw| read_manifest::<IgnoredAny>(&raw, &PcraftLimits::default(), PCRAFT_STEPS, PCRAFT_VERSION).ok());
+            .and_then(|raw| read_manifest::<IgnoredAny, craft_pcraft_format::Error>(&raw, &PcraftLimits::default(), PCRAFT_STEPS, PCRAFT_VERSION).ok());
         let candidates: Vec<&str> = match manifest_ok.as_ref() {
             Some(m) => [m.full_composite.as_deref(), m.composite.as_deref(), m.thumbnail.as_deref()]
                 .into_iter()

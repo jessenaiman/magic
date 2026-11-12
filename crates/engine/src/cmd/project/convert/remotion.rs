@@ -123,6 +123,8 @@ fn inspect_remotion_tsx(rem_root: &Path, tsx_path: &Path, code: &str, plan: &mut
                         "Missing `staticFile(\"{rel}\")` in `{fname}`; ",
                         "save via `magic-cli exec project.save_asset path=<file>` (https://www.remotion.dev/docs/staticfile)"
                     ),
+                    rel = rel,
+                    fname = fname,
                 ),
             });
         }
