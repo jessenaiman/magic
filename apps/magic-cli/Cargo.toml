@@ -20,7 +20,7 @@ path = "src/mcp_bin.rs"
 
 [dependencies]
 clap = { workspace = true }
-magic = { workspace = true }
+magic-engine = { workspace = true }
 magic-mcp = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

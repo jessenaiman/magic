@@ -1,58 +1,19 @@
-# Magic Studio Feature Gaps & Unimplemented Requests
+# Magic Studio Feature Gaps & Host Verification Checklist
 
-This document tracks every missing feature, unimplemented request, `// TODO:` host-verification hook, and upstream ArtCraft parity enhancement in Magic Studio, following the gap-tracking convention in [`EffectCraft` `docs/gaps.md`](https://github.com/storytold/effectcraft/blob/main/docs/gaps.md) and [`PhotoCraft` `ROADMAP.md`](https://github.com/storytold/photocraft/blob/main/ROADMAP.md).
+> **Last Reviewed & Updated:** 2026-11-12T16:59:00-05:00 · **Reviewed by:** Jesse A. Naiman
 
-## 1. `--control` Protocol & Live Automation Enhancements
+This document tracks remaining live-host verification items and upstream dependencies without paraphrasing upstream specs. Always verify upstream behavior directly in the corresponding `storytold/*` `README.md` and `docs/` files.
 
-Nice-to-have control methods and runtime flags identified when cross-checking `apps/magic/src/{control.rs,main.rs}` against [`EffectCraft` `docs/control-protocol.md`](https://github.com/storytold/effectcraft/blob/main/docs/control-protocol.md) and [`FilmCraft` `docs/control-protocol.md`](https://github.com/storytold/filmcraft/blob/main/docs/control-protocol.md).
+## Completed in `magic-fixes-9`
 
-- [ ] Add `--control-input-only` flag to `apps/magic` so UI test harnesses can restrict the `--control` socket to `ui.*` input/inspection calls and block direct `engine.execute` mutations.
-- [ ] Add `ui.screenshot {panel?, id?}` cropping so agents can capture a single workspace panel or DOM element rectangle without post-cropping.
-- [ ] Implement macOS (`WKWebView::takeSnapshotWithConfiguration`) and Windows (`ICoreWebView2::CapturePreview`) backends in `apps/magic/src/capture.rs` (currently Linux `WebKitGTK` only).
-- [ ] Add `render.frame {base64: true, max_side?}` inline downscaled PNG encoding alongside file-path output.
-- [ ] Add `ui.viewer.locate` / `ui.viewer.hit` stage coordinate mapping in Magic's preview viewport (`EffectCraft` viewer parity).
-- [ ] Add `ui.timeline.locate` / `ui.timeline.hit` time-and-track coordinate mapping in Magic's timeline strip (`FilmCraft` / `EffectCraft` timeline parity).
-- [ ] Include real-time L/R peak and RMS dBFS audio meter readings in `ui.playback {action: "status"}` (`FilmCraft` playback meter parity).
-- [ ] Opt out of macOS App Nap while `--control` is active and support non-activating background window bring-forward during live watching.
-- [ ] Expose read-only MCP resources (`magic://document`, `magic://storyboard`, `magic://commands`) in `crates/mcp` alongside MCP tools.
+- [x] Pinned [`storytold/craft-libs`](https://github.com/storytold/craft-libs/blob/main/README.md) via `rev` (`d23f5f36bb9657159ba5468aa9c92d939786922b`) per `craft-libs/README.md` line 23 and removed unused `craft-extensions` (`craft-ext-core`/`craft-ext-store`) dependencies.
+- [x] Consolidated projects into `~/Magic/<slug>/` (`audio/`, `assets/`, `effects/lyrics.ecproj`, `effects/motion.ecproj`, `film/<slug>.fcproj`, `exports/`) with migration-only `original-project.zip`.
+- [x] Wired direct `storyboard.designcraft` ZIP story/asset updates via `craft-zip` + `craft-atomic` and `template_seed_bytes` template loading.
+- [x] Added `--control-input-only`, macOS App Nap guard, `render.frame {max_side?, base64?, write?}` ([`effectcraft/docs/control-protocol.md`](https://github.com/storytold/effectcraft/blob/main/docs/control-protocol.md)), deduplicated `rmsDbfs`/`peakDbfs` telemetry, `magic_menu_bar` title-bar drag area ([`craft-window/README.md`](https://github.com/storytold/craft-libs/blob/main/crates/window/README.md)), decomposed high-cognitive-complexity functions (`rig_track_native_steps`, `trace_silhouette_svg`, `cmd_project_trunk`, `write_state_into_designcraft_zip`, `validate_line_item`, `mode_tab`, `font_family_combo`, `policy::sources`) below Clippy's `cognitive-complexity-threshold = 30`, and added `cargo xtask sources`.
 
-## 2. 3D Character Pipeline (`character.model3d.*` & `TextureCraft`)
+## Open Host-Only & Upstream Items
 
-Follow-up implementation steps for `crates/engine/src/cmd/character/model3d.rs` (replacing the cut-off legacy 3D prototype with native ArtCraft CLI delegation).
-
-- [ ] Verify exact `texturecraft-cli` mesh/UV/PBR inspection subcommands on the host and replace the fallback `.glb` JSON header check in `character.model3d.rig` (`// TODO:` in `crates/engine/src/cmd/character/model3d.rs`).
-- [ ] Wire optional external image-to-3D `.glb` generation provider (or local `TextureCraft` asset import workflow) into `character.model3d.breakout` when only a 2D turnaround sheet is present (`// TODO:` in `crates/engine/src/cmd/character/model3d.rs`).
-- [ ] Map `.anim.json` skeletal joint tracks directly onto `EffectCraft` `advanced3D` `.glb` node transforms once `effectcraft-cli` exposes per-bone glTF animation channel overrides (`// TODO:` in `crates/engine/src/cmd/character/model3d.rs`).
-- [ ] Add interactive 3D orbit/camera preset controls in `AnimationView.tsx` driving `EffectCraft` 3D camera layers (`layer.newCamera`).
-
-## 3. Sibling ArtCraft CLI Host Verification (`// TODO:` Hooks)
-
-Targeted host CLI checks flagged with `// TODO:` comments in `crates/engine` so zero commands rely on unverified syntax.
-
-- [ ] Confirm exact `vectorcraft-cli` flat PNG export command (`export` vs `document.export`) against `vectorcraft-cli commands` in `crates/engine/src/cmd/storyboard/crud.rs` (`resolve_flat_image_and_ref`).
-- [ ] Verify headless `anicraft-cli` sprite-sheet and frame-sequence CLI flags across new `AniCraft` pre-alpha builds while keeping `craft-doc::Ani.allows_live_ui() == false` locked until `AniCraft` reaches beta stability.
-- [ ] Add automated integration smoke tests in `crates/engine/tests/` that run skipped-unless-installed checks against real `designcraft-cli`, `photocraft-cli`, `vectorcraft-cli`, `effectcraft-cli`, and `filmcraft-cli` binaries.
-
-## 4. Audio Transcription, Lip-Sync & Music Timing
-
-Enhancements to song intake (`audio.analyze`, `workshop.import_transcript`) and `EffectCraft` facial puppet lip-sync (`character.puppet.lipsync`).
-
-- [ ] Add sub-word phoneme / viseme timing extraction (`AA`, `EE`, `OH`, `OO`, `MBP`, `FV`, `WQ`, `rest`) directly from `craft-audio` / Whisper word timestamps so rapid multi-syllable words animate crisp jaw and lip shapes without manual curve tweaking.
-- [ ] Support multi-character duet vocal stems (`A1` lead song + isolated character vocal stems) so two rigged characters on `V2` lip-sync independently.
-- [ ] Add beat-snapped scene cut and action-cue quantization (`1/4`, `1/2`, `1 bar`) when seeding `FilmCraft` markers from `timing-reference.json`.
-
-## 5. Storyboard (`DesignCraft`) & Bulk Generation Workflow
-
-Enhancements to `storyboard.designcraft`, readiness gating, and reference-locked image generation.
-
-- [ ] Add side-by-side visual diff preview in `StoryboardView` before committing `storyboard.bulk_generate` scene renders into `.designcraft` frames.
-- [ ] Support custom per-project `.designcraft` trim sizes (`16:9` 1080p/4K widescreen, `9:16` vertical shorts, `1:1` booklet companion) in `storyboard.new`.
-- [ ] Export a printable lyric-and-action booklet PDF preset inspired by children's songbook liner notes directly from `storyboard.export`.
-
-## 6. Packaging, Release Signing & `craft-wiki` Publishing
-
-Distribution and community documentation milestones using [`storytold/craft-common-actions`](https://github.com/storytold/craft-common-actions) and [`storytold/craft-wiki`](https://github.com/storytold/craft-wiki).
-
-- [ ] Configure macOS Developer ID + notarization secrets and Windows Authenticode signing secrets in GitHub repository settings for `.github/workflows/release.yml` (`storytold/craft-common-actions/release.yml@main`).
-- [ ] Verify Linux `.deb`, `.rpm`, and Flatpak/AppStream metadata (`packaging/linux/io.github.jessenaiman.magic.xml`) with `packaging-lint.yml`.
-- [ ] Submit `docs/wiki/magic/*.md` and `magic` app entry to [`storytold/craft-wiki`](https://github.com/storytold/craft-wiki) once the repository is switched to public under the Magic Studio Source-Available Non-Resale License.
+- [ ] **Host `cargo xtask ci` & Live 3-App Socket Proof (`U01`, `U03`, `U11`, `U16`)**: Run `cargo xtask ci`, live `--control` round-trips across `Magic` (`:9875`), `FilmCraft` (`:9876`, `FILMCRAFT_CONTROL_TOKEN`), and `EffectCraft` (`:9877`), and host GPU screenshots (`1440x900`, `1600x950`, `960x720`).
+- [ ] **Read-Only MCP Resource URIs (`U13`)**: Expose `magic://document`, `magic://storyboard`, and `magic://commands` on `crates/mcp/src/server.rs` verified against `rmcp` `3.9` (`modelcontextprotocol/rust-sdk`).
+- [ ] **Upstream FilmCraft Linked Comps (`U10`)**: Track [`storytold/filmcraft#388`](https://github.com/storytold/filmcraft/issues/388) (`PR #3201` still open upstream).
+- [ ] **Host CLI Capability Checks (`U14`, `U15`, `U20`)**: Verify `EffectCraft` `renderer: "advanced3D"` standard glTF 2.0 `JOINTS_0`/`WEIGHTS_0` skinning, `filmcraft-cli` `transcript.generate` / `sequence.transcribe` (`--features whisper`), and installed host CLI capabilities via `magic-cli exec app.doctor`.

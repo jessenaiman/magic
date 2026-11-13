@@ -4,6 +4,7 @@
 //! - [`system`]: UI inspection/controls, Craft CLI pass-throughs, `craft-ai-integrations` (`ai.*`), diagnostics, and settings.
 
 pub mod creative;
+pub(crate) mod film;
 pub mod project;
 pub mod system;
 

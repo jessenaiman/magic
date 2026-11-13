@@ -1,8 +1,10 @@
 # Contributing & House Rules
 
-Magic Studio follows [`storytold/craft-contrib`](https://github.com/storytold/craft-contrib/blob/main/CONTRIBUTING.md) and [`House Rules`](https://github.com/storytold/craft-contrib/blob/main/docs/house-rules-core.md):
+> **Last Reviewed & Updated:** 2026-11-12T16:59:00-05:00 · **Reviewed by:** Jesse A. Naiman
 
-- **Pure Rust & `< 900` Lines**: Keep every `.rs` file focused on one concern and under 900 lines. Never add Tauri, Electron, webview, JavaScript, or TypeScript UI dependencies.
-- **Delegate to ArtCraft CLIs**: Never reimplement pixel matting, SVG tracing, puppet deformation, or NLE timeline rendering in Magic; invoke `photocraft-cli`, `vectorcraft-cli`, `designcraft-cli`, `effectcraft-cli`, and `filmcraft-cli` through `CraftHub`.
-- **No Paraphrased Skill Dumps**: Do not add custom animation how-to markdowns or agent log files to the repo; link to upstream ArtCraft documentation and record missing host checks with `// TODO:` comments (never `todo!()`).
-- **Zero AI Attribution Trailers**: Never add `Co-Authored-By` trailers or `Generated with ...` footers to commits, PRs, or issues.
+Read the actual words of [`README.md`](../../../README.md), [`CONTRIBUTING.md`](../../../CONTRIBUTING.md), and [`docs/house-rules-core.md`](../../../docs/house-rules-core.md) ([`storytold/craft-contrib`](https://github.com/storytold/craft-contrib/blob/main/standards/house-rules-core.md)) before changing code, and navigate directly to each maintained `https://github.com/storytold/<repo>/blob/main/README.md` rather than relying on paraphrased summaries.
+
+- **Single-Responsibility `< 900` Lines**: Enforced by `cargo xtask sources` inside `cargo xtask ci`.
+- **Pinned `storytold/craft-libs` Commit (`rev`)**: Follow [`storytold/craft-libs/README.md`](https://github.com/storytold/craft-libs/blob/main/README.md) (`rev = "<commit>"`); `craft-web-api` and `craft-web-host` remain `L6+` UI crates forbidden below `L6`.
+- **Self-Contained `~/Magic/<slug>/` Projects**: Migration-only `original-project.zip` (`project.migrate` via `craft-zip`).
+- **Sequential PR Branches Only**: Never push to `main`; open a Pull Request from the next sequential branch (`magic-fixes-9`) with zero AI attribution trailers.

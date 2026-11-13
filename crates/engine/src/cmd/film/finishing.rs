@@ -1,9 +1,10 @@
 //! Complete `FilmCraft` Studio NLE finishing command dispatcher (`video.finish` — `T32`–`T42`).
 //!
-//! Maps structured `Magic Studio` UI finishing actions directly onto documented `FilmCraft`
-//! engine & UI commands (`source.*`, `timeline.*`, `sequence.*`, `trim.*`, `clip.*`, `media.*`,
-//! `lumetri.*`, `lut.*`, `effects.*`, `essentialSound.*`, `mixer.*`, `clipMixer.*`,
-//! `graphics.*`, `captions.*`, `export.queue.*`, `jobs.*`, and live `ui.set` scopes).
+//! Maps structured `Magic Studio` UI finishing actions onto `FilmCraft` commands (`source.*`,
+//! `timeline.*`, `sequence.*`, `trim.*`, `clip.*`, `media.*`, `lumetri.*`, `lut.*`, `effects.*`,
+//! `essentialSound.*`, `mixer.*`, `clipMixer.*`, `graphics.*`, `captions.*`, `export.queue.*`,
+//! `jobs.*`), applying them immediately to `film/<song>.fcproj` via [`super::fcproj_doc`] so edits
+//! happen live inside Magic Studio's `05 Studio` UI.
 
 use serde_json::{Value, json};
 
@@ -22,6 +23,7 @@ fn map_edit_and_trim_op(op: &str, p: &Value) -> Option<(&'static str, Value, boo
             json!({
                 "track": p["track"].as_str().unwrap_or("V1"),
                 "audioTrack": p["audioTrack"].as_str().unwrap_or("A1"),
+                "name": p["name"].as_str().unwrap_or("Inserted Clip"),
             }),
             true,
         )),
@@ -30,6 +32,7 @@ fn map_edit_and_trim_op(op: &str, p: &Value) -> Option<(&'static str, Value, boo
             json!({
                 "track": p["track"].as_str().unwrap_or("V1"),
                 "audioTrack": p["audioTrack"].as_str().unwrap_or("A1"),
+                "name": p["name"].as_str().unwrap_or("Overwritten Clip"),
             }),
             true,
         )),
@@ -56,7 +59,42 @@ fn map_edit_and_trim_op(op: &str, p: &Value) -> Option<(&'static str, Value, boo
             }),
             true,
         )),
-        "razor" => Some(("timeline.razor", json!({"seconds": p["seconds"].as_f64().unwrap_or(0.0)}), true)),
+        "razor" => Some((
+            "timeline.razor",
+            json!({
+                "seconds": p["seconds"].as_f64().unwrap_or(0.0),
+                "track": p.get("track").and_then(Value::as_str),
+            }),
+            true,
+        )),
+        "clip_trim" => Some((
+            "clip.trim",
+            json!({
+                "clip": p["clip"],
+                "start_sec": p["start_sec"],
+                "end_sec": p["end_sec"],
+                "name": p["name"],
+            }),
+            true,
+        )),
+        "clip_move" => Some((
+            "clip.move",
+            json!({
+                "clip": p["clip"],
+                "start_sec": p["start_sec"],
+                "name": p["name"],
+            }),
+            true,
+        )),
+        "clip_delete" => Some((
+            "clip.delete",
+            json!({
+                "clip": p["clip"],
+                "ripple": p["ripple"].as_bool().unwrap_or(false),
+            }),
+            true,
+        )),
+        "clip_rename" => Some(("clip.rename", json!({"clip": p["clip"], "name": p["name"]}), true)),
         "nest" => Some(("sequence.nest", json!({"name": p["name"].as_str().unwrap_or("Nested Scene")}), true)),
         "trim_mode" => Some((
             "trim.selectEditPoint",
@@ -66,7 +104,7 @@ fn map_edit_and_trim_op(op: &str, p: &Value) -> Option<(&'static str, Value, boo
             }),
             true,
         )),
-        "trim_nudge" => Some(("trim.nudge", json!({"frames": p["frames"].as_i64().unwrap_or(1)}), true)),
+        "trim_nudge" => Some(("trim.nudge", json!({"frames": p["frames"].as_i64().unwrap_or(1), "clip": p["clip"]}), true)),
         "ripple_to_playhead" => Some((
             "trim.extendToPlayhead",
             json!({
@@ -79,6 +117,7 @@ fn map_edit_and_trim_op(op: &str, p: &Value) -> Option<(&'static str, Value, boo
         "rate_stretch" => Some((
             "clip.rateStretch",
             json!({
+                "clip": p["clip"],
                 "speedPct": p["speed_pct"].as_f64().unwrap_or(100.0),
                 "maintainPitch": p["maintain_pitch"].as_bool().unwrap_or(true),
                 "algorithm": "wsola",
@@ -180,6 +219,7 @@ fn map_color_and_fx_op(op: &str, p: &Value) -> Option<(&'static str, Value, bool
         "clip_motion" => Some((
             "clip.motion",
             json!({
+                "clip": p["clip"],
                 "position": p.get("position").cloned().unwrap_or_else(|| json!([960.0, 540.0])),
                 "scale": p["scale"].as_f64().unwrap_or(100.0),
                 "rotation": p["rotation"].as_f64().unwrap_or(0.0),
@@ -188,7 +228,7 @@ fn map_color_and_fx_op(op: &str, p: &Value) -> Option<(&'static str, Value, bool
             }),
             true,
         )),
-        "blend_mode" => Some(("clip.setBlendMode", json!({"mode": p["mode"].as_str().unwrap_or("Normal")}), true)),
+        "blend_mode" => Some(("clip.setBlendMode", json!({"clip": p["clip"], "mode": p["mode"].as_str().unwrap_or("Normal")}), true)),
         "keyframe_toggle" => Some((
             "effects.addKeyframe",
             json!({
@@ -275,6 +315,7 @@ fn map_audio_and_titles_op(op: &str, p: &Value) -> Option<(&'static str, Value, 
                 "font": p["font"].as_str().unwrap_or("Inter"),
                 "fontStyle": p["font_style"].as_str().unwrap_or("SemiBold"),
                 "seconds": p["duration"].as_f64().unwrap_or(5.0),
+                "at_seconds": p["at_seconds"].as_f64().unwrap_or(0.0),
             }),
             true,
         )),
@@ -284,6 +325,7 @@ fn map_audio_and_titles_op(op: &str, p: &Value) -> Option<(&'static str, Value, 
                 "shape": p["shape"].as_str().unwrap_or("rectangle"),
                 "size": p.get("size").cloned().unwrap_or_else(|| json!([640, 140])),
                 "seconds": p["duration"].as_f64().unwrap_or(5.0),
+                "at_seconds": p["at_seconds"].as_f64().unwrap_or(0.0),
             }),
             true,
         )),
@@ -320,7 +362,7 @@ fn map_audio_and_titles_op(op: &str, p: &Value) -> Option<(&'static str, Value, 
     }
 }
 
-/// `video.finish` (`T32`–`T42`): execute structured FilmCraft Studio finishing operations.
+/// `video.finish` (`T32`–`T42`): execute structured FilmCraft Studio finishing operations directly on `.fcproj`.
 pub fn cmd_video_finish(s: &mut Session, p: &Value) -> Result<Value> {
     let op = p["op"].as_str().ok_or_else(|| bad("op=<finishing operation> is required"))?;
     if op == "scopes" {
@@ -336,18 +378,17 @@ pub fn cmd_video_finish(s: &mut Session, p: &Value) -> Result<Value> {
         return Ok(json!({"ok": true, "op": "scopes", "config": ui_payload}));
     }
     let f = film(s)?;
-    let project = f.require()?.to_path_buf();
+    let project = f.ensure_on_disk(s)?.to_path_buf();
     if matches!(op, "lut_import" | "load_lut") {
         let raw = p["path"].as_str().ok_or_else(|| bad("path=<.cube or .3dl> is required"))?;
         let lut_path = crate::workspace::resolve_workspace_path(s, raw);
         let res = super::execute(&project, "lut.import", json!({"path": lut_path}))?;
         return Ok(json!({"ok": true, "op": "lut_import", "lut": lut_path, "result": res}));
     }
-    let (cmd_id, cmd_params, save) = map_edit_and_trim_op(op, p)
+    let (cmd_id, cmd_params, _save) = map_edit_and_trim_op(op, p)
         .or_else(|| map_color_and_fx_op(op, p))
         .or_else(|| map_audio_and_titles_op(op, p))
         .ok_or_else(|| bad(format!("unknown video.finish op `{op}`")))?;
-    let _ = save;
     let result = super::execute(&project, cmd_id, cmd_params)?;
     Ok(json!({
         "ok": true,

@@ -21,6 +21,7 @@ pub mod craft_effects;
 pub mod doc_state;
 pub mod doctor;
 pub mod error;
+pub mod extensions;
 pub mod guard;
 pub mod history;
 pub mod link_watch;

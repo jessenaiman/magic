@@ -111,11 +111,14 @@ pub fn draw_audio_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
 
 fn draw_four_bar_loudness_meters(ui: &mut Ui, ctx: &ViewCtx<'_>) {
     let tgt = ctx.state.studio.audio_target_lufs;
+    let wf = &ctx.state.cache.song_waveform;
+    let rms_db = wf["rms_dbfs"].as_f64().unwrap_or(tgt);
+    let peak_db = wf["peak_dbfs"].as_f64().unwrap_or(-1.0);
     let bars = [
-        ("M", "Momentary", tgt + 0.8, "LUFS", ctx.pal.accent_emerald),
-        ("S", "Short-Term", tgt + 0.3, "LUFS", ctx.pal.accent_sky),
+        ("M", "Momentary", rms_db + 0.6, "LUFS", ctx.pal.accent_emerald),
+        ("S", "Short-Term", rms_db, "LUFS", ctx.pal.accent_sky),
         ("I", "Integrated", tgt, "LUFS", ctx.pal.accent_emerald),
-        ("TP", "True-Peak 4×", -1.0, "dBTP", ctx.pal.accent_amber),
+        ("TP", "True-Peak", peak_db, "dBTP", ctx.pal.accent_amber),
     ];
     let avail_w = (ui.available_width() - 4.0).max(180.0);
     let (panel_rect, _) = ui.allocate_exact_size(Vec2::new(avail_w, 66.0), Sense::hover());
@@ -207,6 +210,7 @@ fn draw_three_strip_console_mixer(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     });
 }
 
+#[allow(clippy::cognitive_complexity)]
 /// `[Titles]` tab: OpenType Horizontal/Vertical Graphics, Responsive Pinning, Roll/Crawl, `.fcgt` & `C1` Captions (`T41`).
 pub fn draw_titles_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     if ctx.state.studio.title_text.is_empty() {
@@ -217,6 +221,17 @@ pub fn draw_titles_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     }
     ui.label(RichText::new("Essential Graphics & OpenType Titles (T41)").size(11.5).strong().color(ctx.pal.accent_emerald));
     text_input(ui, ctx.reg, "fc-title-text", "Graphic Title Text", &mut ctx.state.studio.title_text, "Project Title", (ui.available_width() - 4.0).max(140.0));
+    let avail_fonts = ctx.state.available_fonts.clone();
+    let _ = crate::fonts_ui::font_family_combo(
+        ui,
+        ctx.reg,
+        ctx.pal,
+        crate::fonts_ui::FontPickerSpec { id_prefix: "fc-title-font", label: "Title Font" },
+        &mut ctx.state.studio.title_font,
+        &avail_fonts,
+        &mut ctx.state.font_picker_filter,
+        ctx.actions,
+    );
     pill_toggle(
         ui,
         ctx.reg,
@@ -238,16 +253,16 @@ pub fn draw_titles_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                     "text": txt,
                     "vertical": ctx.state.studio.title_vertical,
                     "size": 72.0,
-                    "font": "Inter",
+                    "font": ctx.state.studio.title_font,
                     "duration": 5.0,
                 }),
                 Some("Created FilmCraft OpenType graphic title"),
             );
         }
-        for shp in ["rectangle", "ellipse"] {
+        for shp in ["rect", "roundRect", "ellipse", "star5", "rightArrow", "wedgeRoundRectCallout"] {
             let id = format!("fc-new-shape-{shp}");
-            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, shp, "graphics.newShape")).clicked() {
-                ctx.exec("video.finish", json!({"op": "graphic_shape", "shape": shp, "duration": 5.0}), Some("Added graphic shape layer"));
+            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new(&id, "bezierSpline", shp, "Add craft-drawingml preset shape (ECMA-376)")).clicked() {
+                ctx.exec("video.finish", json!({"op": "graphic_shape", "shape": shp, "duration": 5.0}), Some("Added craft-drawingml graphic shape"));
             }
         }
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("fc-style-bg", "Stroke + Pill BG", "graphics.set multi-stroke & rounded background"))

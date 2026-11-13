@@ -130,10 +130,10 @@ fn draw_filter_and_action_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("home-refresh", "refresh", "Refresh project catalog")).clicked() {
                 ctx.exec("project.catalog", json!({}), None);
             }
-            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("home-open", "Open .magic", "Open an existing .magic project")).clicked() {
+            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("home-open", "folder", "Open", "Open a .magic song or animation project")).clicked() {
                 ctx.push(UiAction::PickFile {
                     target: PickerTarget::OpenProject,
-                    title: "Open Magic Studio Project".into(),
+                    title: "Open Magic Studio Project (.magic)".into(),
                     extensions: vec!["magic".into()],
                     directory: false,
                     save: false,
@@ -178,7 +178,7 @@ fn draw_new_project_form(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                     ctx.push(UiAction::PickFile {
                         target: PickerTarget::NewProjectAudio,
                         title: "Select Song Audio".into(),
-                        extensions: vec!["wav".into(), "flac".into(), "mp3".into(), "m4a".into(), "ogg".into()],
+                        extensions: magic_util::media::decode_audio_extensions().iter().map(|s| (*s).to_owned()).collect(),
                         directory: false,
                         save: false,
                     });
@@ -226,11 +226,11 @@ fn draw_new_project_form(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
 
 fn build_new_project_payload(form: &crate::state::HomeFormState) -> Value {
     let root = if form.new_root.trim().is_empty() {
-        magic::project_settings::root()
+        magic_engine::project_settings::root()
             .map(|p| p.to_string_lossy().into_owned())
-            .unwrap_or_else(|_| std::env::var("HOME").map_or_else(|_| ".".into(), |h| format!("{h}/.local/share/magic/projects")))
+            .unwrap_or_else(|_| std::env::var("HOME").map_or_else(|_| ".".into(), |h| format!("{h}/Magic")))
     } else {
-        magic::workspace::expand_tilde(form.new_root.trim()).to_string_lossy().into_owned()
+        magic_engine::workspace::expand_tilde(form.new_root.trim()).to_string_lossy().into_owned()
     };
     let mut wiz = json!({});
     if !form.wizard_style.trim().is_empty() {
@@ -337,6 +337,7 @@ fn draw_start_here_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>, col_w: f32) {
     });
 }
 
+#[allow(clippy::cognitive_complexity)]
 fn draw_single_project_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>, col_w: f32, idx: usize, item: &Value) {
     let path = item["path"].as_str().unwrap_or_default();
     let dir_str = item["directory"].as_str().unwrap_or(path);

@@ -4,7 +4,7 @@
 
 use std::path::PathBuf;
 
-use magic::Session;
+use magic_engine::Session;
 use magic_ui_egui::{AccentChoice, InterfaceStyle, ThemeMode, UiShellState};
 use serde_json::{Value, json};
 
@@ -46,7 +46,7 @@ pub fn build_sanitized_diagnostics(session: &mut Session, ui_state: &mut UiShell
         "version": env!("CARGO_PKG_VERSION"),
         "os": std::env::consts::OS,
         "arch": std::env::consts::ARCH,
-        "renderer": "eframe-wgpu (storytold/egui 0.37)",
+        "renderer": "eframe-wgpu (storytold/egui)",
         "last_render_ms": last_render_ms,
         "view": ui_state.effective_view().as_id(),
         "interface_style": ui_state.interface_style.as_str(),
@@ -94,6 +94,9 @@ pub fn hydrate_prefs_and_ai(session: &mut Session, ui_state: &mut UiShellState) 
         if let Some(fdirs) = p.pointer("/lyrics/font_dirs").and_then(Value::as_str) {
             ui_state.lyrics.font_dir_extra = fdirs.to_owned();
             apply_app_font_dirs(fdirs);
+        }
+        if let Some(fp_url) = p.pointer("/fonts/preview_service_url").and_then(Value::as_str).filter(|u| !u.trim().is_empty()) {
+            ui_state.font_preview_url = fp_url.to_owned();
         }
     }
     if let Ok(ai) = session.execute("ai.status", json!({})) {
@@ -157,6 +160,9 @@ pub fn hydrate_selected_character(session: &mut Session, ui_state: &mut UiShellS
 fn hydrate_open_project_caches(session: &mut Session, ui_state: &mut UiShellState) {
     if let Ok(lyr) = session.execute("song.lyrics", json!({})) {
         ui_state.cache.song_lyrics = lyr;
+    }
+    if let Ok(wf) = session.execute("song.waveform", json!({"bins": 240})) {
+        ui_state.cache.song_waveform = wf;
     }
     if let Ok(pages) = session.execute("storyboard.pages", json!({"full": true})) {
         ui_state.cache.storyboard_pages = pages;
@@ -229,8 +235,9 @@ pub fn refresh_cached_state(session: &mut Session, ui_state: &mut UiShellState, 
 }
 
 pub fn open_https_url(ctx: &egui::Context, url: &str) {
-    if url.starts_with("https://") {
-        ctx.open_url(egui::OpenUrl::new_tab(url));
+    let trimmed = url.trim();
+    if trimmed.starts_with("https://") && !trimmed.chars().any(char::is_control) {
+        ctx.open_url(egui::OpenUrl::new_tab(trimmed));
     }
 }
 

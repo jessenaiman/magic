@@ -16,7 +16,7 @@ const FRAME_WIDTH: f64 = 1920.0;
 const PROPERTIES: [&str; 4] = ["transform/position", "transform/rotation", "transform/scale", "transform/opacity"];
 
 fn project_path(dir: &Path) -> PathBuf {
-    dir.join("lettering/lyrics.ecproj")
+    crate::cmd::words::lyrics_ecproj_path(dir)
 }
 
 fn step(command: &str, params: Value) -> Value {

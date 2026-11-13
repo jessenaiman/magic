@@ -7,8 +7,7 @@ use serde_json::{Value, json};
 
 use super::{
     View, bad, character_folder, check_ecproj_head, discover_character_folders, ecproj_first_comp_name, effectcraft, effectcraft_frame, effectcraft_render,
-    find_dir_anicraft_doc, find_dir_ecproj, find_dir_pcraft, find_dir_photo_doc, find_dir_psd, find_dir_vector_doc, find_initial_cutout, model3d, point,
-    sprite, step,
+    find_dir_ecproj, find_dir_pcraft, find_dir_photo_doc, find_dir_psd, find_dir_vector_doc, find_initial_cutout, model3d, point, sprite, step,
 };
 use crate::{Result, Session};
 
@@ -143,7 +142,6 @@ fn build_view_summary(dir: &Path, canonical_id: &str, raw_id: &str, view_name: &
     let psd_path = find_dir_psd(dir, canonical_id, raw_id, view_name, is_flat);
     let photo_doc = find_dir_photo_doc(dir, canonical_id, raw_id, view_name, is_flat);
     let vector_doc = find_dir_vector_doc(dir, canonical_id, raw_id, view_name, is_flat);
-    let anicraft_path = find_dir_anicraft_doc(dir);
     let parts_path = dir.join("parts.json");
     let has_parts = parts_path.is_file();
     let (joints, pins, canvas) = extract_parts_rig_meta(&parts_path);
@@ -171,7 +169,7 @@ fn build_view_summary(dir: &Path, canonical_id: &str, raw_id: &str, view_name: &
         None
     };
     let latest_frame = rendered_frames.first().cloned().or_else(|| drawing.clone()).or(extracted_craft_png);
-    let any_craft = ecproj_path.is_some() || photo_doc.is_some() || vector_doc.is_some() || anicraft_path.is_some() || has_parts || drawing.is_some();
+    let any_craft = ecproj_path.is_some() || photo_doc.is_some() || vector_doc.is_some() || has_parts || drawing.is_some();
     if is_flat && !any_craft {
         return None;
     }
@@ -188,7 +186,6 @@ fn build_view_summary(dir: &Path, canonical_id: &str, raw_id: &str, view_name: &
         "psd_path": psd_path,
         "photo_doc": photo_doc,
         "vector_doc": vector_doc,
-        "anicraft_path": anicraft_path,
         "ecproj": ecproj_path.is_some(),
         "ecproj_path": ecproj_path,
         "joints": joints,
@@ -448,7 +445,6 @@ pub fn sprite_summaries(folder: &Path) -> Vec<Value> {
         .iter()
         .filter_map(|dir| {
             let ecproj = newest(dir, "ecproj")?;
-            let anicraft = newest(dir, "anicraft");
             let frames = rendered_pngs(&dir.join("frames")).unwrap_or_default();
             let meta: Value = std::fs::read_to_string(dir.join("sprite.json")).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or(Value::Null);
             let fps = meta["fps"].as_u64().unwrap_or(24);
@@ -458,7 +454,6 @@ pub fn sprite_summaries(folder: &Path) -> Vec<Value> {
                 "name": dir.file_name().map(|n| n.to_string_lossy().into_owned()),
                 "animation_style": style,
                 "ecproj": ecproj,
-                "anicraft": anicraft,
                 "preview": newest(&dir.join("clips"), "gif"),
                 "frames": frames,
                 "fps": fps,
@@ -617,9 +612,9 @@ pub fn cmd_character_import(s: &mut Session, p: &Value) -> Result<Value> {
     let ext = source.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase).unwrap_or_default();
     if matches!(
         ext.as_str(),
-        "ecproj" | "pcraft" | "psd" | "psb" | "ora" | "xcf" | "kra" | "pdn" | "vectorcraft" | "svg" | "ai" | "af" | "afdesign" | "afphoto" | "anicraft"
+        "ecproj" | "pcraft" | "psd" | "psb" | "ora" | "xcf" | "kra" | "pdn" | "vectorcraft" | "svg" | "ai" | "af" | "afdesign" | "afphoto"
     ) {
-        if !magic_util::media::is_craft_doc_path(&source) {
+        if !magic_util::media::is_file_or_pcraft_bundle(&source) {
             return Err(bad(format!("{} does not exist", source.display())));
         }
         let head = (ext == "ecproj").then(|| check_ecproj_head(&source)).transpose()?;
@@ -750,9 +745,6 @@ pub fn cmd_character_open(s: &mut Session, p: &Value) -> Result<Value> {
         }
         "photocraft" => ("photocraft", view.require_photo_doc("character.cut")?),
         "vectorcraft" => ("vectorcraft", view.vector_doc().ok_or_else(|| bad("no .vectorcraft or .svg found for this character"))?),
-        "anicraft" => {
-            return Err(bad("AniCraft desktop UI is disabled while in early alpha"));
-        }
         other => return Err(bad(format!("app must be effectcraft, photocraft, or vectorcraft, not {other}"))),
     };
     if app == "effectcraft" {

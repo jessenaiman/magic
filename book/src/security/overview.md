@@ -1,5 +1,7 @@
 # Confinement & Control Security
 
+> **Last Reviewed & Updated:** 2026-11-12T16:59:00-05:00 · **Reviewed by:** Jesse A. Naiman
+
 ## File Access Confinement (`AutomationRoots`)
 
 `crates/engine/src/confinement.rs` implements `--automation-read-root` and `--automation-write-root` matching [`DesignCraft` MCP](https://github.com/storytold/designcraft/blob/main/docs/mcp.md) and [`VectorCraft`](https://github.com/storytold/vectorcraft):

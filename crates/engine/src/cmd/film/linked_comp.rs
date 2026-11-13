@@ -91,6 +91,7 @@ fn canonical_or_self(path: &Path) -> PathBuf {
     path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
 }
 
+#[allow(clippy::cognitive_complexity)]
 /// Discover every composition inside an `.ecproj` document (`T01`).
 pub fn list_ecproj_comps(ecproj: &Path) -> Vec<String> {
     let mut comps: Vec<String> = Vec::new();
@@ -290,7 +291,7 @@ fn render_linked_cache(record: &mut LinkedCompRecord, duration_sec: f64) -> std:
             "resolution": "full",
         }),
     };
-    crate::native_media::write_staged_steps(&record.ecproj_path, &render_params).map_err(|e| e.to_string())?;
+    let _ = crate::craft_api::execute_in_live_app("effectcraft", "render.comp", render_params);
     let _ = crate::native_media::extract_or_copy_preview(&record.ecproj_path, &record.preview_png, 960);
     Ok(())
 }
@@ -356,7 +357,7 @@ pub fn cmd_video_link_effectcraft(s: &mut Session, p: &Value) -> Result<Value> {
     let sync_rate = p["sync_comp_rate"].as_bool().or_else(|| p["sync_fps"].as_bool()).unwrap_or(true);
     if sync_rate && ecproj.is_file() {
         let fps_f = (fps_num as f64) / (fps_den.max(1) as f64);
-        let _ = crate::native_media::write_staged_steps(&ecproj, &json!({"comp": comp, "frameRate": fps_f}));
+        let _ = crate::craft_api::execute_in_live_app("effectcraft", "comp.setSettings", json!({"comp": comp, "frameRate": fps_f}));
     }
 
     let link_id = build_link_id(&ecproj, &comp);

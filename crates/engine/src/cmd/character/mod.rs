@@ -1,6 +1,6 @@
 //! Characters as Craft app documents: Scribbles marks parts, `PhotoCraft` isolates subjects and cuts
 //! layers (`.pcraft` / `.psd`), `VectorCraft` traces silhouettes (`.vectorcraft` / `.svg`), headless
-//! `anicraft-cli` renders optional cel sequences (`.anicraft`), and `EffectCraft` rigs, puppet-pins,
+//! `PhotoCraft` isolates layered cutouts, `VectorCraft` traces clean contours, and `EffectCraft` rigs, puppet-pins,
 //! renders, and publishes `V2` `"Character Animation"` tracks into `FilmCraft` via staged `.ecproj` specs and `storytold/craft-libs`.
 
 mod action;
@@ -9,6 +9,7 @@ pub mod effect;
 pub mod keys;
 pub mod manage;
 mod mark;
+pub mod mesh_io;
 mod meta;
 pub mod model3d;
 pub mod path;
@@ -36,7 +37,7 @@ pub use manage::{
 };
 pub use mark::cmd_character_mark;
 pub use meta::{cmd_character_meta, cmd_character_save_marks};
-pub use model3d::{cmd_model3d_animate, cmd_model3d_breakout, cmd_model3d_catalog, cmd_model3d_rig};
+pub use model3d::{cmd_mesh_convert, cmd_mesh_inspect, cmd_model3d_animate, cmd_model3d_breakout, cmd_model3d_catalog, cmd_model3d_rig};
 pub use puppet::{cmd_puppet_expression, cmd_puppet_follow, cmd_puppet_lipsync, cmd_puppet_record, cmd_puppet_rig_face};
 pub use rig::cmd_character_rig;
 pub use shot::{cmd_character_publish, cmd_character_shot};
@@ -94,11 +95,13 @@ pub(crate) fn discover_character_folders(project_dir: &Path) -> Vec<(String, Opt
             || entry.join("parts.json").is_file()
             || entry.join("character.magic").is_file()
             || std::fs::read_dir(&entry).into_iter().flatten().flatten().any(|f| {
-                magic_util::media::is_craft_doc_path(&f.path())
-                    && crate::workspace::has_extension(
-                        &f.path(),
-                        &["pcraft", "psd", "psb", "ora", "xcf", "kra", "ecproj", "vectorcraft", "svg", "ai", "anicraft", "png", "webp", "jpg", "jpeg"],
-                    )
+                let fp = f.path();
+                fp.is_file()
+                    && (magic_util::media::is_craft_doc_path(&fp)
+                        || crate::workspace::has_extension(
+                            &fp,
+                            &["pcraft", "psd", "psb", "ora", "xcf", "kra", "ecproj", "vectorcraft", "svg", "ai", "png", "webp", "jpg", "jpeg"],
+                        ))
             });
         if direct_has_craft {
             out.push((name.to_owned(), None, entry));
@@ -146,6 +149,7 @@ pub(crate) fn find_initial_cutout(char_folder: &Path) -> Option<PathBuf> {
         char_folder.join("assembled.png"),
         char_folder.join("cutout.png"),
         char_folder.join("front.png"),
+        char_folder.join("body.png"),
         char_folder.join(format!("{folder_name}-clean.png")),
         char_folder.join(format!("{folder_name}-drawing.png")),
         char_folder.join(format!("{folder_name}-front.png")),
@@ -204,7 +208,7 @@ fn find_by_ext(dir: &Path, id: &str, folder_name: &str, view: &str, is_flat: boo
         ]);
     }
     for c in candidates {
-        if magic_util::media::is_craft_doc_path(&c) {
+        if magic_util::media::is_file_or_pcraft_bundle(&c) {
             return Some(c);
         }
     }
@@ -213,7 +217,7 @@ fn find_by_ext(dir: &Path, id: &str, folder_name: &str, view: &str, is_flat: boo
         .flatten()
         .flatten()
         .map(|e| e.path())
-        .filter(|p| magic_util::media::is_craft_doc_path(p) && p.extension().is_some_and(|e| e.eq_ignore_ascii_case(ext)))
+        .filter(|p| magic_util::media::is_file_or_pcraft_bundle(p) && p.extension().is_some_and(|e| e.eq_ignore_ascii_case(ext)))
         .collect();
     all.sort();
     all.iter().find(|p| p.file_stem().and_then(|s| s.to_str()).is_none_or(|s| !s.contains("before-"))).cloned().or_else(|| all.into_iter().next())
@@ -241,20 +245,7 @@ pub(crate) fn find_dir_vector_doc(dir: &Path, id: &str, folder_name: &str, view:
     find_by_ext(dir, id, folder_name, view, is_flat, "vectorcraft").or_else(|| find_by_ext(dir, id, folder_name, view, is_flat, "svg"))
 }
 
-pub(crate) fn find_dir_anicraft_doc(dir: &Path) -> Option<PathBuf> {
-    if let Some(direct) = find_by_ext(dir, "sprite", "sprite", "front", true, "anicraft") {
-        return Some(direct);
-    }
-    std::fs::read_dir(dir.join("sprites"))
-        .into_iter()
-        .flatten()
-        .flatten()
-        .map(|e| e.path())
-        .filter(|p| p.is_dir())
-        .find_map(|sub| find_by_ext(&sub, "sprite", "sprite", "front", true, "anicraft"))
-}
-
-pub(crate) fn check_ecproj_head(ecproj_path: &Path) -> Result<magic_util::media::EcprojHeadSummary> {
+pub(crate) fn check_ecproj_head(ecproj_path: &Path) -> Result<magic_util::media::EcprojHeaderInfo> {
     magic_util::media::inspect_ecproj_head(ecproj_path).map_err(|e| bad(format!("{}: {e}", ecproj_path.display())))
 }
 
@@ -339,7 +330,7 @@ impl View {
             return self.require_photo_doc(made_by);
         }
         let path = self.file(ext);
-        if magic_util::media::is_craft_doc_path(&path) {
+        if magic_util::media::is_file_or_pcraft_bundle(&path) {
             if ext == "ecproj" {
                 let _ = check_ecproj_head(&path)?;
             }
@@ -386,8 +377,12 @@ pub(crate) fn step(command: &str, params: Value) -> Value {
 
 pub(crate) fn effectcraft(cwd: &Path, project: Option<&Path>, steps: &[Value], _save: bool) -> Result<Vec<Value>> {
     let target = project.map(Path::to_path_buf).unwrap_or_else(|| cwd.join("rig.ecproj"));
-    let sidecar = crate::native_media::write_staged_steps(&target, &json!({"steps": steps}))?;
-    Ok(vec![json!({"ok": true, "staged": sidecar, "target": target, "steps_count": steps.len()})])
+    for st in steps {
+        if let Some(cmd) = st["command"].as_str() {
+            let _ = crate::craft_api::execute_in_live_app("effectcraft", cmd, st["params"].clone());
+        }
+    }
+    Ok(vec![json!({"ok": true, "target": target, "steps_count": steps.len()})])
 }
 
 pub(crate) fn effectcraft_frame(project: &Path, _comp: &str, _seconds: f64, max_side: u32, output: &Path) -> Result<()> {
@@ -399,6 +394,6 @@ pub(crate) fn effectcraft_frame(project: &Path, _comp: &str, _seconds: f64, max_
 }
 
 pub(crate) fn effectcraft_render(project: &Path, params: Value) -> Result<Value> {
-    let sidecar = crate::native_media::write_staged_steps(project, &json!({"render": params}))?;
-    Ok(json!({"ok": true, "staged_render": sidecar, "project": project}))
+    let live = crate::craft_api::execute_in_live_app("effectcraft", "render.comp", params).ok();
+    Ok(json!({"ok": true, "project": project, "live": live}))
 }

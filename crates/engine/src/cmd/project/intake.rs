@@ -7,8 +7,8 @@ use serde_json::{Value, json};
 
 use crate::cmd::project::cmd_project_add_asset;
 use crate::cmd::project::workshop::{
-    ASSETS_DIR, IMAGE_EXTENSIONS, STORYBOARD_DIR, STORYBOARD_PDF, VIDEO_TARGETS, files_in, panel_files, project_dir, transcript_files, video_project_path,
-    workshop_asset_files, workshop_status,
+    ASSETS_DIR, IMAGE_EXTENSIONS, STORYBOARD_DESIGNCRAFT, STORYBOARD_DIR, VIDEO_TARGETS, files_in, panel_files, project_dir, transcript_files,
+    video_project_path, workshop_asset_files, workshop_status,
 };
 use crate::workspace::{has_extension, resolve_workspace_path, song_audio_path};
 use crate::{EngineError, Result, Session};
@@ -86,7 +86,7 @@ fn requested_paths(s: &Session, params: &Value) -> Result<Vec<PathBuf>> {
 }
 
 fn require_addable(path: &Path, only: Option<&[&str]>) -> Result<()> {
-    if !magic_util::media::is_craft_doc_path(path) {
+    if !magic_util::media::is_file_or_pcraft_bundle(path) {
         return Err(EngineError::InvalidParams(format!("file not found: {}", path.display())));
     }
     if let Some(exts) = only
@@ -288,9 +288,9 @@ pub fn cmd_workshop_files(s: &mut Session, params: &Value) -> Result<Value> {
     for p in panel_files(&dir) {
         add_catalog_row(&mut rows, &dir, "panel", p, &filter);
     }
-    let pdf = dir.join(STORYBOARD_PDF);
-    if pdf.is_file() {
-        add_catalog_row(&mut rows, &dir, "storyboard_pdf", pdf, &filter);
+    let dc = dir.join(STORYBOARD_DESIGNCRAFT);
+    if dc.is_file() {
+        add_catalog_row(&mut rows, &dir, "storyboard_designcraft", dc, &filter);
     }
     for p in workshop_asset_files(&dir) {
         add_catalog_row(&mut rows, &dir, "asset", p, &filter);

@@ -1,5 +1,7 @@
 # Summary
 
+> **Last Reviewed & Updated:** 2026-11-12T16:59:00-05:00 · **Reviewed by:** Jesse A. Naiman
+
 [Introduction](README.md)
 
 # Getting Started

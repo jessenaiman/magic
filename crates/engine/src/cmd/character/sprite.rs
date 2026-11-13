@@ -50,9 +50,6 @@ pub fn cmd_character_sprite(s: &mut Session, p: &Value) -> Result<Value> {
     std::fs::create_dir_all(&dir)?;
 
     let lock_baseline = !matches!(action, "jump" | "fly");
-    if sheet.extension().is_some_and(|e| e.eq_ignore_ascii_case("anicraft") || e.eq_ignore_ascii_case("ani")) {
-        return Err(bad("render `.anicraft` frame sequences directly with `anicraft-cli render-seq`, then pass the exported PNG sheet"));
-    }
     let target_sheet = dir.join("sheet.png");
     if sheet.canonicalize().ok() != target_sheet.canonicalize().ok() {
         std::fs::copy(&sheet, &target_sheet)?;

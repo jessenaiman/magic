@@ -98,6 +98,7 @@ pub fn sanitize_id(raw: &str) -> String {
     out.trim_matches('_').to_string()
 }
 
+#[allow(clippy::cognitive_complexity)]
 /// Ingests an explicitly specified character bundle directory (`character.png`, `parts-sheet.png`,
 /// `pose-sheet.png`, optional `handoff.json` / `parts.json`) into `<project>/assets/characters/<id>/`.
 pub fn ingest_bundle_dir(project_root: &Path, source_dir: &Path, requested_character_id: Option<&str>) -> Result<IngestedCharacterBundle> {

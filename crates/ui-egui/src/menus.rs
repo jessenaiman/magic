@@ -1,12 +1,12 @@
 //! Native & in-window system menu bar built on [`craft_menu`] (`File`, `Edit`, `View`,
-//! `Window`, `Help`) — deduplicated so stage-specific commands live exclusively on their
-//! respective view ribbons (`Storyboard`, `Animations`, `Lyrics`, `Motion`, `Studio`).
+//! `Window`, `Help`) wired directly to [`craft_ui::docking`] panels and workspaces.
 
 use craft_keymap::{CommandRef, Keymap};
 use craft_menu::{Gate, Item, ItemRole, ItemState, LayoutOptions, MenuBar, MenuBarUi, MenuRole, Row, Target, apply_keymap, apply_state, from_items, layout};
 use serde_json::{Value, json};
 
-use crate::state::{UiAction, UiShellState, ViewMode};
+use crate::docking::{PRESET_NAMES, PanelId, is_dock_command_id};
+use crate::state::{PickerTarget, UiAction, UiShellState, ViewMode};
 use crate::theme::ThemeMode;
 use crate::widgets::AutomationRegistry;
 
@@ -15,6 +15,11 @@ pub const MENU_ORDER: &[&str] = &["File", "Edit", "View", "Window", "Help"];
 
 fn plain_row(path: &[&str], cmd: CommandRef, label: &str) -> Row {
     let kind = Item::new(cmd.clone(), label).kind;
+    Row { path: path.iter().map(|s| (*s).to_owned()).collect(), command: cmd, label: label.to_owned(), shortcut: None, enabled: true, kind }
+}
+
+fn check_row(path: &[&str], cmd: CommandRef, label: &str, checked: bool) -> Row {
+    let kind = Item::new(cmd.clone(), label).check(checked).kind;
     Row { path: path.iter().map(|s| (*s).to_owned()).collect(), command: cmd, label: label.to_owned(), shortcut: None, enabled: true, kind }
 }
 
@@ -28,7 +33,7 @@ fn sep_row(menu: &str) -> Row {
 }
 
 fn build_rows(state: &UiShellState) -> Vec<Row> {
-    let mut rows = Vec::with_capacity(42);
+    let mut rows = Vec::with_capacity(64);
     // File
     rows.push(plain_row(&["File"], CommandRef::from("project.new"), "New Song Project…"));
     rows.push(plain_row(&["File"], CommandRef::from("project.open"), "Open Project…"));
@@ -63,14 +68,36 @@ fn build_rows(state: &UiShellState) -> Vec<Row> {
         rows.push(radio_row(&["View"], CommandRef::with_params("ui.set", json!({"view": view.as_id()})), title, state.effective_view() == view));
     }
     rows.push(sep_row("View"));
-    rows.push(plain_row(&["View"], CommandRef::from("ui.toggle_ribbon"), "Command Ribbon"));
-    rows.push(plain_row(&["View"], CommandRef::from("ui.toggle_assets"), "Stage Assets Shelf"));
-    rows.push(plain_row(&["View"], CommandRef::from("ui.toggle_fidget"), "Fidget & Scribbles Stager"));
+    rows.push(check_row(&["View"], CommandRef::from("ui.toggle_ribbon"), "Stage Header Bar", !state.ribbon_collapsed));
     for (mode, label) in [(ThemeMode::Dark, "Dark Workstation"), (ThemeMode::Light, "Light Paper"), (ThemeMode::System, "Match System")] {
         rows.push(radio_row(&["View", "Theme"], CommandRef::with_params("ui.set", json!({"theme": mode.as_str()})), label, state.theme_mode == mode));
     }
 
-    // Window (ArtCraft Suite Launchers)
+    // Window (craft_ui::docking Panels, Workspaces & ArtCraft Suite Launchers)
+    for panel in PanelId::TOGGLEABLE {
+        let visible = state.docking.is_panel_visible(panel);
+        rows.push(check_row(&["Window"], CommandRef::with_params("ui.panel.toggle", json!({"panel": panel.as_id()})), panel.menu_label(), visible));
+    }
+    rows.push(sep_row("Window"));
+    for &preset in PRESET_NAMES {
+        rows.push(radio_row(
+            &["Window", "Workspaces"],
+            CommandRef::with_params("window.workspace", json!({"name": preset})),
+            preset,
+            state.docking.active_name.eq_ignore_ascii_case(preset),
+        ));
+    }
+    for saved in state.docking.saved_workspaces.keys() {
+        rows.push(radio_row(
+            &["Window", "Workspaces"],
+            CommandRef::with_params("window.workspace", json!({"name": saved})),
+            saved,
+            state.docking.active_name == *saved,
+        ));
+    }
+    rows.push(plain_row(&["Window", "Workspaces"], CommandRef::from("window.workspace.reset"), "Reset Workspace"));
+    rows.push(check_row(&["Window", "Workspaces"], CommandRef::from("window.workspace.lock"), "Lock Workspace", state.docking.workspace.locked));
+    rows.push(plain_row(&["Window"], CommandRef::from("window.floatPanel"), "Undock Active Panel"));
     rows.push(plain_row(&["Window"], CommandRef::from("window.snap"), "Snap Window Left / Right"));
     rows.push(sep_row("Window"));
     for (app, title) in [
@@ -110,8 +137,9 @@ pub fn build_menu_bar(state: &UiShellState, keymap: &Keymap, is_enabled: impl Fn
     apply_state(&mut bar, |cmd| {
         let checked = match cmd.id.as_str() {
             "ui.toggle_ribbon" => Some(!state.ribbon_collapsed),
-            "ui.toggle_assets" => Some(state.assets_drawer_open),
-            "ui.toggle_fidget" => Some(state.fidget_open),
+            "ui.panel.toggle" => cmd.params.get("panel").and_then(Value::as_str).and_then(PanelId::parse).map(|p| state.docking.is_panel_visible(p)),
+            "window.workspace" => cmd.params.get("name").and_then(Value::as_str).map(|n| state.docking.active_name.eq_ignore_ascii_case(n)),
+            "window.workspace.lock" => Some(state.docking.workspace.locked),
             "ui.set" => {
                 if let Some(v) = cmd.params.get("view").and_then(Value::as_str).and_then(ViewMode::parse) {
                     Some(state.effective_view() == v)
@@ -129,14 +157,17 @@ pub fn build_menu_bar(state: &UiShellState, keymap: &Keymap, is_enabled: impl Fn
 
 fn command_enabled(state: &UiShellState, id: &str, engine_enabled: &impl Fn(&str) -> bool) -> bool {
     let has_project = state.project_path.is_some();
+    if is_dock_command_id(id) || id == "ui.panel.toggle" {
+        return true;
+    }
     match id {
         "project.new"
         | "project.open"
         | "app.quit"
         | "ui.preferences"
+        | "ui.font_manager"
         | "ui.set"
         | "ui.toggle_ribbon"
-        | "ui.toggle_fidget"
         | "ui.copy_diagnostics"
         | "ui.report_problem"
         | "window.snap"
@@ -144,7 +175,7 @@ fn command_enabled(state: &UiShellState, id: &str, engine_enabled: &impl Fn(&str
         | "ui.doctor"
         | "app.update"
         | "help.about" => true,
-        "ui.toggle_assets" | "file.save" | "file.saveAs" | "file.close" => has_project,
+        "file.save" | "file.saveAs" | "file.close" => has_project,
         other => engine_enabled(other),
     }
 }
@@ -181,6 +212,9 @@ pub fn serialize_menu_list(state: &UiShellState, is_enabled: impl Fn(&str) -> bo
 }
 
 pub fn translate_menu_command(cmd: &CommandRef, state: &mut UiShellState) -> Option<UiAction> {
+    if is_dock_command_id(&cmd.id) {
+        return Some(UiAction::DockCommand { id: cmd.id.clone(), params: cmd.params.clone() });
+    }
     match cmd.id.as_str() {
         "project.new" => {
             state.view = ViewMode::Home;
@@ -188,21 +222,21 @@ pub fn translate_menu_command(cmd: &CommandRef, state: &mut UiShellState) -> Opt
             None
         }
         "project.open" => Some(UiAction::PickFile {
-            target: crate::state::PickerTarget::OpenProject,
-            title: "Open Magic Studio Project".into(),
+            target: PickerTarget::OpenProject,
+            title: "Open Magic Studio Project (.magic)".into(),
             extensions: vec!["magic".into()],
             directory: false,
             save: false,
         }),
         "file.saveAs" => Some(UiAction::PickFile {
-            target: crate::state::PickerTarget::SaveProjectAs,
+            target: PickerTarget::SaveProjectAs,
             title: "Save Magic Studio Project As".into(),
             extensions: vec!["magic".into()],
             directory: false,
             save: true,
         }),
         "project.import_file" => Some(UiAction::PickFile {
-            target: crate::state::PickerTarget::ImportTrunkFile,
+            target: PickerTarget::ImportTrunkFile,
             title: "Import Media or Asset".into(),
             extensions: Vec::new(),
             directory: false,
@@ -211,21 +245,23 @@ pub fn translate_menu_command(cmd: &CommandRef, state: &mut UiShellState) -> Opt
         "file.close" => Some(UiAction::CloseProject),
         "app.quit" => Some(UiAction::RequestQuit),
         "ui.preferences" => Some(UiAction::OpenPreferences),
+        "ui.font_manager" => Some(UiAction::OpenFontManager),
         "ui.doctor" => Some(UiAction::OpenDoctor),
         "ui.copy_diagnostics" => Some(UiAction::CopyDiagnostics),
         "ui.report_problem" => Some(UiAction::OpenReportProblem),
         "help.about" => Some(UiAction::OpenAbout),
         "window.snap" => Some(UiAction::SnapWindow),
+        "ui.panel.toggle" => {
+            if let Some(p) = cmd.params.get("panel").and_then(Value::as_str).and_then(PanelId::parse) {
+                if p == PanelId::Fonts && state.project_path.is_none() {
+                    return Some(UiAction::OpenFontManager);
+                }
+                state.docking.toggle_panel(p);
+            }
+            None
+        }
         "ui.toggle_ribbon" => {
             state.ribbon_collapsed = !state.ribbon_collapsed;
-            None
-        }
-        "ui.toggle_assets" => {
-            state.assets_drawer_open = !state.assets_drawer_open;
-            None
-        }
-        "ui.toggle_fidget" => {
-            state.fidget_open = !state.fidget_open;
             None
         }
         "ui.set" => {

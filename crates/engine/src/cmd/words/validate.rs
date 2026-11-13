@@ -215,6 +215,24 @@ fn collect_line_item_words<'a>(item: &'a Value, words: &[Value]) -> Result<(Vec<
     Ok((ids, text.join(" "), accent))
 }
 
+fn validate_motion_keys(raw: &Value) -> Result<()> {
+    let keys = raw.as_array().filter(|keys| (2..=24).contains(&keys.len())).ok_or_else(|| invalid("motion_keys needs 2–24 keyframes"))?;
+    let mut last = -1.0;
+    for key in keys {
+        let row =
+            key.as_array().filter(|row| row.len() == 7).ok_or_else(|| invalid("a motion key is [seconds, dx, dy, scale_x, scale_y, rotation, opacity]"))?;
+        for (value, (low, high)) in row.iter().zip([(0., 8.), (-1920., 1920.), (-1080., 1080.), (1., 400.), (1., 400.), (-14400., 14400.), (0., 100.)]) {
+            bounded_num(value, "motion key", low, high)?;
+        }
+        let time = row[0].as_f64().ok_or_else(|| invalid("a motion key needs a time"))?;
+        if (last < 0.0 && time != 0.0) || time <= last {
+            return Err(invalid("motion keys must start at zero and increase"));
+        }
+        last = time;
+    }
+    Ok(())
+}
+
 fn validate_line_item<'a>(item: &'a Value, words: &[Value], placed: &mut Vec<&'a str>) -> Result<Value> {
     let (ids, text, accent) = collect_line_item_words(item, words)?;
     placed.extend(&ids);
@@ -260,20 +278,7 @@ fn validate_line_item<'a>(item: &'a Value, words: &[Value], placed: &mut Vec<&'a
         normalized["per_char_3d"] = json!(pc3d);
     }
     if let Some(raw) = item.get("motion_keys").filter(|keys| !keys.is_null()) {
-        let keys = raw.as_array().filter(|keys| (2..=24).contains(&keys.len())).ok_or_else(|| invalid("motion_keys needs 2–24 keyframes"))?;
-        let mut last = -1.0;
-        for key in keys {
-            let row =
-                key.as_array().filter(|row| row.len() == 7).ok_or_else(|| invalid("a motion key is [seconds, dx, dy, scale_x, scale_y, rotation, opacity]"))?;
-            for (value, (low, high)) in row.iter().zip([(0., 8.), (-1920., 1920.), (-1080., 1080.), (1., 400.), (1., 400.), (-14400., 14400.), (0., 100.)]) {
-                bounded_num(value, "motion key", low, high)?;
-            }
-            let time = row[0].as_f64().ok_or_else(|| invalid("a motion key needs a time"))?;
-            if (last < 0.0 && time != 0.0) || time <= last {
-                return Err(invalid("motion keys must start at zero and increase"));
-            }
-            last = time;
-        }
+        validate_motion_keys(raw)?;
         normalized["motion_keys"] = raw.clone();
     }
     if let Some(spec) = item.get("native_motion").filter(|spec| !spec.is_null()) {

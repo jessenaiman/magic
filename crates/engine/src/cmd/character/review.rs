@@ -77,6 +77,7 @@ pub fn cmd_review(s: &mut Session, _: &Value) -> Result<Value> {
     Ok(json!({"ok":true,"project":s.project_path,"directory":dir,"models":models,"review":read(s)?,"motion_options":motion_options(),"file":path(s)?}))
 }
 
+#[allow(clippy::cognitive_complexity)]
 pub fn cmd_save_revision(s: &mut Session, p: &Value) -> Result<Value> {
     let project = s.project_path.as_ref().ok_or_else(|| bad("Open a project first"))?;
     if p["expected_project"].as_str() != project.to_str() {

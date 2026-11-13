@@ -611,9 +611,9 @@ pub fn cmd_words_letter(s: &mut Session, p: &Value) -> Result<Value> {
     let last = all.last().map_or(Tick::ZERO, |l| l.end);
     let duration = crate::workshop::song_ticks(&dir).unwrap_or(last + Tick(2 * TICKS_PER_SECOND)).max(last);
     let (steps, summary) = build_steps_with_designs(&recipe, &designs, &all, duration);
-    let out = dir.join("lettering");
+    let project = crate::cmd::words::lyrics_ecproj_path(&dir);
+    let out = project.parent().map(Path::to_path_buf).unwrap_or_else(|| dir.join("effects"));
     std::fs::create_dir_all(&out)?;
-    let project = out.join("lyrics.ecproj");
     let mut native_steps = steps;
     native_steps.push(json!({"command":"file.saveAs","params":{"path":project}}));
     crate::cmd::character::effectcraft(&dir, None, &native_steps, true)?;

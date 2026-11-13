@@ -2,7 +2,7 @@
 //! (`magic-cli mcp` and `magic-mcp` both speak newline-delimited JSON-RPC 2.0 over stdio).
 //!
 //! Modes:
-//! - `magic-mcp` (isolated headless `magic::Session` over stdio by default; never silently probes loopback)
+//! - `magic-mcp` (isolated headless `magic_engine::Session` over stdio by default; never silently probes loopback)
 //! - `magic-mcp --connect 127.0.0.1:9875` (requires live `magic --control 9875`)
 //! - `magic-mcp --headless`
 

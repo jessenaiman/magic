@@ -1,5 +1,7 @@
 # Song-to-Video Quickstart
 
+> **Last Reviewed & Updated:** 2026-11-12T16:59:00-05:00 · **Reviewed by:** Jesse A. Naiman
+
 Every Magic Studio song project starts from an audio recording so word timing drives the storyboard, character lip-sync, kinetic lyrics, and master timeline.
 
 ## 1. Create a Song Project

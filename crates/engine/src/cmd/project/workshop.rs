@@ -17,10 +17,9 @@ pub use crate::cmd::project::trunk::{cmd_project_import_file, cmd_project_trunk}
 
 pub(crate) const IMAGE_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "webp"];
 pub(crate) const STORYBOARD_DIR: &str = "storyboard";
-pub(crate) const STORYBOARD_PDF: &str = "storyboard.pdf";
+pub(crate) const STORYBOARD_DESIGNCRAFT: &str = "storyboard.designcraft";
 pub(crate) const ASSETS_DIR: &str = "assets";
 pub const VIDEO_TARGETS: &[&str] = &["filmcraft"];
-pub(crate) const SEQUENCE_TICKS_PER_SECOND: f64 = 254_016_000_000.0;
 
 pub(crate) fn song_seconds(dir: &Path) -> Option<f64> {
     if let Some(duration) = std::fs::read(dir.join("transcript-provenance.json"))
@@ -33,7 +32,7 @@ pub(crate) fn song_seconds(dir: &Path) -> Option<f64> {
     }
     let fcproj = video_project_path(dir)?;
     let seq = crate::cmd::film::execute(&fcproj, "sequence.inspect", json!({})).ok()?;
-    seq.get("duration").and_then(Value::as_f64).map(|t| t / SEQUENCE_TICKS_PER_SECOND)
+    seq.get("duration").and_then(Value::as_f64).map(|t| t / (crate::time::TICKS_PER_SECOND as f64))
 }
 
 pub(crate) fn song_ticks(dir: &Path) -> Option<crate::time::Tick> {
@@ -251,7 +250,7 @@ pub(crate) fn workshop_status(s: &mut Session) -> Result<Value> {
             "document": supplied_transcript, "problems": transcript_errors, "brief": stage_brief(s, &dir, "transcript")}),
         json!({"id": "storyboard", "title": "Storyboard Sections", "done": sb_ready, "why": sb_check["next_step"].as_str().unwrap_or("Complete storyboard sections."),
             "title_sections_complete": sb_titles_done, "light": sb_check["light"],
-            "inputs": [file_chip(&dir.join("storyboard.pdf"))],
+            "inputs": [file_chip(&dir.join(STORYBOARD_DESIGNCRAFT))],
             "outputs": assets.iter().map(|p| file_chip(p)).collect::<Vec<_>>(),
             "brief": stage_brief(s, &dir, "storyboard")}),
         json!({"id": "animate", "title": "Video Production", "done": !animated.is_empty(), "optional": true,
@@ -264,8 +263,8 @@ pub(crate) fn workshop_status(s: &mut Session) -> Result<Value> {
     let setup_ready = audio_ok && transcript_valid;
     let studio_info = studio(&dir);
     let effective_video_project = s.video_project_path.clone().or_else(|| video_project_path(&dir));
-    let lyrics_ready = dir.join("lettering/lyrics.ecproj").is_file() || dir.join("design/words.json").is_file();
-    let motion_ready = dir.join("motion/actions.ecproj").is_file() || dir.join("motion/actions.json").is_file();
+    let lyrics_ready = dir.join("effects/lyrics.ecproj").is_file() || dir.join("lettering/lyrics.ecproj").is_file() || dir.join("design/words.json").is_file();
+    let motion_ready = dir.join("effects/motion.ecproj").is_file() || dir.join("motion/actions.ecproj").is_file() || dir.join("motion/actions.json").is_file();
 
     let next_steps = if !audio_ok || !transcript_valid {
         json!(["magic-cli exec audio.analyze"])

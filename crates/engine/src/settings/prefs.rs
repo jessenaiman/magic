@@ -63,15 +63,13 @@ impl Default for ScribblesPrefs {
 #[serde(default)]
 pub struct ProjectPrefs {
     pub root: Option<String>,
-    pub characters_root: Option<String>,
     pub storyboard_template: String,
     pub storyboard_format: String,
-    pub storyboard_locked: bool,
 }
 
 impl Default for ProjectPrefs {
     fn default() -> Self {
-        Self { root: None, characters_root: None, storyboard_template: "magic".into(), storyboard_format: "pdfcraft".into(), storyboard_locked: true }
+        Self { root: None, storyboard_template: "magic".into(), storyboard_format: "designcraft".into() }
     }
 }
 
@@ -242,10 +240,8 @@ impl MagicPrefs {
             "appearance.accent" => json!(self.appearance.accent),
             "appearance.ui_scale" => json!(self.appearance.ui_scale),
             "project.root" => opt_str_json(&self.project.root),
-            "project.characters_root" => opt_str_json(&self.project.characters_root),
             "project.storyboard_template" => json!(self.project.storyboard_template),
             "project.storyboard_format" => json!(self.project.storyboard_format),
-            "project.storyboard_locked" => json!(self.project.storyboard_locked),
             "lyrics.default_size" => json!(self.lyrics.default_size),
             "lyrics.outline" => json!(self.lyrics.outline),
             "lyrics.font_dirs" => opt_str_json(&self.lyrics.font_dirs),
@@ -281,10 +277,8 @@ impl MagicPrefs {
             "appearance.accent" => self.appearance.accent = value.as_str().unwrap_or("teal").to_owned(),
             "appearance.ui_scale" => self.appearance.ui_scale = value.as_f64().unwrap_or(1.0),
             "project.root" => self.project.root = opt_str_from_value(value),
-            "project.characters_root" => self.project.characters_root = opt_str_from_value(value),
             "project.storyboard_template" => self.project.storyboard_template = value.as_str().unwrap_or("magic").to_owned(),
-            "project.storyboard_format" => self.project.storyboard_format = value.as_str().unwrap_or("pdfcraft").to_owned(),
-            "project.storyboard_locked" => self.project.storyboard_locked = value.as_bool().unwrap_or(true),
+            "project.storyboard_format" => self.project.storyboard_format = value.as_str().unwrap_or("designcraft").to_owned(),
             "lyrics.default_size" => self.lyrics.default_size = value.as_i64().unwrap_or(72),
             "lyrics.outline" => self.lyrics.outline = value.as_bool().unwrap_or(true),
             "lyrics.font_dirs" => self.lyrics.font_dirs = opt_str_from_value(value),

@@ -1,19 +1,17 @@
-//! Storyboard: printable reference document (`storyboard.pdf`) governed strictly by the
-//! `.designcraft` master (`Magic Studio Storyboard.designcraft`), with integrated `PhotoCraft`,
-//! `VectorCraft`, and `EffectCraft` asset/pose pipelines.
+//! Storyboard: modifiable `DesignCraft` layout document (`storyboard.designcraft`) governed
+//! directly by `document.json` (read within bounded limits via [`craft_zip`]) and edited or
+//! exported through the host `DesignCraft` application (`designcraft --control 7979` /
+//! `designcraft-cli`), with `PhotoCraft`, `VectorCraft`, and `EffectCraft` artwork links.
 //!
-//! Storyboard Rules:
-//! 1. The `.designcraft` master IS the rules (`doc["sections"]` defines section names and
-//!    `item["locked"]` defines editable vs chrome items — zero hardcoded section tables or extra
-//!    permission checks).
-//! 2. Storyboard is a printable reference document (`612 × 792 pt` US Letter), decoupled from video.
-//! 3. Storyboard supplies the canonical style & image references for all new media creation.
-//! 4. `Assets` shows each asset's flat project image, and that project image is what Storyboard
-//!    stores together with metadata linking back to the underlying files.
+//! Storyboard Principles:
+//! 1. `storyboard.designcraft` is the complete design document (`doc["sections"]` defines section
+//!    names and `item["locked"]` defines editable vs master-layout items).
+//! 2. Users and agents can modify spreads, typography, frames, and placed graphics directly in
+//!    `DesignCraft` or update unlocked slots from Magic Studio (`storyboard.set`).
+//! 3. Storyboard supplies the canonical style & visual references for downstream animation,
+//!    lyric, and motion scenes.
 
-pub mod barnyard;
 pub mod crud;
-pub mod slides;
 pub mod workflow;
 
 pub use crud::{
@@ -23,18 +21,19 @@ pub use crud::{
 pub use workflow::{cmd_storyboard_bulk_generate, cmd_storyboard_check, cmd_storyboard_grade, cmd_storyboard_wizard};
 
 use std::collections::BTreeMap;
-use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
-use flate2::read::DeflateDecoder;
+use craft_zip::{Archive, Compression, Limits, Writer};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 use crate::{EngineError, Result, Session};
 
-const MASTER_DESIGNCRAFT: &[u8] = include_bytes!("../../../templates/storyboard.designcraft");
-pub(crate) const PDF_TEMPLATE: &[u8] = include_bytes!("../../../templates/storyboard-template.pdf");
+pub(crate) const MASTER_DESIGNCRAFT: &[u8] = include_bytes!("../../../templates/storyboard.designcraft");
+
+const DESIGNCRAFT_ZIP_LIMITS: Limits = Limits { max_entries: 4_096, max_total_bytes: 128 << 20 };
+const DESIGNCRAFT_PART_MAX: u64 = 64 << 20;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct ImageLinkMeta {
@@ -52,6 +51,8 @@ pub struct ImageLinkMeta {
 pub struct FieldState {
     pub text: BTreeMap<String, String>,
     pub images: BTreeMap<String, ImageLinkMeta>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font_family: Option<String>,
 }
 
 pub(crate) fn bad(msg: &str) -> EngineError {
@@ -65,39 +66,144 @@ pub(crate) fn fail(e: impl std::fmt::Display) -> EngineError {
 pub(crate) fn doc_path(s: &Session, p: &Value) -> Result<PathBuf> {
     if let Some(raw) = p.get("path").and_then(Value::as_str).filter(|r| !r.trim().is_empty()) {
         let mut path = crate::workspace::resolve_workspace_path(s, raw);
-        let has_known_ext = path
-            .extension()
-            .and_then(|e| e.to_str())
-            .is_some_and(|e| e.eq_ignore_ascii_case("pptx") || e.eq_ignore_ascii_case("deckcraft") || e.eq_ignore_ascii_case("pdf"));
-        if !has_known_ext {
-            path.set_extension("pptx");
+        let has_dc_ext = path.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("designcraft"));
+        if !has_dc_ext {
+            path.set_extension("designcraft");
         }
         return Ok(path);
     }
     let project = s.project_path.as_ref().ok_or_else(|| bad("give `path`, or open a .magic project"))?;
-    for candidate in ["storyboard.pptx", "storyboard.deckcraft"] {
-        let cand = project.with_file_name(candidate);
-        if cand.is_file() {
-            return Ok(cand);
-        }
+    Ok(project.with_file_name("storyboard.designcraft"))
+}
+
+pub(crate) fn designcraft_path_for(path: &Path) -> PathBuf {
+    if path.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("designcraft")) {
+        path.to_path_buf()
+    } else {
+        path.with_file_name("storyboard.designcraft")
     }
-    Ok(project.with_file_name("storyboard.pdf"))
 }
 
-pub(crate) fn fields_state_path(pdf_path: &Path) -> PathBuf {
-    pdf_path.with_file_name("storyboard").join("fields.json")
+pub(crate) fn fields_state_path(dc_path: &Path) -> PathBuf {
+    dc_path.with_file_name("storyboard").join("fields.json")
 }
 
-pub(crate) fn load_field_state(pdf_path: &Path) -> FieldState {
-    std::fs::read_to_string(fields_state_path(pdf_path)).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default()
+pub(crate) fn load_field_state(dc_path: &Path) -> FieldState {
+    std::fs::read_to_string(fields_state_path(dc_path)).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default()
 }
 
-pub(crate) fn save_field_state(pdf_path: &Path, state: &FieldState) -> Result<()> {
-    let path = fields_state_path(pdf_path);
+pub(crate) fn save_field_state(dc_path: &Path, state: &FieldState) -> Result<()> {
+    let path = fields_state_path(dc_path);
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }
     craft_atomic::atomic_write(&path, &serde_json::to_vec_pretty(state).map_err(fail)?)?;
+    write_state_into_designcraft_zip(dc_path, state)?;
+    Ok(())
+}
+
+fn collect_unlocked_story_updates(doc: &Value, state: &FieldState) -> BTreeMap<String, String> {
+    let default_w = doc["settings"]["pageWidth"].as_f64().unwrap_or(612.0);
+    let mut updates = BTreeMap::new();
+    let mut doc_page_idx = 0usize;
+    for spread in doc["spreads"].as_array().into_iter().flatten() {
+        let raw_pages = spread["pages"].as_array().cloned().unwrap_or_default();
+        let spread_pages: Vec<(f64, f64)> = if raw_pages.is_empty() {
+            vec![(0.0, default_w)]
+        } else {
+            raw_pages.iter().map(|pg| (pg["x"].as_f64().unwrap_or(0.0), pg["width"].as_f64().unwrap_or(default_w))).collect()
+        };
+        for item in spread["items"].as_array().into_iter().flatten() {
+            if item["locked"].as_bool().unwrap_or(false) || item["hidden"].as_bool().unwrap_or(false) {
+                continue;
+            }
+            if let (Some(label), Some(wb), Some(sid)) = (item["label"].as_str().filter(|l| !l.is_empty()), item_bounds(item), item["content"]["story"].as_u64())
+                && item["content"]["type"].as_str() == Some("text")
+            {
+                let cx = (wb[0] + wb[2]) * 0.5;
+                let p_in_sp = spread_pages.iter().position(|(px, pw)| cx >= *px - 2.0 && cx <= *px + *pw + 2.0).unwrap_or(0);
+                if let Some(new_txt) = state.text.get(&field_key(doc_page_idx + p_in_sp, label)) {
+                    updates.insert(sid.to_string(), new_txt.clone());
+                }
+            }
+        }
+        doc_page_idx += spread_pages.len().max(1);
+    }
+    updates
+}
+
+fn rewrite_story_entry(story: &mut Value, new_txt: Option<&String>, font_family: Option<&str>) {
+    if let Some(txt) = new_txt {
+        story["text"] = Value::String(txt.clone());
+        let utf8_len = txt.len();
+        if let Some(chars) = story.get_mut("chars").and_then(Value::as_array_mut) {
+            let mut run = chars.first().cloned().unwrap_or_else(|| json!({ "len": utf8_len, "style": "[None]", "over": {} }));
+            run["len"] = json!(utf8_len);
+            if let Some(fam) = font_family {
+                run["over"]["fontFamily"] = Value::String(fam.to_owned());
+            }
+            chars.clear();
+            chars.push(run);
+        }
+        story["rev"] = json!(story["rev"].as_u64().unwrap_or(1).saturating_add(1));
+        return;
+    }
+    if let Some(fam) = font_family
+        && let Some(chars) = story.get_mut("chars").and_then(Value::as_array_mut)
+    {
+        for run in chars {
+            if run.get("over").is_some_and(Value::is_object) {
+                run["over"]["fontFamily"] = Value::String(fam.to_owned());
+            }
+        }
+    }
+}
+
+fn write_state_into_designcraft_zip(dc_path: &Path, state: &FieldState) -> Result<()> {
+    let dc = designcraft_path_for(dc_path);
+    let seed = std::fs::read(&dc).ok().filter(|b| !b.is_empty()).unwrap_or_else(|| MASTER_DESIGNCRAFT.to_vec());
+    let mut doc =
+        read_zip_entry(&seed, "document.json").and_then(|raw| serde_json::from_slice::<Value>(&raw).ok()).unwrap_or_else(|| master_template_doc().clone());
+
+    let story_updates = collect_unlocked_story_updates(&doc, state);
+    if let Some(stories) = doc.get_mut("stories").and_then(Value::as_object_mut) {
+        for (sid, story) in stories.iter_mut() {
+            rewrite_story_entry(story, story_updates.get(sid), state.font_family.as_deref());
+        }
+    }
+
+    let mimetype = read_zip_entry(&seed, "mimetype").unwrap_or_else(|| b"application/vnd.designcraft+zip".to_vec());
+    let meta = read_zip_entry(&seed, "meta.json").unwrap_or_else(|| br#"{"format":"designcraft","generator":"DesignCraft 0.19.0","version":2}"#.to_vec());
+    let doc_bytes = serde_json::to_vec(&doc).map_err(fail)?;
+
+    let mut writer = Writer::new();
+    writer.add("mimetype", &mimetype, Compression::Deflated).map_err(fail)?;
+    writer.add("meta.json", &meta, Compression::Deflated).map_err(fail)?;
+    if let Some(preview) = read_zip_entry(&seed, "preview.png") {
+        writer.add("preview.png", &preview, Compression::Deflated).map_err(fail)?;
+    }
+    writer.add("document.json", &doc_bytes, Compression::Deflated).map_err(fail)?;
+    for (fkey, img_meta) in &state.images {
+        let img_path = Path::new(&img_meta.image);
+        if let Ok(meta_fs) = std::fs::metadata(img_path)
+            && meta_fs.is_file()
+            && meta_fs.len() <= DESIGNCRAFT_PART_MAX
+            && let Ok(img_bytes) = std::fs::read(img_path)
+        {
+            let ext = img_path.extension().and_then(|e| e.to_str()).unwrap_or("png").to_ascii_lowercase();
+            let entry_name = format!("assets/{fkey}.{ext}");
+            writer.add(&entry_name, &img_bytes, Compression::Deflated).map_err(fail)?;
+        }
+    }
+    let zip_bytes = writer.finish().map_err(fail)?;
+    let verified = Archive::open(&zip_bytes, DESIGNCRAFT_ZIP_LIMITS).map_err(fail)?;
+    if verified.has_duplicate_names() {
+        return Err(fail("duplicate entry names in storyboard.designcraft"));
+    }
+    if let Some(parent) = dc.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    craft_atomic::atomic_write(&dc, &zip_bytes)?;
     Ok(())
 }
 
@@ -142,48 +248,42 @@ pub(crate) fn slot_is_filled(kind: &str, text: Option<&str>, image: Option<&str>
     }
 }
 
-fn u16_at(bytes: &[u8], at: usize) -> usize {
-    u16::from_le_bytes([bytes[at], bytes[at + 1]]) as usize
-}
-
-fn u32_at(bytes: &[u8], at: usize) -> usize {
-    u32::from_le_bytes([bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]]) as usize
+/// Read a named entry (`document.json`, `preview.png`, etc.) from a `.designcraft` ZIP package
+/// within bounded untrusted-archive limits via [`craft_zip::Archive`].
+pub(crate) fn read_zip_entry(bytes: &[u8], entry_name: &str) -> Option<Vec<u8>> {
+    let mut zip = Archive::open(bytes, DESIGNCRAFT_ZIP_LIMITS).ok()?;
+    if zip.has_duplicate_names() {
+        return None;
+    }
+    zip.read(entry_name, DESIGNCRAFT_PART_MAX).ok().flatten()
 }
 
 /// Read `document.json` from the embedded `.designcraft` master once in memory.
 pub(crate) fn master_template_doc() -> &'static Value {
     static DOC: OnceLock<Value> = OnceLock::new();
-    DOC.get_or_init(|| {
-        let bytes = MASTER_DESIGNCRAFT;
-        let eocd = (0..=bytes.len().saturating_sub(22)).rev().find(|&i| &bytes[i..i + 4] == b"PK\x05\x06").unwrap_or(0);
-        let mut pos = u32_at(bytes, eocd + 16);
-        for _ in 0..u16_at(bytes, eocd + 10) {
-            if pos + 46 > bytes.len() || &bytes[pos..pos + 4] != b"PK\x01\x02" {
-                break;
-            }
-            let (name_len, extra_len, comment_len) = (u16_at(bytes, pos + 28), u16_at(bytes, pos + 30), u16_at(bytes, pos + 32));
-            if std::str::from_utf8(&bytes[pos + 46..pos + 46 + name_len]).unwrap_or("") == "document.json" {
-                let local = u32_at(bytes, pos + 42);
-                let start = local + 30 + u16_at(bytes, local + 26) + u16_at(bytes, local + 28);
-                let data = &bytes[start..start + u32_at(bytes, pos + 20)];
-                let mut out = Vec::new();
-                if u16_at(bytes, pos + 10) == 8 {
-                    let _ = DeflateDecoder::new(data).read_to_end(&mut out);
-                } else {
-                    out.extend_from_slice(data);
-                }
-                return serde_json::from_slice(&out).unwrap_or_else(|_| json!({}));
-            }
-            pos += 46 + name_len + extra_len + comment_len;
-        }
-        json!({})
-    })
+    DOC.get_or_init(|| read_zip_entry(MASTER_DESIGNCRAFT, "document.json").and_then(|raw| serde_json::from_slice(&raw).ok()).unwrap_or_else(|| json!({})))
 }
 
-/// Rule 1: Section names come strictly from `doc["sections"]` in the `.designcraft` master.
-pub(crate) fn master_sections() -> Vec<String> {
-    let doc = master_template_doc();
+/// Read `document.json` directly from the project's on-disk `storyboard.designcraft` when present,
+/// or from the embedded `MASTER_DESIGNCRAFT` template before initialization.
+pub(crate) fn load_designcraft_doc(path: &Path) -> Value {
+    let dc_path = designcraft_path_for(path);
+    if let Ok(bytes) = std::fs::read(&dc_path)
+        && let Some(raw_doc) = read_zip_entry(&bytes, "document.json")
+        && let Ok(parsed) = serde_json::from_slice::<Value>(&raw_doc)
+    {
+        return parsed;
+    }
+    master_template_doc().clone()
+}
+
+pub(crate) fn sections_for_doc(doc: &Value) -> Vec<String> {
     doc["sections"].as_array().into_iter().flatten().filter_map(|s| s["marker"].as_str().map(str::trim).filter(|m| !m.is_empty()).map(str::to_owned)).collect()
+}
+
+#[allow(dead_code)]
+pub(crate) fn master_sections() -> Vec<String> {
+    sections_for_doc(master_template_doc())
 }
 
 fn item_bounds(item: &Value) -> Option<[f64; 4]> {
@@ -236,6 +336,10 @@ fn section_for_doc_page(doc: &Value, page_idx: usize) -> String {
         }
     }
     matched.unwrap_or("Storyboard").to_owned()
+}
+
+fn is_section_start_page(doc: &Value, page_idx: usize) -> bool {
+    doc["sections"].as_array().into_iter().flatten().any(|sec| sec["start"].as_u64() == Some(page_idx as u64))
 }
 
 #[derive(Clone)]
@@ -323,14 +427,11 @@ impl PageInfo {
     }
 }
 
-/// Rule 4: Sync connected project assets (`s.project_assets`) into the Storyboard's `Assets`
-/// inventory slots (`assets_thumb_N`, `assets_name_N`, `assets_details_N`) using each asset's
-/// flat project image + linked-file metadata.
 pub(crate) fn sync_assets_into_state(s: &Session, state: &mut FieldState) {
     let Some(project_dir) = s.project_path.as_deref().and_then(Path::parent) else {
         return;
     };
-    let doc = master_template_doc();
+    let doc = load_designcraft_doc(&project_dir.join("storyboard.designcraft"));
     let mut assets_page_idx: Option<usize> = None;
     let mut doc_pg = 0usize;
     for spread in doc["spreads"].as_array().into_iter().flatten() {
@@ -371,16 +472,10 @@ pub(crate) fn sync_assets_into_state(s: &Session, state: &mut FieldState) {
     }
 }
 
-/// Rule 1: Parse Storyboard pages strictly from the `.designcraft` master (`doc["sections"]` + `item["locked"]`).
-pub(crate) fn parse_storyboard_pages(s: Option<&Session>, pdf_path: &Path) -> Vec<PageInfo> {
-    if !pdf_path.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.contains("legacy")) {
-        return barnyard::build_barnyard_hierarchical_pages(s, pdf_path);
-    }
-    if slides::is_slide_storyboard(pdf_path) {
-        return slides::parse_slide_storyboard(s, pdf_path);
-    }
-    let doc = master_template_doc();
-    let mut state = load_field_state(pdf_path);
+#[allow(clippy::cognitive_complexity)]
+pub(crate) fn parse_storyboard_pages(s: Option<&Session>, dc_path: &Path) -> Vec<PageInfo> {
+    let doc = load_designcraft_doc(dc_path);
+    let mut state = load_field_state(dc_path);
     if let Some(sess) = s {
         sync_assets_into_state(sess, &mut state);
     }
@@ -431,7 +526,7 @@ pub(crate) fn parse_storyboard_pages(s: Option<&Session>, pdf_path: &Path) -> Ve
             let story_obj = story_id.and_then(|sid| doc["stories"].get(sid.to_string()));
             let fkey = label_opt.map(|lbl| field_key(target_page_idx, lbl));
             let text = fkey.as_ref().and_then(|k| state.text.get(k).cloned()).or_else(|| story_obj.and_then(|st| st["text"].as_str()).map(str::to_owned));
-            let base_dir = pdf_path.parent().unwrap_or_else(|| Path::new("."));
+            let base_dir = dc_path.parent().unwrap_or_else(|| Path::new("."));
             let img_meta = fkey.as_ref().and_then(|k| state.images.get(k)).cloned().map(|mut m| {
                 if !m.image.trim().is_empty() && !Path::new(&m.image).is_absolute() {
                     let cand = base_dir.join(&m.image);
@@ -481,6 +576,7 @@ pub(crate) fn parse_storyboard_pages(s: Option<&Session>, pdf_path: &Path) -> Ve
                     "stroke": item["stroke"]["swatch"].as_str().unwrap_or("[None]"),
                     "stroke_weight": item["stroke"]["weight"].as_f64().unwrap_or(0.0),
                     "text": text,
+                    "font_family": state.font_family.as_deref().or_else(|| over.and_then(|o| o["fontFamily"].as_str())),
                     "font_size": over.and_then(|o| o["size"].as_f64()).unwrap_or(9.5),
                     "font_style": over.and_then(|o| o["fontStyle"].as_str()).unwrap_or("Regular"),
                     "text_fill": over.and_then(|o| o["fill"].as_str()).unwrap_or("Ink"),
@@ -520,13 +616,20 @@ pub(crate) fn parse_storyboard_pages(s: Option<&Session>, pdf_path: &Path) -> Ve
             spread_pages.into_iter().zip(per_page_slots).zip(per_page_layout.into_iter().zip(per_page_headings)).enumerate()
         {
             let index = doc_page_idx + p_in_sp;
+            let role = if index == 0 {
+                "cover"
+            } else if is_section_start_page(&doc, index) {
+                "section_title"
+            } else {
+                "subpage"
+            };
             pages.push(PageInfo {
                 index,
                 spread_index: spread_idx,
                 page_in_spread: p_in_sp,
                 spread_page_count: sp_count,
-                section: section_for_doc_page(doc, index),
-                page_role: if index == 0 { "cover" } else { "subpage" },
+                section: section_for_doc_page(&doc, index),
+                page_role: role,
                 sub_code: format!("P{:02}", index + 1),
                 bounds: [0.0, 0.0, pw, ph],
                 heading,
@@ -539,13 +642,11 @@ pub(crate) fn parse_storyboard_pages(s: Option<&Session>, pdf_path: &Path) -> Ve
     pages
 }
 
-/// Rule 3: Gather Storyboard visual design prompts and placed reference images, optionally
-/// prioritizing `Characters` prompts and character images for character sheet/rig generation.
 pub(crate) fn storyboard_media_references_for(s: &Session, prefer_character: bool) -> (Option<String>, Vec<PathBuf>) {
-    let Ok(pdf_path) = doc_path(s, &json!({})) else {
+    let Ok(sb_path) = doc_path(s, &json!({})) else {
         return (None, Vec::new());
     };
-    let pages = parse_storyboard_pages(Some(s), &pdf_path);
+    let pages = parse_storyboard_pages(Some(s), &sb_path);
     let keys: &[&str] = if prefer_character {
         &["char_exact_prompt", "cover_overall_design", "world_location_prompt"]
     } else {
@@ -563,19 +664,15 @@ pub(crate) fn storyboard_media_references_for(s: &Session, prefer_character: boo
 
     let mut refs = Vec::new();
     if prefer_character {
-        for pg in &pages {
-            for sl in pg.slots.iter().filter(|sl| sl.kind == "image" && sl.filled && sl.label.starts_with("char_")) {
-                if let Some(p) = sl.image.as_deref().map(PathBuf::from).filter(|p| p.is_file())
-                    && !refs.contains(&p)
-                    && refs.len() < 5
-                {
-                    refs.push(p);
-                }
-            }
-        }
+        collect_filled_slot_images(&pages, true, &mut refs);
     }
-    for pg in &pages {
-        for sl in pg.slots.iter().filter(|sl| sl.kind == "image" && sl.filled) {
+    collect_filled_slot_images(&pages, false, &mut refs);
+    (style_context, refs)
+}
+
+fn collect_filled_slot_images(pages: &[PageInfo], char_only: bool, refs: &mut Vec<PathBuf>) {
+    for pg in pages {
+        for sl in pg.slots.iter().filter(|sl| sl.kind == "image" && sl.filled && (!char_only || sl.label.starts_with("char_"))) {
             if let Some(p) = sl.image.as_deref().map(PathBuf::from).filter(|p| p.is_file())
                 && !refs.contains(&p)
                 && refs.len() < 5
@@ -584,7 +681,6 @@ pub(crate) fn storyboard_media_references_for(s: &Session, prefer_character: boo
             }
         }
     }
-    (style_context, refs)
 }
 
 pub(crate) fn storyboard_media_references(s: &Session) -> (Option<String>, Vec<PathBuf>) {

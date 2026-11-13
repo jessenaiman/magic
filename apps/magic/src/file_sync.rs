@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, UNIX_EPOCH};
 
-use magic::Session;
+use magic_engine::Session;
 use magic_ui_egui::{UiShellState, ViewMode};
 use serde_json::{Value, json};
 
@@ -97,6 +97,7 @@ impl FileSyncMonitor {
 
         if regained_focus {
             self.check_disk_ecprojs(session, ui_state);
+            craft_font_catalog::Catalog::global().rescan_if_changed();
         }
 
         if let Some(since) = self.pending_autosave_since {

@@ -174,6 +174,7 @@ fn draw_aep_dry_run_banner(ui: &mut Ui, ctx: &mut ViewCtx<'_>, aep_src: &str) {
     });
 }
 
+#[allow(clippy::cognitive_complexity)]
 fn draw_dynamic_link_config_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>, ec_path: &str) {
     let comps: Vec<String> = ctx
         .state
@@ -306,6 +307,7 @@ fn draw_dynamic_link_config_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>, ec_path: &st
     });
 }
 
+#[allow(clippy::cognitive_complexity)]
 /// Left-rail `Offline Media & Render-Source Protection` card (`T08`).
 pub fn draw_offline_and_source_guard_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     let pre = &ctx.state.cache.doctor;
@@ -367,5 +369,37 @@ pub fn draw_offline_and_source_guard_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                 ctx.exec("video.sync_links", json!({"render": false}), Some("Verified linked project assets"));
             }
         });
+    });
+}
+
+/// Dockable `Interchange & Bridges` inspector panel (`PanelId::Inspector` on `ViewMode::Project`),
+/// surfacing `craft-timeline` (`EDL`, `ALE`, `FCP7 XML`, `FCPXML`, `OTIO`), `Dynamic Link`, and offline checks.
+pub fn draw_inspector_panel(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
+    egui::ScrollArea::vertical().id_salt("project_interchange_insp_scroll").auto_shrink([false, false]).show(ui, |ui| {
+        fill_card(ui, ctx.pal, false, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                ui.label(RichText::new("craft-timeline Interchange").size(12.0).strong().color(ctx.pal.accent_emerald));
+                status_pill(ui, ctx.pal, "EDL · ALE · XML · FCPXML · OTIO", ctx.pal.accent_sky);
+            });
+            draw_interchange_drawer(ui, ctx);
+            ui.add_space(4.0);
+            ui.horizontal_wrapped(|ui| {
+                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("pf-tl-inspect", "film", "Inspect .fcproj", "Run timeline.inspect via craft-timeline"))
+                    .clicked()
+                {
+                    ctx.exec("timeline.inspect", json!({}), Some("Inspected sequence via craft-timeline"));
+                }
+                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("pf-tl-edl", "download", "CMX 3600 EDL", "Export CMX 3600 EDL via timeline.edl")).clicked()
+                {
+                    ctx.exec("timeline.edl", json!({"action": "export"}), Some("Exported CMX 3600 EDL"));
+                }
+                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("pf-tl-ale", "download", "Avid ALE", "Export Avid Log Exchange via timeline.ale")).clicked()
+                {
+                    ctx.exec("timeline.ale", json!({"action": "export"}), Some("Exported Avid ALE clip table"));
+                }
+            });
+        });
+        ui.add_space(8.0);
+        draw_offline_and_source_guard_card(ui, ctx);
     });
 }

@@ -1,16 +1,15 @@
 //! Storyboard readiness (`storyboard.check`), setup helper (`storyboard.wizard`), batch
-//! PhotoCraft panel grading (`storyboard.grade` via `photocraft-cli batch --actions`), and bulk
-//! reference-driven media generation (`storyboard.bulk_generate`) governed strictly by the
-//! `.designcraft` master (`doc["sections"]` + `!slot.locked`).
+//! `PhotoCraft` panel grading (`storyboard.grade`), and bulk reference-driven media generation
+//! (`storyboard.bulk_generate`) governed directly by `storyboard.designcraft`.
 
 use std::path::Path;
 
 use serde_json::{Value, json};
 
-use super::crud::cmd_storyboard_set;
+use super::crud::{cmd_storyboard_set, ensure_storyboard_file};
 use super::{
-    PDF_TEMPLATE, PageInfo, bad, doc_path, fail, field_key, human_slot_title, load_field_state, master_sections, parse_storyboard_pages, save_field_state,
-    storyboard_media_references_for,
+    PageInfo, bad, designcraft_path_for, doc_path, fail, field_key, human_slot_title, load_designcraft_doc, load_field_state, parse_storyboard_pages,
+    save_field_state, sections_for_doc, storyboard_media_references_for,
 };
 use crate::{Result, Session};
 
@@ -69,15 +68,17 @@ fn evaluate_page_light(page: &PageInfo) -> (Value, Vec<Value>) {
     (summary, page_reqs)
 }
 
-/// `storyboard.check`: evaluate Red/Green lights across every unlocked field and section defined in the `.designcraft` master.
+/// `storyboard.check`: evaluate Red/Green lights across every unlocked field and section defined in `storyboard.designcraft`.
 pub fn cmd_storyboard_check(s: &mut Session, p: &Value) -> Result<Value> {
-    let path = doc_path(s, p)?;
-    if !path.is_file() {
+    let base = doc_path(s, p)?;
+    let dc = designcraft_path_for(&base);
+    if !dc.is_file() {
         return Ok(json!({
             "ok": true,
             "exists": false,
-            "path": path,
-            "format": "pdfcraft",
+            "path": dc,
+            "designcraft": dc,
+            "format": "designcraft",
             "light": "red",
             "status": "missing",
             "title_sections_complete": false,
@@ -86,11 +87,13 @@ pub fn cmd_storyboard_check(s: &mut Session, p: &Value) -> Result<Value> {
             "sections": [],
             "requirements": [],
             "pages": [],
-            "next_step": "Run `magic-cli storyboard new` to initialize printable storyboard.pdf.",
+            "next_step": "Run `magic-cli storyboard new` to initialize storyboard.designcraft.",
         }));
     }
-    let pages = parse_storyboard_pages(Some(s), &path);
-    let sec_names = master_sections();
+    let dc_path = ensure_storyboard_file(&base)?;
+    let doc = load_designcraft_doc(&dc_path);
+    let pages = parse_storyboard_pages(Some(s), &dc_path);
+    let sec_names = sections_for_doc(&doc);
     let mut evaluated = Vec::with_capacity(pages.len());
     let mut requirements = Vec::new();
     for pg in &pages {
@@ -127,11 +130,18 @@ pub fn cmd_storyboard_check(s: &mut Session, p: &Value) -> Result<Value> {
     let scenes_complete =
         sections.iter().find(|sec| sec["section"].as_str().is_some_and(|n| n.eq_ignore_ascii_case("scenes"))).is_some_and(|sec| sec["light"] == "green");
 
+    let state = load_field_state(&dc_path);
+    let font_family = state.font_family.unwrap_or_else(|| "Fraunces".into());
+    let font_installed = magic_util::media::is_font_family_installed(&font_family);
+
     Ok(json!({
         "ok": true,
         "exists": true,
-        "path": path,
-        "format": "pdfcraft",
+        "path": dc_path,
+        "designcraft": dc_path,
+        "format": "designcraft",
+        "font_family": font_family,
+        "font_installed": font_installed,
         "light": if production_ready { "green" } else { "red" },
         "complete": production_ready,
         "status": if production_ready { "complete" } else { "incomplete" },
@@ -143,9 +153,9 @@ pub fn cmd_storyboard_check(s: &mut Session, p: &Value) -> Result<Value> {
         "scenes_complete": scenes_complete,
         "production_ready": production_ready,
         "next_step": if production_ready {
-            "Printable storyboard.pdf is complete and ready as the project reference book."
+            "Storyboard (storyboard.designcraft) is complete and ready to guide scene assembly in FilmCraft."
         } else {
-            "Click red fields directly on storyboard.pdf (or run `magic-cli storyboard set`) to complete missing fields."
+            "Edit fields in Magic Studio or open storyboard.designcraft in DesignCraft (`magic-cli storyboard open`)."
         },
         "sections": sections,
         "requirements": requirements,
@@ -154,11 +164,8 @@ pub fn cmd_storyboard_check(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 pub fn cmd_storyboard_wizard(s: &mut Session, p: &Value) -> Result<Value> {
-    let path = doc_path(s, p)?;
-    if !path.is_file() {
-        craft_atomic::atomic_write(&path, PDF_TEMPLATE)?;
-    }
-    let pages = parse_storyboard_pages(Some(s), &path);
+    let dc = ensure_storyboard_file(&doc_path(s, p)?)?;
+    let pages = parse_storyboard_pages(Some(s), &dc);
     let find_slot_page = |lbl: &str| pages.iter().find(|pg| pg.slots.iter().any(|sl| !sl.locked && sl.label == lbl)).map(|pg| pg.index);
     let mut batch = Vec::new();
     for (param, slot) in [
@@ -177,9 +184,9 @@ pub fn cmd_storyboard_wizard(s: &mut Session, p: &Value) -> Result<Value> {
         }
     }
     if !batch.is_empty() {
-        cmd_storyboard_set(s, &json!({"path": path, "pages": batch}))?;
+        cmd_storyboard_set(s, &json!({"path": dc, "pages": batch}))?;
     }
-    cmd_storyboard_check(s, &json!({"path": path}))
+    cmd_storyboard_check(s, &json!({"path": dc}))
 }
 
 fn build_grade_actions(p: &Value) -> Result<Value> {
@@ -209,20 +216,16 @@ fn build_grade_actions(p: &Value) -> Result<Value> {
     Ok(json!(actions))
 }
 
-/// `storyboard.grade`: run `photocraft-cli batch --actions <grade.json> --in <raw> --out <graded>`
-/// across filled Storyboard image slots (optionally filtered by `section`), updating `storyboard.pdf`
-/// while preserving each slot's `linked_file` metadata.
+/// `storyboard.grade`: run `PhotoCraft` batch actions (`photocraft-cli batch` / `--control`) across
+/// filled Storyboard image slots while preserving each slot's `linked_file` metadata.
 pub fn cmd_storyboard_grade(s: &mut Session, p: &Value) -> Result<Value> {
-    let path = doc_path(s, p)?;
-    if !path.is_file() {
-        return Err(bad("storyboard.pdf does not exist yet; run `storyboard.new` first"));
-    }
+    let dc = ensure_storyboard_file(&doc_path(s, p)?)?;
     let actions = build_grade_actions(p)?;
     let filter_sec = p["section"].as_str().map(str::trim).filter(|sec| !sec.is_empty());
-    let pages = parse_storyboard_pages(Some(s), &path);
-    let mut state = load_field_state(&path);
+    let pages = parse_storyboard_pages(Some(s), &dc);
+    let mut state = load_field_state(&dc);
 
-    let sb_dir = path.with_file_name("storyboard");
+    let sb_dir = dc.with_file_name("storyboard");
     let raw_dir = sb_dir.join("grade_in");
     let graded_dir = sb_dir.join("graded");
     if raw_dir.is_dir() {
@@ -243,23 +246,25 @@ pub fn cmd_storyboard_grade(s: &mut Session, p: &Value) -> Result<Value> {
                     let fkey = field_key(pg.index, &sl.label);
                     let staged = raw_dir.join(format!("{fkey}.png"));
                     if std::fs::copy(src, &staged).is_ok() {
-                        targets.push((pg.index, sl.bounds, fkey));
+                        targets.push(fkey);
                     }
                 }
             }
         }
     }
     if targets.is_empty() {
-        return Ok(json!({"ok": true, "graded_count": 0, "path": path}));
+        return Ok(json!({"ok": true, "graded_count": 0, "path": dc}));
     }
 
-    std::fs::create_dir_all(&graded_dir)?;
     let actions_file = graded_dir.join("grade-actions.json");
     crate::doc_state::write_json(&actions_file, &actions)?;
-    let report = json!({"staged_actions": actions_file});
-    let mut pdf_steps = Vec::new();
+    let raw_s = raw_dir.to_string_lossy().into_owned();
+    let out_s = graded_dir.to_string_lossy().into_owned();
+    let act_s = actions_file.to_string_lossy().into_owned();
+    let cli_report = crate::craft_api::run_host_cli("photocraft", &["batch", "--input", &raw_s, "--output", &out_s, "--actions", &act_s]).ok();
+
     let mut graded_count = 0usize;
-    for (page_idx, bounds, fkey) in targets {
+    for fkey in targets {
         let out_png = graded_dir.join(format!("{fkey}.png"));
         if out_png.is_file()
             && let Some(meta) = state.images.get_mut(&fkey)
@@ -268,46 +273,24 @@ pub fn cmd_storyboard_grade(s: &mut Session, p: &Value) -> Result<Value> {
             if meta.craft_app.is_none() {
                 meta.craft_app = Some("photocraft".into());
             }
-            pdf_steps.push((
-                "annot_image",
-                json!({
-                    "page": page_idx,
-                    "bounds": bounds,
-                    "path": meta.image,
-                    "fit": "fillProportionally",
-                    "metadata": {
-                        "linked_file": meta.linked_file,
-                        "asset_id": meta.asset_id,
-                        "craft_app": meta.craft_app,
-                        "outline": meta.outline,
-                        "time_sec": meta.time_sec,
-                    }
-                }),
-            ));
             graded_count += 1;
         }
     }
     let _ = std::fs::remove_dir_all(&raw_dir);
-    save_field_state(&path, &state)?;
-    if !pdf_steps.is_empty() {
-        let _ = &pdf_steps;
-    }
+    save_field_state(&dc, &state)?;
     Ok(json!({
         "ok": true,
         "engine": "PhotoCraft",
         "graded_count": graded_count,
-        "path": path,
-        "report": report,
+        "path": dc,
+        "actions_file": actions_file,
+        "cli_report": cli_report,
     }))
 }
 
-/// Rule 3: Storyboard supplies all style prompts & image references for new media creation.
 pub fn cmd_storyboard_bulk_generate(s: &mut Session, p: &Value) -> Result<Value> {
-    let path = doc_path(s, p)?;
-    if !path.is_file() {
-        craft_atomic::atomic_write(&path, PDF_TEMPLATE)?;
-    }
-    let pages = parse_storyboard_pages(Some(s), &path);
+    let dc = ensure_storyboard_file(&doc_path(s, p)?)?;
+    let pages = parse_storyboard_pages(Some(s), &dc);
     let (style_ctx, sb_refs) = storyboard_media_references_for(s, false);
     let (char_style_ctx, char_refs) = storyboard_media_references_for(s, true);
     let base_style = style_ctx.unwrap_or_default();
@@ -347,15 +330,15 @@ pub fn cmd_storyboard_bulk_generate(s: &mut Session, p: &Value) -> Result<Value>
             }
         }
         if !updates.is_empty() {
-            cmd_storyboard_set(s, &json!({"path": path, "pages": updates}))?;
+            cmd_storyboard_set(s, &json!({"path": dc, "pages": updates}))?;
         }
     }
-    let sb_dir = path.with_file_name("storyboard");
+    let sb_dir = dc.with_file_name("storyboard");
     std::fs::create_dir_all(&sb_dir)?;
     let plan_path = sb_dir.join("bulk-generation-plan.json");
     let plan_doc = json!({
         "ok": true,
-        "path": path,
+        "path": dc,
         "plan_path": plan_path,
         "storyboard_references": sb_refs,
         "job_count": jobs.len(),

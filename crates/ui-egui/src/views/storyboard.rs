@@ -1,54 +1,71 @@
-//! `Storyboard` view (`#view-storyboard`): Anti-slop 16:9 Barnyard Production Bible with strict
-//! **Sections → Section Cover / Title Pages → Sub-Pages** hierarchy:
-//! 1. Left (`Book Hierarchy · Sections & Scenes`): scrollable hierarchical navigator grouping every
-//!    Section (`01 Cover`, `02 Backgrounds`, `03 Characters`, `04 Scenes`, `05 Assets`, `06 Final`)
-//!    into its dedicated **Section Cover / Title Card** followed by indented **Sub-Pages**
-//!    (`1.1`, `2.1`, `3.1..3.N`, `SC-01..SC-NN`) with tree guide lines and 16:9 live thumbnails.
-//! 2. Center (`16:9 Production Bible · Barnyard Spreads`): crisp widescreen (`960 × 540 pt`) slides
-//!    containing 100% of `Storyboard.potx` fields (`PRODUCTION / VIDEO INSTRUCTION`, `CAST · PERFORMERS`,
-//!    `LOCATIONS 1–5`, `SONG MAP`, `SEQUENCE MAP`, `MOVEMENT VOCABULARY`, `SCENE BEAT`, `PRODUCTION HANDOFF`)
-//!    with click-in-place text editing and drag/drop/paste/click Craft artwork slots.
-//! 3. Right (`Production Checklist · Barnyard Fields`): grouped field navigator synced 1:1 with
-//!    `storyboard.check` to jump directly to any text or image slot.
+//! `Storyboard` view (`#view-storyboard`): Editable `DesignCraft` (`storyboard.designcraft`)
+//! design document (`612 × 792 pt` US Letter) coordinated with host `DesignCraft` (`--control 7979` / `designcraft-cli`):
+//! 1. Left (`Book Hierarchy · Sections & Spreads`): scrollable navigator driven directly by
+//!    `doc["sections"]` in `storyboard.designcraft` (`Cover`, `Backgrounds`, `Characters`,
+//!    `Scenes`, `Assets`, `Final`).
+//! 2. Center (`DesignCraft Storyboard · Editable Spreads`): 1-page or 2-page spread scroll reading
+//!    `document.json` frames directly without intermediate slide interpretations, with inline text
+//!    editing and drag/drop/paste/click `PhotoCraft` / `VectorCraft` / `EffectCraft` artwork slots.
+//! 3. Right (`Field Checklist`): Red/Green readiness navigator synced 1:1 with `storyboard.check`.
 
 use egui::{Align, Align2, Color32, CornerRadius, FontId, Layout, Pos2, Rect, RichText, ScrollArea, Sense, Stroke, StrokeKind, Ui, Vec2};
 use serde_json::{Value, json};
 
 use super::storyboard_page::{DEFAULT_PAGE_H_PT, DEFAULT_PAGE_W_PT, PageSummary, draw_interactive_page, paint_mini_page};
 use crate::controls::{RequirementRow, ScalarSpec, fill_card, paint_craft_doc_card, requirement_light_row, ring_slider_h};
-use crate::editorial::{ThreePaneSpec, draw_pane_kicker_header, draw_three_pane_workspace};
+use crate::editorial::draw_pane_kicker_header;
+use crate::fonts_ui::{FontPickerSpec, font_family_combo};
 use crate::state::ViewCtx;
 use crate::widgets::{BtnSpec, action_button, status_pill};
 
-pub fn show(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
+pub fn draw_stage_header(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     let pages = collect_pages(ctx);
-    draw_toolbar(ui, ctx, &pages);
-    ui.add_space(6.0);
+    ctx.pal.panel_frame().show(ui, |ui| {
+        ui.set_min_width(ui.available_width());
+        draw_toolbar(ui, ctx, &pages);
+    });
+}
 
+pub fn draw_navigator_panel(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
+    let pages = collect_pages(ctx);
+    draw_hierarchical_book_rail(ui, ctx, &pages);
+}
+
+pub fn draw_canvas_panel(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
+    let pages = collect_pages(ctx);
     if pages.is_empty() {
         draw_empty_storyboard_state(ui, ctx);
         return;
     }
-
     let dropped_paths: Vec<String> = ui.ctx().input(|i| i.raw.dropped_files.iter().map(|f| f.path().to_string_lossy().into_owned()).collect());
+    draw_seamless_document_scroll(ui, ctx, &pages, &dropped_paths);
+}
 
-    let wide = ui.available_width() >= 1220.0;
-    draw_three_pane_workspace(
-        ui,
-        ThreePaneSpec {
-            id_prefix: "sb_barnyard",
-            left_width: if wide { 296.0 } else { 252.0 },
-            right_width: if wide { 296.0 } else { 254.0 },
-            gap: 8.0,
-            min_center: 260.0,
-            show_left: ctx.state.show_nav_rail,
-            show_right: ctx.state.show_right_inspector,
-        },
-        ctx,
-        |left, ctx| draw_hierarchical_book_rail(left, ctx, &pages),
-        |center, ctx| draw_seamless_document_scroll(center, ctx, &pages, &dropped_paths),
-        |right, ctx| draw_requirements_navigator(right, ctx),
-    );
+pub fn draw_inspector_panel(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
+    draw_requirements_navigator(ui, ctx);
+}
+
+pub fn draw_timeline_panel(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
+    let pages = collect_pages(ctx);
+    fill_card(ui, ctx.pal, true, |ui| {
+        ui.horizontal_wrapped(|ui| {
+            ui.label(RichText::new("Storyboard Spreads").size(11.5).strong());
+            status_pill(ui, ctx.pal, &format!("{} pages", pages.len()), ctx.pal.accent_emerald);
+        });
+        ScrollArea::horizontal().id_salt("sb_timeline_strip").show(ui, |ui| {
+            ui.horizontal(|ui| {
+                for pg in &pages {
+                    let sel = ctx.state.storyboard.current_page == pg.index;
+                    let (r, resp) = ui.allocate_exact_size(Vec2::new(78.0, 98.0), Sense::click());
+                    paint_mini_page(ui, r, pg, sel, ctx.pal.accent_sky);
+                    if resp.on_hover_text(format!("{} · {}", pg.sub_code, pg.title)).clicked() {
+                        ctx.state.storyboard.current_page = pg.index;
+                        ctx.state.storyboard.scroll_to_page = Some(pg.index);
+                    }
+                }
+            });
+        });
+    });
 }
 
 fn collect_pages(ctx: &ViewCtx<'_>) -> Vec<PageSummary> {
@@ -63,8 +80,10 @@ fn collect_pages(ctx: &ViewCtx<'_>) -> Vec<PageSummary> {
             let slots = pg["slots"].as_array().cloned().unwrap_or_default();
             let total_slots = slots.len();
             let filled_slots = slots.iter().filter(|s| s["filled"] == true).count();
-            let light_green =
-                chk.and_then(|c| c["light"].as_str()).or_else(|| pg["light"].as_str()).map_or(total_slots > 0 && filled_slots == total_slots, |l| l == "green");
+            let light_green = chk
+                .and_then(|c| c["light"].as_str())
+                .or_else(|| pg["light"].as_str())
+                .map_or(total_slots == 0 || filled_slots == total_slots, |l| l == "green");
             let bounds = pg["bounds"].as_array();
             let pw = bounds.and_then(|b| b.get(2)).and_then(Value::as_f64).map_or(DEFAULT_PAGE_W_PT, |v| v as f32);
             let ph = bounds.and_then(|b| b.get(3)).and_then(Value::as_f64).map_or(DEFAULT_PAGE_H_PT, |v| v as f32);
@@ -75,7 +94,7 @@ fn collect_pages(ctx: &ViewCtx<'_>) -> Vec<PageSummary> {
                 section: pg["section"].as_str().unwrap_or("Scenes").to_owned(),
                 page_role: role,
                 sub_code,
-                title: pg["title"].as_str().unwrap_or("Slide").to_owned(),
+                title: pg["title"].as_str().unwrap_or("Page").to_owned(),
                 page_size_pt: [pw.max(200.0), ph.max(200.0)],
                 light_green,
                 filled_slots,
@@ -97,9 +116,9 @@ fn draw_empty_storyboard_state(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             ui,
             rect,
             ctx.pal,
-            "16:9",
-            "16:9 Production Bible · Storyboard",
-            "Initialize the hierarchical 16:9 Barnyard Storyboard (Sections → Cover Pages → Scene Beat Sub-Pages).",
+            "DC",
+            "DesignCraft Storyboard (storyboard.designcraft)",
+            "Initialize the editable storyboard.designcraft design document from the DesignCraft master.",
         );
         ui.add_space(8.0);
         ui.horizontal_wrapped(|ui| {
@@ -110,14 +129,14 @@ fn draw_empty_storyboard_state(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                 BtnSpec::new(
                     "storyboard-empty-init",
                     "plus",
-                    "Initialize Production Bible",
-                    "Create 16:9 Barnyard Storyboard from project song, cast, and locations",
+                    "Initialize Storyboard (.designcraft)",
+                    "Create storyboard.designcraft as a complete editable DesignCraft design document",
                 )
                 .primary(),
             )
             .clicked()
             {
-                ctx.exec("storyboard.new", json!({}), Some("Initialized 16:9 Production Bible"));
+                ctx.exec("storyboard.new", json!({}), Some("Initialized storyboard.designcraft"));
                 ctx.exec("storyboard.pages", json!({"full": true}), None);
                 ctx.exec("storyboard.check", json!({}), None);
             }
@@ -130,22 +149,26 @@ fn draw_empty_storyboard_state(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
 }
 
 fn draw_toolbar(ui: &mut Ui, ctx: &mut ViewCtx<'_>, pages: &[PageSummary]) {
+    if let Some(doc_font) = ctx.state.cache.storyboard_pages["font_family"].as_str().filter(|f| !f.is_empty())
+        && ctx.state.storyboard.font_family.is_empty()
+    {
+        ctx.state.storyboard.font_family = doc_font.to_owned();
+    }
     let filled = ctx.state.cache.storyboard_check["filled_count"].as_u64().unwrap_or_else(|| pages.iter().map(|p| p.filled_slots as u64).sum());
     let total = ctx.state.cache.storyboard_check["total_required"].as_u64().unwrap_or_else(|| pages.iter().map(|p| p.total_slots as u64).sum());
-    let scene_count = pages.iter().filter(|p| p.section == "Scenes" && !p.is_cover_or_section_title()).count();
     let pill_col = if total > 0 && filled == total { ctx.pal.accent_emerald } else { ctx.pal.accent_amber };
 
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 5.0;
-        status_pill(ui, ctx.pal, &format!("16:9 Production Bible · {} Slides ({scene_count} Scenes) · {filled}/{total} Fields", pages.len()), pill_col);
+        status_pill(ui, ctx.pal, &format!("DesignCraft · {} Pages · {filled}/{total} Fields", pages.len()), pill_col);
 
         let cur = ctx.state.storyboard.current_page.min(pages.len().saturating_sub(1));
-        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("sb-prev-slide", "chevronLeft", "Previous Storyboard slide").enabled(cur > 0)).clicked() {
+        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("sb-prev-slide", "chevronLeft", "Previous Storyboard page").enabled(cur > 0)).clicked() {
             let prev = cur.saturating_sub(1);
             ctx.state.storyboard.current_page = prev;
             ctx.state.storyboard.scroll_to_page = Some(prev);
         }
-        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("sb-next-slide", "chevronRight", "Next Storyboard slide").enabled(cur + 1 < pages.len()))
+        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("sb-next-slide", "chevronRight", "Next Storyboard page").enabled(cur + 1 < pages.len()))
             .clicked()
         {
             let next = (cur + 1).min(pages.len().saturating_sub(1));
@@ -154,13 +177,8 @@ fn draw_toolbar(ui: &mut Ui, ctx: &mut ViewCtx<'_>, pages: &[PageSummary]) {
         }
 
         let single_sel = !ctx.state.storyboard.double_page_mode;
-        if action_button(
-            ui,
-            ctx.reg,
-            ctx.pal,
-            BtnSpec::label_only("sb-mode-single", "1-Slide Focus", "Large widescreen 16:9 slide scroll").selected(single_sel),
-        )
-        .clicked()
+        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("sb-mode-single", "pageSingle", "Single-page DesignCraft view").selected(single_sel))
+            .clicked()
         {
             ctx.state.storyboard.double_page_mode = false;
         }
@@ -168,26 +186,37 @@ fn draw_toolbar(ui: &mut Ui, ctx: &mut ViewCtx<'_>, pages: &[PageSummary]) {
             ui,
             ctx.reg,
             ctx.pal,
-            BtnSpec::label_only("sb-mode-double", "2-Slide Spreads", "Side-by-side 2-up slide spread view").selected(!single_sel),
+            BtnSpec::icon_only("sb-mode-double", "spreadTwoPage", "Side-by-side DesignCraft 2-page spread view").selected(!single_sel),
         )
         .clicked()
         {
             ctx.state.storyboard.double_page_mode = true;
         }
 
-        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("sb-add-scene-beat", "plus", "+ Scene Beat", "Append a new Barnyard 16:9 Scene Beat sub-page"))
-            .clicked()
-        {
-            ctx.exec("storyboard.add", json!({}), Some("Added new 16:9 Scene Beat slide"));
-            ctx.exec("storyboard.pages", json!({"full": true}), None);
-            ctx.exec("storyboard.check", json!({}), None);
+        let mut font_changed = false;
+        let avail_fonts = ctx.state.available_fonts.clone();
+        if font_family_combo(
+            ui,
+            ctx.reg,
+            ctx.pal,
+            FontPickerSpec { id_prefix: "sb-font", label: "Font" },
+            &mut ctx.state.storyboard.font_family,
+            &avail_fonts,
+            &mut ctx.state.font_picker_filter,
+            ctx.actions,
+        ) {
+            font_changed = true;
+        }
+        if font_changed {
+            let chosen = ctx.state.storyboard.font_family.clone();
+            ctx.exec("storyboard.set", json!({"font": chosen}), Some("Updated Storyboard typography family"));
         }
 
-        ui.allocate_ui_with_layout(Vec2::new(142.0, 24.0), Layout::left_to_right(Align::Center), |ui| {
+        ui.allocate_ui_with_layout(Vec2::new(136.0, 24.0), Layout::left_to_right(Align::Center), |ui| {
             ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("sb-zoom", "Zoom", 65.0..=145.0, "%", ctx.pal.accent_emerald), &mut ctx.state.storyboard.zoom);
         });
 
-        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("storyboard-refresh", "refresh", "Sync", "Sync Storyboard pages & checklist")).clicked() {
+        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("storyboard-refresh", "refresh", "Sync storyboard.designcraft pages & checklist")).clicked() {
             ctx.exec("storyboard.pages", json!({"full": true}), None);
             ctx.exec("storyboard.check", json!({}), None);
         }
@@ -196,11 +225,33 @@ fn draw_toolbar(ui: &mut Ui, ctx: &mut ViewCtx<'_>, pages: &[PageSummary]) {
             ui,
             ctx.reg,
             ctx.pal,
-            BtnSpec::new("storyboard-open-pdfcraft", "external", "Open in Craft", "Open Storyboard in PDFCraft / DeckCraft (--control)").primary(),
+            BtnSpec::new("storyboard-render-spreads", "eye", "Render Spreads", "Render storyboard.designcraft spreads via host DesignCraft"),
         )
         .clicked()
         {
-            ctx.exec("storyboard.open", json!({"page": cur}), Some("Opened Storyboard in Craft"));
+            ctx.exec("storyboard.thumbnail", json!({"page": cur, "rail": true}), Some("Rendered DesignCraft storyboard previews"));
+        }
+
+        if action_button(
+            ui,
+            ctx.reg,
+            ctx.pal,
+            BtnSpec::new("storyboard-export", "download", "Export", "Export storyboard.designcraft spreads via host DesignCraft"),
+        )
+        .clicked()
+        {
+            ctx.exec("storyboard.export", json!({}), Some("Exported storyboard.designcraft spreads"));
+        }
+
+        if action_button(
+            ui,
+            ctx.reg,
+            ctx.pal,
+            BtnSpec::new("storyboard-open-designcraft", "external", "DesignCraft", "Open storyboard.designcraft in host DesignCraft").primary(),
+        )
+        .clicked()
+        {
+            ctx.exec("storyboard.open", json!({"app": "designcraft", "page": cur}), Some("Opened storyboard.designcraft in DesignCraft"));
         }
     });
 }
@@ -224,7 +275,7 @@ fn draw_hierarchical_book_rail(ui: &mut Ui, ctx: &mut ViewCtx<'_>, pages: &[Page
     fill_card(ui, ctx.pal, true, |ui| {
         let cur_sec = pages.get(ctx.state.storyboard.current_page).map_or("Cover", |p| p.section.as_str());
         let hdr_accent = ctx.pal.section_accent(cur_sec);
-        draw_pane_kicker_header(ui, ctx.pal, "BOOK HIERARCHY", "Sections & Scene Beats", hdr_accent, Some(("16:9", hdr_accent)));
+        draw_pane_kicker_header(ui, ctx.pal, "DESIGNCRAFT DOCUMENT", "Sections & Pages", hdr_accent, Some((".designcraft", hdr_accent)));
         ui.add_space(5.0);
 
         let sections = ordered_sections(ctx, pages);
@@ -254,12 +305,12 @@ fn draw_section_jump_chips(ui: &mut Ui, ctx: &mut ViewCtx<'_>, sections: &[Strin
                 "Characters" => "03 Cast",
                 "Scenes" => "04 Scenes",
                 "Assets" => "05 Assets",
-                "Final" => "06 Handoff",
+                "Final" => "06 Final",
                 _ => "01 Cover",
             };
             let sel = cur_sec == Some(sec.as_str());
             let id = format!("sb-sec-jump-{}", i + 1);
-            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, short, &format!("Jump to {sec} section cover")).selected(sel)).clicked()
+            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, short, &format!("Jump to {sec} section")).selected(sel)).clicked()
                 && let Some(first_pg) = pages.iter().find(|p| &p.section == sec)
             {
                 ctx.state.storyboard.current_page = first_pg.index;
@@ -274,7 +325,6 @@ fn draw_section_hierarchy_group(ui: &mut Ui, ctx: &mut ViewCtx<'_>, sec_num: usi
     let filled_sum: usize = sec_pages.iter().map(|p| p.filled_slots).sum();
     let total_sum: usize = sec_pages.iter().map(|p| p.total_slots).sum();
 
-    // Level 1: Section Banner
     ui.horizontal(|ui| {
         let (dot_r, _) = ui.allocate_exact_size(Vec2::new(8.0, 14.0), Sense::hover());
         ui.painter().circle_filled(dot_r.center(), 3.6, accent);
@@ -289,7 +339,6 @@ fn draw_section_hierarchy_group(ui: &mut Ui, ctx: &mut ViewCtx<'_>, sec_num: usi
     });
     ui.add_space(3.0);
 
-    // Level 2 (Cover / Section Title Card) & Level 3 (Indented Sub-Pages)
     let sub_total = sec_pages.iter().filter(|p| !p.is_cover_or_section_title()).count();
     let mut sub_seen = 0usize;
     for pg in sec_pages {
@@ -323,12 +372,12 @@ fn draw_cover_title_rail_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>, pg: &PageSumma
     ui.painter().rect(crect, CornerRadius::same(6), bg, border, StrokeKind::Inside);
 
     let thumb_h = 54.0;
-    let thumb_w = (thumb_h / pg.aspect_h_over_w()).clamp(64.0, 98.0);
+    let thumb_w = (thumb_h / pg.aspect_h_over_w()).clamp(40.0, 98.0);
     let thumb_r = Rect::from_min_size(Pos2::new(crect.min.x + 6.0, crect.min.y + 6.0), Vec2::new(thumb_w, thumb_h));
     paint_mini_page(ui, thumb_r, pg, selected, accent);
 
     let tx = thumb_r.max.x + 8.0;
-    let role_tag = if pg.page_role == "cover" { format!("MASTER COVER · {}", pg.sub_code) } else { format!("SECTION COVER · {}", pg.sub_code) };
+    let role_tag = if pg.page_role == "cover" { format!("MASTER COVER · {}", pg.sub_code) } else { format!("SECTION START · {}", pg.sub_code) };
     ui.painter().text(Pos2::new(tx, crect.min.y + 15.0), Align2::LEFT_CENTER, role_tag, FontId::monospace(8.5), accent);
     ui.painter().text(Pos2::new(tx, crect.min.y + 33.0), Align2::LEFT_CENTER, clamp_label(&pg.title, 22), FontId::proportional(11.0), ctx.pal.text_primary);
     ui.painter().text(
@@ -350,9 +399,8 @@ fn draw_indented_subpage_row(ui: &mut Ui, ctx: &mut ViewCtx<'_>, pg: &PageSummar
     let row_w = (ui.available_width() - 4.0).max(168.0);
     let row_h = 48.0;
     let (full_r, resp) = ui.allocate_exact_size(Vec2::new(row_w, row_h), Sense::click());
-    ctx.reg.record(format!("sb-rail-p{:02}", pg.index + 1), format!("Sub-Page {} ({})", pg.sub_code, pg.title), &resp, None);
+    ctx.reg.record(format!("sb-rail-p{:02}", pg.index + 1), format!("Page {} ({})", pg.sub_code, pg.title), &resp, None);
 
-    // Tree guide connector (`├─` or `└─`)
     let guide_x = full_r.min.x + 11.0;
     let guide_bottom = if is_last { full_r.center().y } else { full_r.max.y + 3.0 };
     let guide_col = if selected { accent } else { ctx.pal.border };
@@ -371,7 +419,7 @@ fn draw_indented_subpage_row(ui: &mut Ui, ctx: &mut ViewCtx<'_>, pg: &PageSummar
     ui.painter().rect(card_r, CornerRadius::same(5), bg, st, StrokeKind::Inside);
 
     let th = 38.0;
-    let tw = (th / pg.aspect_h_over_w()).clamp(50.0, 68.0);
+    let tw = (th / pg.aspect_h_over_w()).clamp(30.0, 68.0);
     let thumb_r = Rect::from_min_size(Pos2::new(card_r.min.x + 5.0, card_r.min.y + 5.0), Vec2::new(tw, th));
     paint_mini_page(ui, thumb_r, pg, selected, accent);
 
@@ -411,17 +459,17 @@ fn draw_seamless_document_scroll(ui: &mut Ui, ctx: &mut ViewCtx<'_>, pages: &[Pa
             let role_word = if cur_pg.page_role == "cover" {
                 "Master Cover"
             } else if cur_pg.page_role == "section_title" {
-                "Section Cover"
+                "Section Start"
             } else {
-                "Sub-Page"
+                "Page"
             };
             let kicker = format!("{} › {} · {}", cur_pg.section.to_ascii_uppercase(), role_word.to_ascii_uppercase(), cur_pg.sub_code);
-            let badge_txt = format!("Slide {}/{}", cur_pg.index + 1, pages.len());
+            let badge_txt = format!("Page {}/{}", cur_pg.index + 1, pages.len());
             draw_pane_kicker_header(ui, ctx.pal, &kicker, &cur_pg.title, sec_col, Some((&badge_txt, sec_col)));
         }
         ui.label(
             RichText::new(
-                "Click any text box on the slide to edit inline · Drop, paste, or click any artwork frame to link PhotoCraft / VectorCraft / EffectCraft files",
+                "Click any unlocked text frame to edit inline · Drop, paste, or click any unlocked image frame to link PhotoCraft / VectorCraft / EffectCraft files",
             )
             .size(10.0)
             .color(ctx.pal.text_muted),
@@ -436,13 +484,13 @@ fn draw_seamless_document_scroll(ui: &mut Ui, ctx: &mut ViewCtx<'_>, pages: &[Pa
             if ctx.state.storyboard.double_page_mode {
                 draw_two_up_spread_scroll(ui, ctx, pages, dropped_paths, avail_w, zoom, target_scroll);
             } else {
-                draw_single_slide_scroll(ui, ctx, pages, dropped_paths, avail_w, zoom, target_scroll);
+                draw_single_page_scroll(ui, ctx, pages, dropped_paths, avail_w, zoom, target_scroll);
             }
         });
     });
 }
 
-fn draw_single_slide_scroll(
+fn draw_single_page_scroll(
     ui: &mut Ui,
     ctx: &mut ViewCtx<'_>,
     pages: &[PageSummary],
@@ -457,7 +505,8 @@ fn draw_single_slide_scroll(
             prev_sec = pg.section.as_str();
             draw_inline_section_divider(ui, ctx, prev_sec);
         }
-        let base_w = (avail_w * 0.94).clamp(280.0, 860.0) * zoom;
+        let max_natural_w = if pg.aspect_h_over_w() > 1.0 { 640.0 } else { 860.0 };
+        let base_w = (avail_w * 0.88).clamp(260.0, max_natural_w) * zoom;
         let page_w = base_w.min(avail_w);
         let page_h = page_w * pg.aspect_h_over_w();
         let pad_x = ((avail_w - page_w) * 0.5).max(0.0);
@@ -467,7 +516,7 @@ fn draw_single_slide_scroll(
                 ui.add_space(pad_x);
             }
             ui.vertical(|ui| {
-                draw_slide_caption_strip(ui, ctx, pg, page_w);
+                draw_page_caption_strip(ui, ctx, pg, page_w);
                 let r = draw_interactive_page(ui, ctx, pg, Vec2::new(page_w, page_h), dropped_paths);
                 if target_scroll == Some(pg.index) {
                     ui.scroll_to_rect(r, Some(Align::TOP));
@@ -497,7 +546,7 @@ fn draw_two_up_spread_scroll(
         }
         let pair_end = if idx + 1 < pages.len() && pages[idx].section == pages[idx + 1].section { idx + 2 } else { idx + 1 };
         let slice = &pages[idx..pair_end];
-        let base_w = ((avail_w - gap) * 0.5).clamp(220.0, 520.0) * zoom;
+        let base_w = ((avail_w - gap) * 0.5).clamp(200.0, 480.0) * zoom;
         let page_w = base_w.min((avail_w - gap) * 0.5);
         let row_w = slice.len() as f32 * page_w + (slice.len().saturating_sub(1) as f32) * gap;
         let pad_x = ((avail_w - row_w) * 0.5).max(0.0);
@@ -510,7 +559,7 @@ fn draw_two_up_spread_scroll(
             for pg in slice {
                 let page_h = page_w * pg.aspect_h_over_w();
                 ui.vertical(|ui| {
-                    draw_slide_caption_strip(ui, ctx, pg, page_w);
+                    draw_page_caption_strip(ui, ctx, pg, page_w);
                     let r = draw_interactive_page(ui, ctx, pg, Vec2::new(page_w, page_h), dropped_paths);
                     if target_scroll == Some(pg.index) {
                         ui.scroll_to_rect(r, Some(Align::TOP));
@@ -534,9 +583,9 @@ fn draw_inline_section_divider(ui: &mut Ui, ctx: &ViewCtx<'_>, sec_name: &str) {
     ui.add_space(4.0);
 }
 
-fn draw_slide_caption_strip(ui: &mut Ui, ctx: &ViewCtx<'_>, pg: &PageSummary, width: f32) {
+fn draw_page_caption_strip(ui: &mut Ui, ctx: &ViewCtx<'_>, pg: &PageSummary, width: f32) {
     let accent = ctx.pal.section_accent(&pg.section);
-    let kind_lbl = if pg.is_cover_or_section_title() { "COVER / TITLE" } else { "SUB-PAGE" };
+    let kind_lbl = if pg.is_cover_or_section_title() { "COVER / SECTION" } else { "PAGE" };
     ui.allocate_ui_with_layout(Vec2::new(width, 18.0), Layout::left_to_right(Align::Center), |ui| {
         ui.label(RichText::new(format!("{} · {kind_lbl}", pg.sub_code)).monospace().size(9.0).color(accent));
         ui.label(RichText::new("·").color(ctx.pal.text_muted));
@@ -546,11 +595,11 @@ fn draw_slide_caption_strip(ui: &mut Ui, ctx: &ViewCtx<'_>, pg: &PageSummary, wi
 
 fn draw_requirements_navigator(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     fill_card(ui, ctx.pal, true, |ui| {
-        draw_pane_kicker_header(ui, ctx.pal, "FIELD CHECKLIST", "Barnyard Fields", ctx.pal.accent_emerald, None);
+        draw_pane_kicker_header(ui, ctx.pal, "FIELD CHECKLIST", "Storyboard Fields", ctx.pal.accent_emerald, None);
         ui.add_space(4.0);
         ui.horizontal(|ui| {
             for (fid, lbl, tip) in
-                [("all", "All", "Show all Barnyard Storyboard fields"), ("red", "Missing", "Show unfilled fields"), ("green", "Ready", "Show completed fields")]
+                [("all", "All", "Show all unlocked Storyboard fields"), ("red", "Missing", "Show unfilled fields"), ("green", "Ready", "Show completed fields")]
             {
                 let sel = ctx.state.storyboard.req_filter == fid;
                 if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&format!("sb-req-filter-{fid}"), lbl, tip).selected(sel)).clicked() {

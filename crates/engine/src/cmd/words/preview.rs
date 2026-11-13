@@ -15,7 +15,7 @@ pub fn frame(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(EngineError::InvalidParams("kind must be lyrics, motion, or stage".into()));
     }
     let dir = super::workspace_dir(s)?;
-    let project = dir.join("lettering/lyrics.ecproj");
+    let project = crate::cmd::words::lyrics_ecproj_path(&dir);
     if !project.is_file() {
         let _ = super::lettering::cmd_words_letter(s, &json!({"render": false}));
     }

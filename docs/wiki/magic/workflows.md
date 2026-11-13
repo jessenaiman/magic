@@ -3,6 +3,8 @@ title: Production Workflows
 description: Storyboard overlays, PhotoCraft subject isolation, EffectCraft puppet lip-sync, kinetic lyrics, and FilmCraft assembly.
 ---
 
+> **Last Reviewed & Updated:** 2026-11-12T16:59:00-05:00 · **Reviewed by:** Jesse A. Naiman
+
 ## Storyboard (`DesignCraft`)
 
 - Inspect spreads and read-only fine-print CLI instructions: `magic-cli --project song.magic storyboard pages page=0`
@@ -25,6 +27,6 @@ In the **Animation** view (or via `magic-cli`), use [EffectCraft's Puppet Contro
 
 ## Kinetic Lyrics (`V3`), Action Motion (`V4`) & Studio (`FilmCraft`)
 
-- Author word styling and curves in **Lyrics** (`words.letter` -> `lettering/lyrics.ecproj` -> `V3`).
-- Attach SVG trim-path drawings to sung action verbs in **Motion** (`motion.save` + `motion.publish` -> `motion/actions.ecproj` -> `V4`).
+- Author word styling and curves in **Lyrics** (`words.letter` -> `effects/lyrics.ecproj` -> `V3`).
+- Attach SVG trim-path drawings to sung action verbs in **Motion** (`motion.save` + `motion.publish` -> `effects/motion.ecproj` -> `V4`).
 - Open **Studio** and click **Assemble**, **Preview**, or **Export** (`video.assemble`, `video.preview`, `video.export`) — or click **FilmCraft** to fine-tune directly in `FilmCraft`.

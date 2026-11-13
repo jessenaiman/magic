@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Mutex, OnceLock};
 
-use egui::{Align, Align2, Color32, CornerRadius, FontId, Image, Layout, Pos2, Rect, Sense, Shape, Stroke, StrokeKind, Ui, Vec2};
+use egui::{Align2, Color32, CornerRadius, FontId, Image, Pos2, Rect, Sense, Shape, Stroke, StrokeKind, Ui, Vec2};
 
 use crate::controls::badge_accent_color;
 use crate::theme::MagicPalette;
@@ -23,13 +23,6 @@ pub struct FilmbarStyle<'a> {
     pub selected: bool,
     pub hovered: bool,
     pub timecode: Option<&'a str>,
-}
-
-/// Create a clipped top-down child `Ui` inside `rect` without advancing the parent cursor prematurely.
-pub fn child_pane(ui: &mut Ui, rect: Rect, salt: &str) -> Ui {
-    let mut child = ui.new_child(egui::UiBuilder::new().max_rect(rect).layout(Layout::top_down(Align::Min)).scope_id(ui.scope_id().with(salt)));
-    child.set_clip_rect(rect);
-    child
 }
 
 /// Render a panel card with guaranteed vertical interior layout across the available pane width.

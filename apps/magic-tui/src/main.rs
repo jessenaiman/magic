@@ -1,127 +1,118 @@
-//! Backstage (`apps/magic-tui`): interactive terminal companion for Magic Studio, supporting both
-//! headless `magic::Session` and live `magic --control 9875` (`--connect 127.0.0.1:9875`) sessions.
+//! Backstage (`apps/magic-tui`): **Technicolor Workshop** static log & report viewer.
+//!
+//! Renders the 5-tab Backstage view (`WORKSHOP F1`, `BOOTH F2`, `MOPS F3`, `MAYHEM F4`,
+//! `SETTINGS F5`) strictly from existing on-disk logs (`magic.log`, `activity.jsonl`) and past
+//! JSON/JSONL reports. Performs **zero** background polling, **zero** socket connections, and
+//! **zero** subprocess spawns — blocks on stdin and rereads disk only on `r`.
 
 #![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable))]
 
-use std::io::{self, BufRead, Read, Write};
+mod snapshot;
+mod ui;
+
+use std::io::{self, BufRead, Write};
+use std::path::PathBuf;
 
 use clap::Parser;
-use magic::{Session, command_specs};
-use magic_mcp::{Backend, Remote, normalize_control_addr};
-use serde_json::{Value, json};
-
-const MAX_REPL_LINE: usize = 1024 * 1024;
+use snapshot::{SnapshotInputs, load_backstage_snapshot};
+use ui::{TabId, UiCursor, render_screen};
 
 #[derive(Parser)]
-#[command(name = "magic-tui", about = "Magic Studio Backstage terminal console (headless or live `--connect 127.0.0.1:9875`)")]
+#[command(name = "magic-tui", about = "Magic Studio Backstage (Technicolor Workshop — static read-only viewer over existing logs and past reports)")]
 struct Cli {
-    /// Open this `.magic` project at launch (headless mode)
+    /// Optional `.magic` project file to inspect on disk (read-only)
     #[arg(long)]
-    project: Option<String>,
-    /// Attach to a running `magic --control <PORT>` window (`127.0.0.1:9875` or `9875`)
-    #[arg(long, visible_aliases = ["bridge", "control"])]
-    connect: Option<String>,
+    project: Option<PathBuf>,
+    /// Optional imported Mops task handoff snapshot JSON
+    #[arg(long)]
+    mops_json: Option<PathBuf>,
+    /// Optional Mayhem baseline toolResults JSON
+    #[arg(long)]
+    baseline_json: Option<PathBuf>,
+    /// Optional Mayhem candidate toolResults JSON
+    #[arg(long)]
+    candidate_json: Option<PathBuf>,
+    /// Optional explicit path to `magic.log`
+    #[arg(long)]
+    log_file: Option<PathBuf>,
+    /// Initial tab (`workshop`, `booth`, `mops`, `mayhem`, or `settings`)
+    #[arg(long, default_value = "workshop")]
+    tab: String,
+    /// Print a non-interactive JSON summary of discovered logs/reports and exit
+    #[arg(long)]
+    dump: bool,
 }
 
-fn parse_repl_line(line: &str) -> (&str, Value) {
-    let mut parts = line.split_whitespace();
-    let Some(cmd) = parts.next() else {
-        return ("", json!({}));
-    };
-    let rest = line[cmd.len()..].trim();
-    if rest.is_empty() {
-        return (cmd, json!({}));
+fn parse_tab(raw: &str) -> TabId {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "2" | "f2" | "booth" => TabId::Booth,
+        "3" | "f3" | "mops" => TabId::Mops,
+        "4" | "f4" | "mayhem" => TabId::Mayhem,
+        "5" | "f5" | "settings" => TabId::Settings,
+        _ => TabId::Workshop,
     }
-    if rest.starts_with('{')
-        && let Ok(v) = serde_json::from_str::<Value>(rest)
-    {
-        return (cmd, v);
-    }
-    let mut map = serde_json::Map::new();
-    for tok in rest.split_whitespace() {
-        if let Some((k, v)) = tok.split_once('=') {
-            let parsed = serde_json::from_str::<Value>(v).unwrap_or_else(|_| json!(v));
-            map.insert(k.to_owned(), parsed);
+}
+
+fn run_interactive(inputs: &SnapshotInputs, initial_tab: TabId) -> io::Result<()> {
+    let mut snap = load_backstage_snapshot(inputs, 0);
+    let mut cursor = UiCursor { tab: initial_tab, row_idx: 0 };
+    let stdin = io::stdin();
+    let mut reader = stdin.lock();
+    let mut line = String::new();
+
+    loop {
+        print!("{}", render_screen(&snap, &cursor));
+        print!("backstage> ");
+        io::stdout().flush()?;
+        line.clear();
+        if reader.read_line(&mut line)? == 0 {
+            break;
+        }
+        match line.trim().to_ascii_lowercase().as_str() {
+            "q" | "quit" | "exit" => break,
+            "r" | "refresh" | "reload" => snap = load_backstage_snapshot(inputs, snap.reread_count.saturating_add(1)),
+            "1" | "f1" | "workshop" => cursor.tab = TabId::Workshop,
+            "2" | "f2" | "booth" => cursor.tab = TabId::Booth,
+            "3" | "f3" | "mops" => cursor.tab = TabId::Mops,
+            "4" | "f4" | "mayhem" => cursor.tab = TabId::Mayhem,
+            "5" | "f5" | "settings" => cursor.tab = TabId::Settings,
+            "n" | "tab" => cursor.tab = cursor.tab.next(),
+            "j" | "down" => cursor.row_idx = cursor.row_idx.saturating_add(1),
+            "k" | "up" => cursor.row_idx = cursor.row_idx.saturating_sub(1),
+            _ => {}
         }
     }
-    (cmd, Value::Object(map))
+    Ok(())
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
-    let mut remote = cli.connect.as_deref().map(|spec| Remote::new(normalize_control_addr(spec), magic::workspace::control_token()));
-    let mut session = remote.is_none().then(Session::user_session);
+    let inputs = SnapshotInputs {
+        project: cli.project,
+        mops_json: cli.mops_json,
+        baseline_json: cli.baseline_json,
+        candidate_json: cli.candidate_json,
+        log_file: cli.log_file,
+    };
 
-    if let (Some(path), Some(sess)) = (cli.project.as_deref(), session.as_mut()) {
-        println!("Opening project: {path}...");
-        match sess.execute("file.open", json!({ "path": path })) {
-            Ok(res) => println!("Project loaded: {res}"),
-            Err(e) => eprintln!("Error loading project: {e}"),
-        }
+    if cli.dump {
+        let snap = load_backstage_snapshot(&inputs, 0);
+        let sources: Vec<serde_json::Value> =
+            snap.sources.iter().map(|s| serde_json::json!({"label": s.label, "path": s.path, "exists": s.exists, "bytes": s.bytes})).collect();
+        let out = serde_json::json!({
+            "mode": "static_read_only",
+            "polling": false,
+            "project": snap.project.name,
+            "activity_count": snap.activity_recent.len(),
+            "log_lines": snap.log_tail.len(),
+            "mops_tasks": snap.mops_tasks.len(),
+            "mayhem_findings": snap.mayhem.findings.len(),
+            "sources": sources,
+        });
+        println!("{}", serde_json::to_string_pretty(&out)?);
+        return Ok(());
     }
 
-    println!("==================================================");
-    println!(" Magic Studio Backstage (`magic-tui` · :9875)");
-    println!("==================================================");
-    println!("Shortcuts: help [filter] | status | storyboard | doctor | sync | quit");
-    println!("Sample commands:");
-    for spec in command_specs().iter().take(8) {
-        println!("  - {:<26} {}", spec.id, spec.label);
-    }
-    println!("==================================================");
-
-    let stdin = io::stdin();
-    let mut locked = stdin.lock();
-    loop {
-        print!("backstage> ");
-        io::stdout().flush()?;
-        let mut buf = Vec::new();
-        let n = locked.by_ref().take((MAX_REPL_LINE + 1) as u64).read_until(b'\n', &mut buf)?;
-        if n == 0 {
-            break;
-        }
-        if buf.len() > MAX_REPL_LINE {
-            eprintln!("Error: input line exceeded {MAX_REPL_LINE} bytes");
-            continue;
-        }
-        let Ok(line) = std::str::from_utf8(&buf) else {
-            eprintln!("Error: input must be valid UTF-8");
-            continue;
-        };
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        if matches!(trimmed, "quit" | "exit" | "q") {
-            break;
-        }
-        if let Some(rest) = trimmed.strip_prefix("help") {
-            let filter = rest.trim().to_ascii_lowercase();
-            for spec in command_specs() {
-                if filter.is_empty() || spec.id.to_ascii_lowercase().contains(&filter) {
-                    println!("  {:<28} {}", spec.id, spec.label);
-                }
-            }
-            continue;
-        }
-        let (raw_cmd, params) = match trimmed {
-            "status" => ("workshop.status", json!({})),
-            "storyboard" => ("storyboard.check", json!({})),
-            "doctor" => ("app.doctor", json!({})),
-            "sync" => ("video.sync_links", json!({"render": false})),
-            other => parse_repl_line(other),
-        };
-        let res = if let Some(r) = remote.as_mut() {
-            r.execute(raw_cmd, params)
-        } else if let Some(s) = session.as_mut() {
-            s.execute(raw_cmd, params).map_err(|e| e.to_string())
-        } else {
-            Err("no active backend".into())
-        };
-        match res {
-            Ok(val) => println!("{}", serde_json::to_string_pretty(&val).unwrap_or_default()),
-            Err(err) => eprintln!("Error: {err}"),
-        }
-    }
+    run_interactive(&inputs, parse_tab(&cli.tab))?;
     Ok(())
 }

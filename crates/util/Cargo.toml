@@ -1,14 +1,11 @@
 [package]
 name = "magic-util"
-description = "Magic Studio headless utilities for ArtCraft --control descriptors, rational Tick math, curves, and media outlines"
+description = "Magic Studio headless utilities built on craft-timeline, craft-audio, craft-media, craft-text, craft-font-catalog, craft-fonts-build, craft-i18n, and craft-doc"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 repository.workspace = true
-
-[lib]
-name = "magic_util"
 
 [lints]
 workspace = true
@@ -18,12 +15,18 @@ craft-atomic = { workspace = true }
 craft-audio = { workspace = true }
 craft-doc = { workspace = true }
 craft-docpath = { workspace = true }
-craft-ecproj-format = { workspace = true }
+craft-font-catalog = { workspace = true }
+craft-fonts-build = { workspace = true }
+craft-i18n = { workspace = true }
 craft-media = { workspace = true }
-craft-pcraft-format = { workspace = true }
 craft-settings = { workspace = true }
-craft-vectorcraft-format = { workspace = true }
+craft-text = { workspace = true }
+craft-timeline = { workspace = true }
 image = { workspace = true }
+log = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
+
+[build-dependencies]
+craft-fonts-build = { workspace = true, features = ["subset"] }

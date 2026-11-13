@@ -3,7 +3,7 @@
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use magic::Session;
+use magic_engine::Session;
 use magic_ui_egui::UiShellState;
 
 #[derive(Default)]
@@ -44,7 +44,7 @@ pub fn verify_clean(session: &Session, ui_state: &UiShellState) -> Result<(), St
         if !saved.is_object() || saved["format"] != "magic.project" {
             return Err("Cannot verify saved project format; save the project before continuing".into());
         }
-        if magic::project::project_is_dirty(session, &saved) {
+        if magic_engine::project::project_is_dirty(session, &saved) {
             return Err("Save project changes before closing, restarting, or switching projects".into());
         }
     }

@@ -3,6 +3,8 @@ title: Magic Studio Overview
 description: Coordinate DesignCraft storyboards, PhotoCraft cutouts, EffectCraft puppet animation & kinetic lyrics, and FilmCraft timelines from one song recording.
 ---
 
+> **Last Reviewed & Updated:** 2026-11-12T16:59:00-05:00 · **Reviewed by:** Jesse A. Naiman
+
 **Magic Studio** (`magic`, `magic-cli`, `magic-mcp`) is a lightweight song-to-video coordinator for the [ArtCraft](https://github.com/storytold) creative suite. Instead of duplicating raster, vector, compositing, or NLE engines, Magic Studio connects your recorded song to dedicated ArtCraft project files so every stage stays editable in its native application.
 
 ## How Magic Studio Fits Into ArtCraft
@@ -13,8 +15,8 @@ description: Coordinate DesignCraft storyboards, PhotoCraft cutouts, EffectCraft
 | **Storyboard** | [DesignCraft](https://github.com/storytold/designcraft) | `storyboard.designcraft` (`A-Cover`, `B-World`, `C-Character`, `D-Motion`, Scenes -> `V1`) |
 | **Cutouts & SVG** | [PhotoCraft](https://github.com/storytold/photocraft) & [VectorCraft](https://github.com/storytold/vectorcraft) | Isolated character layers (`.pcraft`) and clean SVG silhouettes (`.svg`) |
 | **Puppet Animation** | [EffectCraft](https://github.com/storytold/effectcraft) | 11-pin facial & mouth viseme rigs (`rig.ecproj` -> `V2` ProRes 4444 RGBA) |
-| **Kinetic Lyrics** | [EffectCraft](https://github.com/storytold/effectcraft) | Timed word/phrase typography (`lettering/lyrics.ecproj` -> `V3` ProRes 4444 RGBA) |
-| **Action Motion** | [EffectCraft](https://github.com/storytold/effectcraft) | Trim-path vector action cues (`motion/actions.ecproj` -> `V4` ProRes 4444 RGBA) |
+| **Kinetic Lyrics** | [EffectCraft](https://github.com/storytold/effectcraft) | Timed word/phrase typography (`effects/lyrics.ecproj` -> `V3` ProRes 4444 RGBA) |
+| **Action Motion** | [EffectCraft](https://github.com/storytold/effectcraft) | Trim-path vector action cues (`effects/motion.ecproj` -> `V4` ProRes 4444 RGBA) |
 
 ## Licensing
 

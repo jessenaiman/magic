@@ -1,74 +1,15 @@
-//! Shared anti-slop editorial layout & UI primitives reused across `Storyboard`, `Lyrics`,
-//! `Motion`, and the top workstation shell (`#menu-bar` persisted style controls).
+//! Shared editorial typography, header kickers, playhead scrubber, and persisted style controls
+//! reused across `Storyboard`, `Lyrics`, `Motion`, and the top workstation shell (`#menu-bar`).
 //!
-//! Centralizes:
-//! - `draw_three_pane_workspace`: eliminates duplicated `split_rect` + `child_pane` boilerplate.
-//! - `draw_pane_kicker_header`: crisp section-accented pane headers with tracked monospace kickers.
-//! - `draw_compact_scrubber`: single-line `16px` interactive playhead scrubber shared by `Lyrics` & `Motion`.
-//! - `paint_wrapped_editorial_text`: greedy word-wrapped card typography so Barnyard slides never clip text.
-//! - `draw_persisted_style_controls`: top-bar `Style` & `Dark/Light` controls persisted immediately via `prefs.set`.
+//! Panel layout and docking are owned exclusively by [`crate::docking`] (`craft_ui::docking`).
 
-use craft_ui::layout::{SplitAxis, SplitSize, split_rect};
 use egui::{Align, Align2, Color32, CornerRadius, FontFamily, FontId, Layout, Painter, Pos2, Rect, RichText, Sense, Stroke, Ui, Vec2};
 use serde_json::json;
 
-use crate::controls::child_pane;
 use crate::state::ViewCtx;
 use crate::theme::{MagicPalette, ThemeMode};
 use crate::widgets::AutomationRegistry;
 use crate::widgets::{BtnSpec, action_button, status_pill};
-
-pub struct ThreePaneSpec<'a> {
-    pub id_prefix: &'a str,
-    pub left_width: f32,
-    pub right_width: f32,
-    pub gap: f32,
-    pub min_center: f32,
-    pub show_left: bool,
-    pub show_right: bool,
-}
-
-/// Shared 3-pane studio layout (`Left Rail` + `Center Stage` + `Right Inspector`) that honors
-/// `show_nav_rail` and `show_right_inspector` without duplicating `split_rect` geometry across views.
-// TODO(MAGIC-REVIEW): KEEP one shared mutable state borrow; pane callbacks run sequentially.
-pub fn draw_three_pane_workspace<T>(
-    ui: &mut Ui,
-    spec: ThreePaneSpec<'_>,
-    state: &mut T,
-    draw_left: impl FnOnce(&mut Ui, &mut T),
-    draw_center: impl FnOnce(&mut Ui, &mut T),
-    draw_right: impl FnOnce(&mut Ui, &mut T),
-) -> Rect {
-    let body = ui.available_rect_before_wrap();
-    let after_left = if spec.show_left
-        && let Some(left_split) = split_rect(body, SplitAxis::Horizontal, SplitSize::FixedFirst(spec.left_width), spec.gap, spec.min_center)
-    {
-        let left_id = format!("{}_left", spec.id_prefix);
-        let mut left_ui = child_pane(ui, left_split.first, &left_id);
-        draw_left(&mut left_ui, state);
-        left_split.second
-    } else {
-        body
-    };
-
-    if spec.show_right
-        && let Some(right_split) = split_rect(after_left, SplitAxis::Horizontal, SplitSize::FixedSecond(spec.right_width), spec.gap, spec.min_center)
-    {
-        let center_id = format!("{}_center", spec.id_prefix);
-        let mut center_ui = child_pane(ui, right_split.first, &center_id);
-        draw_center(&mut center_ui, state);
-        let right_id = format!("{}_right", spec.id_prefix);
-        let mut right_ui = child_pane(ui, right_split.second, &right_id);
-        draw_right(&mut right_ui, state);
-    } else {
-        let center_id = format!("{}_center", spec.id_prefix);
-        let mut center_ui = child_pane(ui, after_left, &center_id);
-        draw_center(&mut center_ui, state);
-    }
-
-    let _ = ui.allocate_rect(body, Sense::hover());
-    body
-}
 
 /// Crisp editorial header strip with a vertical accent bar, tracked monospace kicker, and right pill.
 pub fn draw_pane_kicker_header(ui: &mut Ui, pal: &MagicPalette, kicker: &str, title: &str, accent: Color32, badge: Option<(&str, Color32)>) {
@@ -157,43 +98,18 @@ pub fn paint_wrapped_editorial_text(painter: &Painter, spec: WrappedTextSpec<'_>
 }
 
 fn wrap_paragraph(para: &str, max_chars: usize) -> Vec<String> {
-    let trimmed = para.trim();
-    if trimmed.is_empty() {
-        return vec![String::new()];
-    }
-    let mut out = Vec::new();
-    let mut cur = String::new();
-    for word in trimmed.split_whitespace() {
-        let next_len = if cur.is_empty() { word.chars().count() } else { cur.chars().count() + 1 + word.chars().count() };
-        if next_len <= max_chars || cur.is_empty() {
-            if !cur.is_empty() {
-                cur.push(' ');
-            }
-            cur.push_str(word);
-        } else {
-            out.push(cur);
-            cur = word.to_owned();
-        }
-    }
-    if !cur.is_empty() {
-        out.push(cur);
-    }
-    out
+    let _ = magic_util::text::is_paragraph_rtl(para, false);
+    magic_util::text::wrap_paragraph_uax14(para, max_chars)
 }
 
 /// Top-bar style preset & colour-mode pills that persist immediately to disk via `prefs.set`.
 pub fn draw_persisted_style_controls(ui: &mut Ui, ctx: &mut ViewCtx<'_>, wide: bool) {
-    let mode_lbl = match ctx.state.theme_mode {
-        ThemeMode::Dark => "Dark",
-        ThemeMode::Light => "Light",
-        ThemeMode::System => "Auto",
+    let mode_icon = match ctx.state.theme_mode {
+        ThemeMode::Dark => "moon",
+        ThemeMode::Light => "sun",
+        ThemeMode::System => "eye",
     };
-    let mode_spec = if wide {
-        BtnSpec::new("menu-theme-mode", "eye", mode_lbl, "Toggle Dark / Light studio mode (persisted)")
-    } else {
-        BtnSpec::icon_only("menu-theme-mode", "eye", "Toggle Dark / Light studio mode (persisted)")
-    };
-    if action_button(ui, ctx.reg, ctx.pal, mode_spec).clicked() {
+    if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("menu-theme-mode", mode_icon, "Toggle Dark / Light studio mode (persisted)")).clicked() {
         let next_mode = if ctx.pal.dark { ThemeMode::Light } else { ThemeMode::Dark };
         ctx.state.theme_mode = next_mode;
         ctx.exec("prefs.set", json!({"key": "appearance.theme", "value": next_mode.as_str()}), Some("Saved colour mode"));
@@ -201,9 +117,9 @@ pub fn draw_persisted_style_controls(ui: &mut Ui, ctx: &mut ViewCtx<'_>, wide: b
 
     let style_lbl = ctx.state.interface_style.label();
     let style_spec = if wide {
-        BtnSpec::new("menu-style-cycle", "sliders", style_lbl, "Cycle studio interface style preset (Aurora · Editorial · Modern … — persisted)")
+        BtnSpec::new("menu-style-cycle", "colorWheel", style_lbl, "Cycle studio interface style preset (Aurora · Editorial · Modern … — persisted)")
     } else {
-        BtnSpec::label_only("menu-style-cycle", style_lbl, "Cycle studio interface style preset")
+        BtnSpec::icon_only("menu-style-cycle", "colorWheel", "Cycle studio interface style preset")
     };
     if action_button(ui, ctx.reg, ctx.pal, style_spec).clicked() {
         let next_style = ctx.state.interface_style.next();

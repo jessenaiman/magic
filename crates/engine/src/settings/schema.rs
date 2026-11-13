@@ -172,23 +172,18 @@ pub fn fields_with_cat() -> Vec<(&'static str, Field)> {
         ("general", Field { key: "general.show_tooltips", label: "Show Tooltips", kind: Kind::Bool, wired: true, enabled_by: None }),
         ("general", Field { key: "general.show_rich_tooltips", label: "Show Rich Tooltips", kind: Kind::Bool, wired: true, enabled_by: None }),
         ("general", Field { key: "general.recent_projects", label: "Recent Projects", kind: Kind::Text, wired: true, enabled_by: None }),
-        ("project", Field { key: "project.root", label: "Production Projects Folder (magic/projects)", kind: Kind::Path, wired: true, enabled_by: None }),
+        ("project", Field { key: "project.root", label: "Production Projects Folder (~/Magic)", kind: Kind::Path, wired: true, enabled_by: None }),
         (
             "project",
             Field {
-                key: "project.characters_root",
-                label: "Shared Animations / Characters Folder (magic/animations)",
-                kind: Kind::Path,
+                key: "project.storyboard_template",
+                label: "System or Custom Storyboard Template (.designcraft)",
+                kind: Kind::Text,
                 wired: true,
                 enabled_by: None,
             },
         ),
-        ("project", Field { key: "project.storyboard_template", label: "Storyboard Master Template", kind: Kind::Text, wired: true, enabled_by: None }),
         ("project", Field { key: "project.storyboard_format", label: "Storyboard Reference Format", kind: Kind::Text, wired: true, enabled_by: None }),
-        (
-            "project",
-            Field { key: "project.storyboard_locked", label: "Enforce Read-Only Master Storyboard Layout", kind: Kind::Bool, wired: true, enabled_by: None },
-        ),
         (
             "lyrics",
             Field {

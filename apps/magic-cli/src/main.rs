@@ -1,4 +1,4 @@
-//! `magic-cli`: headless CLI, live `app` control client, and stdio MCP server over `magic::Session`
+//! `magic-cli`: headless CLI, live `app` control client, and stdio MCP server over `magic_engine::Session`
 //! (`magic --control 9875`), plus deterministic 3-line signposts for sibling ArtCraft products.
 
 #![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable))]
@@ -9,11 +9,11 @@ use std::io::{BufRead, Write};
 
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use serde_json::{Value, json};
-use subcommands::{CaptionsArgs, ControlsArgs, ConvertArgs, ExportArgs, FinishArgs, InterchangeArgs, MarkersArgs};
+use subcommands::{ArchiveArgs, CaptionsArgs, ControlsArgs, ExportArgs, FinishArgs, InterchangeArgs, MarkersArgs, MeshCliArgs, TimelineCliArgs};
 
 const AFTER_HELP: &str = "\
 CREATE:   magic-cli new --audio song.wav --name \"My Song\" [--wizard]
-CONVERT:  magic-cli convert <hyperframes|remotion|custom|auto> <legacy_dir> [--magic-root ./magic]
+ARCHIVE:  magic-cli archive [source_dir] [--out archive.zip] [--inspect archive.zip]
 CONTROLS: magic-cli controls [filter] [--stage studio] [--live]
 FINISH:   magic-cli finish <op> [key=val ...] | magic-cli export [out.mp4] --codec prores
 INTEROP:  magic-cli interchange export --format otio | magic-cli lottie export | magic-cli import-aep in.aep
@@ -95,10 +95,10 @@ struct NewArgs {
 
 #[derive(Subcommand)]
 enum Cmd {
-    /// Create a new song project (`--audio` transcribes timestamps, syncs FilmCraft lyrics, and initializes printable `storyboard.pdf`)
+    /// Create a new song project (`--audio` transcribes timestamps, creates the FilmCraft project, and starts `storyboard.designcraft`)
     New(NewArgs),
-    /// Convert a HyperFrames, Remotion, or Custom legacy project into `magic/projects/<slug>/` (archiving `magic/originals/`)
-    Convert(ConvertArgs),
+    /// Compress a project directory into a verified `.zip` archive via `craft-zip`
+    Archive(ArchiveArgs),
     /// List engine commands (`id` and `label`; `describe` shows one in full)
     Commands { filter: Option<String> },
     /// List all `--control` RPC methods (`:9875`) and stage commands
@@ -107,8 +107,14 @@ enum Cmd {
     Describe { id: String },
     /// Inspect project, storyboard, timeline, or doctor state as JSON
     Inspect { target: Option<String> },
+    /// Show live Magic Studio window or headless workspace status
+    Status,
     /// Bidirectional `OTIO` / `FCPXML` / `XML` / `EDL` / `AAF` / `OMF` / `ALE` sequence interchange (`T03`)
     Interchange(InterchangeArgs),
+    /// Full `craft-timeline` operations (`inspect`, `detect`, `export`, `import`, `timecode`, `ale`, `edl`)
+    Timeline(TimelineCliArgs),
+    /// Pure-Rust `craft-mesh` 3D scene inspection & conversion (`inspect`, `convert` across `.glb`, `.gltf`, `.obj`, `.fbx`, `.stl`, `.ply`, `.3mf`)
+    Mesh(MeshCliArgs),
     /// Execute a FilmCraft Studio finishing operation (`T32`–`T42`: edit, trim, color, FX, audio, mixer, titles)
     Finish(FinishArgs),
     /// Export master film via FilmCraft's pure-Rust codecs (`H.264`, `HEVC`, `ProRes`, `DNxHR`, `APV`, `AV1`, `MXF`, `EXR`, `Opus`) (`T42`)
@@ -195,12 +201,12 @@ pub(crate) fn parse_params(tokens: &[String], raw: Option<&str>) -> Result<Value
 
 fn call_live_control(connect: Option<&str>, method: &str, params: Value) -> Result<Value, String> {
     let spec = connect.ok_or("Live UI commands require --connect 127.0.0.1:9875 (or --control <PORT>)")?;
-    let mut remote = magic_mcp::Remote::new(magic_mcp::normalize_control_addr(spec), magic::workspace::control_token());
+    let mut remote = magic_mcp::Remote::new(magic_mcp::normalize_control_addr(spec), magic_engine::workspace::control_token());
     magic_mcp::Backend::execute(&mut remote, method, params)
 }
 
 pub(crate) struct Target {
-    pub(crate) session: Option<magic::Session>,
+    pub(crate) session: Option<magic_engine::Session>,
     pub(crate) connect: Option<String>,
     pub(crate) project: Option<String>,
     pub(crate) save: bool,
@@ -314,23 +320,38 @@ fn list_commands(target: &mut Target, filter: Option<String>) -> Result<(), Stri
 
 fn inspect(target: &mut Target, what: Option<String>) -> Result<(), String> {
     let value = match what.as_deref().unwrap_or("all") {
-        "project" => target.call("workshop.status", json!({}))?,
+        "project" => target.call("workshop.status", json!({})).or_else(|_| target.call("project.catalog", json!({})))?,
         "storyboard" => target.call("storyboard.check", json!({}))?,
         "timeline" | "sequence" => target.call("video.timeline", json!({}))?,
         "doctor" => target.call("app.doctor", json!({}))?,
+        "ui" => target.call("ui.inspect", json!({}))?,
         "effects" => json!({
             "words": target.call("words.effects", json!({})).unwrap_or(Value::Null),
             "motion": target.call("motion.effects", json!({})).unwrap_or(Value::Null),
         }),
-        "all" => json!({
-            "project": target.call("workshop.status", json!({}))?,
-            "storyboard": target.call("storyboard.check", json!({})).unwrap_or(Value::Null),
-            "timeline": target.call("video.timeline", json!({})).unwrap_or(Value::Null),
-        }),
-        other => return Err(format!("inspect: unknown `{other}` (all | project | storyboard | timeline | bridge | preflight | history | effects | doctor)")),
+        "all" => {
+            let proj = target.call("workshop.status", json!({})).ok();
+            let ui_live = if target.connect.is_some() { target.call("ui.inspect", json!({})).ok() } else { None };
+            json!({
+                "ok": true,
+                "mode": if target.connect.is_some() { "live" } else { "headless" },
+                "ui": ui_live,
+                "project": proj,
+                "storyboard": target.call("storyboard.check", json!({})).ok(),
+                "timeline": target.call("video.timeline", json!({})).ok(),
+                "doctor": target.call("app.doctor", json!({})).ok(),
+            })
+        }
+        other => return Err(format!("inspect: unknown `{other}` (all | ui | project | storyboard | timeline | effects | doctor)")),
     };
     emit(&value);
     Ok(())
+}
+
+fn auto_detect_live_magic() -> Option<String> {
+    let sock: std::net::SocketAddr = magic_mcp::DEFAULT_CONTROL_ADDR.parse().ok()?;
+    std::net::TcpStream::connect_timeout(&sock, std::time::Duration::from_millis(45)).ok()?;
+    Some(magic_mcp::DEFAULT_CONTROL_ADDR.to_owned())
 }
 
 fn run_file(target: &mut Target, file: &str, keep_going: bool) -> Result<(), String> {
@@ -434,25 +455,25 @@ struct SiblingProductSpec {
 
 const SIBLING_PRODUCTS: &[SiblingProductSpec] = &[
     SiblingProductSpec {
-        slug: "deckcraft",
-        title: "DeckCraft",
-        mcp_cmd: "deckcraft-cli mcp --connect 7990  (or headless: deckcraft-cli mcp)",
-        open_cmd: "deckcraft --control 7990",
-        auth_note: "macOS ships deckcraft-cli in a separate release zip; Windows MSI installs to %LOCALAPPDATA%\\Programs\\ArtCraft\\DeckCraft\\",
+        slug: "photocraft",
+        title: "PhotoCraft",
+        mcp_cmd: "photocraft-cli mcp --bridge 127.0.0.1:7878 --control-token-file <token_file>",
+        open_cmd: "photocraft --control 7878 --control-token-file <token_file>",
+        auth_note: "PhotoCraft requires matching same-release CLI + app (`auth.challenge` HMAC) and `--control-token-file`",
+    },
+    SiblingProductSpec {
+        slug: "vectorcraft",
+        title: "VectorCraft",
+        mcp_cmd: "vectorcraft-cli mcp --connect 127.0.0.1:7980  (or headless: vectorcraft-cli mcp)",
+        open_cmd: "vectorcraft --control 7980",
+        auth_note: "Default port 7980 (override via VECTORCRAFT_CONTROL_PORT)",
     },
     SiblingProductSpec {
         slug: "designcraft",
         title: "DesignCraft",
         mcp_cmd: "designcraft-cli mcp --connect 7979  (or headless: designcraft-cli mcp)",
         open_cmd: "designcraft --control 7979",
-        auth_note: "Port 7979 is shared in examples with VectorCraft/CADCraft/GridCraft; pick a free port if busy",
-    },
-    SiblingProductSpec {
-        slug: "filmcraft",
-        title: "FilmCraft",
-        mcp_cmd: "filmcraft-cli mcp --bridge 127.0.0.1:9876  (or headless: filmcraft-cli mcp --project <p.fcproj>)",
-        open_cmd: "export FILMCRAFT_CONTROL_TOKEN=$(64-hex-chars) && filmcraft --control 9876",
-        auth_note: "FilmCraft uses `--bridge` (not `--connect`) and leaves port 9876 closed unless FILMCRAFT_CONTROL_TOKEN (64 hex chars) is set",
+        auth_note: "Default port 7979 (override via DESIGNCRAFT_CONTROL_PORT)",
     },
     SiblingProductSpec {
         slug: "effectcraft",
@@ -462,81 +483,11 @@ const SIBLING_PRODUCTS: &[SiblingProductSpec] = &[
         auth_note: "EffectCraft uses `--bridge 9877` for live windows",
     },
     SiblingProductSpec {
-        slug: "photocraft",
-        title: "PhotoCraft",
-        mcp_cmd: "photocraft-cli mcp --bridge 127.0.0.1:7878 --control-token-file <token_file>",
-        open_cmd: "photocraft --control 7878 --control-token-file <token_file>",
-        auth_note: "PhotoCraft requires matching same-release CLI + app (`auth.challenge` HMAC) and `--control-token-file` (AppImage: `--cli mcp`)",
-    },
-    SiblingProductSpec {
-        slug: "vectorcraft",
-        title: "VectorCraft",
-        mcp_cmd: "vectorcraft-cli mcp --connect 127.0.0.1:7979  (or headless: vectorcraft-cli mcp)",
-        open_cmd: "vectorcraft --control 7979",
-        auth_note: "Pick a free port if 7979 is already bound by DesignCraft/CADCraft/GridCraft",
-    },
-    SiblingProductSpec {
-        slug: "wordcraft",
-        title: "WordCraft",
-        mcp_cmd: "wordcraft-cli mcp --connect 127.0.0.1:7981  (or headless: wordcraft-cli mcp)",
-        open_cmd: "wordcraft --control 7981",
-        auth_note: "Auto-reads ~/.config/wordcraft/control-key.local-7981 or WORDCRAFT_CONTROL_KEY",
-    },
-    SiblingProductSpec {
-        slug: "soundcraft",
-        title: "SoundCraft",
-        mcp_cmd: "soundcraft-cli mcp --connect 7801  (or headless: soundcraft-cli mcp)",
-        open_cmd: "soundcraft --control 7801  (`--control 0` prints a free port)",
-        auth_note: "Follows RFC-0012 (`soundcraft-cli app --port 7801` for single calls)",
-    },
-    SiblingProductSpec {
-        slug: "cadcraft",
-        title: "CADCraft",
-        mcp_cmd: "cadcraft-cli mcp --connect 127.0.0.1:7979  (or headless: cadcraft-cli mcp)",
-        open_cmd: "cadcraft --control 7979",
-        auth_note: "Reads per-session cadcraft-control-<port>.token automatically",
-    },
-    SiblingProductSpec {
-        slug: "gridcraft",
-        title: "GridCraft",
-        mcp_cmd: "gridcraft-cli mcp --connect 7979  (or headless: gridcraft-cli mcp)",
-        open_cmd: "gridcraft --control 7979",
-        auth_note: "Reads GridCraft's per-launch token file or GRIDCRAFT_CONTROL_TOKEN",
-    },
-    SiblingProductSpec {
-        slug: "lightcraft",
-        title: "LightCraft",
-        mcp_cmd: "lightcraft-cli mcp --connect 127.0.0.1:7980",
-        open_cmd: "lightcraft --control 7980",
-        auth_note: "IPv4 loopback 127.0.0.1 JSON-lines control channel",
-    },
-    SiblingProductSpec {
-        slug: "texturecraft",
-        title: "TextureCraft",
-        mcp_cmd: "texturecraft-cli mcp --bridge 7878",
-        open_cmd: "texturecraft --control 7878",
-        auth_note: "Uses `--bridge` (set TEXTURECRAFT_CONTROL_TOKEN if authentication is enabled)",
-    },
-    SiblingProductSpec {
-        slug: "materialcraft",
-        title: "MaterialCraft",
-        mcp_cmd: "materialcraft-cli mcp --bridge 7878",
-        open_cmd: "materialcraft --control 7878",
-        auth_note: "Uses `--bridge` on 127.0.0.1",
-    },
-    SiblingProductSpec {
-        slug: "pdfcraft",
-        title: "PdfCraft",
-        mcp_cmd: "pdfcraft-cli mcp  (headless in-process only; no `--connect`/`--bridge` on mcp)",
-        open_cmd: "pdfcraft --control ~/.pdfcraft-control.json  (drive UI via `pdfcraft-cli ui --control ~/.pdfcraft-control.json`)",
-        auth_note: "PdfCraft MCP is always headless; live window control uses `pdfcraft-cli ui --control <file>`",
-    },
-    SiblingProductSpec {
-        slug: "anicraft",
-        title: "AniCraft",
-        mcp_cmd: "anicraft-cli mcp [scene.anicraft]  (headless stdio only)",
-        open_cmd: "anicraft-cli render / run  (early-alpha; do not drive live GUI)",
-        auth_note: "AniCraft is early-alpha; use headless `anicraft-cli` / `anicraft-cli mcp` only",
+        slug: "filmcraft",
+        title: "FilmCraft",
+        mcp_cmd: "filmcraft-cli mcp --bridge 127.0.0.1:9876  (or headless: filmcraft-cli mcp --project <p.fcproj>)",
+        open_cmd: "export FILMCRAFT_CONTROL_TOKEN=$(64-hex-chars) && filmcraft --control 9876",
+        auth_note: "FilmCraft uses `--bridge` (not `--connect`) and requires FILMCRAFT_CONTROL_TOKEN (64 hex chars)",
     },
 ];
 
@@ -581,7 +532,7 @@ fn run_app_call(target: &mut Target, port: Option<String>, method: Option<String
 }
 
 fn resolve_shorthand(tokens: &[String]) -> Result<(String, Vec<String>), String> {
-    let known: Vec<&str> = magic::command_specs().iter().map(|c| c.id).collect();
+    let known: Vec<&str> = magic_engine::command_specs().iter().map(|c| c.id).collect();
     let words: Vec<&String> = tokens.iter().take_while(|t| !t.contains('=') && !t.starts_with('-') && !t.starts_with('{')).collect();
     for n in (1..=words.len()).rev() {
         let raw_candidate = words[..n].iter().map(|w| w.as_str()).collect::<Vec<_>>().join(".");
@@ -605,7 +556,7 @@ fn run_shorthand(target: &mut Target, tokens: &[String]) -> Result<(), String> {
     }
     let (id, rest) = resolve_shorthand(tokens)?;
     if rest.iter().any(|t| t == "--help" || t == "-h")
-        && let Some(command) = magic::find_command(&id)
+        && let Some(command) = magic_engine::find_command(&id)
     {
         emit(&command.describe());
         return Ok(());
@@ -627,12 +578,12 @@ fn run_shorthand(target: &mut Target, tokens: &[String]) -> Result<(), String> {
 }
 
 fn describe(id: &str) -> Result<(), String> {
-    let command = magic::find_command(id).ok_or_else(|| format!("Unknown command '{id}'"))?;
+    let command = magic_engine::find_command(id).ok_or_else(|| format!("Unknown command '{id}'"))?;
     emit(&command.describe());
     Ok(())
 }
 
-fn apply_font_overrides(cli: &Cli, session: &mut Option<magic::Session>) {
+fn apply_font_overrides(cli: &Cli, session: &mut Option<magic_engine::Session>) {
     if let (Some(s), Some(dirs)) = (session.as_mut(), cli.font_dirs.as_ref()) {
         let _ = s.execute("prefs.set", json!({"key": "lyrics.font_dirs", "value": dirs}));
     }
@@ -661,14 +612,21 @@ fn run(cli: Cli) -> Result<(), String> {
         return Err("Pass --automation-read-root / --automation-write-root to `magic --control`, not to `--connect`.".into());
     }
 
-    let roots = magic::AutomationRoots::from_args(&cli.automation_read_roots, &cli.automation_write_roots)?;
-    let live = cli.connect.is_some();
-    let mut session = (!live).then(|| magic::Session::user_session().with_automation_roots(roots));
+    let roots = magic_engine::AutomationRoots::from_args(&cli.automation_read_roots, &cli.automation_write_roots)?;
+    let effective_connect = if cli.project.is_some() {
+        None
+    } else {
+        cli.connect
+            .clone()
+            .or_else(|| if cli.automation_read_roots.is_empty() && cli.automation_write_roots.is_empty() { auto_detect_live_magic() } else { None })
+    };
+    let live = effective_connect.is_some();
+    let mut session = (!live).then(|| magic_engine::Session::user_session().with_automation_roots(roots));
     apply_font_overrides(&cli, &mut session);
     if let (Some(path), Some(session)) = (cli.project.as_deref(), session.as_mut()) {
         session.execute("file.open", json!({ "path": path })).map_err(|e| e.to_string())?;
     }
-    let mut target = Target { session, connect: cli.connect, project: cli.project, save: cli.save, save_as: cli.save_as, dry: cli.dry_run };
+    let mut target = Target { session, connect: effective_connect, project: cli.project, save: cli.save, save_as: cli.save_as, dry: cli.dry_run };
     match (cli.command_id, cli.command) {
         (Some(_), Some(_)) => Err("Use --command or a subcommand, not both.".into()),
         (Some(id), None) => {
@@ -677,12 +635,15 @@ fn run(cli: Cli) -> Result<(), String> {
         }
         (None, Some(command)) => match command {
             Cmd::New(args) => run_new(&mut target, args),
-            Cmd::Convert(args) => subcommands::run_convert(&mut target, args),
+            Cmd::Archive(args) => subcommands::run_archive(&mut target, args),
             Cmd::Commands { filter } => list_commands(&mut target, filter),
             Cmd::Controls(args) => subcommands::run_controls(&mut target, args),
             Cmd::Describe { id } => describe(&id),
             Cmd::Inspect { target: what } => inspect(&mut target, what),
+            Cmd::Status => inspect(&mut target, None),
             Cmd::Interchange(args) => subcommands::run_interchange(&mut target, args),
+            Cmd::Timeline(args) => subcommands::run_timeline_cli(&mut target, args),
+            Cmd::Mesh(args) => subcommands::run_mesh_cli(&mut target, args),
             Cmd::Finish(args) => subcommands::run_finish(&mut target, args),
             Cmd::Export(args) => subcommands::run_export(&mut target, args),
             Cmd::Captions(args) => subcommands::run_captions(&mut target, args),
@@ -708,8 +669,11 @@ fn run(cli: Cli) -> Result<(), String> {
 fn main() {
     let cli = Cli::parse();
     if cli.connect.is_some() && cli.project.is_some() {
-        let _ = writeln!(std::io::stderr(), "Use --connect or --project, not both: --connect uses the project open in the live window.");
-        std::process::exit(2);
+        let _ = writeln!(
+            std::io::stderr(),
+            "note: --project supplied; running headlessly against {} instead of --connect",
+            cli.project.as_deref().unwrap_or_default()
+        );
     }
     if let Err(err) = run(cli) {
         let _ = writeln!(std::io::stderr(), "{err}");

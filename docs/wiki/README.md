@@ -1,5 +1,7 @@
 # Magic Studio — `storytold/craft-wiki` App Guides
 
+> **Last Reviewed & Updated:** 2026-11-12T16:59:00-05:00 · **Reviewed by:** Jesse A. Naiman
+
 The 5 Starlight Markdown pages in [`docs/wiki/magic/`](magic/) follow the exact 5-page app guide contract of [`storytold/craft-wiki`](https://github.com/storytold/craft-wiki) (`src/content/docs/apps/<slug>/`):
 
 - [`magic/overview.md`](magic/overview.md) — What Magic Studio is, how it coordinates the ArtCraft suite, and commercial video vs non-resale licensing.
@@ -19,7 +21,7 @@ The 5 Starlight Markdown pages in [`docs/wiki/magic/`](magic/) follow the exact 
   slug: "magic",
   name: "Magic Studio",
   tagline: "Song-driven storyboard, puppet animation, and kinetic lyric studio",
-  repo: "https://github.com/jessenaiman/magic-studio-app",
+  repo: "https://github.com/jessenaiman/magic",
   cli: "magic-cli",
   controlPort: 9876,
 }

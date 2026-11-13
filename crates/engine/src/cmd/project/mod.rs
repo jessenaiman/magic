@@ -1,12 +1,12 @@
-//! Project lifecycle: `.magic` open/save/saveAs/close/autosave (`project.*` and ArtCraft `file.*`
-//! suite aliases), delegating `project.new` / `file.new` to [`new_project`].
+//! Self-contained `.magic` project lifecycle (`project.*` and ArtCraft `file.*` suite aliases).
 //!
-//! Includes `craft_atomic::write_new` exclusive creation, private (`0600`) rolling
-//! `.history/<stem>.magic.bak.{1..3}` snapshots, and private `.autosave` crash-recovery journals.
+//! Every Magic Studio project is a self-contained `<project-slug>/` directory that owns copies of
+//! its audio, assets, `storyboard.designcraft`, `effects/*.ecproj`, and `film/*.fcproj`, storing
+//! relative paths inside `<slug>.magic`.
 
+pub mod archive;
 pub mod assets;
 pub mod catalog;
-pub mod convert;
 pub mod intake;
 pub mod new_project;
 pub mod settings;
@@ -14,17 +14,15 @@ pub mod transcript;
 pub mod trunk;
 pub mod ui_state;
 pub mod workshop;
-pub mod workspace_layout;
 
+pub use archive::cmd_project_migrate;
 pub use assets::{
     cmd_project_add_asset, cmd_project_list_assets, cmd_project_load_asset, cmd_project_remove_asset, cmd_project_save_asset, cmd_project_update_asset,
 };
-pub use convert::cmd_project_convert;
 pub use new_project::cmd_project_new;
 pub(crate) use new_project::copy_audio_into_project;
 pub use trunk::{cmd_project_import_file, cmd_project_trunk};
 pub use ui_state::{cmd_project_snapshot, save_theatre_state, theatre_state};
-pub use workspace_layout::cmd_workspace_init;
 
 use std::path::{Path, PathBuf};
 
@@ -69,7 +67,7 @@ pub fn project_document(s: &Session) -> Value {
         "assets": s.project_assets,
         "workshop": {
             "audio": s.song_audio,
-            "storyboard": "storyboard.pdf",
+            "storyboard": "storyboard.designcraft",
             "draft_approved": s.draft_approved,
             "target": s.video_target,
             "video_project": s.video_project_path,
@@ -133,12 +131,7 @@ fn autosave_journal_path(project: &Path) -> PathBuf {
     history_dir(project).join(format!("{fname}.autosave"))
 }
 
-/// Rotate up to 3 rolling `.magic.bak.{1..3}` snapshots inside `<project_dir>/.history/` using
-/// private `craft-atomic` permissions (`0600` on Unix).
 fn rotate_project_backups(project: &Path) {
-    if !project.is_file() {
-        return;
-    }
     let Ok(existing_bytes) = std::fs::read(project) else {
         return;
     };
@@ -147,16 +140,14 @@ fn rotate_project_backups(project: &Path) {
         return;
     }
     let fname = project.file_name().and_then(|n| n.to_str()).unwrap_or("project.magic");
-    let bak1 = hdir.join(format!("{fname}.bak.1"));
-    let bak2 = hdir.join(format!("{fname}.bak.2"));
-    let bak3 = hdir.join(format!("{fname}.bak.3"));
-    if let Ok(b2) = std::fs::read(&bak2) {
-        let _ = crate::doc_state::write_private_file(&bak3, &b2);
+    let bak = |n: u8| hdir.join(format!("{fname}.bak.{n}"));
+    if let Ok(b2) = std::fs::read(bak(2)) {
+        let _ = crate::doc_state::write_private_file(bak(3), &b2);
     }
-    if let Ok(b1) = std::fs::read(&bak1) {
-        let _ = crate::doc_state::write_private_file(&bak2, &b1);
+    if let Ok(b1) = std::fs::read(bak(1)) {
+        let _ = crate::doc_state::write_private_file(bak(2), &b1);
     }
-    let _ = crate::doc_state::write_private_file(&bak1, &existing_bytes);
+    let _ = crate::doc_state::write_private_file(bak(1), &existing_bytes);
 }
 
 fn finalize_project_write(s: &Session, path: &Path, stamp: Option<crate::doc_state::FileStamp>, written: usize) {
@@ -165,11 +156,9 @@ fn finalize_project_write(s: &Session, path: &Path, stamp: Option<crate::doc_sta
     if journal.is_file() {
         let _ = std::fs::remove_file(&journal);
     }
-    if s.record_user_state {
-        crate::change_marker::invalidate();
-    }
     s.project_saves.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     if s.record_user_state {
+        crate::change_marker::invalidate();
         crate::activity::stored(path, written);
     }
 }
@@ -215,13 +204,8 @@ pub fn cmd_project_autosave(s: &mut Session, _: &Value) -> Result<Value> {
         return Ok(json!({"ok": false, "reason": "no_project"}));
     };
     let journal = autosave_journal_path(path);
-    let doc = merged_document(s, path);
-    let (_, bytes) = crate::doc_state::write_private_json(&journal, &doc)?;
-    Ok(json!({
-        "ok": true,
-        "journal": journal,
-        "bytes": bytes,
-    }))
+    let (_, bytes) = crate::doc_state::write_private_json(&journal, &merged_document(s, path))?;
+    Ok(json!({"ok": true, "journal": journal, "bytes": bytes}))
 }
 
 pub(crate) fn project_slug(name: &str) -> String {
@@ -253,7 +237,7 @@ pub(crate) fn project_file_path(s: &Session, params: &Value) -> Result<PathBuf> 
         (Some(path), _, _) => path.to_string(),
         (None, Some(root), Some(name)) => {
             let slug = validate_project_name(name)?;
-            crate::workspace::expand_tilde(root).join(slug).join(format!("{name}.magic")).to_string_lossy().into_owned()
+            crate::workspace::expand_tilde(root).join(&slug).join(format!("{slug}.magic")).to_string_lossy().into_owned()
         }
         (None, None, _) => return Err(EngineError::InvalidParams("give the project `path`, or a `root` folder and a `name`".into())),
         (None, Some(_), None) => return Err(EngineError::InvalidParams("give the project `name` to create it in `root`".into())),
@@ -262,21 +246,17 @@ pub(crate) fn project_file_path(s: &Session, params: &Value) -> Result<PathBuf> 
     if path.extension().is_none_or(|e| !e.eq_ignore_ascii_case("magic")) {
         if path.is_dir()
             && let Some(found) = std::fs::read_dir(&path)
-                .ok()
                 .into_iter()
                 .flatten()
                 .flatten()
                 .map(|e| e.path())
                 .find(|p| p.is_file() && p.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("magic")))
         {
-            return std::fs::canonicalize(&found).map_err(EngineError::from);
+            return std::fs::canonicalize(found).map_err(EngineError::from);
         }
         path.as_mut_os_string().push(".magic");
     }
-    if path.exists() {
-        return std::fs::canonicalize(&path).map_err(EngineError::from);
-    }
-    Ok(path)
+    if path.exists() { std::fs::canonicalize(path).map_err(EngineError::from) } else { Ok(path) }
 }
 
 pub(crate) fn reset_for_project(s: &mut Session, path: PathBuf, assets: Vec<crate::ProjectAsset>) {
@@ -302,12 +282,9 @@ pub(crate) fn recent_warning(s: &Session, path: &Path, requested: bool) -> Vec<V
         Ok(()) => Vec::new(),
         Err(error) => vec![json!({
             "code": "recent_history_unavailable",
-            "stage": "update_recent_projects",
             "path": crate::cmd::project::catalog::file_for(s),
             "error": error,
             "project": path,
-            "effect": "Project is available; Home recent history was not updated",
-            "next_action": "Continue using the returned project path; repair only the named navigation-history location if needed",
         })],
     }
 }
@@ -321,11 +298,10 @@ pub(crate) fn project_mode(value: &Value) -> Result<Option<String>> {
 }
 
 pub(crate) fn read_project_document(path: &Path) -> Result<Value> {
-    let text = std::fs::read_to_string(path)?;
-    serde_json::from_str(&text).map_err(|e| EngineError::InvalidParams(format!("invalid project file: {e}")))
+    serde_json::from_str(&std::fs::read_to_string(path)?).map_err(|e| EngineError::InvalidParams(format!("invalid project file: {e}")))
 }
 
-fn project_assets_from_doc(path: &Path, doc: &Value) -> Result<Vec<crate::ProjectAsset>> {
+fn apply_opened_state(s: &mut Session, path: &Path, doc: &Value) -> Result<()> {
     let mut assets: Vec<crate::ProjectAsset> = serde_json::from_value(doc.get("assets").cloned().unwrap_or_else(|| json!([])))
         .map_err(|e| EngineError::InvalidParams(format!("invalid project assets: {e}")))?;
     for asset in &mut assets {
@@ -333,21 +309,17 @@ fn project_assets_from_doc(path: &Path, doc: &Value) -> Result<Vec<crate::Projec
             asset.path = Some(opened_path(&source, path));
         }
     }
-    Ok(assets)
-}
-
-fn apply_opened_state(s: &mut Session, path: &Path, doc: &Value, assets: Vec<crate::ProjectAsset>) -> Result<()> {
     let song = serde_json::from_value(doc.get("song").cloned().unwrap_or_else(|| json!({})))
         .map_err(|e| EngineError::InvalidParams(format!("invalid song metadata: {e}")))?;
     reset_for_project(s, path.to_path_buf(), assets);
     s.project_mode = project_mode(doc)?;
     s.song = song;
-    s.song_audio = doc.pointer("/workshop/audio").and_then(Value::as_str).map(|source| opened_path(source, path));
+    s.song_audio = doc.pointer("/workshop/audio").and_then(Value::as_str).map(|src| opened_path(src, path));
     s.draft_approved = doc.pointer("/workshop/draft_approved").and_then(Value::as_bool).unwrap_or(false);
     if let Some(target) = doc.pointer("/workshop/target").and_then(Value::as_str).filter(|t| crate::cmd::project::workshop::VIDEO_TARGETS.contains(t)) {
         s.video_target = target.into();
     }
-    s.video_project_path = doc.pointer("/workshop/video_project").and_then(Value::as_str).map(|source| opened_path(source, path));
+    s.video_project_path = doc.pointer("/workshop/video_project").and_then(Value::as_str).map(|src| opened_path(src, path));
     Ok(())
 }
 
@@ -360,14 +332,12 @@ pub fn cmd_project_open(s: &mut Session, params: &Value) -> Result<Value> {
     }
     let journal = autosave_journal_path(&path);
     let use_journal = params["recover_autosave"] == true && journal.is_file();
-    let doc = if use_journal { read_project_document(&journal)? } else { read_project_document(&path)? };
+    let doc = read_project_document(if use_journal { &journal } else { &path })?;
     if doc.get("format").and_then(Value::as_str) != Some(PROJECT_FORMAT) {
         return Err(EngineError::InvalidParams(format!("{} is not a Magic Studio project", path.display())));
     }
-    let assets = project_assets_from_doc(&path, &doc)?;
-    let missing: Vec<&str> = assets.iter().filter(|a| a.path.as_ref().is_some_and(|p| !p.exists())).map(|a| a.id.as_str()).collect::<Vec<_>>();
-    let missing = json!(missing);
-    apply_opened_state(s, &path, &doc, assets)?;
+    apply_opened_state(s, &path, &doc)?;
+    let missing: Vec<String> = s.project_assets.iter().filter(|a| a.path.as_ref().is_some_and(|p| !p.exists())).map(|a| a.id.clone()).collect();
     if params["read_only"] != true
         && let Ok(disk_doc) = read_project_document(&path)
         && project_is_dirty(s, &disk_doc)
@@ -395,25 +365,12 @@ pub fn cmd_project_open(s: &mut Session, params: &Value) -> Result<Value> {
     }))
 }
 
-fn project_guard(s: &Session, p: &Value) -> Result<()> {
-    let selected = s.project_path.as_ref().ok_or_else(|| EngineError::InvalidParams("Select the intended project".into()))?.canonicalize()?;
-    let expected = project_file_path(s, &json!({"path": p["expected_project"]}))?.canonicalize()?;
-    if selected != expected {
-        return Err(EngineError::InvalidParams("expected_project differs from selected project".into()));
-    }
-    Ok(())
-}
-
 fn flush_dirty_documents(s: &mut Session) -> Result<Vec<Value>> {
     let mut saved = Vec::new();
     for doc in &mut s.docs {
         if doc.dirty {
             doc.save()?;
-            saved.push(json!({
-                "kind": doc.kind,
-                "path": doc.path,
-                "revision": doc.revision,
-            }));
+            saved.push(json!({"kind": doc.kind, "path": doc.path, "revision": doc.revision}));
         }
     }
     Ok(saved)
@@ -421,34 +378,32 @@ fn flush_dirty_documents(s: &mut Session) -> Result<Vec<Value>> {
 
 pub fn cmd_project_save(s: &mut Session, params: &Value) -> Result<Value> {
     if params.get("expected_project").is_some() {
-        project_guard(s, params)?;
+        let selected = s.project_path.as_ref().ok_or_else(|| EngineError::InvalidParams("Select the intended project".into()))?.canonicalize()?;
+        let expected = project_file_path(s, &json!({"path": params["expected_project"]}))?.canonicalize()?;
+        if selected != expected {
+            return Err(EngineError::InvalidParams("expected_project differs from selected project".into()));
+        }
     }
     if s.project_path.is_none() {
         return Err(EngineError::InvalidParams("no project is open; use project.new".into()));
     }
-    let target = match params.get("path") {
-        Some(_) => Some(project_file_path(s, params)?),
-        None => None,
-    };
-    match target {
-        Some(target) if s.project_path.as_ref() != Some(&target) => save_as(s, target),
-        _ => {
-            let documents = flush_dirty_documents(s)?;
-            write_project_file(s)?;
-            s.edits_since_save = 0;
-            Ok(json!({
-                "ok": true,
-                "project": s.project_path,
-                "saved": s.project_path,
-                "saves": s.project_saves.load(std::sync::atomic::Ordering::Relaxed),
-                "documents": documents,
-                "native": [],
-                "derivatives": [],
-                "relinked": [],
-                "warnings": [],
-            }))
-        }
+    if let Some(target) = params.get("path").map(|_| project_file_path(s, params)).transpose()?
+        && s.project_path.as_ref() != Some(&target)
+    {
+        return save_as(s, target);
     }
+    let documents = flush_dirty_documents(s)?;
+    write_project_file(s)?;
+    s.edits_since_save = 0;
+    Ok(json!({
+        "ok": true,
+        "project": s.project_path,
+        "saved": s.project_path,
+        "saves": s.project_saves.load(std::sync::atomic::Ordering::Relaxed),
+        "documents": documents,
+        "relinked": [],
+        "warnings": [],
+    }))
 }
 
 pub fn cmd_file_save_as(s: &mut Session, params: &Value) -> Result<Value> {
@@ -458,19 +413,15 @@ pub fn cmd_file_save_as(s: &mut Session, params: &Value) -> Result<Value> {
     if s.project_path.is_none() {
         return Err(EngineError::InvalidParams("no project is open; use file.new or project.new".into()));
     }
-    let target = project_file_path(s, params)?;
-    save_as(s, target)
+    save_as(s, project_file_path(s, params)?)
 }
 
-fn copy_project_tree_on_save_as(old_dir: &Path, new_dir: &Path) -> Result<Vec<PathBuf>> {
-    if let (Ok(co), Ok(cn)) = (old_dir.canonicalize(), new_dir.canonicalize())
-        && co == cn
-    {
+fn copy_project_tree(old_dir: &Path, new_dir: &Path) -> Result<Vec<PathBuf>> {
+    if old_dir.canonicalize().ok() == new_dir.canonicalize().ok() {
         return Ok(Vec::new());
     }
     let mut relinked = Vec::new();
-    let entries: Vec<PathBuf> = std::fs::read_dir(old_dir).into_iter().flatten().flatten().map(|e| e.path()).collect();
-    for entry in entries {
+    for entry in std::fs::read_dir(old_dir).into_iter().flatten().flatten().map(|e| e.path()) {
         let Some(fname) = entry.file_name().and_then(|n| n.to_str()) else { continue };
         if fname.starts_with('.') || entry.extension().is_some_and(|e| e.eq_ignore_ascii_case("magic")) {
             continue;
@@ -491,34 +442,22 @@ fn save_as(s: &mut Session, target: PathBuf) -> Result<Value> {
     let old_dir = s.project_path.as_deref().and_then(Path::parent).map(Path::to_path_buf);
     let target_parent = target.parent().ok_or_else(|| EngineError::InvalidParams("Save As target must reside in a directory".into()))?;
     std::fs::create_dir_all(target_parent)?;
-    if target.exists() && !target.is_file() {
-        return Err(EngineError::InvalidParams("Project destination must be a regular file; no write performed".into()));
-    }
     let target_dir = std::fs::canonicalize(target_parent).unwrap_or_else(|_| target_parent.to_path_buf());
-    let target = match target.file_name() {
-        Some(name) => target_dir.join(name),
-        None => target,
-    };
+    let target = target.file_name().map_or_else(|| target.clone(), |name| target_dir.join(name));
     let documents = flush_dirty_documents(s)?;
     let relinked = match old_dir {
-        Some(ref prev_dir) if *prev_dir != target_dir => copy_project_tree_on_save_as(prev_dir, &target_dir)?,
+        Some(ref prev_dir) if *prev_dir != target_dir => copy_project_tree(prev_dir, &target_dir)?,
         _ => Vec::new(),
     };
     if let Some(ref prev_dir) = old_dir {
-        if let Some(ref audio) = s.song_audio
-            && let Ok(rel) = audio.strip_prefix(prev_dir)
-        {
+        if let Some(rel) = s.song_audio.as_ref().and_then(|a| a.strip_prefix(prev_dir).ok()).map(Path::to_path_buf) {
             s.song_audio = Some(target_dir.join(rel));
         }
-        if let Some(ref vp) = s.video_project_path
-            && let Ok(rel) = vp.strip_prefix(prev_dir)
-        {
+        if let Some(rel) = s.video_project_path.as_ref().and_then(|v| v.strip_prefix(prev_dir).ok()).map(Path::to_path_buf) {
             s.video_project_path = Some(target_dir.join(rel));
         }
         for asset in &mut s.project_assets {
-            if let Some(ref ap) = asset.path
-                && let Ok(rel) = ap.strip_prefix(prev_dir)
-            {
+            if let Some(rel) = asset.path.as_ref().and_then(|p| p.strip_prefix(prev_dir).ok()).map(Path::to_path_buf) {
                 asset.path = Some(target_dir.join(rel));
             }
         }
@@ -533,10 +472,7 @@ fn save_as(s: &mut Session, target: PathBuf) -> Result<Value> {
     if let Some(path) = s.project_path.as_ref().and_then(|p| std::fs::canonicalize(p).ok()) {
         s.project_path = Some(path);
     }
-    let warnings = match &s.project_path {
-        Some(saved) => recent_warning(s, saved, true),
-        None => Vec::new(),
-    };
+    let warnings = s.project_path.as_deref().map_or_else(Vec::new, |saved| recent_warning(s, saved, true));
     s.edits_since_save = 0;
     Ok(json!({
         "ok": true,
@@ -544,8 +480,6 @@ fn save_as(s: &mut Session, target: PathBuf) -> Result<Value> {
         "saved": s.project_path,
         "saves": s.project_saves.load(std::sync::atomic::Ordering::Relaxed),
         "documents": documents,
-        "native": [],
-        "derivatives": [],
         "relinked": relinked,
         "warnings": warnings,
     }))
@@ -567,15 +501,15 @@ pub fn ensure_default_asset_project(s: &mut Session) -> Result<PathBuf> {
     if let Some(existing) = &s.project_path {
         return Ok(existing.clone());
     }
-    let root = crate::workspace::workspace_root(s).join("exports/scratch");
+    let root = crate::workspace::magic_data_dir().unwrap_or_else(|| crate::workspace::workspace_root(s)).join("recovery/scratch");
     std::fs::create_dir_all(&root)?;
     let default_proj = root.join("scratch.magic");
-    if default_proj.is_file() {
-        let _ = cmd_project_open(s, &json!({"path": default_proj, "record_recent": false}));
+    let _ = if default_proj.is_file() {
+        cmd_project_open(s, &json!({"path": default_proj, "record_recent": false}))
     } else {
-        let _ = cmd_project_new(s, &json!({"path": default_proj, "overwrite": true, "allow_empty_audio": true}));
-    }
-    s.project_path.clone().ok_or_else(|| EngineError::InvalidParams("could not initialize default asset project".into()))
+        cmd_project_new(s, &json!({"path": default_proj, "overwrite": true, "allow_empty_audio": true}))
+    };
+    s.project_path.clone().ok_or_else(|| EngineError::InvalidParams("could not initialize scratch asset project".into()))
 }
 
 pub fn cmd_project_identity(s: &mut Session, p: &Value) -> Result<Value> {

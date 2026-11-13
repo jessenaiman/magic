@@ -1,4 +1,4 @@
-//! Synthetic `egui` 0.37 pointer, scroll, keyboard, text, and focus event injection for `--control`
+//! Synthetic `egui` pointer, scroll, keyboard, text, and focus event injection for `--control`
 //! (`ui.click`, `ui.move`, `ui.drag`, `ui.scroll`, `ui.key`, `ui.type`, `ui.focus`).
 
 use egui::{Event, Key, Modifiers, MouseWheelSource, MouseWheelUnit, PointerButton, Pos2, TouchPhase, Vec2};

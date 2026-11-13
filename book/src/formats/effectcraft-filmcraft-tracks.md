@@ -1,5 +1,7 @@
 # `EffectCraft` & `FilmCraft` `V1`–`V4` Tracks
 
+> **Last Reviewed & Updated:** 2026-11-12T16:59:00-05:00 · **Reviewed by:** Jesse A. Naiman
+
 ## Puppet Controls for Facial Expressions & Mouth Lip-Sync (`V2`)
 
 Magic Studio delegates all character deformation and mouth visemes to [`EffectCraft` Puppet Controls](https://github.com/storytold/effectcraft/blob/main/docs/agents.md):

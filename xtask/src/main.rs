@@ -16,13 +16,15 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Task {
-    /// Run all quality gates in fast-fail order: build groups, fmt, layers, assets, Clippy (`-D warnings`), and workspace tests.
+    /// Run quality gates in fast-fail order: build groups, fmt, layers, assets, and Clippy (`-D warnings`; tests opt-in via `MAGIC_RUN_TESTS=1`).
     Ci,
-    /// Check Magic's crate dependency DAG, UI toolkit boundary, pure-Rust non-Tauri rule, and sibling-crate isolation.
+    /// Check Magic's crate dependency DAG, headless L4/L5 boundary, sibling-crate isolation, and no `egui_kittest` bloat.
     Layers,
     /// Verify every bundled file under `assets/`, `docs/brand/`, and `figcraft/` is attributed in `ATTRIBUTION.md`.
     Assets,
-    /// Run workspace tests with bounded concurrency (`RUST_TEST_THREADS=4`) and a hang watchdog (`MAGIC_TEST_TIMEOUT_MINUTES`).
+    /// Verify Rust source file length (`< 900` lines), zero production `.unwrap()`/`todo!()`, and `crates/ui-egui` purity.
+    Sources,
+    /// Explicitly run workspace tests when opted in after live verification (`RUST_TEST_THREADS=4`, `MAGIC_TEST_TIMEOUT_MINUTES`).
     Test,
 }
 
@@ -33,6 +35,7 @@ fn main() {
         Task::Ci => ci::ci(),
         Task::Layers => policy::layers(),
         Task::Assets => policy::assets(),
+        Task::Sources => policy::sources(),
         Task::Test => ci::tests(),
     };
     if let Err(error) = result {

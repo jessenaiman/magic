@@ -5,7 +5,7 @@
 //!   while preserving full Bezier Masks, 19-Category 308-FX Browser, 38 Blend Modes, and Track/EXR.
 
 use egui::{Align, Layout, Pos2, RichText, ScrollArea, Ui};
-use magic::craft_effects::{EFFECTCRAFT_19_CATEGORIES, EFFECTCRAFT_38_BLEND_MODES};
+use magic_engine::craft_effects::{EFFECTCRAFT_19_CATEGORIES, EFFECTCRAFT_38_BLEND_MODES};
 use serde_json::{Value, json};
 
 use crate::controls::{EffectRowSpec, ScalarSpec, badge_accent_color, effect_row_button, fill_card, pill_toggle, ring_slider_h, rotary_dial};
@@ -17,7 +17,7 @@ pub fn resolved_motion_effects(ctx: &ViewCtx<'_>) -> Vec<Value> {
     if let Some(arr) = ctx.state.cache.motion_effects.get("effects").and_then(Value::as_array).filter(|a| !a.is_empty()) {
         return arr.clone();
     }
-    magic::craft_effects::motion_catalog_json()
+    magic_engine::craft_effects::motion_catalog_json()
 }
 
 /// Apply a Craft motion effect to the active motion cue and persist via `motion.save`.
@@ -271,6 +271,20 @@ pub fn draw_motion_inspector(ui: &mut Ui, ctx: &mut ViewCtx<'_>) -> Option<Pos2>
 }
 
 fn draw_shapes_and_masks_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) -> Option<Pos2> {
+    let avail_fonts = ctx.state.available_fonts.clone();
+    if crate::fonts_ui::font_family_combo(
+        ui,
+        ctx.reg,
+        ctx.pal,
+        crate::fonts_ui::FontPickerSpec { id_prefix: "motion-font", label: "Callout Font" },
+        &mut ctx.state.motion.font_family,
+        &avail_fonts,
+        &mut ctx.state.font_picker_filter,
+        ctx.actions,
+    ) {
+        ctx.exec("project.autosave", json!({}), Some("Updated Motion callout font"));
+    }
+    ui.separator();
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
         rotary_dial(

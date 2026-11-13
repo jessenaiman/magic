@@ -143,7 +143,7 @@ pub fn cmd_words_lyrics_view(s: &mut Session, p: &Value) -> Result<Value> {
     if show == "still" && p["animation_id"].as_str().is_none() {
         return Err(invalid("still needs animation_id"));
     }
-    let ecproj = dir.join("lettering/lyrics.ecproj");
+    let ecproj = crate::cmd::words::lyrics_ecproj_path(&dir);
     let doc_path = document_path(&dir);
     let bytes = fs::read(&ecproj).or_else(|_| fs::read(&doc_path)).unwrap_or_default();
     Ok(json!({
@@ -440,7 +440,7 @@ pub fn cmd_words_read(s: &mut Session, p: &Value) -> Result<Value> {
     let tools = runtime_words_tools(&kinetic_library);
     let graphics = graphic_cues(&doc, &kinetic_library, &studio_times(s));
     let scene_clips = project_scene_clips(&dir, &doc);
-    let ecproj_file = dir.join("lettering/lyrics.ecproj");
+    let ecproj_file = crate::cmd::words::lyrics_ecproj_path(&dir);
     let ecproj = inspect_lettering_ecproj(&ecproj_file);
     let render_mov = dir.join("lettering/lyrics.mov");
     let stage_paths: Vec<PathBuf> = stage_frames.into_iter().map(|(_, p)| p).collect();
@@ -606,7 +606,7 @@ pub fn cmd_words_save(s: &mut Session, p: &Value) -> Result<Value> {
     anim["origin"] = p.get("origin").filter(|v| v.is_string()).cloned().unwrap_or(json!("magic"));
     let saved = anim.clone();
     save(s, &dir, &doc)?;
-    let ecproj = dir.join("lettering/lyrics.ecproj");
+    let ecproj = crate::cmd::words::lyrics_ecproj_path(&dir);
     let live_saved = crate::craft_api::save_in_live_app("effectcraft", ecproj.is_file().then_some(ecproj.as_path())).is_ok();
     Ok(json!({"ok": true, "conflict": false, "path": document_path(&dir), "live_app_saved": live_saved, "animation": saved}))
 }

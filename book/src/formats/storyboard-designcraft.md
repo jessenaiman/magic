@@ -1,17 +1,9 @@
-# `storyboard.designcraft` & Fine-Print CLI
+# `storyboard.designcraft` Package
 
-`crates/engine/templates/storyboard.designcraft` is a native [`DesignCraft`](https://github.com/storytold/designcraft) archive containing 7 starter spreads across 5 archetypes:
+> **Last Reviewed & Updated:** 2026-11-12T16:59:00-05:00 · **Reviewed by:** Jesse A. Naiman
 
-1. `A-Cover` (`page=0`) — Project title, D01 visual style, key art, and song map.
-2. `B-World` (`page=1`) — Master location reference (`storyboard.locations`).
-3. `C-Character` (`page=2`) — Lead character turnaround, cutout, and puppet rig sheet.
-4. `D-Motion` (`page=3`) — Song-action vector cue sheet.
-5. `Scene` (`page=4..N`) — Individual lyric/scene spreads populated via `storyboard.bulk_generate` or drag-and-drop.
+`crates/engine/templates/storyboard.designcraft` (seeded on first launch into `~/.local/share/magic/templates/storyboard.designcraft`) is a native [`DesignCraft`](https://github.com/storytold/designcraft/blob/main/README.md) v2 ZIP package (`mimetype`, `meta.json`, `preview.png`, `document.json`, and `assets/`). Consult [`designcraft/docs/architecture.md`](https://github.com/storytold/designcraft/blob/main/docs/architecture.md) and [`designcraft/docs/mcp.md`](https://github.com/storytold/designcraft/blob/main/docs/mcp.md) in `storytold/designcraft` for the canonical format and MCP `--automation-write-root` rules.
 
-## Read-Only Fine-Print `magic-cli` Instructions (`*_cli`)
-
-Every spread and editable slot has a companion `*_cli` text frame on Layer 2 (`"CLI Fineprint (Read-Only)"`), styled in `Geist Mono` `5.75pt` (`"CLI Fineprint"` paragraph style) with `locked: true` and `readonly: true`:
-
-- `magic-cli storyboard pages page=0` lists both editable `slots` and the read-only `cli_instructions` array.
-- `magic-cli storyboard set` refuses to modify any `*_cli` frame.
-- `magic-cli storyboard add archetype=scene` updates the duplicated spread's `*_cli` labels to the new `page=<index>` and re-locks them.
+- `storyboard.new` seeds `<project>/storyboard.designcraft` from `project.storyboard_template` or `~/.local/share/magic/templates/storyboard.designcraft`.
+- `storyboard.set` and `storyboard.wizard` update unlocked story `text` (`utf8` byte run length + `fontFamily` + `rev`) and bundle placed slot artwork under `assets/*` directly inside `storyboard.designcraft` via `craft-zip` + `craft-atomic`.
+- `storyboard.add`, `storyboard.remove`, and `storyboard.thumbnail` delegate spread insertion, deletion, and rendering to host `DesignCraft` (`designcraft --control 7979` or `designcraft-cli`).

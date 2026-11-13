@@ -1,11 +1,12 @@
-//! `05 Lyrics` (`V3 · lettering/lyrics.ecproj`) right-rail inspector & `words.effects`
+//! `03 Lyrics` (`V3 · lettering/lyrics.ecproj`) right-rail inspector & `words.effects`
 //! dynamic Craft Typography Effects browser (`05-lyrics-v3-effectcraft.jpg` + `effectcraft/docs/effects.md`):
 //! - Default rail surfaces **Font & OpenType**, **Transform & Skew**, and the dynamic
-//!   **Craft Typography Effects (`words.effects` `--control :9877` API + catalog)** list immediately
-//!   without hiding effects behind a buried tab, while preserving full Variable Axes, Range Selectors,
-//!   9 Layer Styles, 3D Extrusion, JS Expressions, and `V3 ↔ C1` Captions.
+//!   **Craft Typography Effects (`words.effects` `--control :9877` API + catalog)** list immediately,
+//!   while preserving full Variable Axes, Range Selectors, interactive **Cubic-Bézier Easing Curve**,
+//!   9 Layer Styles, 3D Extrusion, pure-Rust Procedural Motion Curves, and `V3 ↔ C1` Captions.
 
-use egui::{Pos2, RichText, ScrollArea, Ui};
+use egui::epaint::CubicBezierShape;
+use egui::{Color32, CornerRadius, Pos2, Rect, RichText, ScrollArea, Sense, Stroke, StrokeKind, Ui, Vec2};
 use serde_json::{Value, json};
 
 use crate::controls::{EffectRowSpec, ScalarSpec, badge_accent_color, effect_row_button, fill_card, pill_toggle, ring_slider_h, rotary_dial};
@@ -17,7 +18,7 @@ pub fn resolved_lyrics_effects(ctx: &ViewCtx<'_>) -> Vec<Value> {
     if let Some(arr) = ctx.state.cache.words_effects.get("effects").and_then(Value::as_array).filter(|a| !a.is_empty()) {
         return arr.clone();
     }
-    magic::craft_effects::lyrics_catalog_json()
+    magic_engine::craft_effects::lyrics_catalog_json()
 }
 
 /// Apply a Craft typography effect to the currently selected stage word AND push via `words.effect_install`.
@@ -30,24 +31,34 @@ pub fn apply_effect_to_selected_word(ctx: &mut ViewCtx<'_>, fx_id: &str, fx_labe
     ctx.exec("words.effect_install", json!({"name": fx_id}), Some(&format!("Applied {fx_label} ({fx_id})")));
 }
 
-/// Compact font discovery, `+ Font Dir`, `Point/Box`, `Kerning`, & `LTR/RTL` strip (`T21`–`T22`).
 pub fn draw_font_shaping_strip(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     ui.label(RichText::new("Font & OpenType Shaping").size(11.2).strong().color(ctx.pal.accent_sky));
+    let avail_fonts = ctx.state.available_fonts.clone();
+    if crate::fonts_ui::font_family_combo(
+        ui,
+        ctx.reg,
+        ctx.pal,
+        crate::fonts_ui::FontPickerSpec { id_prefix: "words-font", label: "Family" },
+        &mut ctx.state.lyrics.font_preset,
+        &avail_fonts,
+        &mut ctx.state.font_picker_filter,
+        ctx.actions,
+    ) {
+        ctx.state.dirty_drafts.insert("lyrics".into());
+        ctx.exec("project.autosave", json!({}), Some("Updated lyric font family"));
+    }
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 3.5;
-        ui.spacing_mut().item_spacing.y = 3.5;
-        for (font, short_lbl) in [("Inter", "Inter"), ("Fraunces", "Fraunces"), ("Space Grotesk", "Grotesk"), ("JetBrains Mono", "JB Mono")] {
-            let id = format!("words-font-{font}");
-            let sel = ctx.state.lyrics.font_preset == font;
-            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, short_lbl, font).selected(sel)).clicked() {
-                ctx.state.lyrics.font_preset = font.into();
-                ctx.exec("project.autosave", json!({}), Some("Updated lyric font"));
-            }
+        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("words-scan-fonts", "refresh", "Rescan Catalog::global() system & Craft Store fonts"))
+            .clicked()
+        {
+            craft_font_catalog::Catalog::global().rescan();
+            crate::fonts_ui::refresh_available_fonts(ctx.state);
+            ctx.exec("project.autosave", json!({}), Some("Rescanned system & Craft Font Store families"));
         }
-        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("words-scan-fonts", "refresh", "Rescan system & variable fonts (text.fonts)")).clicked() {
-            ctx.exec("project.autosave", json!({}), Some("Rescanned system & variable fonts"));
-        }
-        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("words-font-dir", "+ Font", "Add folder to EFFECTCRAFT_FONT_DIRS (T21)")).clicked() {
+        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("words-font-dir", "+ Folder", "Add folder to Catalog::set_app_dirs (EFFECTCRAFT_FONT_DIRS)"))
+            .clicked()
+        {
             ctx.push(UiAction::PickFile {
                 target: PickerTarget::ImportFontDir,
                 title: "Select Custom Font Directory (EFFECTCRAFT_FONT_DIRS)".into(),
@@ -96,7 +107,6 @@ pub fn draw_font_shaping_strip(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
 }
 
 /// Dynamic Craft Typography Effects browser (`words.effects` internal `--control :9877` API + catalog).
-/// Returns the left-edge screen position of the active selected effect row so animated tethers can connect to it.
 pub fn draw_craft_typography_effects_browser(ui: &mut Ui, ctx: &mut ViewCtx<'_>, id_prefix: &str) -> Option<Pos2> {
     let api_connected = ctx.state.cache.words_effects.get("api_connected").and_then(Value::as_bool).unwrap_or(false);
     let effects = resolved_lyrics_effects(ctx);
@@ -211,8 +221,7 @@ pub fn draw_craft_typography_effects_browser(ui: &mut Ui, ctx: &mut ViewCtx<'_>,
     active_anchor
 }
 
-/// Right-hand inspector (`[Transform & FX] [Styles & 3D] [Range & JS]`) for `05 Lyrics`,
-/// returning the screen-space anchor of the selected Craft Effect row when visible.
+/// Right-hand inspector (`[Transform & FX] [Styles & 3D] [Range & Curves]`) for `03 Lyrics`.
 pub fn draw_lyrics_inspector(ui: &mut Ui, ctx: &mut ViewCtx<'_>) -> Option<Pos2> {
     let mut fx_anchor = None;
     let panel = fill_card(ui, ctx.pal, true, |ui| {
@@ -221,7 +230,7 @@ pub fn draw_lyrics_inspector(ui: &mut Ui, ctx: &mut ViewCtx<'_>) -> Option<Pos2>
             for (tid, lbl, tip) in [
                 ("animators", "Transform & FX", "Font, Transform & Live Craft Typography Effects (`words.effects`)"),
                 ("styles", "Styles & 3D", "All 9 Layer Styles + Global Light & 3D Extrude (T24)"),
-                ("fx", "Range & JS", "Range/Wiggly Selectors, Variable Axes & Inline JS Expressions (T21-T25)"),
+                ("fx", "Range & Curves", "Range/Wiggly Selectors, Cubic-Bézier Easing, Variable Axes & Procedural Motion"),
             ] {
                 let id = format!("words-insp-tab-{tid}");
                 let sel = ctx.state.lyrics.inspector_tab == tid;
@@ -234,7 +243,7 @@ pub fn draw_lyrics_inspector(ui: &mut Ui, ctx: &mut ViewCtx<'_>) -> Option<Pos2>
         ScrollArea::vertical().id_salt("words_right_insp_scroll").auto_shrink([false, false]).show(ui, |ui| match ctx.state.lyrics.inspector_tab.as_str() {
             "styles" => draw_styles_and_3d_extrude_tab(ui, ctx),
             "fx" => {
-                fx_anchor = draw_range_and_expressions_tab(ui, ctx);
+                fx_anchor = draw_range_and_curves_tab(ui, ctx);
             }
             _ => {
                 fx_anchor = draw_transform_and_craft_fx_tab(ui, ctx);
@@ -353,7 +362,7 @@ fn draw_styles_and_3d_extrude_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             &mut ctx.state.lyrics.global_light_deg,
         );
         let rem_w = (ui.available_width() - 4.0).max(120.0);
-        ui.allocate_ui_with_layout(egui::Vec2::new(rem_w, 68.0), egui::Layout::top_down(egui::Align::Min), |ui| {
+        ui.allocate_ui_with_layout(Vec2::new(rem_w, 68.0), egui::Layout::top_down(egui::Align::Min), |ui| {
             ring_slider_h(
                 ui,
                 ctx.reg,
@@ -402,7 +411,60 @@ fn draw_styles_and_3d_extrude_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     });
 }
 
-fn draw_range_and_expressions_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) -> Option<Pos2> {
+fn draw_cubic_bezier_easing_editor(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
+    let p1 = ctx.state.lyrics.curve_p1;
+    let p2 = ctx.state.lyrics.curve_p2;
+    ui.horizontal(|ui| {
+        ui.label(RichText::new("Cubic-Bézier Easing Curve").size(11.2).strong().color(ctx.pal.accent_amber));
+        ui.label(RichText::new(format!("({:.2},{:.2},{:.2},{:.2})", p1[0], p1[1], p2[0], p2[1])).monospace().size(8.6).color(ctx.pal.text_muted));
+    });
+    let graph_sz = Vec2::new((ui.available_width() - 4.0).max(160.0), 86.0);
+    let (grect, _) = ui.allocate_exact_size(graph_sz, Sense::hover());
+    let inner = grect.shrink2(Vec2::new(10.0, 8.0));
+    ui.painter().rect_filled(grect, CornerRadius::same(5), ctx.pal.bg_stage);
+    ui.painter().rect_stroke(grect, CornerRadius::same(5), Stroke::new(1.0, ctx.pal.border_subtle), StrokeKind::Inside);
+
+    let to_screen = |nx: f32, ny: f32| Pos2::new(inner.min.x + nx.clamp(0.0, 1.0) * inner.width(), inner.max.y - ny.clamp(0.0, 1.0) * inner.height());
+    let start_pt = to_screen(0.0, 0.0);
+    let end_pt = to_screen(1.0, 1.0);
+    let c1_pt = to_screen(p1[0], p1[1]);
+    let c2_pt = to_screen(p2[0], p2[1]);
+
+    ui.painter().line_segment([start_pt, end_pt], Stroke::new(1.0, ctx.pal.border_subtle));
+    ui.painter().line_segment([start_pt, c1_pt], Stroke::new(1.1, ctx.pal.accent_sky.gamma_multiply(0.65)));
+    ui.painter().line_segment([end_pt, c2_pt], Stroke::new(1.1, ctx.pal.accent_amber.gamma_multiply(0.65)));
+    ui.painter().add(CubicBezierShape::from_points_stroke(
+        [start_pt, c1_pt, c2_pt, end_pt],
+        false,
+        Color32::TRANSPARENT,
+        Stroke::new(2.0, ctx.pal.accent_emerald),
+    ));
+
+    for (idx, (pt, col)) in [(c1_pt, ctx.pal.accent_sky), (c2_pt, ctx.pal.accent_amber)].into_iter().enumerate() {
+        ui.painter().circle_filled(pt, 4.8, col);
+        ui.painter().circle_stroke(pt, 4.8, Stroke::new(1.2, Color32::WHITE));
+        let h_hit = ui.interact(Rect::from_center_size(pt, Vec2::splat(14.0)), ui.scope_id().with(("lyrics_bezier_handle", idx)), Sense::drag());
+        if h_hit.dragged()
+            && let Some(ptr) = h_hit.interact_pointer_pos()
+        {
+            let nx = ((ptr.x - inner.min.x) / inner.width().max(1.0)).clamp(0.0, 1.0);
+            let ny = ((inner.max.y - ptr.y) / inner.height().max(1.0)).clamp(0.0, 1.0);
+            if idx == 0 {
+                ctx.state.lyrics.curve_p1 = [nx, ny];
+                ctx.state.lyrics.ease_high_pct = f64::from(ny * 100.0);
+            } else {
+                ctx.state.lyrics.curve_p2 = [nx, ny];
+                ctx.state.lyrics.ease_low_pct = f64::from((1.0 - nx) * 100.0);
+            }
+        }
+        ctx.reg.record(format!("words-bezier-p{}", idx + 1), "Easing Handle", &h_hit, None);
+    }
+}
+
+fn draw_range_and_curves_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) -> Option<Pos2> {
+    draw_cubic_bezier_easing_editor(ui, ctx);
+    ui.separator();
+
     ui.label(RichText::new("Range & Wiggly Selector (T23)").size(11.5).strong().color(ctx.pal.accent_emerald));
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
@@ -519,33 +581,46 @@ fn draw_range_and_expressions_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) -> Option<
 
     ui.separator();
     ui.horizontal_wrapped(|ui| {
-        ui.label(RichText::new("Inline JS Expression (T25)").size(11.5).strong().color(ctx.pal.accent_emerald));
-        let ok_expr = !ctx.state.lyrics.expr_code.trim().is_empty();
-        status_pill(ui, ctx.pal, if ok_expr { "JS Ready" } else { "Disabled" }, if ok_expr { ctx.pal.accent_emerald } else { ctx.pal.text_muted });
+        ui.label(RichText::new("Procedural Motion & Pick-Whip").size(11.5).strong().color(ctx.pal.accent_emerald));
+        let ok_drv = !ctx.state.lyrics.expr_code.trim().is_empty();
+        status_pill(ui, ctx.pal, if ok_drv { "Rust Driver" } else { "Manual" }, if ok_drv { ctx.pal.accent_emerald } else { ctx.pal.text_muted });
     });
     text_input(
         ui,
         ctx.reg,
         "words-expr-code",
-        "JavaScript Expression",
+        "Procedural Curve Driver",
         &mut ctx.state.lyrics.expr_code,
-        "wiggle(2.5, 8)",
+        "spring_pop(freq: 2.5, amp: 8.0)",
         (ui.available_width() - 4.0).max(140.0),
     );
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
         ui.spacing_mut().item_spacing.y = 4.0;
-        for (lbl, snippet) in [("wiggle", "wiggle(2.5, 8)"), ("loopOut", "loopOut(\"cycle\")"), ("beatPulse", "100 + Math.sin(time * 8.0) * 14")] {
+        for (lbl, preset) in [
+            ("spring_pop", "spring_pop(freq: 2.5, amp: 8.0)"),
+            ("beat_pulse", "beat_pulse(bpm: 120, gain: 0.14)"),
+            ("pendulum", "pendulum_sway(deg: 6.0, hz: 1.2)"),
+            ("cycle_loop", "cycle_loop(span: 2.0)"),
+        ] {
             let id = format!("words-expr-snip-{lbl}");
-            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, lbl, "Load expression preset")).clicked() {
-                ctx.state.lyrics.expr_code = snippet.into();
+            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, lbl, "Load pure-Rust procedural motion preset")).clicked() {
+                ctx.state.lyrics.expr_code = preset.into();
             }
         }
-        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("words-expr-whip", "@ Pick-Whip", "prop.pickWhip")).clicked() {
+        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("words-expr-whip", "@ Pick-Whip", "Bind lyric property via EffectCraft Pick-Whip")).clicked()
+        {
             ctx.exec("project.autosave", json!({}), Some("Bound lyric property via Pick-Whip"));
         }
-        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("words-expr-apply", "Apply JS", "prop.setExpression").primary()).clicked() {
-            ctx.exec("project.autosave", json!({}), Some("Applied JS expression to lyric layer"));
+        if action_button(
+            ui,
+            ctx.reg,
+            ctx.pal,
+            BtnSpec::label_only("words-expr-apply", "Apply Driver", "Write procedural curve keyframes into lyrics.ecproj").primary(),
+        )
+        .clicked()
+        {
+            ctx.exec("project.autosave", json!({}), Some("Applied procedural motion curve to lyric layer"));
         }
     });
 
@@ -553,6 +628,7 @@ fn draw_range_and_expressions_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) -> Option<
     draw_craft_typography_effects_browser(ui, ctx, "words-fx-secondary")
 }
 
+#[allow(clippy::cognitive_complexity)]
 /// Collapsible stage-footer bidirectional `V3 ↔ C1` Captions (`T26`) and `.ectemplate` / `.fcgt` bar (`T06`).
 pub fn draw_captions_and_template_strip(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     ctx.pal.inset_frame().show(ui, |ui| {

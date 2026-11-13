@@ -47,6 +47,20 @@ pub(crate) fn workspace_dir(s: &Session) -> Result<PathBuf> {
     crate::workshop::project_dir(s)
 }
 
+/// Resolve the project's kinetic lyrics EffectCraft file (`effects/lyrics.ecproj` in the 5-folder
+/// layout, falling back to `lettering/lyrics.ecproj` when opening an older project folder).
+pub(crate) fn lyrics_ecproj_path(dir: &Path) -> PathBuf {
+    let preferred = dir.join("effects/lyrics.ecproj");
+    if preferred.is_file() {
+        return preferred;
+    }
+    let legacy = dir.join("lettering/lyrics.ecproj");
+    if legacy.is_file() {
+        return legacy;
+    }
+    preferred
+}
+
 /// Select an existing lyrics folder without opening or writing a `.magic` project file.
 pub fn cmd_words_workspace(s: &mut Session, params: &Value) -> Result<Value> {
     if let Some(raw) = params["path"].as_str() {
@@ -538,6 +552,7 @@ impl crate::doc_state::ProjectDoc for WordsDesign {
     }
 }
 
+#[allow(clippy::cognitive_complexity)]
 fn normalize_words_doc(mut doc: Value) -> Value {
     if let Some(anims) = doc["animations"].as_array_mut() {
         for anim in anims.iter_mut() {

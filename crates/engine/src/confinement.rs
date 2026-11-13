@@ -109,6 +109,7 @@ impl AutomationRoots {
     }
 }
 
+#[allow(clippy::cognitive_complexity)]
 fn check_param_value(roots: &AutomationRoots, s: &Session, id: &str, key: &str, value: &Value, is_write_cmd: bool) -> Result<()> {
     const READ_KEYS: &[&str] = &["audio", "transcript", "captions", "image", "source", "input", "background", "source_project", "reference"];
     const WRITE_KEYS: &[&str] = &["output", "out", "out_dir", "pdf", "pptx", "png_dir", "root", "save_as"];

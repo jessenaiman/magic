@@ -1,30 +1,18 @@
 # Magic Studio Roadmap
 
-Magic Studio coordinates the [ArtCraft](https://github.com/storytold) creative suite — [`DesignCraft`](https://github.com/storytold/designcraft), [`PhotoCraft`](https://github.com/storytold/photocraft), [`VectorCraft`](https://github.com/storytold/vectorcraft), [`EffectCraft`](https://github.com/storytold/effectcraft), and [`FilmCraft`](https://github.com/storytold/filmcraft) — to turn a recorded song into a storyboarded, puppet-animated, kinetic-lyric video.
+> **Last Reviewed & Updated:** 2026-11-12T16:59:00-05:00 · **Reviewed by:** Jesse A. Naiman
 
-Detailed technical checklists for unimplemented requests and `// TODO:` host checks live in [`docs/control-protocol.md`](docs/control-protocol.md) and [`ROADMAP.md`](ROADMAP.md).
+Magic Studio coordinates host [`DesignCraft`](https://github.com/storytold/designcraft/blob/main/README.md), [`PhotoCraft`](https://github.com/storytold/photocraft/blob/main/README.md), [`VectorCraft`](https://github.com/storytold/vectorcraft/blob/main/README.md), [`EffectCraft`](https://github.com/storytold/effectcraft/blob/main/README.md), and [`FilmCraft`](https://github.com/storytold/filmcraft/blob/main/README.md) on top of [`storytold/craft-libs`](https://github.com/storytold/craft-libs/blob/main/README.md).
 
-## Completed Foundation
+## Completed Pre-Alpha Foundation (`magic-fixes-9`)
 
-- [x] Pure-Rust desktop shell (`eframe` + `egui` 0.37 + [`storytold/craft-libs`](https://github.com/storytold/craft-libs)) in `crates/ui-egui` and `apps/magic` with `craft-menu` system menus, inner stage navigation, `craft_ui::capture::CaptureSlot` cross-platform screenshots, `craft-keymap`, `craft-dialogs`, and `craft-quit` — zero Tauri/webview dependencies.
-- [x] Single-Responsibility workspace architecture (`magic-util`, `magic-scribbles`, `magic-engine`, `magic-mcp`, `magic-ui-egui`, `magic-cli`, `magic`, `magic-tui`) enforced by `cargo xtask layers`.
-- [x] Song-first `magic-cli new --audio` intake writing `timing-reference.json` and initializing a synced [`FilmCraft`](https://github.com/storytold/filmcraft) `.fcproj` timeline (`A1` Song, `V1` Storyboard Scenes, `V2` Character Animation, `V3` Kinetic Lyrics, `V4` Action Motion).
-- [x] [`DesignCraft`](https://github.com/storytold/designcraft) `storyboard.designcraft` master template with locked, read-only fine-print `magic-cli` instructions (`*_cli`), traffic-light readiness gating (`storyboard.check`), and title-page-driven `storyboard.bulk_generate`.
-- [x] [`EffectCraft`](https://github.com/storytold/effectcraft) 11-pin facial & viseme Puppet Controls (`character.puppet.rig_face`, `character.puppet.expression`, `character.puppet.lipsync`, `character.puppet.follow`, `character.puppet.record`).
-- [x] [`PhotoCraft`](https://github.com/storytold/photocraft) subject isolation (`photo.remove_background`) and [`VectorCraft`](https://github.com/storytold/vectorcraft) background-free tracing (`vector.trace`), plus strict headless-only safety isolation for early-alpha [`AniCraft`](https://github.com/storytold/AniCraft).
-- [x] `magic-cli mcp` / `magic-mcp` stdio server (`--connect` / `--bridge` + `--headless`) and `magic --control 9875` live desktop watching with `--automation-read-root` and `--automation-write-root` confinement.
-- [x] Magic Studio Source-Available Non-Resale License (`LICENSE` + `docs/brand/LICENSE-brand.txt`) allowing unrestricted commercial video production while prohibiting commercial resale of Magic Studio.
+- [x] **Self-Contained `~/Magic/<slug>/` Workspace Architecture** ([`crates/engine/src/workspace.rs`](crates/engine/src/workspace.rs), [`cmd/project/`](crates/engine/src/cmd/project/mod.rs)): 5-folder project layout (`audio/`, `assets/`, `effects/`, `film/`, `exports/`), `~/.local/share/magic/{templates,recovery,logs}` seeding, and migration-only `original-project.zip` (`project.migrate` via `craft-zip`).
+- [x] **Direct `storyboard.designcraft` Package Updates** ([`crates/engine/src/cmd/storyboard/`](crates/engine/src/cmd/storyboard/mod.rs)): Unlocked text/font slots and `assets/*` entries written atomically into `storyboard.designcraft` via `craft-zip` + `craft-atomic`, with spread operations delegated to host `DesignCraft`.
+- [x] **`craft_ui::docking` Workstation & Zero-Polling Backstage TUI** ([`crates/ui-egui/src/docking.rs`](crates/ui-egui/src/docking.rs), [`apps/magic-tui/`](apps/magic-tui/README.md)): Shared docking presets, 70+ clean-room `assets/icons/*.svg` controls, and 5-tab ANSI snapshot `magic-tui` with zero third-party TUI bloat.
+- [x] **Control Channel & CI Source Hygiene** ([`apps/magic/src/control.rs`](apps/magic/src/control.rs), [`apps/magic/src/capture.rs`](apps/magic/src/capture.rs), [`xtask/src/policy.rs`](xtask/src/policy.rs)): `--control-input-only`, macOS App Nap opt-out, `render.frame` (`max_side`, `base64`, `write`), `ui.playback` `rmsDbfs`/`peakDbfs`, marker `sync_warnings`, and `cargo xtask ci` (`layers`, `assets`, `sources`, `clippy -D warnings`).
 
-## Next Milestones
+## Remaining Host-Verification & Upstream Parity Milestones
 
-### Milestone A — Live `--control` & Stage Viewport Parity
-- [ ] Add `--control-input-only`, `ui.viewer.locate` / `ui.viewer.hit`, `ui.timeline.locate` / `ui.timeline.hit`, `render.frame {base64: true, max_side?}`, and live dBFS audio meters in `ui.playback`.
-- [ ] Opt out of macOS App Nap while `--control` is active and expose MCP read-only resources (`magic://document`, `magic://storyboard`, `magic://commands`).
-
-### Milestone B — 3D Character Breakout & Host CLI Verification
-- [ ] Complete `TextureCraft` CLI inspection and glTF skeletal channel mapping in `crates/engine/src/cmd/character/model3d.rs`.
-- [ ] Verify `vectorcraft-cli` flat PNG export verb in `storyboard/crud.rs` and add opt-in host integration tests across all installed `*craft-cli` binaries.
-
-### Milestone C — Phoneme Lip-Sync, Duet Stems & Community Release
-- [ ] Upgrade `character.puppet.lipsync` with sub-word phoneme alignment and multi-character vocal stem routing.
-- [ ] Configure signed multi-platform installers via [`storytold/craft-common-actions`](https://github.com/storytold/craft-common-actions) and publish user guides to [`storytold/craft-wiki`](https://github.com/storytold/craft-wiki).
+- [ ] **Live 3-App `--control` & Host GPU Screenshot Verification**: Run [`HANDOFF-magic-fixes-9.md`](HANDOFF-magic-fixes-9.md) on host GPU with live `FilmCraft` (`:9876`, `FILMCRAFT_CONTROL_TOKEN`), `EffectCraft` (`:9877`), and `DesignCraft` (`:7979`), plus 10-step workflow screenshots.
+- [ ] **Upstream FilmCraft Linked Comps & Whisper Transcripts**: Track upstream [`storytold/filmcraft#388`](https://github.com/storytold/filmcraft/issues/388) for native linked `.ecproj` comps and verify `filmcraft-cli` `transcript.generate` / `sequence.transcribe` (`--features whisper`) per [`filmcraft/docs/transcripts.md`](https://github.com/storytold/filmcraft/blob/main/docs/transcripts.md).
+- [ ] **Release Signing & Community Wiki**: Wire [`storytold/craft-common-actions`](https://github.com/storytold/craft-common-actions/blob/main/README.md) Linux/macOS/Windows signing secrets and submit `docs/wiki/magic/` to [`storytold/craft-wiki`](https://github.com/storytold/craft-wiki).

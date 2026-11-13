@@ -1,8 +1,10 @@
 # Magic Studio Documentation
 
-**Magic Studio** (`magic`, `magic-cli`, `magic-mcp`) is a pure-Rust song-to-video coordinator application (`eframe` + `egui` 0.37 + [`storytold/craft-libs`](https://github.com/storytold/craft-libs)) for the [ArtCraft](https://github.com/storytold) desktop creative suite.
+> **Last Reviewed & Updated:** 2026-11-12T16:59:00-05:00 · **Reviewed by:** Jesse A. Naiman
 
-Like [`PhotoCraft`](https://github.com/storytold/photocraft), [`VectorCraft`](https://github.com/storytold/vectorcraft), [`DesignCraft`](https://github.com/storytold/designcraft), [`EffectCraft`](https://github.com/storytold/effectcraft), and [`FilmCraft`](https://github.com/storytold/filmcraft), Magic Studio separates a clean Rust coordinator engine (`crates/engine`), a shared `egui` 0.37 shell crate (`crates/ui-egui`), a headless CLI (`magic-cli`), a stdio [Model Context Protocol](https://modelcontextprotocol.io) server (`magic-cli mcp` / `magic-mcp`), and a native `eframe` desktop app (`magic --control 9875`) with zero Tauri, Electron, or webview dependencies.
+**Magic Studio** (`magic`, `magic-cli`, `magic-mcp`, `magic-tui`) is a song-to-video coordinator application built in Rust (`eframe` + [`emilk/egui`](https://github.com/emilk/egui) + [`storytold/craft-libs`](https://github.com/storytold/craft-libs)) for the [ArtCraft](https://github.com/storytold) creative suite.
+
+Like [`PhotoCraft`](https://github.com/storytold/photocraft), [`VectorCraft`](https://github.com/storytold/vectorcraft), [`DesignCraft`](https://github.com/storytold/designcraft), [`EffectCraft`](https://github.com/storytold/effectcraft), and [`FilmCraft`](https://github.com/storytold/filmcraft), Magic Studio separates a clean Rust coordinator engine (`crates/engine`), a shared `egui` workstation crate (`crates/ui-egui`), a headless CLI (`magic-cli`), a Backstage TUI (`magic-tui`), a stdio [Model Context Protocol](https://modelcontextprotocol.io) server (`magic-cli mcp` / `magic-mcp`), and an `eframe` app (`magic --control 9875`) supporting custom GPU `Shape::Callback` shaders and `craft-web-host` / child `wry` stage embeds.
 
 ## What Magic Studio Coordinates
 

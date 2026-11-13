@@ -3,6 +3,8 @@ title: Getting Started with Magic Studio
 description: Create a song project, complete the 4 Storyboard Main Title Pages, and assemble your first FilmCraft preview.
 ---
 
+> **Last Reviewed & Updated:** 2026-11-12T16:59:00-05:00 · **Reviewed by:** Jesse A. Naiman
+
 ## 1. Check Installed ArtCraft Apps
 
 Run the built-in suite check to confirm which ArtCraft apps and `<craft>-cli` binaries are available on your machine:
