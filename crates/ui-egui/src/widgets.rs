@@ -1,6 +1,6 @@
 //! Shared `craft-ui` workstation controls, icon/label buttons, stadium mint mode-tab capsules
-//! (`1. App-Bar & Navigation Tokens` in `00-figma-component-system-sheet.jpg`), glowing project
-//! pill button, traffic-light pills, and per-frame widget automation-ID registry for `--control`.
+//! with embedded stage SVG icons (`1. App-Bar & Navigation Tokens` in `00-figma-component-system-sheet.jpg`),
+//! glowing project pill button, traffic-light pills, and per-frame widget automation-ID registry.
 
 use std::collections::BTreeMap;
 
@@ -142,6 +142,7 @@ impl<'a> BtnSpec<'a> {
     }
 }
 
+#[allow(clippy::cognitive_complexity)]
 /// Draw a uniform workstation button via `craft_ui::buttons::IconButton` and register its automation ID.
 pub fn action_button(ui: &mut Ui, reg: &mut AutomationRegistry, pal: &MagicPalette, spec: BtnSpec<'_>) -> Response {
     let font = FontId::proportional(12.0);
@@ -186,7 +187,7 @@ pub fn action_button(ui: &mut Ui, reg: &mut AutomationRegistry, pal: &MagicPalet
     resp
 }
 
-/// Stadium project pill button (`[📖 Pterodactyl Song]` in `02-project-craft-files.jpg` and `00-figma-component-system-sheet.jpg`).
+/// Stadium project pill button (`[📖 Pterodactyl Song]` in `02-project-craft-files.jpg`).
 pub fn project_pill_button(ui: &mut Ui, reg: &mut AutomationRegistry, pal: &MagicPalette, id: &str, label: &str, selected: bool, tooltip: &str) -> Response {
     let font = FontId::proportional(12.5);
     let galley = ui.painter().layout_no_wrap(label.to_owned(), font.clone(), pal.text_primary);
@@ -224,51 +225,67 @@ pub fn companion_button(ui: &mut Ui, reg: &mut AutomationRegistry, pal: &MagicPa
     resp
 }
 
-/// Primary `#app-bar` mode tab (`1. App-Bar & Navigation Tokens` in `00-figma-component-system-sheet.jpg`):
-/// active tab renders as a full stadium pill (`CornerRadius::same(13)`) in solid `#35E1C0` mint with crisp `#061612` ink.
-pub fn mode_tab(ui: &mut Ui, reg: &mut AutomationRegistry, pal: &MagicPalette, id: &str, label: &str, selected: bool, dot_color: Option<Color32>) -> Response {
-    let font = FontId::proportional(12.5);
-    let galley = ui.painter().layout_no_wrap(label.to_owned(), font.clone(), pal.text_primary);
-    let extra = if dot_color.is_some() { 11.0 } else { 0.0 };
-    let (rect, _) = ui.allocate_exact_size(Vec2::new(galley.size().x + 24.0 + extra, 26.0), Sense::hover());
-    let tab_id = ui.scope_id().with(id);
+pub struct ModeTabSpec<'a> {
+    pub id: &'a str,
+    pub icon: &'a str,
+    pub label: &'a str,
+    pub tooltip: &'a str,
+    pub icon_only: bool,
+    pub selected: bool,
+    pub dot_color: Option<Color32>,
+}
+
+/// Primary `#app-bar` mode tab (`1. App-Bar & Navigation Tokens` in `00-figma-component-system-sheet.jpg`)
+/// pairing a custom stage SVG icon with its label (or collapsing to an icon pill on narrow viewports).
+pub fn mode_tab(ui: &mut Ui, reg: &mut AutomationRegistry, pal: &MagicPalette, spec: ModeTabSpec<'_>) -> Response {
+    let font = FontId::proportional(12.2);
+    let text_w = if spec.icon_only { 0.0 } else { ui.painter().layout_no_wrap(spec.label.to_owned(), font.clone(), pal.text_primary).size().x };
+    let dot_w = if spec.dot_color.is_some() { 9.5 } else { 0.0 };
+    let total_w = if spec.icon_only { 34.0 + dot_w } else { 20.0 + 16.0 + text_w + dot_w };
+    let (rect, _) = ui.allocate_exact_size(Vec2::new(total_w, 26.0), Sense::hover());
+    let tab_id = ui.scope_id().with(spec.id);
     let dark_ink = Color32::from_rgb(0x06, 0x16, 0x12);
-    let resp = Tab::new(tab_id, label, selected).sense(Sense::click()).show_at(ui, rect, |ui, response| {
-        let fill = if selected {
-            pal.accent_emerald
-        } else if response.hovered() {
-            pal.bg_hover
-        } else {
-            Color32::TRANSPARENT
-        };
-        let stroke = if selected {
-            Stroke::NONE
-        } else if response.hovered() {
-            Stroke::new(1.0, pal.border)
-        } else {
-            Stroke::NONE
-        };
+    let resp = Tab::new(tab_id, spec.label, spec.selected).sense(Sense::click()).show_at(ui, rect, |ui, response| {
+        let (fill, stroke, fg) = mode_tab_colors(pal, dark_ink, spec.selected, response.hovered());
         ui.painter().rect(response.rect, CornerRadius::same(13), fill, stroke, StrokeKind::Inside);
-        let mut x = response.rect.min.x + 12.0;
-        if let Some(dot) = dot_color {
-            let center = Pos2::new(x + 3.0, response.rect.center().y);
-            if selected {
-                ui.painter().circle_filled(center, 4.4, dark_ink);
+
+        let mut x = response.rect.min.x + 10.0;
+        if let Some(dot) = spec.dot_color {
+            let center = Pos2::new(x + 2.5, response.rect.center().y);
+            if spec.selected {
+                ui.painter().circle_filled(center, 4.2, dark_ink);
             }
-            ui.painter().circle_filled(center, 3.2, dot);
-            x += 10.5;
+            ui.painter().circle_filled(center, 3.0, dot);
+            x += 9.0;
         }
-        let fg = if selected {
-            if pal.dark { dark_ink } else { Color32::WHITE }
-        } else if response.hovered() {
-            pal.text_primary
-        } else {
-            pal.text_secondary
-        };
-        ui.painter().text(Pos2::new(x, response.rect.center().y), Align2::LEFT_CENTER, label, font, fg);
+        let icon_rect = Rect::from_min_size(Pos2::new(x, response.rect.center().y - 6.5), Vec2::splat(13.0));
+        icon_image(spec.icon, 13.0, fg).paint_at(ui, icon_rect);
+        if !spec.icon_only {
+            ui.painter().text(Pos2::new(icon_rect.max.x + 5.0, response.rect.center().y), Align2::LEFT_CENTER, spec.label, font, fg);
+        }
     });
-    reg.record(id, label, &resp, None);
+    let resp = resp.on_hover_text(spec.tooltip);
+    reg.record(spec.id, spec.label, &resp, None);
     resp
+}
+
+fn mode_tab_colors(pal: &MagicPalette, dark_ink: Color32, selected: bool, hovered: bool) -> (Color32, Stroke, Color32) {
+    let fill = if selected {
+        pal.accent_emerald
+    } else if hovered {
+        pal.bg_hover
+    } else {
+        Color32::TRANSPARENT
+    };
+    let stroke = if selected || !hovered { Stroke::NONE } else { Stroke::new(1.0, pal.border) };
+    let fg = if selected {
+        if pal.dark { dark_ink } else { Color32::WHITE }
+    } else if hovered {
+        pal.text_primary
+    } else {
+        pal.text_secondary
+    };
+    (fill, stroke, fg)
 }
 
 pub fn text_input(ui: &mut Ui, reg: &mut AutomationRegistry, id: &str, label: &str, value: &mut String, hint: &str, width: f32) -> Response {

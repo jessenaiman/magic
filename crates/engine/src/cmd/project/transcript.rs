@@ -242,12 +242,17 @@ pub(crate) fn write_timing_reference(dir: &Path, audio: Option<&Path>, duration:
 
 /// Sync both the structured transcript (`transcript.set`) and the SRT caption/lyric track (`captions.import`)
 /// directly onto the linked `FilmCraft` `.fcproj` timeline.
-pub(crate) fn sync_lyric_track_to_filmcraft(s: &mut Session, srt_path: &Path, doc: Option<&Value>) {
+pub(crate) fn sync_lyric_track_to_filmcraft(s: &mut Session, srt_path: &Path, _doc: Option<&Value>) {
     if let Ok(fcproj) = crate::cmd::film::film_path(s)
         && fcproj.is_file()
+        && let Some(project_dir) = srt_path.parent()
     {
-        let _ =
-            crate::native_media::write_staged_steps(&fcproj, &json!({"id": "captions.import", "params": {"srt": srt_path, "has_transcript": doc.is_some()}}));
+        let mut fc_doc = crate::cmd::film::fcproj_doc::load_fcproj(&fcproj);
+        let srt_cues = crate::cmd::film::fcproj_doc::parse_srt_captions(project_dir);
+        if let Some(c1) = fc_doc["sequence"]["captions"].get_mut(0) {
+            c1["captions"] = json!(srt_cues);
+        }
+        let _ = crate::cmd::film::fcproj_doc::save_fcproj(&fcproj, &mut fc_doc);
     }
     let _ = crate::cmd::words::cmd_words_captions(s, &json!({"to": "video"}));
 }

@@ -1,9 +1,8 @@
 //! Settings schema for Magic Studio (`prefs.schema`, `prefs.get`, `prefs.set`).
 //!
-//! Scoped strictly to Magic Studio's coordinator responsibilities (AI roles via
-//! `storytold/craft-ai-integrations`, appearance, project root,
-//! lyrics font paths, character preview, and `.magic` autosave) — NLE playback, media-cache, and
-//! track-label settings belong to `FilmCraft` and `EffectCraft`, not Magic.
+//! Scoped strictly to Magic Studio's coordinator responsibilities (AI contract via `craft-ai-core`,
+//! appearance, project root, custom `DeckCraft` starter storyboard template, lyrics font paths,
+//! character preview, and `.magic` autosave).
 
 #[derive(Clone, Copy, Debug)]
 pub enum Kind {
@@ -30,7 +29,7 @@ pub struct Category {
 }
 
 pub const CATEGORIES: &[Category] = &[
-    Category { id: "ai", title: "AI & LLM (craft-ai-integrations)" },
+    Category { id: "ai", title: "AI & LLM (craft-ai-core)" },
     Category { id: "appearance", title: "Appearance & Interface Style" },
     Category { id: "general", title: "General" },
     Category { id: "project", title: "Project Workspace" },
@@ -41,7 +40,7 @@ pub const CATEGORIES: &[Category] = &[
 
 pub fn fields_with_cat() -> Vec<(&'static str, Field)> {
     vec![
-        ("ai", Field { key: "ai.enabled", label: "Enable AI Integrations (storytold/craft-ai-integrations)", kind: Kind::Bool, wired: true, enabled_by: None }),
+        ("ai", Field { key: "ai.enabled", label: "Enable Opt-In AI Shell (craft-ai-core)", kind: Kind::Bool, wired: true, enabled_by: None }),
         (
             "ai",
             Field {
@@ -62,10 +61,7 @@ pub fn fields_with_cat() -> Vec<(&'static str, Field)> {
                 enabled_by: Some("fidget.enabled"),
             },
         ),
-        (
-            "ai",
-            Field { key: "fidget.connection", label: "Fidget SharedStore Connection ID", kind: Kind::Text, wired: true, enabled_by: Some("fidget.enabled") },
-        ),
+        ("ai", Field { key: "fidget.connection", label: "Fidget Connection ID", kind: Kind::Text, wired: true, enabled_by: Some("fidget.enabled") }),
         ("ai", Field { key: "fidget.model", label: "Fidget Model ID", kind: Kind::Text, wired: true, enabled_by: Some("fidget.enabled") }),
         (
             "ai",
@@ -77,16 +73,7 @@ pub fn fields_with_cat() -> Vec<(&'static str, Field)> {
                 enabled_by: Some("ai.enabled"),
             },
         ),
-        (
-            "ai",
-            Field {
-                key: "scribbles.connection",
-                label: "Scribbles SharedStore Connection ID",
-                kind: Kind::Text,
-                wired: true,
-                enabled_by: Some("scribbles.enabled"),
-            },
-        ),
+        ("ai", Field { key: "scribbles.connection", label: "Scribbles Connection ID", kind: Kind::Text, wired: true, enabled_by: Some("scribbles.enabled") }),
         ("ai", Field { key: "scribbles.model", label: "Scribbles Model ID", kind: Kind::Text, wired: true, enabled_by: Some("scribbles.enabled") }),
         (
             "ai",
@@ -172,23 +159,18 @@ pub fn fields_with_cat() -> Vec<(&'static str, Field)> {
         ("general", Field { key: "general.show_tooltips", label: "Show Tooltips", kind: Kind::Bool, wired: true, enabled_by: None }),
         ("general", Field { key: "general.show_rich_tooltips", label: "Show Rich Tooltips", kind: Kind::Bool, wired: true, enabled_by: None }),
         ("general", Field { key: "general.recent_projects", label: "Recent Projects", kind: Kind::Text, wired: true, enabled_by: None }),
-        ("project", Field { key: "project.root", label: "Production Projects Folder (magic/projects)", kind: Kind::Path, wired: true, enabled_by: None }),
+        ("project", Field { key: "project.root", label: "Production Projects Folder (~/Magic)", kind: Kind::Path, wired: true, enabled_by: None }),
         (
             "project",
             Field {
-                key: "project.characters_root",
-                label: "Shared Animations / Characters Folder (magic/animations)",
-                kind: Kind::Path,
+                key: "project.storyboard_template",
+                label: "Custom Storyboard Starter Template (.deckcraft / .pptx / .potx)",
+                kind: Kind::Text,
                 wired: true,
                 enabled_by: None,
             },
         ),
-        ("project", Field { key: "project.storyboard_template", label: "Storyboard Master Template", kind: Kind::Text, wired: true, enabled_by: None }),
         ("project", Field { key: "project.storyboard_format", label: "Storyboard Reference Format", kind: Kind::Text, wired: true, enabled_by: None }),
-        (
-            "project",
-            Field { key: "project.storyboard_locked", label: "Enforce Read-Only Master Storyboard Layout", kind: Kind::Bool, wired: true, enabled_by: None },
-        ),
         (
             "lyrics",
             Field {

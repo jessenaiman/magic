@@ -14,7 +14,6 @@ use std::{
 pub mod compose;
 pub mod lettering;
 pub mod lyrics;
-pub(crate) mod lyrics_layout;
 pub(crate) mod motion_curve;
 pub(crate) mod native_motion;
 pub(crate) mod preview;
@@ -29,12 +28,10 @@ pub(crate) const ACTIONS: &[&str] = &["none", "wave", "tiny", "swim", "no", "cry
 pub(crate) const ENTRANCES: &[&str] = &["pop", "fade", "rise", "none"];
 pub(crate) const EXITS: &[&str] = &["fade", "drop", "none"];
 pub(crate) const MOVES: &[&str] = &["quiet", "sleep", "settle", "fall", "pop", "rise", "east", "west", "loop"];
-pub(crate) const FONTS: &[&str] = &["song", "serif", "sans"];
 /// 0.4 seconds in FilmCraft ticks (`254_016_000_000 * 2 / 5`).
 pub(crate) const LEAD_IN_TICK: Tick = Tick(101_606_400_000);
 /// 1.0 second in FilmCraft ticks.
 pub(crate) const HOLD_TICK: Tick = Tick(TICKS_PER_SECOND);
-pub(crate) const KINETIC_LIBRARY: &str = include_str!("../../../../../pipeline/templates/kinetic-library.json");
 
 pub(crate) fn invalid(message: impl Into<String>) -> EngineError {
     EngineError::InvalidParams(message.into())
@@ -45,6 +42,36 @@ pub(crate) fn workspace_dir(s: &Session) -> Result<PathBuf> {
         return Ok(folder.clone());
     }
     crate::workshop::project_dir(s)
+}
+
+/// Resolve the project's kinetic lyrics EffectCraft file (`effects/lyrics.ecproj` in the 5-folder
+/// layout, falling back to `lettering/lyrics.ecproj` when opening an older project folder).
+pub(crate) fn lyrics_ecproj_write_path(dir: &Path) -> PathBuf {
+    dir.join("effects/lyrics.ecproj")
+}
+
+pub(crate) fn lyrics_ecproj_path(dir: &Path) -> PathBuf {
+    let preferred = lyrics_ecproj_write_path(dir);
+    if preferred.is_file() {
+        return preferred;
+    }
+    let legacy = dir.join("lettering/lyrics.ecproj");
+    if legacy.is_file() {
+        return legacy;
+    }
+    preferred
+}
+
+pub(crate) fn lyrics_mov_path(dir: &Path) -> PathBuf {
+    let preferred = dir.join("effects/lyrics.mov");
+    if preferred.is_file() {
+        return preferred;
+    }
+    let legacy = dir.join("lettering/lyrics.mov");
+    if legacy.is_file() {
+        return legacy;
+    }
+    preferred
 }
 
 /// Select an existing lyrics folder without opening or writing a `.magic` project file.
@@ -98,7 +125,15 @@ fn norm(text: &str) -> String {
 }
 
 pub(crate) fn document_path(dir: &Path) -> PathBuf {
-    dir.join("design/words.json")
+    if let Ok(entries) = fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if p.is_file() && p.extension().and_then(|e| e.to_str()) == Some("magic") {
+                return p;
+            }
+        }
+    }
+    dir.join("effects/lyrics.ecproj")
 }
 
 fn heard_text(w: &Value) -> &str {
@@ -443,7 +478,7 @@ pub(crate) fn studio_times(s: &mut Session) -> std::collections::HashMap<String,
     let Ok(dir) = workspace_dir(s) else {
         return std::collections::HashMap::new();
     };
-    let track_file = dir.join("design/words-track.json");
+    let track_file = if dir.join("effects/words-track.json").is_file() { dir.join("effects/words-track.json") } else { dir.join("design/words-track.json") };
     let Ok(bytes) = fs::read(track_file) else {
         return std::collections::HashMap::new();
     };
@@ -526,18 +561,7 @@ pub(crate) fn timing(anim: &mut Value) {
     }
 }
 
-/// The lyric design (`design/words.json`).
-#[derive(serde::Serialize, serde::Deserialize)]
-#[serde(transparent)]
-pub(crate) struct WordsDesign(pub Value);
-
-impl crate::doc_state::ProjectDoc for WordsDesign {
-    const KIND: &'static str = "words";
-    fn path(dir: &Path) -> std::path::PathBuf {
-        document_path(dir)
-    }
-}
-
+#[allow(clippy::cognitive_complexity)]
 fn normalize_words_doc(mut doc: Value) -> Value {
     if let Some(anims) = doc["animations"].as_array_mut() {
         for anim in anims.iter_mut() {
@@ -569,11 +593,13 @@ fn normalize_words_doc(mut doc: Value) -> Value {
 }
 
 pub(crate) fn load(s: &mut Session, dir: &Path) -> Result<Option<Value>> {
-    Ok(s.doc::<WordsDesign>(dir)?.map(|d| normalize_words_doc(d.0)))
+    Ok(crate::project::read_session_section(s, dir, "lyrics", "design/words.json")?.map(normalize_words_doc))
 }
 
 pub(crate) fn save(s: &mut Session, dir: &Path, doc: &Value) -> Result<()> {
-    s.save_doc(dir, &WordsDesign(normalize_words_doc(doc.clone())))
+    let normalized = normalize_words_doc(doc.clone());
+    let _ = crate::project::write_session_section(s, dir, "lyrics", &normalized)?;
+    Ok(())
 }
 
 fn group_caption_lines(src: &[&Value]) -> Vec<[usize; 2]> {

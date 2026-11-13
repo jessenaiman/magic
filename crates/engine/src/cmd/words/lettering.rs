@@ -1,15 +1,19 @@
-//! `words.letter`: the song's lyrics lettered and animated by the linked EffectCraft engine.
-//! Magic owns the words, their timing in [`Tick`]s and the approved recipe (`lyrics-design.json`);
-//! EffectCraft owns layout, type, motion and rendering (`lettering/lyrics.ecproj`).
-use crate::cmd::words::word_tick;
-use crate::time::{TICKS_PER_SECOND, Tick, parse_tick};
-use crate::{EngineError, Result, Session};
+//! `words.letter`: build `effects/lyrics.ecproj` and render alpha `effects/lyrics.mov` via `EffectCraft`.
+//! Uses `craft_font_catalog::Catalog::global()` so any installed/suite font works directly without
+//! requiring a static `lyrics-design.json` recipe, while measuring real SFNT glyph advance widths (`B10-01`).
+
+use std::collections::HashMap;
+use std::path::Path;
+
+use magic_util::text::measure_text_advance;
 use serde_json::{Value, json};
-use std::path::{Path, PathBuf};
+
+use crate::cmd::words::word_tick;
+use crate::time::{TICKS_PER_SECOND, Tick};
+use crate::{EngineError, Result, Session};
 
 const COMP: &str = "Lyrics";
 const FRAME: (f64, f64) = (1920.0, 1080.0);
-/// 0.25s lead-in and 1.0s hold in FilmCraft ticks.
 const LEAD_TICK: Tick = Tick(TICKS_PER_SECOND / 4);
 const HOLD_TICK: Tick = Tick(TICKS_PER_SECOND);
 
@@ -17,46 +21,41 @@ fn invalid(message: impl Into<String>) -> EngineError {
     EngineError::InvalidParams(message.into())
 }
 
-/// One sung line: its id, its printed words with their sung `Tick` times, and its sung span.
-struct Line {
-    id: String,
-    layer: String,
-    words: Vec<(String, Option<(Tick, Tick)>)>,
-    start: Tick,
-    end: Tick,
+pub(crate) struct Line {
+    pub(crate) id: String,
+    pub(crate) layer: String,
+    pub(crate) words: Vec<(String, String, Option<(Tick, Tick)>)>,
+    pub(crate) start: Tick,
+    pub(crate) end: Tick,
 }
 
 impl Line {
     fn text(&self) -> String {
-        self.words.iter().map(|w| w.0.as_str()).collect::<Vec<_>>().join(" ")
-    }
-
-    /// Character range of word `k` within `text()`.
-    fn range(&self, k: usize) -> (usize, usize) {
-        let start: usize = self.words[..k].iter().map(|w| w.0.chars().count() + 1).sum();
-        (start, start + self.words[k].0.chars().count())
+        self.words.iter().map(|w| w.1.as_str()).collect::<Vec<_>>().join(" ")
     }
 }
 
-/// The artist's lines in sung order, from the aligned words; lines with no timed word skip.
-fn lines(aligned: &Value) -> Vec<Line> {
+pub(crate) fn lines(aligned: &Value) -> Vec<Line> {
     let mut out: Vec<Line> = Vec::new();
-    for w in aligned["words"].as_array().into_iter().flatten() {
-        let id = w["sung_id"].as_str().or(w["line_id"].as_str()).unwrap_or_default();
+    for (idx, w) in aligned["words"].as_array().into_iter().flatten().enumerate() {
+        let id = w["sung_id"].as_str().or(w["line_id"].as_str()).unwrap_or("l1");
+        let wid = w["word_id"].as_str().map(str::to_owned).unwrap_or_else(|| format!("{id}/w{idx}"));
         let time = word_tick(w, "start_tick", "start").zip(word_tick(w, "end_tick", "end"));
-        let word = (w["text"].as_str().unwrap_or_default().to_owned(), time);
+        let entry = (wid, w["text"].as_str().unwrap_or_default().to_owned(), time);
         match out.last_mut() {
-            Some(line) if line.id == id => line.words.push(word),
-            _ => out.push(Line { id: id.to_owned(), layer: id.to_owned(), words: vec![word], start: Tick(i64::MAX), end: Tick(i64::MIN) }),
+            Some(line) if line.id == id => line.words.push(entry),
+            _ => out.push(Line { id: id.to_owned(), layer: id.to_owned(), words: vec![entry], start: Tick(i64::MAX), end: Tick(i64::MIN) }),
         }
     }
     for line in &mut out {
-        for (s, e) in line.words.iter().filter_map(|w| w.1) {
-            (line.start, line.end) = (line.start.min(s), line.end.max(e));
+        for (_, _, span) in &line.words {
+            if let Some((s, e)) = *span {
+                (line.start, line.end) = (line.start.min(s), line.end.max(e));
+            }
         }
     }
     out.retain(|l| l.start <= l.end);
-    let mut seen: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    let mut seen: HashMap<String, usize> = HashMap::new();
     for line in &mut out {
         let n = seen.entry(line.id.clone()).or_insert(0);
         *n += 1;
@@ -67,13 +66,33 @@ fn lines(aligned: &Value) -> Vec<Line> {
     out
 }
 
-fn key(text: &str) -> String {
-    text.chars().filter(char::is_ascii_alphabetic).flat_map(char::to_lowercase).collect()
+pub(crate) fn resolve_catalog_font(raw: Option<&str>) -> String {
+    let requested = raw.map(str::trim).filter(|s| !s.is_empty()).unwrap_or("sans");
+    if !matches!(requested, "song" | "sans" | "sans-bold" | "serif" | "serif-bold" | "serif-italic") {
+        if magic_util::media::is_font_family_installed(requested) {
+            return requested.to_owned();
+        }
+        return requested.to_owned();
+    }
+    let catalog = craft_font_catalog::Catalog::global();
+    let candidates: &[&str] = if requested.starts_with("serif") {
+        &["Fraunces", "Georgia", "DejaVu Serif", "Liberation Serif", "C059"]
+    } else {
+        &["Ubuntu", "Inter", "DejaVu Sans", "Liberation Sans", "Nimbus Sans"]
+    };
+    for cand in candidates {
+        if catalog.family(cand).is_some() {
+            return (*cand).to_owned();
+        }
+    }
+    catalog.families().first().map(ToString::to_string).unwrap_or_else(|| if requested.starts_with("serif") { "C059".into() } else { "Nimbus Sans".into() })
 }
 
 struct Look {
     font: String,
     style: &'static str,
+    weight: u16,
+    italic: bool,
     size: f64,
     fill: String,
     outline: Option<String>,
@@ -81,68 +100,25 @@ struct Look {
     tracking: Option<f64>,
 }
 
-fn is_dark_hex(hex: &str) -> bool {
-    let raw = hex.trim().trim_start_matches('#');
-    if raw.len() != 6 {
-        return false;
-    }
-    let Ok(rgb) = u32::from_str_radix(raw, 16) else {
-        return false;
-    };
-    let r = ((rgb >> 16) & 0xff) as f64;
-    let g = ((rgb >> 8) & 0xff) as f64;
-    let b = (rgb & 0xff) as f64;
-    (0.299 * r + 0.587 * g + 0.114 * b) < 88.0
-}
-
-fn colour(recipe: &Value, name: &Value) -> Option<String> {
-    let name = name.as_str()?;
-    if name.starts_with('#') {
-        return Some(name.to_owned());
-    }
-    recipe["palette"][name].as_str().map(str::to_owned)
-}
-
-fn look(recipe: &Value, spec: &Value) -> Look {
-    let font = |kind: &str, default: &str| recipe["fonts"][kind].as_str().unwrap_or(default).to_owned();
-    let (font, style) = match spec["lettering"].as_str().unwrap_or("sans-bold") {
-        "serif-bold" => (font("serif", "C059"), "Bold"),
-        "serif-italic" => (font("serif", "C059"), "Italic"),
-        "serif" => (font("serif", "C059"), "Roman"),
-        "sans" => (font("sans", "Nimbus Sans"), "Regular"),
-        _ => (font("sans", "Nimbus Sans"), "Bold"),
-    };
-    let fill = colour(recipe, &spec["color"]).unwrap_or_else(|| "#000000".into());
-    let outline = colour(recipe, &spec["outline"]).or_else(|| is_dark_hex(&fill).then(|| "#FFF8E9".into()));
-    Look {
-        font,
-        style,
-        size: spec["size"].as_f64().unwrap_or(58.0),
-        fill,
-        outline,
-        stroke_width: spec["stroke_width"].as_f64(),
-        tracking: spec["tracking"].as_f64(),
-    }
-}
-
-fn item_look(recipe: &Value, item: &Value) -> Look {
-    let font_fn = |kind: &str, default: &str| recipe["fonts"][kind].as_str().unwrap_or(default).to_owned();
-    let kind = item["font"].as_str().unwrap_or("sans");
-    let bold = item["weight"].as_u64().unwrap_or(700) >= 700;
+fn look_from_item(base_spec: &Value, item: &Value) -> Look {
+    let raw_font = item["font"].as_str().or_else(|| base_spec["font"].as_str()).or_else(|| base_spec["lettering"].as_str());
+    let font = resolve_catalog_font(raw_font);
+    let weight = item["weight"].as_u64().or_else(|| base_spec["weight"].as_u64()).unwrap_or(700).clamp(100, 900) as u16;
     let italic = item["italic"].as_bool().unwrap_or(false);
-    let (font, style) = match (kind, bold, italic) {
-        ("serif" | "song", _, true) => (font_fn("serif", "C059"), "Italic"),
-        ("serif" | "song", true, false) => (font_fn("serif", "C059"), "Bold"),
-        ("serif" | "song", false, false) => (font_fn("serif", "C059"), "Roman"),
-        (_, true, _) => (font_fn("sans", "Nimbus Sans"), "Bold"),
-        (_, false, _) => (font_fn("sans", "Nimbus Sans"), "Regular"),
+    let style = match (weight >= 700, italic) {
+        (true, true) => "Bold Italic",
+        (true, false) => "Bold",
+        (false, true) => "Italic",
+        (false, false) => "Regular",
     };
-    let fill = colour(recipe, &item["color"]).unwrap_or_else(|| "#173F49".into());
-    let outline = colour(recipe, &item["outline"]).or_else(|| is_dark_hex(&fill).then(|| "#FFF8E9".into()));
+    let fill = item["color"].as_str().or_else(|| base_spec["color"].as_str()).unwrap_or("#FFF6E3").to_owned();
+    let outline = item["outline"].as_str().or_else(|| base_spec["outline"].as_str()).map(str::to_owned);
     Look {
         font,
         style,
-        size: item["size"].as_f64().unwrap_or(58.0),
+        weight,
+        italic,
+        size: item["size"].as_f64().or_else(|| base_spec["size"].as_f64()).unwrap_or(64.0),
         fill,
         outline,
         stroke_width: item["stroke_width"].as_f64(),
@@ -150,83 +126,81 @@ fn item_look(recipe: &Value, item: &Value) -> Look {
     }
 }
 
-fn hero<'a>(recipe: &'a Value, line: &Line) -> Option<(usize, &'a Value)> {
-    if recipe["max_heroes"].as_u64() == Some(0) {
-        return None;
-    }
-    line.words.iter().enumerate().find_map(|(k, w)| recipe["heroes"].get(key(&w.0)).map(|spec| (k, spec)))
-}
-
-/// The hero's motion as `(animator property, keyframes of (Tick, value))`.
-fn motion(name: &str, start: Tick, end: Tick) -> Option<(&'static str, Vec<(Tick, Value)>)> {
-    let still = json!([0, 0, 0]);
-    let min_arrive = Tick(TICKS_PER_SECOND * 3 / 10); // 0.3s
-    let max_arrive = Tick(TICKS_PER_SECOND * 6 / 10); // 0.6s
-    let arrive = (end - start).clamp(min_arrive, max_arrive);
-    let t_50ms = Tick(TICKS_PER_SECOND / 20);
-    let t_60ms = Tick(TICKS_PER_SECOND * 3 / 50);
-    let t_100ms = Tick(TICKS_PER_SECOND / 10);
-    let t_240ms = Tick(TICKS_PER_SECOND * 6 / 25);
-    let t_800ms = Tick(TICKS_PER_SECOND * 4 / 5);
-    Some(match name {
-        "pop" => {
-            ("scale", vec![(start - t_100ms, json!([100, 100, 100])), (start + t_60ms, json!([135, 135, 100])), (start + t_240ms, json!([100, 100, 100]))])
-        }
-        "fall" => ("position", vec![(start - t_50ms, json!([0, -60, 0])), (start + arrive, still)]),
-        "rise" => ("position", vec![(start - t_50ms, json!([0, 50, 0])), (start + arrive, still)]),
-        "east" => ("position", vec![(start - t_50ms, json!([-80, 0, 0])), (start + arrive, still)]),
-        "west" => ("position", vec![(start - t_50ms, json!([80, 0, 0])), (start + arrive, still)]),
-        "settle" => ("position", vec![(start - t_50ms, json!([0, -24, 0])), (start + arrive, still)]),
-        "sleep" => ("rotation", vec![(start - t_50ms, json!(-12)), (start + arrive, json!(0))]),
-        "loop" => ("rotation", vec![(start, json!(-360)), (start + t_800ms, json!(0))]),
-        _ => return None,
-    })
-}
-
-fn stroke_preset(name: &str) -> Option<(&'static str, &'static str, f64, f64, Tick)> {
-    Some(match name {
-        "underline" => ("0 0 280 30", "M 5 14 Q 61 5 125 13 T 269 10", 260.0, 28.0, Tick(TICKS_PER_SECOND * 11 / 20)),
-        "swoop" => ("0 0 790 160", "M 10 145 Q 126 170 217 93 T 438 58 Q 578 29 756 7 M 730 5 L 761 5 L 746 29", 520.0, 110.0, HOLD_TICK),
-        "loop" => {
-            ("0 0 620 110", "M 15 20 C 110 95 425 95 455 40 C 485 -4 350 -3 352 37 C 355 95 515 85 602 50 M 579 33 L 608 49 L 586 73", 460.0, 90.0, HOLD_TICK)
-        }
-        "hill" => ("0 0 410 95", "M 7 77 Q 73 72 118 32 Q 171 -8 228 31 Q 279 75 400 76", 320.0, 74.0, Tick(TICKS_PER_SECOND * 9 / 10)),
-        "down" => ("0 0 160 330", "M 73 13 C 27 67 104 129 66 196 Q 47 231 61 289 M 30 264 L 61 294 L 87 260", 120.0, 240.0, Tick(TICKS_PER_SECOND * 4 / 5)),
-        _ => return None,
-    })
-}
-
-struct Stroke<'a> {
-    id: &'a str,
-    view_box: &'a str,
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn measure_word_box_width(
+    text_str: &str,
+    font: &str,
+    weight: u16,
+    italic: bool,
+    size: f64,
+    has_outline: bool,
+    stroke_width: Option<f64>,
+    tracking: Option<f64>,
+    explicit_w: Option<f64>,
     x: f64,
-    y: f64,
-    w: f64,
-    h: f64,
-    d: &'a str,
-    color: &'a str,
-    width: f64,
-    from: Tick,
-    to: Tick,
-    shown: Tick,
-    gone: Tick,
+    next_same_row_x: Option<f64>,
+) -> f64 {
+    let measured_glyphs = measure_text_advance(text_str, font, weight, italic, size);
+    let stroke_pad = if has_outline { 2.0 * stroke_width.unwrap_or_else(|| (size * 0.08).max(3.0)) } else { 0.0 };
+    let tracking_pad = tracking.map(|tr| (text_str.chars().count().saturating_sub(1) as f64) * (tr / 1000.0) * size).unwrap_or(0.0);
+    let natural = explicit_w
+        .filter(|&w| w.is_finite() && w > 0.0)
+        .unwrap_or_else(|| (measured_glyphs + stroke_pad + tracking_pad + size * 0.08).ceil())
+        .clamp((size * 0.45).max(20.0), (FRAME.0 - x - 24.0).max(40.0));
+    match next_same_row_x {
+        Some(next_x) if next_x > x + 16.0 => {
+            let min_gap = (size * 0.14).max(8.0);
+            natural.min((next_x - x - min_gap).max(16.0))
+        }
+        _ => natural,
+    }
 }
 
-fn stroke_steps(s: &Stroke<'_>, steps: &mut Vec<Value>) {
-    let svg = format!(
-        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"{}\" width=\"{}\" height=\"{}\"><path d=\"{}\" fill=\"none\" stroke=\"{}\" stroke-width=\"{}\" stroke-linecap=\"round\"/></svg>",
-        s.view_box, s.w, s.h, s.d, s.color, s.width
-    );
-    steps.push(step("edit.pasteSvg", json!({"svg": svg, "name": s.id})));
-    steps.push(step("prop.set", json!({"layer": s.id, "path": "transform/position", "value": [s.x + s.w / 2.0, s.y + s.h / 2.0, 0.0]})));
-    steps.push(step("layer.addShapeItem", json!({"layer": s.id, "kind": "trim"})));
-    let min_span = Tick(TICKS_PER_SECOND / 20);
-    let from = s.from.max(Tick::ZERO);
-    let to = s.to.max(from + min_span);
-    for (t, v) in [(from, 0.0), (to, 100.0)] {
-        steps.push(step("prop.addKey", json!({"layer": s.id, "path": "contents/trim/end", "value": v, "time": t.seconds(), "timeBase": "comp"})));
+/// Lay out non-overlapping per-word items along rows using SFNT glyph advance widths (`B10-01`).
+pub(crate) fn default_line_items(words: &[(String, String, Option<(Tick, Tick)>)], style: &Value, top_band: bool) -> Vec<Value> {
+    let font = style["font"].as_str().unwrap_or("sans");
+    let resolved_font = resolve_catalog_font(Some(font));
+    let weight = style["weight"].as_u64().unwrap_or(700).clamp(100, 900) as u16;
+    let size = style["size"].as_f64().unwrap_or(68.0).clamp(24.0, 240.0);
+    let color = style["color"].as_str().unwrap_or("#FFF6E3");
+    let outline = style["outline"].as_str().unwrap_or("#143042");
+    let margin = 120.0;
+    let max_right = FRAME.0 - margin;
+    let row_step = (size * 1.48).max(88.0);
+    let mut x = margin;
+    let mut y = if top_band { 96.0 } else { FRAME.1 - 280.0 };
+    let space_gap = (size * 0.34).max(18.0);
+
+    let mut out = Vec::with_capacity(words.len());
+    for (wid, text, _) in words {
+        let w = measure_word_box_width(text, &resolved_font, weight, false, size, true, None, None, None, 0.0, None);
+        if x > margin && x + w > max_right {
+            x = margin;
+            y += row_step;
+        }
+        out.push(json!({
+            "word_ids": [wid],
+            "text": text,
+            "x": x.round(),
+            "y": y.round(),
+            "w": w,
+            "size": size,
+            "weight": weight,
+            "italic": false,
+            "color": color,
+            "font": font,
+            "outline": outline,
+            "rotate": 0.0,
+            "motion": "pop",
+            "accent": wid,
+        }));
+        x += w + space_gap;
     }
-    steps.extend(trim_steps(json!(s.id), s.shown, s.gone));
+    out
+}
+
+fn step(command: &str, params: Value) -> Value {
+    json!({"command": command, "params": params})
 }
 
 fn text_params(look: &Look) -> Value {
@@ -246,61 +220,7 @@ fn text_params(look: &Look) -> Value {
     p
 }
 
-fn apply_item_effectcraft_props(layer_id: &str, item: &Value, bw: f64, bh: f64, ws: Tick, steps: &mut Vec<Value>) {
-    let sx = item["scale_x"].as_f64().unwrap_or(100.0);
-    let sy = item["scale_y"].as_f64().unwrap_or(100.0);
-    if (sx - 100.0).abs() > 1e-4 || (sy - 100.0).abs() > 1e-4 {
-        steps.push(step("prop.set", json!({"layer": layer_id, "path": "transform/scale", "value": [sx, sy, 100.0]})));
-    }
-    let skew = item["skew"].as_f64().unwrap_or(0.0);
-    let skew_axis = item["skew_axis"].as_f64().unwrap_or(0.0);
-    if skew.abs() > 1e-4 || skew_axis.abs() > 1e-4 {
-        steps.push(step("layer.addTextAnimator", json!({"layer": layer_id, "name": "Skew Design", "properties": ["skew"]})));
-        steps.push(step("prop.set", json!({"layer": layer_id, "path": "text/animators/animator/properties/skew", "value": skew})));
-        if skew_axis.abs() > 1e-4 {
-            steps.push(step("prop.set", json!({"layer": layer_id, "path": "text/animators/animator/properties/skewAxis", "value": skew_axis})));
-        }
-    }
-    if item["per_char_3d"].as_bool() == Some(true) {
-        steps.push(step("layer.enablePerChar3D", json!({"layer": layer_id, "enabled": true})));
-    }
-    if let Some(warp) = item["warp_path"].as_str().filter(|w| *w != "none") {
-        let cy = bh * 0.62;
-        let (verts, in_t, out_t) = match warp {
-            "arc_up" => (
-                json!([[0.0, cy + 28.0], [bw * 0.5, cy - 38.0], [bw, cy + 28.0]]),
-                json!([[0.0, 0.0], [-bw * 0.18, 0.0], [0.0, 0.0]]),
-                json!([[0.0, 0.0], [bw * 0.18, 0.0], [0.0, 0.0]]),
-            ),
-            "arc_down" => (
-                json!([[0.0, cy - 28.0], [bw * 0.5, cy + 38.0], [bw, cy - 28.0]]),
-                json!([[0.0, 0.0], [-bw * 0.18, 0.0], [0.0, 0.0]]),
-                json!([[0.0, 0.0], [bw * 0.18, 0.0], [0.0, 0.0]]),
-            ),
-            "wave" => (
-                json!([[0.0, cy], [bw * 0.33, cy - 30.0], [bw * 0.67, cy + 30.0], [bw, cy]]),
-                json!([[0.0, 0.0], [-bw * 0.1, 0.0], [-bw * 0.1, 0.0], [0.0, 0.0]]),
-                json!([[0.0, 0.0], [bw * 0.1, 0.0], [bw * 0.1, 0.0], [0.0, 0.0]]),
-            ),
-            "diagonal" => (json!([[0.0, cy + 32.0], [bw, cy - 32.0]]), json!([[0.0, 0.0], [0.0, 0.0]]), json!([[0.0, 0.0], [0.0, 0.0]])),
-            _ => (Value::Null, Value::Null, Value::Null),
-        };
-        if verts.is_array() {
-            steps.push(step(
-                "mask.new",
-                json!({"layer": layer_id, "vertices": verts, "inTangents": in_t, "outTangents": out_t, "closed": false, "mode": "none"}),
-            ));
-            steps.push(step("prop.set", json!({"layer": layer_id, "path": "text/pathOptions/path", "value": 1})));
-        }
-    }
-    if let Some(preset) = item["preset"].as_str().filter(|s| !s.is_empty()) {
-        steps.push(step("layer.select", json!({"layers": [layer_id]})));
-        steps.push(step("time.set", json!({"time": ws.max(Tick::ZERO).seconds()})));
-        steps.push(step("layer.applyTextPreset", json!({"layer": layer_id, "preset": preset})));
-    }
-}
-
-fn trim_steps(layer: Value, shown: Tick, gone: Tick) -> Vec<Value> {
+fn trim_steps(layer: &str, shown: Tick, gone: Tick) -> Vec<Value> {
     vec![
         step("layer.select", json!({"layers": [layer]})),
         step("time.set", json!({"time": shown.seconds()})),
@@ -310,69 +230,53 @@ fn trim_steps(layer: Value, shown: Tick, gone: Tick) -> Vec<Value> {
     ]
 }
 
-fn step(command: &str, params: Value) -> Value {
-    json!({"command": command, "params": params})
-}
-
-fn animate_range(id: &str, range: (usize, usize), name: &str, start: Tick, end: Tick, steps: &mut Vec<Value>) {
-    let Some((property, keys)) = motion(name, start, end) else {
+fn animate_word_pop(layer_id: &str, text_len: usize, motion_name: &str, start: Tick, end: Tick, steps: &mut Vec<Value>) {
+    if motion_name == "quiet" || motion_name == "none" || text_len == 0 {
         return;
-    };
-    steps.push(step("layer.addTextAnimator", json!({"layer": id, "properties": [property]})));
-    let selector = "text/animators/animator/selectors/rangeSelector";
-    for (path, value) in [("advanced/units", json!(1)), ("start", json!(range.0)), ("end", json!(range.1))] {
-        steps.push(step("prop.set", json!({"layer": id, "path": format!("{selector}/{path}"), "value": value})));
     }
-    for (time, value) in keys {
-        let path = format!("text/animators/animator/properties/{property}");
-        steps.push(step("prop.addKey", json!({"layer": id, "path": path, "value": value, "time": time.max(Tick::ZERO).seconds(), "timeBase": "comp"})));
+    let t_60ms = Tick(TICKS_PER_SECOND * 3 / 50);
+    let t_100ms = Tick(TICKS_PER_SECOND / 10);
+    let t_240ms = Tick(TICKS_PER_SECOND * 6 / 25);
+    let (prop, keys) = match motion_name {
+        "rise" => ("position", vec![(start - t_60ms, json!([0, 42, 0])), (end.max(start + t_240ms), json!([0, 0, 0]))]),
+        "fall" => ("position", vec![(start - t_60ms, json!([0, -48, 0])), (end.max(start + t_240ms), json!([0, 0, 0]))]),
+        _ => ("scale", vec![(start - t_100ms, json!([100, 100, 100])), (start + t_60ms, json!([128, 128, 100])), (start + t_240ms, json!([100, 100, 100]))]),
+    };
+    steps.push(step("layer.addTextAnimator", json!({"layer": layer_id, "properties": [prop]})));
+    let selector = "text/animators/animator/selectors/rangeSelector";
+    for (sub, val) in [("advanced/units", json!(1)), ("start", json!(0)), ("end", json!(text_len))] {
+        steps.push(step("prop.set", json!({"layer": layer_id, "path": format!("{selector}/{sub}"), "value": val})));
+    }
+    for (tm, val) in keys {
+        steps.push(step(
+            "prop.addKey",
+            json!({"layer": layer_id, "path": format!("text/animators/animator/properties/{prop}"), "value": val, "time": tm.max(Tick::ZERO).seconds(), "timeBase": "comp"}),
+        ));
     }
 }
 
-fn hero_steps(recipe: &Value, line: &Line, k: usize, spec: &Value, box_y: f64, span: (Tick, Tick), steps: &mut Vec<Value>) -> Value {
-    let id = line.layer.as_str();
-    let (a, b) = line.range(k);
-    let hero_look = look(recipe, spec);
-    let mut style = text_params(&hero_look);
-    style["layer"] = json!(id);
-    style["range"] = json!([a, b]);
-    steps.push(step("layer.setText", style));
-    let (start, end) = line.words[k].1.unwrap_or((line.start, line.end));
-    let name = spec["motion"].as_str().unwrap_or("quiet");
-    animate_range(id, (a, b), name, start, end, steps);
-    if let Some(stroke_name) = spec["stroke"].as_str()
-        && let Some((view_box, d, sw, sh, draw_s)) = stroke_preset(stroke_name)
-    {
-        let stroke_id = format!("{id}_stroke");
-        stroke_steps(
-            &Stroke {
-                id: &stroke_id,
-                view_box,
-                x: (FRAME.0 - sw) / 2.0,
-                y: box_y + 190.0,
-                w: sw,
-                h: sh,
-                d,
-                color: &hero_look.fill,
-                width: 7.0,
-                from: start,
-                to: (start + draw_s).min(span.1),
-                shown: span.0,
-                gone: span.1,
-            },
-            steps,
-        );
-    }
-    json!({"word": line.words[k].0, "motion": name, "at_tick": start.0, "at": start.seconds()})
+fn next_row_neighbor_x(items: &[Value], idx: usize, x: f64, y: f64, bh: f64) -> Option<f64> {
+    items
+        .iter()
+        .skip(idx + 1)
+        .filter_map(|other| {
+            let ox = other["x"].as_f64()?;
+            let oy = other["y"].as_f64()?;
+            ((oy - y).abs() < bh * 0.55 && ox > x).then_some(ox)
+        })
+        .reduce(f64::min)
 }
 
 fn item_word_time(line: &Line, item: &Value) -> (Tick, Tick) {
-    let id_str = item["accent"].as_str().or_else(|| item["word_ids"].get(0).and_then(Value::as_str)).unwrap_or_default();
-    if let Some((_, suffix)) = id_str.rsplit_once("/w")
+    let target_id = item["accent"].as_str().or_else(|| item["word_ids"].get(0).and_then(Value::as_str)).unwrap_or_default();
+    if let Some((_, _, Some(span))) = line.words.iter().find(|(wid, _, _)| wid == target_id) {
+        return *span;
+    }
+    if let Some((_, suffix)) = target_id.rsplit_once("/w")
         && let Ok(idx) = suffix.parse::<usize>()
-        && let Some((_, Some(t))) = line.words.get(idx)
+        && let Some((_, _, Some(span))) = line.words.get(idx)
     {
-        return *t;
+        return *span;
     }
     (line.start, line.end)
 }
@@ -385,150 +289,96 @@ fn item_text(line: &Line, item: &Value) -> String {
         .as_array()
         .into_iter()
         .flatten()
-        .filter_map(|v| v.as_str()?.rsplit_once("/w")?.1.parse::<usize>().ok())
-        .filter_map(|idx| line.words.get(idx).map(|(w, _)| w.as_str()))
+        .filter_map(Value::as_str)
+        .filter_map(|wid| line.words.iter().find(|(id, _, _)| id == wid).map(|(_, txt, _)| txt.as_str()))
         .collect::<Vec<_>>()
         .join(" ")
 }
 
-fn spatial_line_steps(recipe: &Value, line: &Line, design: &Value, shown: Tick, gone: Tick, steps: &mut Vec<Value>) -> Value {
-    let mut hero_summary = Value::Null;
-    let fade_tick = Tick(TICKS_PER_SECOND / 5); // 0.2s
-    for (idx, item) in design["items"].as_array().into_iter().flatten().enumerate() {
-        let layer_id = format!("{}_item{idx}", line.layer);
-        let text_owned = item_text(line, item);
-        let text_str = text_owned.as_str();
-        let look = item_look(recipe, item);
-        let x = item["x"].as_f64().unwrap_or(140.0);
-        let y = item["y"].as_f64().unwrap_or(90.0);
-        let bw = ((text_str.chars().count() as f64) * look.size * 0.72).clamp(220.0, FRAME.0 - 80.0);
-        let bh = (look.size * 1.5).max(96.0);
-        let mut text = text_params(&look);
-        text["text"] = json!(text_str);
-        text["name"] = json!(layer_id);
-        if let Some(keys) = item["motion_keys"].as_array().filter(|keys| !keys.is_empty()) {
-            let (start, _) = item_word_time(line, item);
-            let (origin_x, origin_y) = if item["native_motion"].is_object() || item["native_motion_binding"]["box"].as_bool() == Some(true) {
-                text["box"] = json!([x, y, bw, bh]);
-                (x + bw / 2.0, y + bh / 2.0)
-            } else {
-                text["position"] = json!([x, y]);
-                (x, y)
-            };
-            text["justify"] = json!("left");
-            steps.push(step("layer.newText", text));
-            steps.extend(trim_steps(json!(layer_id), start.max(shown), gone));
-            let rotate = item["rotate"].as_f64().unwrap_or_default();
-            for key in keys {
-                let num = |i: usize| key[i].as_f64().unwrap_or_default();
-                let key_tick = start + Tick::from_seconds_f64(num(0));
-                for (property, value) in [
-                    ("position", json!([origin_x + num(1), origin_y + num(2)])),
-                    ("scale", json!([num(3), num(4)])),
-                    ("rotation", json!(rotate + num(5))),
-                    ("opacity", json!(num(6))),
-                ] {
-                    steps.push(step(
-                        "prop.addKey",
-                        json!({"layer": layer_id,
-                        "path": format!("transform/{property}"), "time": key_tick.seconds(),
-                        "timeBase": "comp", "value": value}),
-                    ));
-                }
-            }
-            hero_summary = json!({"word": text_str, "motion": "keyframes", "at_tick": start.0, "at": start.seconds()});
-            continue;
-        }
-        text["box"] = json!([x, y, bw, bh]);
-        text["justify"] = json!("left");
-        steps.push(step("layer.newText", text));
-        let rot = item["rotate"].as_f64().unwrap_or(0.0);
-        if rot.abs() > 1e-4 {
-            steps.push(step("prop.set", json!({"layer": layer_id, "path": "transform/rotation", "value": rot})));
-        }
-        let (ws, we) = item_word_time(line, item);
-        apply_item_effectcraft_props(&layer_id, item, bw, bh, ws, steps);
-        let move_name = item["motion"].as_str().unwrap_or("quiet");
-        if item["preset"].as_str().is_none_or(str::is_empty) {
-            animate_range(&layer_id, (0, text_str.chars().count()), move_name, ws, we, steps);
-        }
-        if item["accent"].is_string() || move_name != "quiet" || item["preset"].is_string() {
-            hero_summary = json!({"word": text_str, "motion": item["preset"].as_str().unwrap_or(move_name), "at_tick": ws.0, "at": ws.seconds()});
-        }
-        steps.extend(trim_steps(json!(layer_id), shown, gone));
-        let max_opacity = item["opacity"].as_f64().unwrap_or(100.0);
-        for (time, value) in [(shown, 0.0), (shown + fade_tick, max_opacity)] {
-            steps
-                .push(step("prop.addKey", json!({"layer": layer_id, "path": "transform/opacity", "value": value, "time": time.seconds(), "timeBase": "comp"})));
-        }
-    }
-    let default_draw = Tick(TICKS_PER_SECOND * 11 / 20);
-    for (d_idx, draw) in design["draws"].as_array().into_iter().flatten().enumerate() {
-        let vb = draw["view_box"].as_str().unwrap_or("0 0 280 30");
-        let (x, y) = (draw["x"].as_f64().unwrap_or(0.0), draw["y"].as_f64().unwrap_or(0.0));
-        let (w, h) = (draw["w"].as_f64().unwrap_or(240.0), draw["h"].as_f64().unwrap_or(30.0));
-        for (p_idx, path) in draw["paths"].as_array().into_iter().flatten().enumerate() {
-            let sid = format!("{}_draw{d_idx}_{p_idx}", line.layer);
-            let from_rel = path.get("from").and_then(parse_tick).unwrap_or(Tick::ZERO);
-            let to_rel = path.get("to").and_then(parse_tick).unwrap_or(default_draw);
-            stroke_steps(
-                &Stroke {
-                    id: &sid,
-                    view_box: vb,
-                    x,
-                    y,
-                    w,
-                    h,
-                    d: path["d"].as_str().unwrap_or_default(),
-                    color: path["stroke"].as_str().unwrap_or("#B8442A"),
-                    width: path["width"].as_f64().unwrap_or(7.0),
-                    from: line.start + from_rel,
-                    to: line.start + to_rel,
-                    shown,
-                    gone,
-                },
-                steps,
-            );
-        }
-    }
-    hero_summary
-}
-
-fn build_steps_with_designs(recipe: &Value, designs: &Value, all: &[Line], duration: Tick) -> (Vec<Value>, Vec<Value>) {
+pub(crate) fn build_steps_with_designs(base_cfg: &Value, designs: &Value, all: &[Line], duration: Tick) -> (Vec<Value>, Vec<Value>) {
     let (w, h) = FRAME;
-    let top = recipe["band"].as_str() != Some("bottom");
-    let box_y = if top { 50.0 } else { h - 350.0 };
-    let base = look(recipe, &recipe["base"]);
+    let top_band = base_cfg["band"].as_str() != Some("bottom");
+    let base_spec = if base_cfg["base"].is_object() { &base_cfg["base"] } else { base_cfg };
     let fade_tick = Tick(TICKS_PER_SECOND / 5);
     let mut steps = vec![step("comp.new", json!({"name": COMP, "width": w, "height": h, "frameRate": 30, "duration": duration.seconds()}))];
     let mut summary = Vec::new();
     let mut previous_out = Tick::ZERO;
+
     for (i, line) in all.iter().enumerate() {
-        let id = line.id.as_str();
         let next = all.get(i + 1).map_or(duration, |l| l.start);
         let shown = (line.start - LEAD_TICK).max(previous_out).max(Tick::ZERO);
         let gone = if next - line.end < HOLD_TICK { next } else { (line.end + HOLD_TICK).min(duration) };
         previous_out = gone;
-        let line_design = &designs[&line.layer];
-        let hero_info = if line_design["items"].as_array().is_some_and(|a| !a.is_empty()) {
-            spatial_line_steps(recipe, line, line_design, shown, gone, &mut steps)
-        } else {
-            let mut text = text_params(&base);
-            text["text"] = json!(line.text());
-            text["name"] = json!(line.layer);
-            text["box"] = json!([120.0, box_y, w - 240.0, 300.0]);
-            text["justify"] = json!("center");
+
+        let fallback_items = default_line_items(&line.words, base_spec, top_band);
+        let items: &[Value] = designs[&line.layer]["items"].as_array().filter(|a| !a.is_empty()).map_or(fallback_items.as_slice(), Vec::as_slice);
+
+        for (idx, item) in items.iter().enumerate() {
+            let layer_id = format!("{}_item{idx}", line.layer);
+            let text_owned = item_text(line, item);
+            let look = look_from_item(base_spec, item);
+            let x = item["x"].as_f64().unwrap_or(120.0);
+            let y = item["y"].as_f64().unwrap_or(if top_band { 96.0 } else { h - 280.0 });
+            let bh = (look.size * 1.5).max(96.0);
+            let next_x = next_row_neighbor_x(items, idx, x, y, bh);
+            let bw = measure_word_box_width(
+                &text_owned,
+                &look.font,
+                look.weight,
+                look.italic,
+                look.size,
+                look.outline.is_some(),
+                look.stroke_width,
+                look.tracking,
+                item["w"].as_f64(),
+                x,
+                next_x,
+            );
+            let mut text = text_params(&look);
+            text["text"] = json!(text_owned);
+            text["name"] = json!(layer_id);
+            text["box"] = json!([x, y, bw, bh]);
+            text["justify"] = json!("left");
             steps.push(step("layer.newText", text));
-            let h_val = hero(recipe, line).map(|(k, spec)| hero_steps(recipe, line, k, spec, box_y, (shown, gone), &mut steps)).unwrap_or(Value::Null);
-            steps.extend(trim_steps(json!(line.layer), shown, gone));
-            for (time, value) in [(shown, 0), (shown + fade_tick, 100)] {
-                steps.push(step(
-                    "prop.addKey",
-                    json!({"layer": line.layer, "path": "transform/opacity", "value": value, "time": time.seconds(), "timeBase": "comp"}),
-                ));
+
+            let (ws, we) = item_word_time(line, item);
+            if let Some(keys) = item["motion_keys"].as_array().filter(|k| !k.is_empty()) {
+                let (origin_x, origin_y) = (x + bw / 2.0, y + bh / 2.0);
+                let rotate = item["rotate"].as_f64().unwrap_or(0.0);
+                for key in keys {
+                    let num = |k_idx: usize| key[k_idx].as_f64().unwrap_or_default();
+                    let key_tick = ws + Tick::from_seconds_f64(num(0));
+                    for (prop, val) in [
+                        ("position", json!([origin_x + num(1), origin_y + num(2)])),
+                        ("scale", json!([num(3), num(4)])),
+                        ("rotation", json!(rotate + num(5))),
+                        ("opacity", json!(num(6))),
+                    ] {
+                        steps.push(step(
+                            "prop.addKey",
+                            json!({"layer": layer_id, "path": format!("transform/{prop}"), "time": key_tick.seconds(), "timeBase": "comp", "value": val}),
+                        ));
+                    }
+                }
+            } else {
+                if let Some(preset) = item["preset"].as_str().filter(|s| !s.is_empty()) {
+                    steps.push(step("layer.select", json!({"layers": [layer_id]})));
+                    steps.push(step("time.set", json!({"time": ws.max(Tick::ZERO).seconds()})));
+                    steps.push(step("layer.applyTextPreset", json!({"layer": layer_id, "preset": preset})));
+                } else {
+                    let motion_name = item["motion"].as_str().unwrap_or("pop");
+                    animate_word_pop(&layer_id, text_owned.chars().count(), motion_name, ws, we, &mut steps);
+                }
+                for (tm, val) in [(shown, 0.0), (shown + fade_tick, item["opacity"].as_f64().unwrap_or(100.0))] {
+                    steps.push(step(
+                        "prop.addKey",
+                        json!({"layer": layer_id, "path": "transform/opacity", "value": val, "time": tm.seconds(), "timeBase": "comp"}),
+                    ));
+                }
             }
-            h_val
-        };
+            steps.extend(trim_steps(&layer_id, shown, gone));
+        }
+
         steps.push(step(
             "markers.set",
             json!({
@@ -537,102 +387,90 @@ fn build_steps_with_designs(recipe: &Value, designs: &Value, all: &[Line], durat
                 "duration": (gone - shown).seconds(),
                 "comment": line.text(),
                 "label": "Blue",
-                "cuePoint": {
-                    "name": line.layer,
-                    "navigation": true,
-                    "params": [["id", id]]
-                }
+                "cuePoint": {"name": line.layer, "navigation": true, "params": [["id", line.id]]},
             }),
         ));
         summary.push(json!({
-            "id": id,
+            "id": line.id,
             "text": line.text(),
             "in_tick": shown.0,
             "out_tick": gone.0,
             "in": shown.seconds(),
             "out": gone.seconds(),
-            "hero": hero_info
         }));
     }
     (steps, summary)
 }
 
-fn words_designs(dir: &Path, all: &[Line]) -> Value {
-    let path = crate::cmd::words::document_path(dir);
-    let Ok(bytes) = std::fs::read(path) else {
-        return json!({});
-    };
-    let Ok(doc) = serde_json::from_slice::<Value>(&bytes) else {
-        return json!({});
+fn collect_saved_designs(s: &mut Session, dir: &Path, all: &[Line]) -> (Value, Value) {
+    let Ok(Some(doc)) = crate::cmd::words::load(s, dir) else {
+        return (json!({}), json!({}));
     };
     let mut map = serde_json::Map::new();
-    let tolerance = TICKS_PER_SECOND / 10_000;
-    for line in all {
-        let design = doc["animations"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .find_map(|anim| {
-                let belongs = anim["words"].as_array().into_iter().flatten().any(|word| {
-                    let wid_line = word["word_id"].as_str().and_then(|wid| wid.split_once('/').map(|(l, _)| l));
-                    (word["sung_id"].as_str().or(word["line_id"].as_str()).or(wid_line) == Some(line.id.as_str()))
-                        && word_tick(word, "start_tick", "start").is_some_and(|start| (start.0 - line.start.0).abs() <= tolerance)
-                });
-                belongs.then(|| anim["design"].get(&line.id)).flatten()
-            })
-            .or_else(|| doc["animations"].as_array().into_iter().flatten().find_map(|anim| anim["design"].get(&line.id)));
-        if let Some(design) = design {
-            map.insert(line.layer.clone(), design.clone());
+    let mut base_style = json!({});
+    for anim in doc["animations"].as_array().into_iter().flatten() {
+        if base_style.as_object().is_some_and(|m| m.is_empty()) && anim["style"].is_object() {
+            base_style = anim["style"].clone();
+        }
+        for line in all {
+            if let Some(d) = anim["design"].get(&line.id) {
+                map.insert(line.layer.clone(), d.clone());
+            }
         }
     }
-    Value::Object(map)
+    (Value::Object(map), base_style)
 }
 
-/// `words.letter`: build `lettering/lyrics.ecproj` from the approved recipe and the aligned
-/// lyrics, then render it with transparency unless `render` is false.
+/// `words.letter`: build `effects/lyrics.ecproj` directly from aligned lyrics and `craft_font_catalog`
+/// fonts (no `lyrics-design.json` file required), and optionally render `effects/lyrics.mov` + publish `V3`.
 pub fn cmd_words_letter(s: &mut Session, p: &Value) -> Result<Value> {
     let dir = crate::cmd::words::workspace_dir(s)?;
     let all = lines(&crate::cmd::words::aligned_in(&dir)?);
-    let designs = words_designs(&dir, &all);
-    let recipe_path = p["recipe"].as_str().map_or_else(|| dir.join("lyrics-design.json"), PathBuf::from);
-    let recipe: Value = std::fs::read(&recipe_path)
-        .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .or_else(|| {
-            designs
-                .as_object()
-                .filter(|m| !m.is_empty())
-                .map(|_| json!({"band": "top", "base": {"lettering": "sans-bold", "size": 58, "color": "#173F49", "outline": "#FFF8E9"}}))
-        })
-        .ok_or_else(|| invalid(format!("No lyric design recipe at {}; propose one and get it approved first", recipe_path.display())))?;
     if all.is_empty() {
         return Err(invalid("No timed lyric lines: import the transcript and the artist's lyric sheet first"));
     }
+    let (designs, saved_style) = collect_saved_designs(s, &dir, &all);
+    let explicit_recipe = p["recipe"]
+        .as_str()
+        .map(|raw| crate::workspace::resolve_workspace_path(s, raw))
+        .filter(|rp| rp.is_file())
+        .and_then(|rp| std::fs::read(rp).ok())
+        .and_then(|b| serde_json::from_slice::<Value>(&b).ok());
+    let base_cfg = explicit_recipe.unwrap_or_else(|| {
+        json!({
+            "band": p["band"].as_str().unwrap_or("top"),
+            "font": p["font"].as_str().or_else(|| saved_style["font"].as_str()).unwrap_or("sans"),
+            "size": p["size"].as_f64().or_else(|| saved_style["size"].as_f64()).unwrap_or(68.0),
+            "color": p["color"].as_str().or_else(|| saved_style["color"].as_str()).unwrap_or("#FFF6E3"),
+            "outline": p["outline"].as_str().or_else(|| saved_style["outline_color"].as_str()).unwrap_or("#143042"),
+        })
+    });
+
     let last = all.last().map_or(Tick::ZERO, |l| l.end);
     let duration = crate::workshop::song_ticks(&dir).unwrap_or(last + Tick(2 * TICKS_PER_SECOND)).max(last);
-    let (steps, summary) = build_steps_with_designs(&recipe, &designs, &all, duration);
-    let out = dir.join("lettering");
-    std::fs::create_dir_all(&out)?;
-    let project = out.join("lyrics.ecproj");
-    let mut native_steps = steps;
-    native_steps.push(json!({"command":"file.saveAs","params":{"path":project}}));
-    crate::cmd::character::effectcraft(&dir, None, &native_steps, true)?;
-    let head = crate::cmd::character::check_ecproj_head(&project)?;
+    let (mut steps, summary) = build_steps_with_designs(&base_cfg, &designs, &all, duration);
+    let project = crate::cmd::words::lyrics_ecproj_write_path(&dir);
+    if let Some(parent) = project.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    steps.push(json!({"command": "file.saveAs", "params": {"path": project}}));
+    crate::craft_api::run_effectcraft_steps(None, true, &steps).map_err(|e| EngineError::ExternalTool("effectcraft".into(), e))?;
+
+    let head = crate::cmd::character::check_ecproj_head(&project).ok();
     let should_render = p["render"].as_bool().unwrap_or(false) || p["studio"].as_bool().unwrap_or(false);
-    let render = if !should_render {
-        None
-    } else {
-        let movie = out.join("lyrics.mov");
-        crate::cmd::character::effectcraft_render(
+    let render = if should_render {
+        let movie = dir.join("effects/lyrics.mov");
+        crate::craft_api::render_effectcraft_comp(
             &project,
-            json!({
-                "comp": COMP, "output": movie, "format": "prores", "proresProfile": "4444", "channels": "rgba"
-            }),
-        )?;
+            &json!({"comp": COMP, "output": movie, "format": "prores", "proresProfile": "4444", "channels": "rgba"}),
+        )
+        .map_err(|e| EngineError::ExternalTool("effectcraft".into(), e))?;
         Some(movie)
+    } else {
+        None
     };
     let studio = if p["studio"] == true {
-        let movie = render.as_deref().ok_or_else(|| invalid("Render the lettering before sending it to Studio"))?;
+        let movie = render.as_deref().ok_or_else(|| invalid("Render `effects/lyrics.mov` before publishing V3 to Studio"))?;
         Some(crate::cmd::film::publish_lyrics(s, movie)?)
     } else {
         None
@@ -640,25 +478,65 @@ pub fn cmd_words_letter(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({
         "ok": true,
         "project": project,
-        "saved_by": head.saved_by,
-        "schema": head.schema,
+        "saved_by": head.as_ref().map(|h| &h.saved_by),
+        "schema": head.as_ref().map(|h| h.schema),
         "render": render,
-        "recipe": recipe_path,
         "duration_tick": duration.0,
         "duration": duration.seconds(),
         "lines": summary,
-        "studio": studio
+        "studio": studio,
     }))
 }
 
-/// Publish the already-rendered alpha lettering after a background render.
+/// Publish rendered alpha lettering (`effects/lyrics.mov`) onto `FilmCraft` `V3`.
 pub fn cmd_words_publish(s: &mut Session, p: &Value) -> Result<Value> {
     let dir = crate::cmd::words::workspace_dir(s)?.canonicalize()?;
-    let path = p["path"].as_str().map_or_else(|| dir.join("lettering/lyrics.mov"), |path| dir.join(path));
-    let path = path.canonicalize()?;
+    let candidate = p["path"].as_str().map(|raw| crate::workspace::resolve_workspace_path(s, raw)).unwrap_or_else(|| crate::cmd::words::lyrics_mov_path(&dir));
+    let path = candidate.canonicalize().map_err(|_| invalid(format!("Rendered lyrics movie not found at {}", candidate.display())))?;
     if !path.starts_with(&dir) || !path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("mov")) {
         return Err(invalid("Choose a rendered .mov inside the Magic project"));
     }
     let studio = crate::cmd::film::publish_lyrics(s, &path)?;
-    Ok(json!({"ok":true,"render":path,"studio":studio}))
+    Ok(json!({"ok": true, "render": path, "studio": studio}))
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::{build_steps_with_designs, lines};
+    use crate::time::{TICKS_PER_SECOND, Tick};
+
+    #[test]
+    fn spatial_steps_for_turn_and_round_hero_boxes_never_overlap() {
+        let aligned = json!({
+            "words": [
+                {"word_id": "l1/w0", "line_id": "l1", "text": "turn", "start": 1.0, "end": 1.5},
+                {"word_id": "l1/w1", "line_id": "l1", "text": "round", "start": 1.55, "end": 2.1}
+            ]
+        });
+        let base_cfg = json!({"band": "top", "font": "Fraunces", "size": 104.0, "color": "#B8442A", "outline": "#FFF8E9"});
+        let parsed_lines = lines(&aligned);
+        let (steps, _) = build_steps_with_designs(&base_cfg, &json!({}), &parsed_lines, Tick(5 * TICKS_PER_SECOND));
+
+        let text_boxes: Vec<(String, f64, f64)> = steps
+            .iter()
+            .filter(|s| s["command"] == "layer.newText")
+            .map(|s| {
+                let b = &s["params"]["box"];
+                (s["params"]["text"].as_str().unwrap().to_owned(), b[0].as_f64().unwrap(), b[2].as_f64().unwrap())
+            })
+            .collect();
+
+        assert_eq!(text_boxes.len(), 2);
+        assert_eq!(text_boxes[0].0, "turn");
+        assert_eq!(text_boxes[1].0, "round");
+        assert!(
+            text_boxes[0].1 + text_boxes[0].2 < text_boxes[1].1,
+            "EffectCraft text boxes for `turn` ({} + {}) and `round` ({}) must not overlap horizontally",
+            text_boxes[0].1,
+            text_boxes[0].2,
+            text_boxes[1].1
+        );
+    }
 }

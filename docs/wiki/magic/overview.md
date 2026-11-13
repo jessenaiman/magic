@@ -1,20 +1,20 @@
 ---
 title: Magic Studio Overview
-description: Coordinate DesignCraft storyboards, PhotoCraft cutouts, EffectCraft puppet animation & kinetic lyrics, and FilmCraft timelines from one song recording.
+description: Coordinate DeckCraft storyboards, open multi-tool animations, kinetic lyrics, motion graphics, and FilmCraft finishing from one song recording.
 ---
 
-**Magic Studio** (`magic`, `magic-cli`, `magic-mcp`) is a lightweight song-to-video coordinator for the [ArtCraft](https://github.com/storytold) creative suite. Instead of duplicating raster, vector, compositing, or NLE engines, Magic Studio connects your recorded song to dedicated ArtCraft project files so every stage stays editable in its native application.
+**Magic Studio** (`magic`, `magic-cli`, `magic-tui`) is a pure-Rust song-to-video coordinator for the [ArtCraft](https://github.com/storytold) creative suite. Instead of duplicating slide, raster, vector, compositing, or NLE engines, Magic Studio connects your recorded song to native project files so every stage stays open and editable.
 
 ## How Magic Studio Fits Into ArtCraft
 
-| Stage | ArtCraft App | Output Track / File |
+| Stage | Tools & Formats | Output Track / File |
 |---|---|---|
-| **Song & Captions** | [FilmCraft](https://github.com/storytold/filmcraft) | `A1` Song + Caption Track (`film/<song>.fcproj`, `timing-reference.json`) |
-| **Storyboard** | [DesignCraft](https://github.com/storytold/designcraft) | `storyboard.designcraft` (`A-Cover`, `B-World`, `C-Character`, `D-Motion`, Scenes -> `V1`) |
-| **Cutouts & SVG** | [PhotoCraft](https://github.com/storytold/photocraft) & [VectorCraft](https://github.com/storytold/vectorcraft) | Isolated character layers (`.pcraft`) and clean SVG silhouettes (`.svg`) |
-| **Puppet Animation** | [EffectCraft](https://github.com/storytold/effectcraft) | 11-pin facial & mouth viseme rigs (`rig.ecproj` -> `V2` ProRes 4444 RGBA) |
-| **Kinetic Lyrics** | [EffectCraft](https://github.com/storytold/effectcraft) | Timed word/phrase typography (`lettering/lyrics.ecproj` -> `V3` ProRes 4444 RGBA) |
-| **Action Motion** | [EffectCraft](https://github.com/storytold/effectcraft) | Trim-path vector action cues (`motion/actions.ecproj` -> `V4` ProRes 4444 RGBA) |
+| **Song & Captions** | [FilmCraft](https://github.com/storytold/filmcraft) + `craft-audio` + `craft-captions` | `A1` Song + `C1` Captions (`film/<slug>.fcproj`, `timing-reference.json`) |
+| **01 Storyboard & Scribbles** | [DeckCraft](https://github.com/storytold/deckcraft) (`.deckcraft` / `.pptx` + PDF) + `extensions/scribbles/` (`craft-ai-core`) | Saved Storyboard slides & scene plates -> `V1` |
+| **02 Animations** | Blender, Three.js, After Effects, [AniCraft](https://github.com/storytold/anicraft), [EffectCraft](https://github.com/storytold/effectcraft), [PhotoCraft](https://github.com/storytold/photocraft), [VectorCraft](https://github.com/storytold/vectorcraft) | Any clip/sequence recognized by `FilmCraft` + 3D meshes (`craft-mesh`) -> `V2` |
+| **03 Lyrics** | [EffectCraft](https://github.com/storytold/effectcraft) + `craft-font-manager` + `craft-captions` | Timed word/phrase typography (`effects/lyrics.ecproj`) -> `V3` + `C1` |
+| **04 Motion** | [EffectCraft](https://github.com/storytold/effectcraft) + `craft-drawingml` + [VectorCraft](https://github.com/storytold/vectorcraft) | Vector shapes, text warps & action cues (`effects/motion.ecproj`) -> `V4` |
+| **05 Studio** | [FilmCraft](https://github.com/storytold/filmcraft) (`Live Breakdown` & `Finishing` dock) | Master `MP4`/`MOV`/ProRes exports & `OTIO`/`FCPXML`/`EDL`/`ALE` interchange |
 
 ## Licensing
 

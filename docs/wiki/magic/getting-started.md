@@ -1,6 +1,6 @@
 ---
 title: Getting Started with Magic Studio
-description: Create a song project, complete the 4 Storyboard Main Title Pages, and assemble your first FilmCraft preview.
+description: Create or attach a song project, author DeckCraft storyboard slides, and map tracks into FilmCraft.
 ---
 
 ## 1. Check Installed ArtCraft Apps
@@ -11,22 +11,16 @@ Run the built-in suite check to confirm which ArtCraft apps and `<craft>-cli` bi
 magic-cli exec app.doctor
 ```
 
-## 2. Start From a Song Recording
+## 2. Start From a Song Recording (or an Existing Project)
 
-Every full Magic Studio project begins with an audio recording so timestamps synchronize lyrics, facial visemes, motion cues, and scene cuts:
+Every Magic Studio project begins with an audio recording so timestamps synchronize storyboard beats, animations, kinetic lyrics, captions, and scene cuts:
 
 ```sh
-magic-cli new   --root ~/Videos/Magic   --name "Babys Boat"   --audio ~/Music/babys-boat.wav   --wizard
+magic-cli new [existing_project] --audio ~/Music/babys-boat.wav --name "Babys Boat"
 ```
 
-Or launch the desktop window (`magic`), click **+ New** on the Home view, pick your song audio file, and open the **Storyboard** tab.
+Or launch the desktop window (`magic`), click **+ New** on the Home view, pick your song audio file, and open **`01 Storyboard`**.
 
-## 3. Complete the Four Main Title Pages First
+## 3. Build & Save Your Storyboard Deck First
 
-In **Storyboard**, complete the four master reference spreads until their traffic lights turn green:
-1. **A-Cover** — Overall visual style and key art.
-2. **B-World** — Master stage/location design.
-3. **C-Character** — Lead character sheet for cutout and rigging.
-4. **D-Motion** — Song-action graphic cues.
-
-Then click **Bulk** (or run `magic-cli storyboard bulk_generate`) to generate consistent scene artwork across your storyboard spreads before moving into **Lyrics**, **Motion**, **Animation**, and **Studio**.
+In **`01 Storyboard`**, author your visual style, world, character, and scene slides as a native [DeckCraft](https://github.com/storytold/deckcraft) `.deckcraft` or `.pptx` deck (with PDF export for review handouts) and save your slides to disk. Saving Storyboard slides unlocks user-editable **`extensions/scribbles/`** generation before moving into **`02 Animations`**, **`03 Lyrics`**, **`04 Motion`**, and **`05 Studio`** (`magic-cli studio map-tracks`).

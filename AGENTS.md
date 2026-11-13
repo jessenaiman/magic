@@ -1,28 +1,24 @@
 # Agent Instructions (`Magic Studio`)
 
-> **Notice on Legacy Repository**: Do NOT read, reference, or import code/patterns from the legacy prototype repository (`jessenaiman/magic-studio-app`) unless the user explicitly requests it, as historical churn and divergent iterations can introduce regressions. Historical development, early prototypes, and past discussions are preserved for human record at https://github.com/jessenaiman/magic-studio-app.
+Magic Studio (`magic`, `magic-cli`, `magic-tui`) is a pure-Rust ArtCraft production studio built on `eframe` + `egui` 0.37 + [`storytold/craft-libs`](https://github.com/storytold/craft-libs/blob/main/README.md) and governed by [`docs/house-rules-core.md`](docs/house-rules-core.md) ([`storytold/craft-contrib`](https://github.com/storytold/craft-contrib/blob/main/standards/house-rules-core.md)).
 
-Magic Studio is a pure-Rust ArtCraft coordinator application (`magic`, `magic-cli`, `magic-mcp`, `magic-tui`) built on `eframe` + `egui` 0.37 + [`storytold/craft-libs`](https://github.com/storytold/craft-libs) and governed by [`storytold/craft-contrib`](https://github.com/storytold/craft-contrib/blob/main/AGENTS.md).
+## 1. Upstream References & Workspace Build
 
-## 1. Drive Magic Through `magic-cli mcp` and Live `--control`
+- **Read Actual Upstream `README.md` & `docs/` Pages**: Consult [`README.md`](README.md) and the live upstream repositories directly before changing integrations:
+  - Shared Rust libraries & `craft-ai-core`: [`storytold/craft-libs/README.md`](https://github.com/storytold/craft-libs/blob/main/README.md) and [`docs/ai-shared-layer.md`](https://github.com/storytold/craft-libs/blob/main/docs/ai-shared-layer.md)
+  - Crafting Apps: [`DeckCraft`](https://github.com/storytold/deckcraft/blob/main/README.md), [`AniCraft`](https://github.com/storytold/anicraft/blob/main/README.md), [`PhotoCraft`](https://github.com/storytold/photocraft/blob/main/README.md), [`VectorCraft`](https://github.com/storytold/vectorcraft/blob/main/README.md), [`EffectCraft`](https://github.com/storytold/effectcraft/blob/main/README.md), [`DesignCraft`](https://github.com/storytold/designcraft/blob/main/README.md), and [`FilmCraft`](https://github.com/storytold/filmcraft/blob/main/README.md)
+  - Shared CI & contribution standards: [`storytold/craft-common-actions`](https://github.com/storytold/craft-common-actions/blob/main/README.md) and [`storytold/craft-contrib`](https://github.com/storytold/craft-contrib/blob/main/README.md)
+- **Floating `craft-libs` & `cargo xtask ci`**: Workspace dependencies in [`Cargo.toml`](Cargo.toml) track `storytold/craft-libs` `main` (`./install.sh --from-source` runs `cargo update` before building). Run `cargo xtask ci` (`fmt`, `clippy --workspace --all-targets -- -D warnings`, and opt-in `MAGIC_RUN_TESTS=1`), which writes diagnostics to `target/ci-report.txt` and `target/ci-report.jsonl`.
 
-Follow the exact ArtCraft MCP pattern in [`docs/mcp.md`](docs/mcp.md) (matching [DesignCraft MCP](https://github.com/storytold/designcraft/blob/main/docs/mcp.md) and VectorCraft):
+## 2. Drive Magic Through `magic-cli`, `--control 9875`, and `magic-cli mcp`
 
-- **Live Watching (`--control`)**: Start or connect to `magic --control 9875` via `magic-cli mcp --connect 127.0.0.1:9875` (or `magic-cli app --port 9875 <cmd>`, or `magic-tui --connect 127.0.0.1:9875` Backstage, or `magic-mcp --connect 127.0.0.1:9875`). Connect to sibling ArtCraft apps directly through each app's own `<app>-cli mcp` server; Magic never proxies sibling `--control` sockets.
-- **Headless**: Use `magic-cli mcp --headless` (with `--automation-read-root` / `--automation-write-root` when confining file access) or `magic-cli --project <file.magic> exec <id>`.
-- Discover commands dynamically with `list_commands` or `magic-cli commands`, inspect schemas with `magic-cli describe <id>`, and execute via `run_command` or `run_batch`.
+Follow [`docs/mcp.md`](docs/mcp.md) and [`docs/control-protocol.md`](docs/control-protocol.md):
 
-## 2. Single-Responsibility ArtCraft Delegation & Storyboard Rules
-
-- **Audio & Master NLE Timeline**: Delegate to `craft-audio` + [FilmCraft](https://github.com/storytold/filmcraft) on disk.
-- **Animation (`V2`), Kinetic Lyrics (`V3`), and Song-Action Motion (`V4`)**: Author each domain as its own [EffectCraft](https://github.com/storytold/effectcraft) (`.ecproj`) composition exporting ProRes 4444 RGBA tracks into `FilmCraft`, using EffectCraft Puppet Controls for facial expressions and mouth movements and [PhotoCraft](https://github.com/storytold/photocraft) / [VectorCraft](https://github.com/storytold/vectorcraft) for cutout prep and vector tracing.
-- **Storyboard Rules (Printable Reference — Never Drives Video)**:
-  1. `storyboard.designcraft` ([DesignCraft](https://github.com/storytold/designcraft)) is the read-only master template — no code checks PDF edit permissions or section-name locks.
-  2. `storyboard.pdf` ([PdfCraft](https://github.com/storytold/pdfcraft)) is a printable reference document.
-  3. The storyboard serves as the visual reference for new media creation; it never drives or mutates the video timeline.
-  4. Project assets display the canonical project image, stored in the storyboard as an image with metadata linking the underlying project files.
-- **Single Design Document (`figcraft/`)**: `figcraft/magic-studio-master.figcraft` is the sole UI design file (tracked in `ATTRIBUTION.md`). Never create extra `.figcraft`, `.fig`, `.html` mockups, or markdown logs in the repository.
-- **AniCraft Safety Boundary**: [AniCraft](https://github.com/storytold/AniCraft) is early alpha; invoke `anicraft-cli` strictly headlessly (never launch the pre-alpha AniCraft desktop UI).
+- **Headless & Live Desktop (`--control`)**: Install binaries via `./install.sh --from-source` (or `cargo install --path apps/magic-cli`). Register headless MCP with `claude mcp add magic -- magic-cli mcp` (serving commands and read-only `magic://` resources), or launch `magic --control 9875` and attach live via `magic-cli mcp --connect 9875`, `magic-cli --connect 127.0.0.1:9875`, or `magic-tui --connect 127.0.0.1:9875`.
+- **Stage Architecture**:
+  - **`01 Storyboard` & `extensions/scribbles/`**: Creative storyboards live in native [`DeckCraft`](https://github.com/storytold/deckcraft) `.deckcraft` / `.pptx` decks with PDF export (`deckcraft --control 7990` / `deckcraft-cli`). User-editable `extensions/scribbles/` templates (`craft-ai-core`) require saved Storyboard slides on disk before generating turnaround or scene plates.
+  - **`02 Animations` (`V2`)**: Open multi-tool lane accepting renders and meshes from Blender, Three.js, After Effects, `AniCraft`, `EffectCraft`, `PhotoCraft`, and `VectorCraft` in any format recognized by `FilmCraft`.
+  - **`03 Lyrics` (`V3` + `C1`), `04 Motion` (`V4`), & `05 Studio`**: Live `FilmCraft`-aligned editing views, `magic-cli studio map-tracks` reconciliation, and a 2-tab `Live Breakdown` & `Finishing` dock in `05 Studio`.
 
 ## House rules
 

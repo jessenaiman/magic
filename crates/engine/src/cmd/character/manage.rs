@@ -7,8 +7,7 @@ use serde_json::{Value, json};
 
 use super::{
     View, bad, character_folder, check_ecproj_head, discover_character_folders, ecproj_first_comp_name, effectcraft, effectcraft_frame, effectcraft_render,
-    find_dir_anicraft_doc, find_dir_ecproj, find_dir_pcraft, find_dir_photo_doc, find_dir_psd, find_dir_vector_doc, find_initial_cutout, model3d, point,
-    sprite, step,
+    find_dir_ecproj, find_dir_pcraft, find_dir_photo_doc, find_dir_psd, find_dir_vector_doc, find_initial_cutout, mesh_io, point, sprite, step,
 };
 use crate::{Result, Session};
 
@@ -30,7 +29,10 @@ fn collect_view_frames(dir: &Path) -> Vec<PathBuf> {
 }
 
 fn read_animation_map(project_dir: &Path) -> Value {
-    for rel in ["assets/animations/animation-map.json", "animations/animation-map.json", "animation-map.json"] {
+    if let Some(sec) = crate::cmd::project::read_magic_section_in_dir(project_dir, "animation_map", "assets/animations/animation-map.json") {
+        return sec;
+    }
+    for rel in ["animations/animation-map.json", "animation-map.json"] {
         let p = project_dir.join(rel);
         if let Ok(raw) = std::fs::read_to_string(&p)
             && let Ok(parsed) = serde_json::from_str::<Value>(&raw)
@@ -143,7 +145,6 @@ fn build_view_summary(dir: &Path, canonical_id: &str, raw_id: &str, view_name: &
     let psd_path = find_dir_psd(dir, canonical_id, raw_id, view_name, is_flat);
     let photo_doc = find_dir_photo_doc(dir, canonical_id, raw_id, view_name, is_flat);
     let vector_doc = find_dir_vector_doc(dir, canonical_id, raw_id, view_name, is_flat);
-    let anicraft_path = find_dir_anicraft_doc(dir);
     let parts_path = dir.join("parts.json");
     let has_parts = parts_path.is_file();
     let (joints, pins, canvas) = extract_parts_rig_meta(&parts_path);
@@ -171,7 +172,7 @@ fn build_view_summary(dir: &Path, canonical_id: &str, raw_id: &str, view_name: &
         None
     };
     let latest_frame = rendered_frames.first().cloned().or_else(|| drawing.clone()).or(extracted_craft_png);
-    let any_craft = ecproj_path.is_some() || photo_doc.is_some() || vector_doc.is_some() || anicraft_path.is_some() || has_parts || drawing.is_some();
+    let any_craft = ecproj_path.is_some() || photo_doc.is_some() || vector_doc.is_some() || has_parts || drawing.is_some();
     if is_flat && !any_craft {
         return None;
     }
@@ -188,7 +189,6 @@ fn build_view_summary(dir: &Path, canonical_id: &str, raw_id: &str, view_name: &
         "psd_path": psd_path,
         "photo_doc": photo_doc,
         "vector_doc": vector_doc,
-        "anicraft_path": anicraft_path,
         "ecproj": ecproj_path.is_some(),
         "ecproj_path": ecproj_path,
         "joints": joints,
@@ -255,7 +255,15 @@ pub fn cmd_character_list(s: &mut Session, _: &Value) -> Result<Value> {
             }));
         }
         let char_magic = folder.join("character.magic");
-        let info_3d = model3d::inspect_character_3d(s, &project_dir, &canonical_id);
+        let info_3d = mesh_io::inspect_character_3d(s, &project_dir, &canonical_id);
+        let m3d_view = mesh_io::view_model3d_summary(&info_3d);
+        if !m3d_view.is_null() {
+            if views.is_empty() {
+                views.push(json!({"view": "front", "parts": false, "ecproj": false, "joints": [], "pins": [], "model3d": m3d_view}));
+            } else if let Some(first) = views.first_mut() {
+                first["model3d"] = m3d_view;
+            }
+        }
         let mut sprites = sprite_summaries(&folder);
         for act in &action_ecprojs {
             let act_name = act["action"].as_str().unwrap_or("rig");
@@ -448,7 +456,6 @@ pub fn sprite_summaries(folder: &Path) -> Vec<Value> {
         .iter()
         .filter_map(|dir| {
             let ecproj = newest(dir, "ecproj")?;
-            let anicraft = newest(dir, "anicraft");
             let frames = rendered_pngs(&dir.join("frames")).unwrap_or_default();
             let meta: Value = std::fs::read_to_string(dir.join("sprite.json")).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or(Value::Null);
             let fps = meta["fps"].as_u64().unwrap_or(24);
@@ -458,7 +465,6 @@ pub fn sprite_summaries(folder: &Path) -> Vec<Value> {
                 "name": dir.file_name().map(|n| n.to_string_lossy().into_owned()),
                 "animation_style": style,
                 "ecproj": ecproj,
-                "anicraft": anicraft,
                 "preview": newest(&dir.join("clips"), "gif"),
                 "frames": frames,
                 "fps": fps,
@@ -522,7 +528,7 @@ pub fn sprite_summaries(folder: &Path) -> Vec<Value> {
 fn animation_documents(s: &Session) -> Result<Vec<Value>> {
     let root = crate::workshop::project_dir(s)?;
     let mut paths = Vec::new();
-    for folder in ["motion", "lettering", "animations", "assets/animations"] {
+    for folder in ["effects", "motion", "lettering", "animations", "assets/animations"] {
         collect_ecprojs_in_dir(&root.join(folder), 3, &mut paths);
     }
     Ok(paths.iter().map(|path| json!({"name": path.file_stem().map(|n| n.to_string_lossy().into_owned()), "path": path})).collect())
@@ -617,9 +623,9 @@ pub fn cmd_character_import(s: &mut Session, p: &Value) -> Result<Value> {
     let ext = source.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase).unwrap_or_default();
     if matches!(
         ext.as_str(),
-        "ecproj" | "pcraft" | "psd" | "psb" | "ora" | "xcf" | "kra" | "pdn" | "vectorcraft" | "svg" | "ai" | "af" | "afdesign" | "afphoto" | "anicraft"
+        "ecproj" | "pcraft" | "psd" | "psb" | "ora" | "xcf" | "kra" | "pdn" | "vectorcraft" | "svg" | "ai" | "af" | "afdesign" | "afphoto"
     ) {
-        if !magic_util::media::is_craft_doc_path(&source) {
+        if !magic_util::media::is_file_or_pcraft_bundle(&source) {
             return Err(bad(format!("{} does not exist", source.display())));
         }
         let head = (ext == "ecproj").then(|| check_ecproj_head(&source)).transpose()?;
@@ -738,22 +744,31 @@ pub fn cmd_character_open(s: &mut Session, p: &Value) -> Result<Value> {
                 if let Some(first_ec) = action_ecs.first().and_then(|v| v["path"].as_str()).map(PathBuf::from).filter(|p| p.is_file()) {
                     first_ec
                 } else {
-                    let info_3d = model3d::inspect_character_3d(s, &project_dir, &view.id);
+                    let info_3d = mesh_io::inspect_character_3d(s, &project_dir, &view.id);
                     info_3d["clips"]
                         .as_array()
                         .and_then(|clips| clips.iter().find_map(|c| c["ecproj_3d"].as_str().map(PathBuf::from)))
                         .filter(|p| p.is_file())
-                        .ok_or_else(|| bad("no EffectCraft .ecproj found; run character.rig or character.model3d.animate first"))?
+                        .ok_or_else(|| bad("no EffectCraft .ecproj found; run character.rig or animation.promote first"))?
                 }
             };
             ("effectcraft", chosen)
         }
         "photocraft" => ("photocraft", view.require_photo_doc("character.cut")?),
         "vectorcraft" => ("vectorcraft", view.vector_doc().ok_or_else(|| bad("no .vectorcraft or .svg found for this character"))?),
-        "anicraft" => {
-            return Err(bad("AniCraft desktop UI is disabled while in early alpha"));
+        "texturecraft" => {
+            let project_dir = crate::workshop::project_dir(s)?;
+            let info_3d = mesh_io::inspect_character_3d(s, &project_dir, &view.id);
+            let tcraft = info_3d["tcraft_files"]
+                .as_array()
+                .and_then(|arr| arr.first())
+                .and_then(Value::as_str)
+                .map(PathBuf::from)
+                .filter(|p| p.is_file())
+                .ok_or_else(|| bad("no .tcraft document found for this character"))?;
+            ("texturecraft", tcraft)
         }
-        other => return Err(bad(format!("app must be effectcraft, photocraft, or vectorcraft, not {other}"))),
+        other => return Err(bad(format!("app must be effectcraft, photocraft, vectorcraft, or texturecraft, not {other}"))),
     };
     if app == "effectcraft" {
         let _ = check_ecproj_head(&file)?;

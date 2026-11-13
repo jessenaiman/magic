@@ -10,7 +10,6 @@
   "binaries": {
     "desktop": "magic",
     "cli": "magic-cli",
-    "mcp": "magic-mcp",
     "tui": "magic-tui"
   },
   "control": {
@@ -25,12 +24,7 @@
       "magic-cli",
       "mcp",
       "--connect",
-      "127.0.0.1:9875"
-    ],
-    "mcp_headless_command": [
-      "magic-cli",
-      "mcp",
-      "--headless"
+      "9875"
     ]
   },
   "mime_types": [

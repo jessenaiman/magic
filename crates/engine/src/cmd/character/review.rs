@@ -1,23 +1,28 @@
-//! Project-local, append-only animation revisions. Source GLBs are never overwritten.
-use super::{bad, model3d};
-use crate::{Result, Session};
-use serde_json::{Value, json};
+//! Project-local, append-only animation revisions stored inside `<slug>.magic` (`"animation_review"`,
+//! reading legacy `animation-review.json` on import). Source GLBs and `.ecproj` rigs are never overwritten.
+
 use std::path::PathBuf;
 
-fn path(s: &Session) -> Result<PathBuf> {
+use serde_json::{Value, json};
+
+use super::{bad, mesh_io};
+use crate::{Result, Session};
+
+fn legacy_path(s: &Session) -> Result<PathBuf> {
     Ok(crate::workshop::project_dir(s)?.join("animation-review.json"))
 }
-fn read(s: &Session) -> Result<Value> {
-    let p = path(s)?;
-    if !p.exists() {
-        return Ok(json!({"version":1,"revision":0,"revisions":[]}));
+
+fn read(s: &mut Session) -> Result<Value> {
+    let dir = crate::workshop::project_dir(s)?;
+    if let Some(v) = crate::cmd::project::read_session_section(s, &dir, "animation_review", "animation-review.json")? {
+        if v["version"] == 1 && v["revisions"].is_array() {
+            return Ok(v);
+        }
+        return Err(bad("Invalid animation_review section"));
     }
-    let v: Value = serde_json::from_slice(&std::fs::read(p)?).map_err(|e| bad(e.to_string()))?;
-    if v["version"] != 1 || !v["revisions"].is_array() {
-        return Err(bad("Invalid animation-review.json"));
-    }
-    Ok(v)
+    Ok(json!({"version": 1, "revision": 0, "revisions": []}))
 }
+
 fn fingerprint(p: &std::path::Path) -> Result<String> {
     use sha2::{Digest, Sha256};
     Ok(format!("{:x}", Sha256::digest(std::fs::read(p)?)))
@@ -33,10 +38,9 @@ pub fn cmd_review(s: &mut Session, _: &Value) -> Result<Value> {
             s.project_assets.iter().find(|a| a.id == cid).map(|a| a.name.clone()).unwrap_or_else(|| c["name"].as_str().unwrap_or(cid).replace(['-', '_'], " "));
         let style = c["animation_style"].as_str().unwrap_or("cutout_2_5d");
 
-        // 1. 3D / 2.5D GLB model clips (EffectCraft advanced3D)
         let m = &c["model_3d"];
         if m["available"].as_bool() == Some(true) {
-            let file = m["primary_glb"].as_str().or_else(|| m["blend_files"].as_array().and_then(|a| a.first()).and_then(Value::as_str)).unwrap_or_default();
+            let file = m["primary_glb"].as_str().unwrap_or_default();
             let mut clip_names: Vec<Value> = m["model_clips"].as_array().cloned().unwrap_or_default();
             for clip_obj in m["clips"].as_array().into_iter().flatten() {
                 if let Some(cn) = clip_obj["id"].as_str()
@@ -52,15 +56,18 @@ pub fn cmd_review(s: &mut Session, _: &Value) -> Result<Value> {
                 "path": file,
                 "rigged": m["rigged"],
                 "clips": clip_names,
-                "version": std::fs::metadata(file).ok().and_then(|md| md.modified().ok()).and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_millis().to_string()),
+                "version": std::fs::metadata(file)
+                    .ok()
+                    .and_then(|md| md.modified().ok())
+                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map(|d| d.as_millis().to_string()),
                 "qa_status": "needs-visual-review"
             }));
         }
 
-        // 2. 2D Sprite Cycles & 2.5D EffectCraft Cutout Rig Cycles
         let sprites = c["sprites"].as_array().cloned().unwrap_or_default();
         if !sprites.is_empty() {
-            let clip_names: Vec<Value> = sprites.iter().filter_map(|sp| sp["name"].as_str().map(|s| json!(s))).collect();
+            let clip_names: Vec<Value> = sprites.iter().filter_map(|sp| sp["name"].as_str().map(|n| json!(n))).collect();
             let first_ecproj = sprites.first().and_then(|sp| sp["ecproj"].as_str()).unwrap_or_default();
             models.push(json!({
                 "id": cid,
@@ -74,11 +81,17 @@ pub fn cmd_review(s: &mut Session, _: &Value) -> Result<Value> {
             }));
         }
     }
-    Ok(json!({"ok":true,"project":s.project_path,"directory":dir,"models":models,"review":read(s)?,"motion_options":motion_options(),"file":path(s)?}))
+    let review_doc = read(s)?;
+    let target_file = s.project_path.clone().unwrap_or_else(|| legacy_path(s).unwrap_or_else(|_| dir.join("project.magic")));
+    Ok(json!({
+        "ok": true, "project": s.project_path, "directory": dir, "models": models,
+        "review": review_doc, "motion_options": motion_options(), "file": target_file,
+    }))
 }
 
+#[allow(clippy::cognitive_complexity)]
 pub fn cmd_save_revision(s: &mut Session, p: &Value) -> Result<Value> {
-    let project = s.project_path.as_ref().ok_or_else(|| bad("Open a project first"))?;
+    let project = s.project_path.clone().ok_or_else(|| bad("Open a project first"))?;
     if p["expected_project"].as_str() != project.to_str() {
         return Err(bad("Project changed; reopen animation review"));
     }
@@ -92,7 +105,7 @@ pub fn cmd_save_revision(s: &mut Session, p: &Value) -> Result<Value> {
         .ok_or_else(|| bad("Invalid character"))?;
     let clip = p["clip"].as_str().ok_or_else(|| bad("clip is required"))?;
     let project_dir = crate::workshop::project_dir(s)?;
-    let model = model3d::inspect_character_3d(s, &project_dir, id);
+    let model = mesh_io::inspect_character_3d(s, &project_dir, id);
     let char_folder = super::character_folder(&project_dir, id);
     let sprites = super::sprite_summaries(&char_folder);
     let source_path = if let Some(sp) = sprites.iter().find(|sp| sp["name"].as_str() == Some(clip)) {
@@ -100,22 +113,17 @@ pub fn cmd_save_revision(s: &mut Session, p: &Value) -> Result<Value> {
     } else if model["model_clips"].as_array().is_some_and(|a| a.contains(&json!(clip)))
         || model["clips"].as_array().is_some_and(|a| a.iter().any(|c| c["id"].as_str() == Some(clip)))
     {
-        model["primary_glb"]
-            .as_str()
-            .or_else(|| model["blend_files"].as_array().and_then(|a| a.first()).and_then(Value::as_str))
-            .ok_or_else(|| bad("Character has no GLB file"))?
-            .to_owned()
+        model["primary_glb"].as_str().ok_or_else(|| bad("Character has no GLB file"))?.to_owned()
     } else {
         return Err(bad("Clip is not in this character's GLB or sprite/EffectCraft cycles"));
     };
-    let file = source_path.as_str();
     let d = &p["draft"];
-    let start = number(d, "trim_start", 0., 3600.)?;
-    let end = number(d, "trim_end", 0., 3600.)?;
+    let start = number(d, "trim_start", 0.0, 3600.0)?;
+    let end = number(d, "trim_end", 0.0, 3600.0)?;
     if end <= start {
         return Err(bad("Trim end must be after trim start"));
     }
-    number(d, "speed", 0.1, 4.)?;
+    number(d, "speed", 0.1, 4.0)?;
     for k in ["loop", "in_place"] {
         if !d[k].is_boolean() {
             return Err(bad(format!("{k} must be boolean")));
@@ -129,45 +137,66 @@ pub fn cmd_save_revision(s: &mut Session, p: &Value) -> Result<Value> {
         if key["bone"].as_str().is_none_or(|b| b.is_empty() || b.len() > 200) {
             return Err(bad("Invalid bone name"));
         }
-        number(key, "time", 0., 3600.)?;
-        if !key["rotation"].as_array().is_some_and(|v| v.len() == 3 && v.iter().all(|n| n.as_f64().is_some_and(|n| n.is_finite() && n.abs() <= 180.))) {
+        number(key, "time", 0.0, 3600.0)?;
+        if !key["rotation"].as_array().is_some_and(|v| v.len() == 3 && v.iter().all(|n| n.as_f64().is_some_and(|n| n.is_finite() && n.abs() <= 180.0))) {
             return Err(bad("Correction rotation must have three angles within ±180 degrees"));
         }
     }
     if !d["issues"].as_array().is_some_and(|v| {
         v.len() <= 1000
             && v.iter().all(|i| {
-                i["time"].as_f64().is_some_and(|n| n.is_finite() && (0. ..=3600.).contains(&n))
+                i["time"].as_f64().is_some_and(|n| n.is_finite() && (0.0..=3600.0).contains(&n))
                     && i["text"].as_str().is_some_and(|t| !t.trim().is_empty() && t.len() <= 4000)
             })
     }) {
         return Err(bad("Invalid issue notes"));
     }
-    if d["notes"].as_str().is_none_or(|s| s.len() > 16000) {
+    if d["notes"].as_str().is_none_or(|n| n.len() > 16000) {
         return Err(bad("Notes must be text under 16000 bytes"));
     }
     let revision = doc["revision"].as_u64().unwrap_or(0) + 1;
-    let entry = json!({"id":revision,"character":id,"clip":clip,"created_unix_ms":std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64,"source_sha256":fingerprint(std::path::Path::new(file))?,"parent":p["parent"],"draft":d});
+    let created_ms = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
+    let entry = json!({
+        "id": revision,
+        "character": id,
+        "clip": clip,
+        "created_unix_ms": created_ms,
+        "source_sha256": fingerprint(std::path::Path::new(&source_path))?,
+        "parent": p["parent"],
+        "draft": d,
+    });
     doc["revisions"].as_array_mut().ok_or_else(|| bad("Invalid revision list"))?.push(entry.clone());
     doc["revision"] = json!(revision);
-    let out = path(s)?;
-    let payload = serde_json::to_vec_pretty(&doc).map_err(|e| bad(e.to_string()))?;
-    craft_atomic::atomic_write(&out, &payload)?;
-    Ok(json!({"ok":true,"file":out,"revision":revision,"entry":entry}))
+    let out = crate::cmd::project::write_session_section(s, &project_dir, "animation_review", &doc)?;
+    Ok(json!({"ok": true, "file": out, "revision": revision, "entry": entry}))
 }
+
 fn number(p: &Value, key: &str, min: f64, max: f64) -> Result<f64> {
     p[key].as_f64().filter(|v| v.is_finite() && *v >= min && *v <= max).ok_or_else(|| bad(format!("{key} must be between {min} and {max}")))
 }
 
-// The engine owns option definitions and CLI recipes; Scribbles only displays them.
 fn motion_options() -> Value {
     json!([
-        {"id":"baseline","label":"Keep baseline motion","description":"Use the selected GLB clip unchanged in EffectCraft.","load":"One character. Project preparation only; no rendering."},
-        {"id":"paced","label":"Gentler pacing","description":"Play the existing clip at 85% speed; does not change skin weights or collision poses.","load":"One character. Project preparation only; no rendering."}
+        {
+            "id": "baseline",
+            "label": "Keep baseline motion",
+            "description": "Use the selected GLB clip unchanged in EffectCraft.",
+            "load": "One character. Project preparation only; no rendering.",
+        },
+        {
+            "id": "paced",
+            "label": "Gentler pacing",
+            "description": "Play the existing clip at 85% speed; does not change skin weights or collision poses.",
+            "load": "One character. Project preparation only; no rendering.",
+        },
     ])
 }
+
 pub fn cmd_motion_options(_: &mut Session, _: &Value) -> Result<Value> {
-    Ok(json!({"ok":true,"options":motion_options(),"scope":"single-subject","render":"explicit separate command","baseline":"source GLBs are preserved"}))
+    Ok(json!({
+        "ok": true, "options": motion_options(), "scope": "single-subject",
+        "render": "explicit separate command", "baseline": "source GLBs are preserved",
+    }))
 }
 
 pub fn cmd_prepare_motion(s: &mut Session, p: &Value) -> Result<Value> {
@@ -181,36 +210,29 @@ pub fn cmd_prepare_motion(s: &mut Session, p: &Value) -> Result<Value> {
     if !matches!(option, "baseline" | "paced") {
         return Err(bad("Unknown motion option"));
     }
-    let model = model3d::inspect_character_3d(s, &dir, character);
+    let model = mesh_io::inspect_character_3d(s, &dir, character);
     let source = model["primary_glb"].as_str().ok_or_else(|| bad("Character needs a GLB"))?;
     let clips = model["model_clips"].as_array().ok_or_else(|| bad("Character has no animation clips"))?;
     let index = clips.iter().position(|v| v.as_str() == Some(clip)).ok_or_else(|| bad("This character does not have that clip"))?;
-    let fingerprint = fingerprint(std::path::Path::new(source))?;
+    let sha = fingerprint(std::path::Path::new(source))?;
     let safe_clip = crate::workspace::sanitize_asset_id(clip);
-    let duration = p["duration"].as_f64().unwrap_or(3.).clamp(0.1, 30.);
-    let folder = dir.join("animation-options").join(character).join(format!("{}-{}-{}-{:.3}s-v2", safe_clip, option, &fingerprint[..10], duration));
+    let duration = p["duration"].as_f64().unwrap_or(3.0).clamp(0.1, 30.0);
+    let folder = dir.join("animation-options").join(character).join(format!("{}-{}-{}-{:.3}s-v2", safe_clip, option, &sha[..10], duration));
     std::fs::create_dir_all(&folder)?;
     let project = folder.join("motion.ecproj");
     if project.exists() {
-        return Ok(
-            json!({"ok":true,"reused":true,"project":project,"script":folder.join("effectcraft.json"),"option":option,"source_sha256":fingerprint,"rendered":false}),
-        );
+        return Ok(json!({"ok": true, "reused": true, "project": project, "option": option, "source_sha256": sha, "rendered": false}));
     }
-    let steps = json!([
-        {"id":"comp.new","params":{"name":format!("{character} / {clip} / {option}"),"width":1280,"height":720,"frameRate":30,"duration":duration,"renderer":"advanced3D","background":"#20332a"}},
-        {"id":"layer.newModel","params":{"path":source,"name":"Character"}},
-        {"id":"prop.set","params":{"layer":"Character","path":"transform/position","value":[640,648,0]}},
-        {"id":"prop.set","params":{"layer":"Character","path":"transform/scale","value":[140,140,140]}},
-        {"id":"prop.set","params":{"layer":"Character","path":"geometryOptions/animation","value":index+1}},
-        {"id":"prop.set","params":{"layer":"Character","path":"geometryOptions/loopAnimation","value":true}},
-        {"id":"prop.set","params":{"layer":"Character","path":"geometryOptions/animationSpeed","value":if option=="paced" {85}else{100}}}
-    ]);
-    let script = folder.join("effectcraft.json");
-    crate::doc_state::write_file(&script, serde_json::to_vec_pretty(&steps).map_err(|e| bad(e.to_string()))?)?;
-    let mut native_steps = steps.as_array().cloned().ok_or_else(|| bad("EffectCraft steps must be an array"))?;
-    native_steps.push(json!({"command":"file.saveAs","params":{"path":project}}));
-    let result = crate::cmd::character::effectcraft(&dir, None, &native_steps, true)?;
-    let manifest = json!({"character":character,"clip":clip,"option":option,"source":source,"source_sha256":fingerprint,"script":script,"project":project,"rendered":false,"status":"ready-for-preview","resource_policy":"one subject; no render during preparation","filmcraft_handoff":"Render a chosen short clip from this EffectCraft project, then import the result into FilmCraft; source rig remains unchanged"});
-    crate::doc_state::write_file(folder.join("option.json"), serde_json::to_vec_pretty(&manifest).map_err(|e| bad(e.to_string()))?)?;
-    Ok(json!({"ok":true,"project":project,"script":script,"option":option,"source_sha256":fingerprint,"rendered":false,"effectcraft":result}))
+    let comp_name = format!("{character} / {clip} / {option}");
+    let speed = if option == "paced" { 85 } else { 100 };
+    let spec = mesh_io::GlbStageSpec {
+        comp_name: &comp_name,
+        glb_path: std::path::Path::new(source),
+        clip_index: index,
+        duration,
+        speed_pct: speed,
+        out_ecproj: &project,
+    };
+    let result = mesh_io::stage_glb_in_effectcraft(&dir, &spec)?;
+    Ok(json!({"ok": true, "project": project, "option": option, "source_sha256": sha, "rendered": false, "effectcraft": result}))
 }

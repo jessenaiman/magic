@@ -397,7 +397,7 @@ impl MagicPalette {
         style.visuals = visuals;
         style.spacing.item_spacing = egui::vec2(6.0, 6.0);
         style.spacing.button_padding = egui::vec2(8.0, 4.0);
-        style.spacing.interact_size = egui::vec2(28.0, 25.0);
+        style.spacing.interact_size = egui::vec2(28.0, 26.0);
         ctx.set_global_style(style);
     }
 }
@@ -406,10 +406,12 @@ fn apply_style_tints(pal: &mut MagicPalette, style: InterfaceStyle, is_dark: boo
     if is_dark {
         match style {
             InterfaceStyle::Aurora => {
-                pal.bg_canvas = Color32::from_rgb(0x11, 0x16, 0x20);
-                pal.bg_panel = Color32::from_rgb(0x16, 0x1c, 0x28);
-                pal.bg_elevated = Color32::from_rgb(0x1c, 0x23, 0x32);
-                pal.border = Color32::from_rgb(0x2b, 0x35, 0x48);
+                pal.bg_stage = Color32::from_rgb(0x0c, 0x10, 0x16);
+                pal.bg_input = Color32::from_rgb(0x0e, 0x12, 0x19);
+                pal.bg_canvas = Color32::from_rgb(0x11, 0x15, 0x1c);
+                pal.bg_panel = Color32::from_rgb(0x16, 0x1b, 0x24);
+                pal.bg_elevated = Color32::from_rgb(0x1c, 0x22, 0x2d);
+                pal.border = Color32::from_rgb(0x2b, 0x34, 0x43);
             }
             InterfaceStyle::Editorial => {
                 pal.bg_stage = Color32::from_rgb(0x14, 0x14, 0x13);

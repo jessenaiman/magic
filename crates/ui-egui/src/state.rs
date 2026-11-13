@@ -1,6 +1,6 @@
 //! Shared UI state, view routing (`Home`, `Project`, `Storyboard`, `Animations`, `Lyrics`,
-//! `Motion`, `Studio`), `InterfaceStyle` & `AccentChoice` appearance state, `CachedPayloads`,
-//! dirty-track invalidation, and shell action queue.
+//! `Motion`, `Studio`), `DockWorkspaceState` (`craft_ui::docking`), `InterfaceStyle` &
+//! `AccentChoice` appearance state, `CachedPayloads`, dirty-track invalidation, and action queue.
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;
@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
+use crate::docking::DockWorkspaceState;
 pub use crate::state_views::{
     AiUiState, AnimationViewState, HomeFormState, LyricsViewState, MotionViewState, ProjectViewState, StoryboardViewState, StudioViewState,
 };
@@ -73,9 +74,9 @@ impl ViewMode {
             Self::Home => "home",
             Self::Project => "folder",
             Self::Storyboard => "book",
-            Self::Animation => "user",
+            Self::Animation => "puppetPin",
             Self::Design => "type",
-            Self::Motion => "sparkles",
+            Self::Motion => "bezierSpline",
             Self::Studio => "film",
         }
     }
@@ -121,11 +122,13 @@ pub enum UiAction {
     NavigateAuthoring { view: ViewMode, seconds: f64 },
     SelectCharacter { id: String, jump_animation: bool },
     Execute { id: String, params: Value, toast: Option<String> },
+    DockCommand { id: String, params: Value },
     PickFile { target: PickerTarget, title: String, extensions: Vec<String>, directory: bool, save: bool },
     ToggleAudio,
     SeekAudio(f64),
     SnapWindow,
     OpenPreferences,
+    OpenFontManager,
     OpenDoctor,
     OpenReportProblem,
     CopyDiagnostics,
@@ -139,6 +142,7 @@ pub enum UiAction {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ActiveModal {
     Preferences,
+    FontManager,
     Doctor,
     ReportProblem,
     About,
@@ -150,6 +154,7 @@ pub struct CachedPayloads {
     pub snapshot: Value,
     pub catalog: Value,
     pub song_lyrics: Value,
+    pub song_waveform: Value,
     pub storyboard_pages: Value,
     pub storyboard_check: Value,
     pub characters: Value,
@@ -176,6 +181,7 @@ pub struct CachedPayloads {
 #[derive(Clone, Debug)]
 pub struct UiShellState {
     pub view: ViewMode,
+    pub docking: DockWorkspaceState,
     pub theme_mode: ThemeMode,
     pub interface_style: InterfaceStyle,
     pub accent_choice: AccentChoice,
@@ -187,18 +193,11 @@ pub struct UiShellState {
     pub project_path: Option<PathBuf>,
     pub selected_character_id: Option<String>,
     pub ribbon_collapsed: bool,
-    pub show_nav_rail: bool,
-    pub show_bottom_dock: bool,
-    pub show_right_inspector: bool,
-    pub assets_drawer_open: bool,
-    pub assets_drawer_pinned: bool,
     pub assets_drawer_tab: String,
     pub global_search: String,
     pub command_search: String,
     pub update_banner_dismissed: bool,
-    pub fidget_open: bool,
     pub fidget_prompt: String,
-    pub history_popup_open: bool,
     pub active_modal: Option<ActiveModal>,
     pub busy: bool,
     pub saving: bool,
@@ -210,6 +209,13 @@ pub struct UiShellState {
     pub audio_time_sec: f64,
     pub audio_duration_sec: f64,
     pub window_snapped_right: bool,
+    pub control_port: Option<u16>,
+    pub available_fonts: Vec<String>,
+    pub font_picker_filter: String,
+    pub font_store_query: String,
+    pub font_store_style: String,
+    pub font_preview_url: String,
+    pub font_preview_sample: String,
     pub ai: AiUiState,
     pub home: HomeFormState,
     pub project: ProjectViewState,
@@ -225,6 +231,7 @@ impl Default for UiShellState {
     fn default() -> Self {
         Self {
             view: ViewMode::Home,
+            docking: DockWorkspaceState::default(),
             theme_mode: ThemeMode::Dark,
             interface_style: InterfaceStyle::Aurora,
             accent_choice: AccentChoice::Teal,
@@ -232,22 +239,15 @@ impl Default for UiShellState {
             ui_scale_pct: 100,
             autosave_enabled: true,
             autosave_minutes: 5.0,
-            focused_panel: String::new(),
+            focused_panel: "canvas".into(),
             project_path: None,
             selected_character_id: None,
             ribbon_collapsed: false,
-            show_nav_rail: true,
-            show_bottom_dock: true,
-            show_right_inspector: true,
-            assets_drawer_open: false,
-            assets_drawer_pinned: false,
             assets_drawer_tab: "characters".into(),
             global_search: String::new(),
             command_search: String::new(),
             update_banner_dismissed: false,
-            fidget_open: false,
             fidget_prompt: String::new(),
-            history_popup_open: false,
             active_modal: None,
             busy: false,
             saving: false,
@@ -259,6 +259,13 @@ impl Default for UiShellState {
             audio_time_sec: 0.0,
             audio_duration_sec: 0.0,
             window_snapped_right: false,
+            control_port: None,
+            available_fonts: Vec::new(),
+            font_picker_filter: String::new(),
+            font_store_query: "Fraunces".into(),
+            font_store_style: "Regular".into(),
+            font_preview_url: std::env::var("MAGIC_FONT_PREVIEW_URL").unwrap_or_else(|_| "http://127.0.0.1:8000".into()),
+            font_preview_sample: "All the pterodactyls were sleeping very still".into(),
             ai: AiUiState::default(),
             home: HomeFormState::default(),
             project: ProjectViewState::default(),
@@ -306,6 +313,7 @@ impl UiShellState {
             .map(str::to_owned)
     }
 
+    #[allow(clippy::cognitive_complexity)]
     /// Ordered `FilmCraft` (`V1` / program) & Storyboard scene frames for stage track switching and Film Reels.
     pub fn active_film_frames(&self) -> Vec<String> {
         let mut out = Vec::new();
@@ -340,10 +348,32 @@ impl UiShellState {
                 }
             }
         }
-        if out.is_empty()
-            && let Some(bg) = self.cache.snapshot.pointer("/data/drawer/backgrounds/0/thumb").and_then(Value::as_str).filter(|s| !s.is_empty())
-        {
-            out.push(bg.to_owned());
+        if let Some(bgs) = self.cache.snapshot.pointer("/data/drawer/backgrounds").and_then(Value::as_array) {
+            for item in bgs {
+                if let Some(bg) = item["thumb"].as_str().or_else(|| item["path"].as_str()).filter(|s| !s.is_empty())
+                    && !out.iter().any(|x| x == bg)
+                {
+                    out.push(bg.to_owned());
+                }
+            }
+        }
+        if let Some(anims) = self.cache.words_doc.pointer("/document/animations").and_then(Value::as_array) {
+            for a in anims {
+                if let Some(bg) = a["background_path"].as_str().or_else(|| a["preview_frame"].as_str()).filter(|s| !s.is_empty())
+                    && !out.iter().any(|x| x == bg)
+                {
+                    out.push(bg.to_owned());
+                }
+            }
+        }
+        if let Some(cues) = self.cache.motion_doc.pointer("/document/cues").and_then(Value::as_array) {
+            for c in cues {
+                if let Some(bg) = c["backdrop_path"].as_str().filter(|s| !s.is_empty())
+                    && !out.iter().any(|x| x == bg)
+                {
+                    out.push(bg.to_owned());
+                }
+            }
         }
         out
     }
@@ -374,6 +404,37 @@ impl UiShellState {
     pub fn set_toast(&mut self, now: f64, msg: impl Into<String>) {
         self.toast_message = msg.into();
         self.toast_until = now + 5.5;
+    }
+
+    /// Clear per-project stage drafts, selections, and cached frame previews on project switch (`B10-P0`).
+    pub fn reset_for_project_switch(&mut self) {
+        self.selected_character_id = None;
+        self.dirty_drafts.clear();
+        self.dirty_tracks.clear();
+        self.audio_playing = false;
+        self.audio_time_sec = 0.0;
+        self.audio_duration_sec = 0.0;
+        self.project = ProjectViewState::default();
+        self.storyboard = StoryboardViewState::default();
+        self.lyrics = LyricsViewState::default();
+        self.motion = MotionViewState::default();
+        self.animation = AnimationViewState::default();
+        self.studio = StudioViewState::default();
+        self.cache.snapshot = Value::Null;
+        self.cache.storyboard_pages = Value::Null;
+        self.cache.storyboard_check = Value::Null;
+        self.cache.song_lyrics = Value::Null;
+        self.cache.words_doc = Value::Null;
+        self.cache.motion_doc = Value::Null;
+        self.cache.characters = Value::Null;
+        self.cache.character_keys = Value::Null;
+        self.cache.film_status = Value::Null;
+        self.cache.timeline = Value::Null;
+        self.cache.last_words_frame = None;
+        self.cache.last_motion_frame = None;
+        self.cache.last_character_frame = None;
+        self.cache.last_video_frame = None;
+        self.cache.last_storyboard_thumb = None;
     }
 }
 

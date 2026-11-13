@@ -74,21 +74,32 @@ pub fn draw_puppet_and_3d_inspector(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &st
     fill_card(ui, ctx.pal, true, |ui| {
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing.x = 4.0;
-            for (tid, lbl, tip) in [
-                ("puppet", "Puppet", "5-Pin Puppet Mesh, Live Record, Null Rig & Follow-Through (T11-T13)"),
-                ("3d", "3D & Cam", "Classic/PBR 3D, .GLB Import, 1/2-Node DoF Cam & IBL Lights (T14-T16)"),
-                ("roto", "Roto AI", "Roto Brush 3.0 SAM 2.1, Object Matte & JS Expressions (T17)"),
+            for (tid, ico, lbl, tip) in [
+                ("puppet", "puppetPin", "Puppet", "5-Pin Puppet Mesh, Live Record, Null Rig & Follow-Through (T11-T13)"),
+                ("3d", "mesh3d", "3D & Mesh", "craft-mesh (.glb/.gltf/.obj/.fbx/.stl/.ply/.3mf), DoF Cam & IBL Lights (T14-T16)"),
+                ("roto", "scissors", "Roto AI", "Roto Brush 3.0 SAM 2.1, Object Matte & Procedural Rig Cycles (T17)"),
             ] {
                 let id = format!("anim-insp-tab-{tid}");
                 let sel = ctx.state.animation.inspector_tab == tid;
-                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, lbl, tip).selected(sel)).clicked() {
+                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new(&id, ico, lbl, tip).selected(sel)).clicked() {
                     ctx.state.animation.inspector_tab = tid.into();
                 }
             }
         });
+        let avail_fonts = ctx.state.available_fonts.clone();
+        let _ = crate::fonts_ui::font_family_combo(
+            ui,
+            ctx.reg,
+            ctx.pal,
+            crate::fonts_ui::FontPickerSpec { id_prefix: "anim-font", label: "Stage Font" },
+            &mut ctx.state.animation.font_family,
+            &avail_fonts,
+            &mut ctx.state.font_picker_filter,
+            ctx.actions,
+        );
         ui.separator();
         ScrollArea::vertical().id_salt("anim_right_insp_scroll").auto_shrink([false, false]).show(ui, |ui| match ctx.state.animation.inspector_tab.as_str() {
-            "3d" => draw_3d_camera_and_lights_tab(ui, ctx, cid),
+            "3d" => draw_3d_camera_and_lights_tab(ui, ctx, cid, view_obj),
             "roto" => draw_roto_and_expr_tab(ui, ctx, cid),
             _ => draw_puppet_tab(ui, ctx, cid, view_obj),
         });
@@ -259,7 +270,8 @@ fn draw_puppet_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str, view_obj: Opti
     });
 }
 
-fn draw_3d_camera_and_lights_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>, _cid: &str) {
+#[allow(clippy::cognitive_complexity)]
+fn draw_3d_camera_and_lights_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str, view_obj: Option<&Value>) {
     ui.label(RichText::new("3D Renderer & Models (T14)").size(11.5).strong().color(ctx.pal.accent_sky));
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
@@ -278,14 +290,14 @@ fn draw_3d_camera_and_lights_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>, _cid: &str)
             ui,
             ctx.reg,
             ctx.pal,
-            BtnSpec::new("anim-import-3d", "folder", "+ 3D Model", "Import .glb/.gltf/.obj/.fbx/.stl via layer.newModel (T14)").primary(),
+            BtnSpec::new("anim-import-3d", "mesh3d", "+ 3D Mesh", "Import & validate .glb/.gltf/.obj/.fbx/.stl/.ply/.3mf via craft-mesh").primary(),
         )
         .clicked()
         {
             ctx.push(UiAction::PickFile {
                 target: PickerTarget::ImportModel3d,
-                title: "Import 3D Model (.glb/.gltf/.obj/.fbx/.stl)".into(),
-                extensions: vec!["glb".into(), "gltf".into(), "obj".into(), "fbx".into(), "stl".into()],
+                title: "Import 3D Mesh (.glb/.gltf/.obj/.fbx/.stl/.ply/.3mf)".into(),
+                extensions: vec!["glb".into(), "gltf".into(), "obj".into(), "fbx".into(), "stl".into(), "ply".into(), "3mf".into()],
                 directory: false,
                 save: false,
             });
@@ -299,6 +311,39 @@ fn draw_3d_camera_and_lights_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>, _cid: &str)
             }
         }
     });
+
+    if let Some(m3d) = view_obj.and_then(|v| v.get("model3d")).filter(|m| m.is_object()) {
+        ctx.pal.inset_frame().show(ui, |ui| {
+            let fmt = m3d["format"].as_str().unwrap_or("glb");
+            let verts = m3d["vertices"].as_u64().unwrap_or(0);
+            let tris = m3d["triangles"].as_u64().unwrap_or(0);
+            let joints = m3d["joints"].as_u64().unwrap_or(0);
+            let anims = m3d["animations"].as_u64().unwrap_or(0);
+            ui.label(
+                RichText::new(format!("craft-mesh ({fmt}): {verts} verts · {tris} tris · {joints} joints · {anims} clips"))
+                    .monospace()
+                    .size(9.5)
+                    .color(ctx.pal.accent_emerald),
+            );
+            if let Some(mpath) = m3d["path"].as_str().filter(|p| !p.is_empty()) {
+                let mpath_owned = mpath.to_owned();
+                ui.horizontal_wrapped(|ui| {
+                    for out_fmt in ["glb", "obj", "stl"] {
+                        let btn_id = format!("anim-mesh-conv-{out_fmt}");
+                        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new(&btn_id, "download", out_fmt, "Convert 3D mesh via craft-mesh (mesh.convert)"))
+                            .clicked()
+                        {
+                            ctx.exec(
+                                "mesh.convert",
+                                json!({"path": mpath_owned, "format": out_fmt, "character": cid}),
+                                Some("Converted 3D mesh via craft-mesh"),
+                            );
+                        }
+                    }
+                });
+            }
+        });
+    }
 
     ui.separator();
     ui.label(RichText::new("DoF Camera & 4-View (T15)").size(11.5).strong().color(ctx.pal.accent_emerald));
@@ -414,22 +459,32 @@ fn draw_roto_and_expr_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>, _cid: &str) {
     });
 
     ui.separator();
-    ui.label(RichText::new("Rig JS Expression (T25)").size(11.5).strong().color(ctx.pal.accent_amber));
+    ui.label(RichText::new("Procedural Rig Cycle & Pick-Whip").size(11.5).strong().color(ctx.pal.accent_amber));
     text_input(
         ui,
         ctx.reg,
         "anim-expr-input",
-        "Rig JS Expression",
+        "Procedural Rig Cycle",
         &mut ctx.state.animation.expr_code,
-        "loopOut(\"cycle\")",
+        "cycle_loop(span: 2.0)",
         (ui.available_width() - 4.0).max(140.0),
     );
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
-        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-expr-apply", "Apply Expr", "prop.setExpression").primary()).clicked() {
-            ctx.exec("project.autosave", json!({}), Some("Applied JavaScript expression to character rig"));
+        for (lbl, preset) in
+            [("cycle_loop", "cycle_loop(span: 2.0)"), ("wing_flap", "wing_flap(hz: 2.2, deg: 24.0)"), ("pendulum", "pendulum_tail(deg: 10.0, hz: 1.4)")]
+        {
+            let id = format!("anim-proc-{lbl}");
+            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, lbl, "Load pure-Rust rig cycle preset")).clicked() {
+                ctx.state.animation.expr_code = preset.into();
+            }
         }
-        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-expr-whip", "@ Pick-Whip", "prop.pickWhip")).clicked() {
+        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-expr-apply", "Apply Cycle", "Write procedural rig cycle into .ecproj").primary())
+            .clicked()
+        {
+            ctx.exec("project.autosave", json!({}), Some("Applied procedural rig cycle to character rig"));
+        }
+        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-expr-whip", "@ Pick-Whip", "Bind rig property via EffectCraft Pick-Whip")).clicked() {
             ctx.exec("project.autosave", json!({}), Some("Linked property via Pick-Whip"));
         }
     });

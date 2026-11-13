@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, UNIX_EPOCH};
 
-use magic::Session;
+use magic_engine::Session;
 use magic_ui_egui::{UiShellState, ViewMode};
 use serde_json::{Value, json};
 
@@ -49,7 +49,7 @@ impl FileSyncMonitor {
         let Some(proj_dir) = ui_state.project_path.as_deref().and_then(Path::parent) else {
             return;
         };
-        for rel in ["lettering/lyrics.ecproj", "motion/actions.ecproj"] {
+        for rel in ["effects/lyrics.ecproj", "effects/motion.ecproj", "lettering/lyrics.ecproj", "motion/actions.ecproj"] {
             let p = proj_dir.join(rel);
             if let Some(st) = stamp_of(&p) {
                 self.stamps.insert(p, st);
@@ -85,7 +85,7 @@ impl FileSyncMonitor {
             ui_state.dirty_tracks.remove("V3");
         } else if cmd_id == "motion.publish" {
             ui_state.dirty_tracks.remove("V4");
-        } else if matches!(cmd_id, "character.publish" | "video.assemble" | "video.sync_links") {
+        } else if matches!(cmd_id, "character.publish" | "animation.promote" | "video.assemble" | "video.sync_links") {
             ui_state.dirty_tracks.clear();
         }
     }
@@ -97,6 +97,7 @@ impl FileSyncMonitor {
 
         if regained_focus {
             self.check_disk_ecprojs(session, ui_state);
+            craft_font_catalog::Catalog::global().rescan_if_changed();
         }
 
         if let Some(since) = self.pending_autosave_since {
@@ -113,7 +114,11 @@ impl FileSyncMonitor {
         let Some(proj_dir) = ui_state.project_path.as_deref().and_then(Path::parent).map(Path::to_path_buf) else {
             return;
         };
-        let mut candidates = vec![("V3", proj_dir.join("lettering/lyrics.ecproj")), ("V4", proj_dir.join("motion/actions.ecproj"))];
+        let v3_fx = proj_dir.join("effects/lyrics.ecproj");
+        let v4_fx = proj_dir.join("effects/motion.ecproj");
+        let v3 = if v3_fx.is_file() { v3_fx } else { proj_dir.join("lettering/lyrics.ecproj") };
+        let v4 = if v4_fx.is_file() { v4_fx } else { proj_dir.join("motion/actions.ecproj") };
+        let mut candidates = vec![("V3", v3), ("V4", v4)];
         if let Some(ec) = active_character_ecproj(ui_state) {
             candidates.push(("V2", ec));
         }
@@ -144,12 +149,14 @@ pub(crate) fn stage_ecproj_for_drop(ui_state: &UiShellState) -> Option<PathBuf> 
     match ui_state.effective_view() {
         ViewMode::Animation => active_character_ecproj(ui_state).filter(|p| p.is_file()),
         ViewMode::Design => {
-            let p = proj_dir.join("lettering/lyrics.ecproj");
-            p.is_file().then_some(p)
+            let primary = proj_dir.join("effects/lyrics.ecproj");
+            let legacy = proj_dir.join("lettering/lyrics.ecproj");
+            if primary.is_file() { Some(primary) } else { legacy.is_file().then_some(legacy) }
         }
         ViewMode::Motion => {
-            let p = proj_dir.join("motion/actions.ecproj");
-            p.is_file().then_some(p)
+            let primary = proj_dir.join("effects/motion.ecproj");
+            let legacy = proj_dir.join("motion/actions.ecproj");
+            if primary.is_file() { Some(primary) } else { legacy.is_file().then_some(legacy) }
         }
         _ => None,
     }

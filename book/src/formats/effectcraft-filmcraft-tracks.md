@@ -1,14 +1,13 @@
-# `EffectCraft` & `FilmCraft` `V1`–`V4` Tracks
+# `02 Animations`, `EffectCraft` & `FilmCraft` Tracks
 
-## Puppet Controls for Facial Expressions & Mouth Lip-Sync (`V2`)
+## Open Multi-Tool `02 Animations` (`V2`)
 
-Magic Studio delegates all character deformation and mouth visemes to [`EffectCraft` Puppet Controls](https://github.com/storytold/effectcraft/blob/main/docs/agents.md):
+`02 Animations` accepts 2D, 2.5D, and 3D assets from any creative tool whose output [`FilmCraft`](https://github.com/storytold/filmcraft) or `craft-mesh` understands:
 
-- `character.puppet.rig_face` installs an 11-pin facial mesh (`head_crown` & `neck_anchor` starch pins + brow, lid, cheek, mouth-corner, upper-lip, and `jaw_lower` pins).
-- `character.puppet.lipsync` maps timed words from `timing-reference.json` onto mouth viseme pin keyframes.
-- `character.puppet.expression` keyframes `happy`, `joy`, `surprised`, `oh`, `sad`, `focused`, `blink`, `wink_L`, `wink_R`, and `neutral`.
-- `character.puppet.follow` attaches secondary follow-through (`puppet.follow`) to tails, ears, hair, or props.
+- **External & Sibling Tools**: Render shots or alpha overlays in **Blender**, **Three.js**, **After Effects**, **[AniCraft](https://github.com/storytold/anicraft)**, **[EffectCraft](https://github.com/storytold/effectcraft)**, **[PhotoCraft](https://github.com/storytold/photocraft)**, or **[VectorCraft](https://github.com/storytold/vectorcraft)**.
+- **3D Meshes (`craft-mesh`)**: Inspect and convert `GLB`/`glTF`, `OBJ`/`MTL`, `FBX`, `STL`, `PLY`, and `3MF` models for `EffectCraft` `advanced3D` layers.
+- **Puppet Controls (`EffectCraft`)**: Install facial/viseme pins (`character.puppet.rig_face`, `character.puppet.lipsync`, `character.puppet.expression`, `character.puppet.follow`) driven from `timing-reference.json`.
 
-## ProRes 4444 RGBA Track Publishing (`V2`, `V3`, `V4`)
+## Live `03 Lyrics` (`V3` + `C1`), `04 Motion` (`V4`) & `05 Studio` Track Mapping
 
-`character.publish`, `words.publish`, and `motion.publish` render straight-alpha ProRes 4444 `.mov` overlays via `effectcraft-cli` and place them onto `V2`, `V3`, and `V4` in `FilmCraft` (`filmcraft-cli`) over `V1` storyboard scene plates and `A1` song audio.
+Run `magic-cli studio map-tracks` (or use the **`Live Breakdown`** tab in `05 Studio`) to map `V1` Storyboard slides, `V2` Animations, `V3` Kinetic Lyrics (`effects/lyrics.ecproj`), `V4` Motion (`effects/motion.ecproj`), `C1` Captions, and `A1` Song Audio onto `film/<slug>.fcproj`, then finish color, scopes, and delivery in the **`Finishing`** tab.

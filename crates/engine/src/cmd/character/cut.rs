@@ -1,16 +1,36 @@
-//! `character.cut`: pure-Rust background isolation, part cutout cropping, and silhouette SVG
-//! extraction built on `image` and `craft-atomic` (`crate::native_media`).
+//! `character.cut`: subject isolation, part cutout cropping, and silhouette contour tracing
+//! delegated to host `PhotoCraft` and `VectorCraft` via `crate::craft_api` and `crate::native_media`,
+//! with noisy external-tool failure reporting and safe `.pcraft` handling.
 
 use std::path::{Path, PathBuf};
 
 use serde_json::{Value, json};
 
 use super::{View, bad, part_list, root_part};
-use crate::{Result, Session};
+use crate::{EngineError, Result, Session};
 
-/// Pure-Rust in-process image step runner (`layer.removeBackground`, `image.imageSize`,
-/// `file.export.layersToFiles`, `file.saveACopy`) replacing legacy `photocraft-cli` spawning.
+fn photocraft_host_available() -> bool {
+    crate::craft_api::probe_live_app("photocraft")["connected"] == true || crate::workspace::resolve_executable_path("photocraft-cli").is_some()
+}
+
+/// Execute PhotoCraft layer/image steps via host `PhotoCraft` (`--control` / `photocraft-cli`),
+/// surfacing noisy [`EngineError::ExternalTool`] failures when `PhotoCraft` is available and never
+/// overwriting `.pcraft` / `.psd` paths with raw PNG bytes.
 pub(crate) fn photocraft_run(src: &Path, steps: &[(&str, Value)], out_pcraft: Option<&Path>) -> Result<()> {
+    let host_ran = if photocraft_host_available() {
+        for (op, params) in steps {
+            crate::craft_api::execute_on_host_app("photocraft", Some(src), op, params.clone())
+                .map_err(|e| EngineError::ExternalTool("photocraft".into(), format!("{op}: {e}")))?;
+        }
+        if let Some(pcraft) = out_pcraft {
+            crate::craft_api::execute_on_host_app("photocraft", Some(src), "file.saveAs", json!({"path": pcraft}))
+                .map_err(|e| EngineError::ExternalTool("photocraft".into(), format!("file.saveAs {}: {e}", pcraft.display())))?;
+        }
+        true
+    } else {
+        false
+    };
+
     let mut current = crate::native_media::load_rgba(src)?;
     for (op, params) in steps {
         match *op {
@@ -46,10 +66,16 @@ pub(crate) fn photocraft_run(src: &Path, steps: &[(&str, Value)], out_pcraft: Op
             _ => {}
         }
     }
-    if let Some(pcraft) = out_pcraft {
-        crate::native_media::encode_png_atomic(&current, pcraft)?;
-        let step_list: Vec<Value> = steps.iter().map(|(id, p)| json!({"id": id, "params": p})).collect();
-        let _ = crate::native_media::write_staged_steps(pcraft, &json!({"source": src, "steps": step_list}))?;
+    if let Some(target) = out_pcraft
+        && !host_ran
+    {
+        let is_layered_doc = crate::workspace::has_extension(target, &["pcraft", "psd", "psb", "ora", "xcf", "kra", "afphoto"]);
+        if is_layered_doc {
+            let preview_png = target.with_extension("preview.png");
+            crate::native_media::encode_png_atomic(&current, &preview_png)?;
+        } else {
+            crate::native_media::encode_png_atomic(&current, target)?;
+        }
     }
     Ok(())
 }
@@ -66,6 +92,10 @@ pub(crate) fn photocraft_dimensions(path: &Path) -> Result<(u32, u32)> {
 }
 
 pub(crate) fn vectorcraft_trace_outline(image: &Path, svg_out: &Path, offset_px: f64) -> Result<Vec<Value>> {
+    if crate::craft_api::probe_live_app("vectorcraft")["connected"] == true || crate::workspace::resolve_executable_path("vectorcraft-cli").is_some() {
+        crate::craft_api::execute_on_host_app("vectorcraft", None, "trace.image", json!({"input": image, "output": svg_out, "offsetPx": offset_px}))
+            .map_err(|e| EngineError::ExternalTool("vectorcraft".into(), format!("trace.image: {e}")))?;
+    }
     let (w, h) = photocraft_dimensions(image)?;
     let (_, rel_pts) = crate::native_media::trace_silhouette_svg(image, svg_out, offset_px, false)?;
     let cx = f64::from(w) / 2.0;
@@ -97,6 +127,7 @@ fn outline_bbox(outline: &[Value], img_w: u32, img_h: u32) -> [u32; 4] {
     [x0, y0, w.max(1), h.max(1)]
 }
 
+#[allow(clippy::cognitive_complexity)]
 pub fn cmd_character_cut(s: &mut Session, p: &Value) -> Result<Value> {
     if p["parts"].is_array() {
         super::cmd_character_save_marks(s, p)?;

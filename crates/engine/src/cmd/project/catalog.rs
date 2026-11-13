@@ -168,10 +168,15 @@ fn discover_project_craft_badges(dir: &Path, doc: &Value) -> Vec<&'static str> {
     if has_fcproj {
         badges.push(".fcproj");
     }
-    if dir.join("storyboard.pdf").is_file() || dir.join("storyboard-template.pdf").is_file() {
-        badges.push(".pdf");
+    if dir.join("storyboard.deckcraft").is_file() {
+        badges.push(".deckcraft");
+    } else if dir.join("storyboard.pptx").is_file() {
+        badges.push(".pptx");
     }
-    let has_ecproj = dir.join("lettering/lyrics.ecproj").is_file()
+    let has_ecproj = dir.join("effects/lyrics.ecproj").is_file()
+        || dir.join("effects/motion.ecproj").is_file()
+        || dir.join("effects/animation.ecproj").is_file()
+        || dir.join("lettering/lyrics.ecproj").is_file()
         || dir.join("motion/actions.ecproj").is_file()
         || has_ext_in_tree(&dir.join("animations"), &["ecproj"], 3)
         || has_ext_in_tree(&dir.join("assets/characters"), &["ecproj"], 3);
@@ -217,22 +222,16 @@ fn find_character_preview(project_dir: &Path, char_dir: &Path, raw_name: &str, c
 }
 
 fn find_project_cover(project_dir: &Path, doc: &Value) -> Option<PathBuf> {
-    for rendered_dir in [
-        project_dir.join("film/frames"),
-        project_dir.join("storyboard/renders"),
-        project_dir.join("storyboard/.preview"),
-        project_dir.join("lettering/.preview"),
-        project_dir.join("motion/.preview"),
-    ] {
+    for rendered_dir in
+        [project_dir.join("film/frames"), project_dir.join("storyboard/slides"), project_dir.join("lettering/.preview"), project_dir.join("motion/.preview")]
+    {
         if let Some(found) = first_image_in_tree(&rendered_dir, 1) {
             return Some(found);
         }
     }
-    for rel in ["storyboard/rail/page_0000.png", "storyboard/spreads/page_0000.png", "assets/backgrounds/cover.png"] {
-        let p = project_dir.join(rel);
-        if is_image_file(&p) {
-            return Some(p);
-        }
+    let cover_bg = project_dir.join("assets/backgrounds/cover.png");
+    if is_image_file(&cover_bg) {
+        return Some(cover_bg);
     }
     for asset in doc["assets"].as_array().into_iter().flatten() {
         if let Some(rel) = asset["path"].as_str() {
@@ -292,13 +291,44 @@ fn project_card(raw_path: &str) -> Value {
     })
 }
 
+fn discover_root_magic_files(s: &crate::Session) -> Vec<String> {
+    let Ok(root) = crate::project_settings::root_for(s) else {
+        return Vec::new();
+    };
+    if !root.is_dir() {
+        return Vec::new();
+    }
+    let mut found = Vec::new();
+    for entry in sorted_dir_entries(&root) {
+        if !entry.is_dir() {
+            continue;
+        }
+        for child in sorted_dir_entries(&entry) {
+            if child.is_file() && crate::workspace::has_extension(&child, &["magic"]) {
+                let s_path = child.to_string_lossy().into_owned();
+                if !is_transient(&s_path) {
+                    found.push(s_path);
+                }
+            }
+        }
+    }
+    found
+}
+
 pub fn catalog(s: &mut crate::Session, params: &Value) -> crate::Result<Value> {
     if params["clear"] == true {
         clear_for(s).map_err(crate::EngineError::InvalidParams)?;
     } else if let Some(forget_path) = params["forget"].as_str().filter(|p| !p.trim().is_empty()) {
         forget_for(s, forget_path).map_err(crate::EngineError::InvalidParams)?;
     }
-    let recent: Vec<Value> = list_for(s).iter().map(|p| project_card(p)).collect();
+    let mut seen_paths = HashSet::new();
+    let mut combined_paths = Vec::new();
+    for p in list_for(s).into_iter().chain(discover_root_magic_files(s)) {
+        if seen_paths.insert(canonical(&p)) {
+            combined_paths.push(p);
+        }
+    }
+    let recent: Vec<Value> = combined_paths.iter().map(|p| project_card(p)).collect();
     let mut seen_chars = HashSet::new();
     let mut characters = Vec::new();
     for card in &recent {

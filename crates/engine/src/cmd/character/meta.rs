@@ -113,7 +113,7 @@ pub fn cmd_character_meta(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let table: Value = serde_json::from_str(POSES).map_err(|e| bad(e.to_string()))?;
     let actions = super::action::action_summaries(&table);
-    let info_3d = super::model3d::inspect_character_3d(s, &project_dir, &char_id);
+    let info_3d = super::mesh_io::inspect_character_3d(s, &project_dir, &char_id);
     let sprites = super::sprite_summaries(&char_folder);
     let (animation_style, animation_styles) = super::classify_animation_style(&views, &sprites, &info_3d);
     Ok(json!({"ok": true, "character": char_id, "animation_style": animation_style, "animation_styles": animation_styles,

@@ -1,6 +1,6 @@
 //! Creative Craft-producer command registrations:
-//! - Kinetic Teaching Lyrics (`words.*` -> `lettering/lyrics.ecproj` -> FilmCraft `V3` `"Kinetic Lyrics"`).
-//! - Song-Action Motion (`motion.*` -> `motion/actions.ecproj` -> FilmCraft `V4` `"Action Motion"`).
+//! - Kinetic Teaching Lyrics (`words.*` -> `effects/lyrics.ecproj` -> FilmCraft `V3` `"Kinetic Lyrics"`).
+//! - Song-Action Motion (`motion.*` -> `effects/motion.ecproj` -> FilmCraft `V4` `"Action Motion"`).
 //! - Character Animation (`character.*` -> `.ecproj` -> FilmCraft `V2` `"Character Animation"`).
 //! - Subject Isolation & Vector Tracing (`native_media::isolate_subject_rgba`, `native_media::trace_silhouette_svg`, `scribbles.*`).
 //! - FilmCraft × EffectCraft Bridge & Studio Finishing (`bridge.*`, `effect.*`, `video.*`).
@@ -14,7 +14,7 @@ pub fn specs() -> Vec<CommandSpec> {
     out.extend(specs_motion());
     out.extend(specs_photo_vector_and_scribbles());
     out.extend(specs_character());
-    out.extend(specs_film());
+    out.extend(super::film::specs_film());
     out
 }
 
@@ -105,7 +105,7 @@ fn specs_words() -> Vec<CommandSpec> {
         ),
         cmd_spec!(
             "words.letter",
-            "Build lettering/lyrics.ecproj & Export V3 Track to FilmCraft",
+            "Build effects/lyrics.ecproj & Export V3 Track to FilmCraft",
             ["Lyrics"],
             None,
             "{\"recipe\":\"optional\",\"render\":true,\"studio\":true}",
@@ -126,7 +126,7 @@ fn specs_words() -> Vec<CommandSpec> {
             "Publish Rendered Kinetic Lyrics (.mov) onto FilmCraft V3",
             ["Lyrics"],
             None,
-            "{\"path\":\"optional lettering/lyrics.mov\"}",
+            "{\"path\":\"optional effects/lyrics.mov\"}",
             always,
             crate::cmd::words::lettering::cmd_words_publish
         ),
@@ -172,12 +172,21 @@ fn specs_words() -> Vec<CommandSpec> {
             always,
             crate::craft_api::cmd_craft_live_save
         ),
+        cmd_spec!(
+            "effect.exec",
+            "Execute Any Real EffectCraft Engine Command via :9877 Bridge or effectcraft-cli exec",
+            ["Lyrics"],
+            None,
+            "{\"command\":\"comp.info\",\"params\":{},\"project\":\"optional effects/lyrics.ecproj\",\"save\":false}",
+            always,
+            crate::craft_api::cmd_effect_exec
+        ),
     ]
 }
 
 fn specs_motion() -> Vec<CommandSpec> {
     vec![
-        query_spec!("motion.read", "Song-Action Motion Cues & Timed Words (motion/actions.ecproj)", "{}", crate::cmd::motion::cmd_motion_read),
+        query_spec!("motion.read", "Song-Action Motion Cues & Timed Words (effects/motion.ecproj)", "{}", crate::cmd::motion::cmd_motion_read),
         query_spec!(
             "motion.effects",
             "CLI-Mapped Craft Vector & Motion Effects (VectorCraft, EffectCraft & PhotoCraft)",
@@ -195,10 +204,10 @@ fn specs_motion() -> Vec<CommandSpec> {
         ),
         cmd_spec!(
             "motion.publish",
-            "Render motion/actions.ecproj (ProRes 4444 RGBA) & Publish V4 Action Motion Track to FilmCraft",
+            "Render effects/motion.ecproj (ProRes 4444 RGBA) & Publish V4 Action Motion Track to FilmCraft",
             ["Motion"],
             None,
-            "{\"render\":true,\"path\":\"optional motion/actions.mov\"}",
+            "{\"render\":true,\"path\":\"optional effects/motion.mov\"}",
             always,
             crate::cmd::motion::cmd_motion_publish
         ),
@@ -213,7 +222,7 @@ fn specs_motion() -> Vec<CommandSpec> {
         ),
         query_spec!(
             "motion.preview_frame",
-            "Render Song-Action Motion Frame (motion/actions.ecproj)",
+            "Render Song-Action Motion Frame (effects/motion.ecproj)",
             "{\"time\":12.5}",
             crate::cmd::motion::cmd_motion_preview_frame
         ),
@@ -234,7 +243,7 @@ fn specs_photo_vector_and_scribbles() -> Vec<CommandSpec> {
     vec![
         cmd_spec!(
             "image.generate",
-            "Generate Image via craft-ai-integrations (With Optional PhotoCraft Cutout & VectorCraft Trace)",
+            "Generate Image via Configured Provider Shell (craft-ai-core)",
             ["Project Assets"],
             None,
             "{\"prompt\":\"description\",\"references\":[],\"remove_background\":false,\"vectorize\":false,\"name\":\"optional\"}",
@@ -243,7 +252,7 @@ fn specs_photo_vector_and_scribbles() -> Vec<CommandSpec> {
         ),
         cmd_spec!(
             "scribbles.connect",
-            "Bind Scribbles Connection & Model in SharedStore (craft-ai-integrations)",
+            "Bind Scribbles Connection & Model (craft-ai-core)",
             ["Scribbles"],
             None,
             "{\"connection\":\"connection id\",\"model\":\"model id\"}",
@@ -271,7 +280,7 @@ fn specs_photo_vector_and_scribbles() -> Vec<CommandSpec> {
         query_spec!(
             "fidget.prepare",
             "Preview Deterministic Template Brief",
-            "{\"kind\":\"new|image|sheet|poses|actions|custom\",\"prompt\":\"description\"}",
+            "{\"slide\":\"storyboard/slides/slide-01.png\",\"kind\":\"new|image|sheet|poses|actions|custom\",\"prompt\":\"description\"}",
             crate::scribbles::cmd_fidget_prepare
         ),
         cmd_spec!(
@@ -279,7 +288,7 @@ fn specs_photo_vector_and_scribbles() -> Vec<CommandSpec> {
             "Rephrase & Stage Structured Prompt via Fidget (With Optional Seamless Scribbles Handoff)",
             ["Scribbles"],
             None,
-            "{\"kind\":\"new|image|sheet|poses|actions|custom\",\"prompt\":\"description\",\"seamless\":false}",
+            "{\"slide\":\"storyboard/slides/slide-01.png\",\"kind\":\"new|image|sheet|poses|actions|custom\",\"prompt\":\"description\",\"seamless\":false}",
             always,
             crate::scribbles::cmd_fidget_stage
         ),
@@ -288,18 +297,26 @@ fn specs_photo_vector_and_scribbles() -> Vec<CommandSpec> {
             "Generate Drawing From Template via Scribbles",
             ["Scribbles"],
             None,
-            "{\"prompt\":\"instructions\"}",
+            "{\"slide\":\"storyboard/slides/slide-01.png\",\"prompt\":\"instructions\"}",
             always,
             crate::scribbles::cmd_scribbles_generate
         ),
         query_spec!("scribbles.templates", "Scribbles Templates & Craft AI Status", "{}", crate::scribbles::cmd_scribbles_templates),
-        cmd_spec!("scribbles.new", "New Character Drawing", ["Scribbles"], None, "{\"prompt\":\"character\"}", always, crate::scribbles::cmd_scribbles_new),
+        cmd_spec!(
+            "scribbles.new",
+            "New Character Drawing",
+            ["Scribbles"],
+            None,
+            "{\"slide\":\"storyboard/slides/slide-01.png\",\"prompt\":\"character\"}",
+            always,
+            crate::scribbles::cmd_scribbles_new
+        ),
         cmd_spec!(
             "scribbles.image",
             "Redraw Character for Animation",
             ["Scribbles"],
             None,
-            "{\"reference\":\"image\",\"prompt\":\"character\"}",
+            "{\"slide\":\"storyboard/slides/slide-01.png\",\"prompt\":\"character\"}",
             always,
             crate::scribbles::cmd_scribbles_image
         ),
@@ -308,7 +325,7 @@ fn specs_photo_vector_and_scribbles() -> Vec<CommandSpec> {
             "Turnaround Sheet",
             ["Scribbles"],
             None,
-            "{\"reference\":\"image\",\"prompt\":\"character\"}",
+            "{\"slide\":\"storyboard/slides/slide-01.png\",\"prompt\":\"character\"}",
             always,
             crate::scribbles::cmd_scribbles_sheet
         ),
@@ -317,7 +334,7 @@ fn specs_photo_vector_and_scribbles() -> Vec<CommandSpec> {
             "Pose Sheet (3x2)",
             ["Scribbles"],
             None,
-            "{\"reference\":\"image\",\"prompt\":\"character\"}",
+            "{\"slide\":\"storyboard/slides/slide-01.png\",\"prompt\":\"character\"}",
             always,
             crate::scribbles::cmd_scribbles_poses
         ),
@@ -326,7 +343,7 @@ fn specs_photo_vector_and_scribbles() -> Vec<CommandSpec> {
             "Pose Sheet (2x2)",
             ["Scribbles"],
             None,
-            "{\"reference\":\"image\",\"prompt\":\"character\"}",
+            "{\"slide\":\"storyboard/slides/slide-01.png\",\"prompt\":\"character\"}",
             always,
             crate::scribbles::cmd_scribbles_poses_2x2
         ),
@@ -335,7 +352,7 @@ fn specs_photo_vector_and_scribbles() -> Vec<CommandSpec> {
             "Cutout Parts Sheet",
             ["Scribbles"],
             None,
-            "{\"reference\":\"image\",\"prompt\":\"character\"}",
+            "{\"slide\":\"storyboard/slides/slide-01.png\",\"prompt\":\"character\"}",
             always,
             crate::scribbles::cmd_scribbles_parts_chroma
         ),
@@ -344,7 +361,7 @@ fn specs_photo_vector_and_scribbles() -> Vec<CommandSpec> {
             "3-Part Character Cutout & Rig Bundle",
             [],
             None,
-            "{\"character\":\"id\",\"prompt\":\"description\",\"rig\":true}",
+            "{\"slide\":\"storyboard/slides/slide-01.png\",\"character\":\"id\",\"prompt\":\"description\",\"rig\":true}",
             always,
             crate::scribbles::cmd_scribbles_moppet
         ),
@@ -353,7 +370,7 @@ fn specs_photo_vector_and_scribbles() -> Vec<CommandSpec> {
             "8-Frame Action Sheet",
             ["Scribbles"],
             None,
-            "{\"reference\":\"image\",\"action\":\"walk\"}",
+            "{\"slide\":\"storyboard/slides/slide-01.png\",\"action\":\"walk\",\"direction\":\"side\"}",
             always,
             crate::scribbles::cmd_scribbles_actions
         ),
@@ -362,11 +379,19 @@ fn specs_photo_vector_and_scribbles() -> Vec<CommandSpec> {
             "Layered Character Sheet",
             ["Scribbles"],
             None,
-            "{\"reference\":\"image\"}",
+            "{\"slide\":\"storyboard/slides/slide-01.png\"}",
             always,
             crate::scribbles::cmd_scribbles_layers
         ),
-        cmd_spec!("scribbles.custom", "Custom Drawing", ["Scribbles"], None, "{\"prompt\":\"drawing\"}", always, crate::scribbles::cmd_scribbles_custom),
+        cmd_spec!(
+            "scribbles.custom",
+            "Custom Drawing",
+            ["Scribbles"],
+            None,
+            "{\"slide\":\"storyboard/slides/slide-01.png\",\"prompt\":\"drawing\"}",
+            always,
+            crate::scribbles::cmd_scribbles_custom
+        ),
         cmd_spec!(
             "scribbles.svg",
             "Trace Vector Pose Sheet via VectorCraft",
@@ -465,10 +490,10 @@ fn specs_character() -> Vec<CommandSpec> {
         ),
         cmd_spec!(
             "character.sprite",
-            "Build Sprite Cycle in PhotoCraft / Headless AniCraft CLI + EffectCraft",
+            "Build Sprite Cycle in PhotoCraft + EffectCraft",
             ["Animation"],
             None,
-            "{\"character\":\"id\",\"action\":\"walk\",\"sheet\":\"sheet.png or .anicraft\",\"columns\":4,\"rows\":2}",
+            "{\"character\":\"id\",\"action\":\"walk\",\"direction\":\"front|side|back\",\"sheet\":\"sheet.png\",\"columns\":4,\"rows\":2}",
             always,
             crate::cmd::character::cmd_character_sprite
         ),
@@ -726,113 +751,36 @@ fn specs_character() -> Vec<CommandSpec> {
             always,
             crate::cmd::character::cmd_layer_set_parent
         ),
-        query_spec!("character.model3d.catalog", "3D Character Breakout & Motion Preset Catalog", "{}", crate::cmd::character::cmd_model3d_catalog),
-        cmd_spec!(
-            "character.model3d.breakout",
-            "3D Character Breakout (PhotoCraft Split / T-Pose Spec)",
-            ["Animation"],
-            None,
-            "{\"character\":\"id\"}",
-            always,
-            crate::cmd::character::cmd_model3d_breakout
-        ),
-        cmd_spec!(
-            "character.model3d.rig",
-            "3D Mesh Pre-Check & Skeleton Validation (TextureCraft)",
-            ["Animation"],
-            None,
-            "{\"character\":\"id\"}",
-            always,
-            crate::cmd::character::cmd_model3d_rig
-        ),
-        cmd_spec!(
-            "character.model3d.animate",
-            "3D Motion Clip & EffectCraft advanced3D Comp",
-            ["Animation"],
-            None,
-            "{\"character\":\"id\"}",
-            always,
-            crate::cmd::character::cmd_model3d_animate
-        ),
-    ]
-}
-
-fn specs_film() -> Vec<CommandSpec> {
-    vec![
-        cmd_spec!(
-            "video.assemble",
-            "Assemble FilmCraft Timeline (A1 Song, V1 Scenes, V2 Character, V3 Lyrics, V4 Motion)",
-            ["Studio"],
-            None,
-            "{\"backgrounds\":[],\"characters\":[],\"lettering\":\"optional\",\"motion\":\"optional\",\"fps\":30,\"export\":true}",
-            always,
-            crate::cmd::film::assembly::cmd_video_assemble
-        ),
         query_spec!(
-            "video.list_ec_comps",
-            "List Compositions & Alpha Formats in an EffectCraft .ecproj",
-            "{\"project\":\"comp.ecproj\"}",
-            crate::cmd::film::cmd_video_list_ec_comps
+            "mesh.inspect",
+            "Inspect 3D Mesh / Scene Topology & Skeleton (craft-mesh)",
+            "{\"path\":\"model.glb\"}",
+            crate::cmd::character::cmd_mesh_inspect
         ),
         cmd_spec!(
-            "video.link_effectcraft",
-            "Dynamic-Link EffectCraft Composition onto FilmCraft Timeline",
-            ["Studio"],
+            "mesh.convert",
+            "Convert 3D Mesh Between .glb, .obj/.mtl, and .stl (craft-mesh)",
+            ["Animation"],
             None,
-            "{\"project\":\"comp.ecproj\",\"comp\":\"optional Main\",\"track\":\"V2\",\"format\":\"prores|webm|exr\",\"fps_preset\":\"24\",\"from\":0}",
+            "{\"path\":\"in.obj\",\"output\":\"out.glb\"}",
             always,
-            crate::cmd::film::cmd_video_link_effectcraft
+            crate::cmd::character::cmd_mesh_convert
+        ),
+        query_spec!("animation.hosts", "Registered Asset & Animation Host Drivers and Extensions", "{}", crate::cmd::character::cmd_animation_hosts),
+        query_spec!(
+            "animation.locate_from_studio",
+            "Resolve Studio Playhead Time to Character Clip & Local Frame",
+            "{\"seconds\":0.0}",
+            crate::cmd::character::cmd_animation_locate
         ),
         cmd_spec!(
-            "video.sync_links",
-            "Check or Re-Render Dirty Dynamic-Linked EffectCraft Compositions",
-            ["Studio"],
+            "animation.promote",
+            "One-Step Render/Reuse Character Clip & Hot-Swap onto FilmCraft V2",
+            ["Animation"],
             None,
-            "{\"render\":true}",
+            "{\"character\":\"id\",\"action\":\"idle\",\"loop_mode\":\"loop\"}",
             always,
-            crate::cmd::film::cmd_video_sync_links
-        ),
-        cmd_spec!(
-            "video.bake_link",
-            "Bake Dynamic-Linked EffectCraft Comp to Standalone Media (or Unbake)",
-            ["Studio"],
-            None,
-            "{\"link_id\":\"comp-id\",\"unbake\":false}",
-            always,
-            crate::cmd::film::cmd_video_bake_link
-        ),
-        cmd_spec!(
-            "video.finish",
-            "Execute FilmCraft Studio Finishing Operation (Edit, Trim, Color, FX, Audio, Titles)",
-            ["Studio"],
-            None,
-            "{\"op\":\"mark_in|mark_out|insert|overwrite|lift|extract|add_edit|trim_mode|sequence_rate|color_space|lumetri_look|fx_apply|audio_gain|audio_ducking|mixer_strip|graphic_text|scopes\"}",
-            always,
-            crate::cmd::film::cmd_video_finish
-        ),
-        query_spec!("video.film", "Film Timeline, Preview and Export Status", "{}", crate::cmd::film::cmd_video_film),
-        cmd_spec!("video.preview", "Render Half-Scale Film Preview (FilmCraft)", ["Studio"], None, "{}", always, crate::cmd::film::cmd_video_preview),
-        cmd_spec!("video.export", "Export Final Film (FilmCraft)", ["Studio"], None, "{}", always, crate::cmd::film::cmd_video_export),
-        query_spec!("video.frame", "Render One Program Frame (FilmCraft)", "{\"seconds\":0}", crate::cmd::film::cmd_video_frame),
-        query_spec!("video.open", "Open Timeline in FilmCraft", "{}", crate::cmd::film::cmd_video_open),
-        query_spec!("video.timeline", "Film Tracks, Clips and Synced Markers", "{}", crate::cmd::film::cmd_video_timeline),
-        cmd_spec!(
-            "video.markers",
-            "Manage, Export CSV & Interchange Timeline Markers (FilmCraft <-> EffectCraft)",
-            ["Studio"],
-            Some("M"),
-            "{\"action\":\"list|add|edit|palette|export_csv|seed|delete|clear|interchange\"}",
-            always,
-            crate::cmd::film::cmd_video_markers
-        ),
-        cmd_spec!(
-            "video.place_clip",
-            "Place Clip on FilmCraft Track",
-            ["Studio"],
-            None,
-            "{\"clip\":\"rendered .mov\",\"from\":0,\"track\":\"V2\"}",
-            always,
-            crate::cmd::film::cmd_video_place_clip
+            crate::cmd::character::cmd_animation_promote
         ),
     ]
 }

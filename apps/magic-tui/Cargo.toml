@@ -1,6 +1,6 @@
 [package]
 name = "magic-tui"
-description = "Magic Studio terminal UI (interactive console over magic)"
+description = "Magic Studio Backstage TUI (Technicolor Workshop — static read-only viewer over existing logs and past reports)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -15,7 +15,6 @@ path = "src/main.rs"
 
 [dependencies]
 clap = { workspace = true }
-magic = { workspace = true }
-magic-mcp = { workspace = true }
+magic-engine = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

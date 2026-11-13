@@ -1,11 +1,39 @@
 //! `character.mark`: prepares `parts.json` joint pivots and cutout polygons from an existing
-//! `parts/rig.json` manifest or deterministic `plush-9` character rig slots (`magic_scribbles::plush9_part_slots`)
-//! for review on the canvas before `character.cut` (`PhotoCraft`). Zero external CLI agent subprocesses.
+//! `parts/rig.json` manifest or deterministic 9-part character rig slots for review on the canvas
+//! before `character.cut` (`PhotoCraft`). Zero external CLI agent subprocesses.
 
 use serde_json::{Value, json};
 
 use super::{POSES, View, bad, point};
 use crate::{Result, Session};
+
+type RigSlot<'a> = (&'a str, Option<&'a str>, [f64; 2], [f64; 2]);
+
+fn default_9_part_slots(width: u32, height: u32) -> Vec<Value> {
+    let (wf, hf) = (f64::from(width.max(1)), f64::from(height.max(1)));
+    let slots: &[RigSlot<'_>] = &[
+        ("torso", None, [0.50, 0.55], [0.5, 0.5]),
+        ("head", Some("torso"), [0.50, 0.43], [0.5, 0.85]),
+        ("arm_L", Some("torso"), [0.425, 0.51], [0.7, 0.2]),
+        ("arm_R", Some("torso"), [0.575, 0.51], [0.3, 0.2]),
+        ("leg_L", Some("torso"), [0.445, 0.65], [0.5, 0.2]),
+        ("leg_R", Some("torso"), [0.555, 0.65], [0.5, 0.2]),
+        ("tail", Some("torso"), [0.37, 0.57], [0.85, 0.35]),
+        ("ear_L", Some("head"), [0.45, 0.25], [0.5, 0.85]),
+        ("ear_R", Some("head"), [0.55, 0.25], [0.5, 0.85]),
+    ];
+    slots
+        .iter()
+        .map(|(id, parent, [ju, jv], [pu, pv])| {
+            json!({
+                "id": id,
+                "parent": parent,
+                "joint": [(wf * *ju).round(), (hf * *jv).round()],
+                "pivot_uv": [*pu, *pv],
+            })
+        })
+        .collect()
+}
 
 /// Copies the drawing beside `parts.json` and measures pixel dimensions via `PhotoCraft` or `image`.
 fn stage_image(view: &View, p: &Value, s: &Session) -> Result<(std::path::PathBuf, (u32, u32))> {
@@ -26,7 +54,7 @@ fn stage_image(view: &View, p: &Value, s: &Session) -> Result<(std::path::PathBu
 }
 
 /// Optional body-plate redraw when `redraw=true` is requested: delegates image generation through
-/// `crate::craft_ai::cmd_image_generate` (`storytold/craft-ai-integrations`) and resizes in `PhotoCraft`.
+/// `crate::craft_ai::cmd_image_generate` and resizes in `PhotoCraft`.
 fn ensure_redrawn_body_plate(s: &mut Session, view: &View, size: (u32, u32), p: &Value) -> Result<Option<std::path::PathBuf>> {
     let Some(char_dir) = view.dir.parent() else {
         return Ok(None);
@@ -45,7 +73,7 @@ fn ensure_redrawn_body_plate(s: &mut Session, view: &View, size: (u32, u32), p: 
             view.id, size.0, size.1
         )
     });
-    let generated = crate::craft_ai::cmd_image_generate(s, &json!({"prompt": prompt, "name": format!("{}-body-plate", view.id)}))?;
+    let generated = crate::craft_ai::cmd_image_generate(s, &json!({"prompt": prompt, "slide": p["slide"], "name": format!("{}-body-plate", view.id)}))?;
     if let Some(raw_img) = generated["image"].as_str() {
         let src = std::path::Path::new(raw_img);
         if src.is_file() {
@@ -137,7 +165,7 @@ fn import_rig_marks(s: &mut Session, view: &View, p: &Value) -> Result<Option<Va
 
 fn build_plush9_draft_marks(view: &View, staged: &std::path::Path, size: (u32, u32)) -> Result<Value> {
     let skeleton: Value = serde_json::from_str(POSES).map_err(|e| bad(e.to_string()))?;
-    let slots = magic_scribbles::plush9_part_slots(size.0, size.1);
+    let slots = default_9_part_slots(size.0, size.1);
     let (w, h) = (f64::from(size.0.max(1)), f64::from(size.1.max(1)));
     let pad_x = (w * 0.12).round() as i64;
     let pad_y = (h * 0.10).round() as i64;

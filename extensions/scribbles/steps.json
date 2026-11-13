@@ -1,0 +1,33 @@
+{
+  "default_workflow": "moppet",
+  "workflows": {
+    "moppet": {
+      "label": "3-Step Character Rig Pack",
+      "ingest": true,
+      "reassemble": true,
+      "steps": [
+        { "id": "character", "kind": "new", "output": "character.png", "remove_background": true },
+        { "id": "parts_sheet", "kind": "parts_chroma", "output": "parts-sheet.png", "chroma": "#00FF00" },
+        { "id": "pose_sheet", "kind": "poses_2x2", "output": "pose-sheet.png", "grid": [2, 2] }
+      ]
+    },
+    "turnaround": {
+      "label": "Front / Side / Back Turnaround",
+      "ingest": false,
+      "reassemble": false,
+      "steps": [
+        { "id": "character", "kind": "new", "output": "character.png", "remove_background": true },
+        { "id": "turnaround", "kind": "sheet", "output": "turnaround-sheet.png" }
+      ]
+    },
+    "poses": {
+      "label": "Character + 3x2 Poses",
+      "ingest": false,
+      "reassemble": false,
+      "steps": [
+        { "id": "character", "kind": "image", "output": "character.png", "remove_background": true },
+        { "id": "poses", "kind": "poses", "output": "pose-sheet.png", "grid": [3, 2] }
+      ]
+    }
+  }
+}

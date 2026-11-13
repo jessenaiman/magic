@@ -11,7 +11,7 @@
 use egui::{Align, Align2, Color32, CornerRadius, FontId, Layout, Pos2, Rect, Response, Sense, Shape, Stroke, StrokeKind, Ui, Vec2};
 
 pub use crate::filmbar::{
-    FilmbarOrientation, FilmbarStyle, cached_image_aspect, child_pane, fill_card, local_image_uri, paint_craft_badge, paint_craft_doc_card, paint_cubic_bezier,
+    FilmbarOrientation, FilmbarStyle, cached_image_aspect, fill_card, local_image_uri, paint_craft_badge, paint_craft_doc_card, paint_cubic_bezier,
     paint_dashed_rect, paint_filmbar_frame, paint_local_image, paint_readiness_light, paint_svg_path_preview, paint_timecode_pill,
 };
 use crate::theme::MagicPalette;
@@ -322,10 +322,10 @@ pub fn rotary_dial(ui: &mut Ui, reg: &mut AutomationRegistry, pal: &MagicPalette
     painter.circle_stroke(center, r, Stroke::new(1.4, rim));
 
     let norm = ((*value - lo) / (hi - lo)).clamp(0.0, 1.0) as f32;
-    for tick_idx in 0..=36 {
+    for tick_idx in 0_u32..=36 {
         let tf = (tick_idx as f32) / 36.0;
         let a = (-135.0_f32 + tf * 270.0).to_radians();
-        let outer = if tick_idx % 3 == 0 { r + 6.0 } else { r + 4.4 };
+        let outer = if tick_idx.is_multiple_of(3) { r + 6.0 } else { r + 4.4 };
         let p0 = Pos2::new(center.x + a.sin() * (r + 2.0), center.y - a.cos() * (r + 2.0));
         let p1 = Pos2::new(center.x + a.sin() * outer, center.y - a.cos() * outer);
         let lit = if spec.suffix == "°" && lo < 0.0 {
@@ -480,7 +480,7 @@ pub fn craft_swatch_button(ui: &mut Ui, reg: &mut AutomationRegistry, id: &str, 
 /// Color-coded ArtCraft badge color (`EC` violet, `VC` amber, `PC` sky, `FC` emerald, `DC` pink).
 pub fn badge_accent_color(pal: &MagicPalette, badge: &str) -> Color32 {
     match badge.to_ascii_uppercase().trim_start_matches('.') {
-        "EC" | "ECPROJ" | "ANICRAFT" => pal.accent_violet,
+        "EC" | "ECPROJ" => pal.accent_violet,
         "VC" | "VCRAFT" | "VECTORCRAFT" | "SVG" => pal.accent_amber,
         "PC" | "PCRAFT" | "PSD" | "PNG" | "JPG" | "WEBP" => pal.accent_sky,
         "FC" | "FCPROJ" | "MP4" | "MOV" => pal.accent_emerald,

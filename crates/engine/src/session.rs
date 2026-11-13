@@ -115,6 +115,31 @@ impl Session {
         self
     }
 
+    /// Clear all project-local lyrics, song cues, composition metadata, cached previews/assets,
+    /// undo history, and active selections when switching or closing projects (`B10-P0`).
+    pub fn reset_for_project(&mut self, path: Option<PathBuf>, assets: Vec<ProjectAsset>) {
+        let stamp = path.as_deref().and_then(crate::link_watch::FileStamp::of);
+        self.assets.clear();
+        self.project_assets = assets;
+        self.project_path = path;
+        self.lyrics_workspace = None;
+        self.video_project_path = None;
+        self.project_mode = None;
+        self.project_stamp.set(stamp);
+        self.song_audio = None;
+        self.song = crate::cmd::song::song_metadata::SongMetadata::default();
+        self.draft_approved = false;
+        self.video_target = "filmcraft".into();
+        self.active_asset = None;
+        self.last_result = None;
+        self.project_saves.store(0, std::sync::atomic::Ordering::Relaxed);
+        self.edits_since_save = 0;
+        self.docs.clear();
+        self.history.clear();
+        self.step_base.clear();
+        crate::craft_api::invalidate_cached_probe();
+    }
+
     pub fn record(&mut self, value: Value) {
         self.last_result = Some(value);
     }

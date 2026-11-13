@@ -1,4 +1,4 @@
-//! Interactive widescreen `960 × 540 pt` (16:9 Barnyard `Storyboard.potx`) and `612 × 792 pt`
+//! Interactive `612 × 792 pt` DesignCraft (`storyboard.designcraft`)
 //! Storyboard page renderer with anti-slop word-wrapped card typography, click-in-place text
 //! editing, drag-and-drop / Wayland paste / click artwork placement, and right-click handoff
 //! to `PhotoCraft`, `VectorCraft`, `EffectCraft`, or `FilmCraft`.
@@ -11,8 +11,8 @@ use crate::editorial::{WrappedTextSpec, paint_wrapped_editorial_text};
 use crate::state::{PickerTarget, UiAction, ViewCtx};
 use crate::theme::MagicPalette;
 
-pub const DEFAULT_PAGE_W_PT: f32 = 960.0;
-pub const DEFAULT_PAGE_H_PT: f32 = 540.0;
+pub const DEFAULT_PAGE_W_PT: f32 = 612.0;
+pub const DEFAULT_PAGE_H_PT: f32 = 792.0;
 
 const SLOT_PICKER_EXTS: &[&str] = &[
     "png",
@@ -321,7 +321,7 @@ fn draw_image_slot(ui: &mut Ui, ctx: &mut ViewCtx<'_>, page: &PageSummary, slot:
 
     let img_path = slot["image"].as_str().filter(|p| !p.trim().is_empty());
     let slot_bg = MagicPalette::editorial_swatch("Slot").unwrap_or(Color32::from_rgb(240, 232, 220));
-    if (!env.has_raster_bg || img_path.is_some()) && !paint_local_image(ui, rect, img_path, slot_bg, 3) && !env.has_raster_bg {
+    if !env.has_raster_bg && !paint_local_image(ui, rect, img_path, slot_bg, 3) {
         ui.painter().rect_filled(rect, CornerRadius::same(3), slot_bg);
         ui.painter().rect_stroke(rect.shrink(2.0), CornerRadius::same(2), Stroke::new(0.8, Color32::from_rgb(206, 194, 178)), StrokeKind::Inside);
         ui.painter().text(
@@ -345,7 +345,8 @@ fn draw_image_slot(ui: &mut Ui, ctx: &mut ViewCtx<'_>, page: &PageSummary, slot:
 
     if hovered && let Some(dropped) = env.dropped_paths.first().or(env.pasted.as_ref()) {
         ctx.state.storyboard.current_page = page.index;
-        ctx.exec("storyboard.set", json!({"page": page.index, "label": label, "image": dropped}), Some("Placed artwork onto Storyboard slide"));
+        let el = json!({"section": format!("Slide {}", page.index + 1), "name": label, "image": dropped});
+        ctx.exec("storyboard.add_element", el, Some("Placed artwork onto Storyboard slide"));
     } else if resp.secondary_clicked()
         && let Some(linked_path) = linked_meta
     {
@@ -426,6 +427,7 @@ fn draw_inline_text_editor(ui: &mut Ui, ctx: &mut ViewCtx<'_>, rect: Rect, page_
         let new_val = ctx.state.storyboard.draft_text.trim().to_owned();
         ctx.state.storyboard.editing_page = None;
         ctx.state.storyboard.editing_slot = None;
-        ctx.exec("storyboard.set", json!({"page": page_idx, "label": label, "text": new_val}), Some("Saved Storyboard field"));
+        let el = json!({"section": format!("Slide {}", page_idx + 1), "name": label, "text": new_val});
+        ctx.exec("storyboard.add_element", el, Some("Saved Storyboard element"));
     }
 }

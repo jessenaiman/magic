@@ -1,7 +1,3 @@
 [alias]
-# Repository tasks written in Rust: `cargo xtask ci | layers | assets | test`.
+# Repository tasks written in Rust: `cargo xtask ci | layers | assets | sources | test`.
 xtask = "run --quiet --package xtask --"
-
-[env]
-# Cap concurrent libtest threads by default (`storytold/lightcraft#3059`); caller overrides win.
-RUST_TEST_THREADS = { value = "4", force = false }

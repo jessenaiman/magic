@@ -92,6 +92,71 @@ fn library_slot(parts: &Value, name: &str, p: &Value) -> (Option<Value>, f64) {
 /// Convert `parts/rig.json` tracks (`oscillate` and sparse `keys`) directly into native `EffectCraft`
 /// `prop.setExpression` (`Math.sin` / `loopOut("cycle")`) and sparse `prop.addKey` steps so curves
 /// remain live and editable in EffectCraft's Graph Editor.
+struct ChannelMotionCtx<'a> {
+    layer: &'a str,
+    channel: &'a str,
+    base_pos: [f64; 2],
+    duration: f64,
+    is_loop: bool,
+    when: &'a Placement,
+}
+
+fn push_oscillate_term(spec: &Value, channel: &str, start_at: f64, osc_x: &mut Vec<String>, osc_y: &mut Vec<String>) {
+    let amp = spec["amplitude"].as_f64().unwrap_or(0.0);
+    let hz = spec["hz"].as_f64().unwrap_or(1.0);
+    let phase = spec["phase"].as_f64().unwrap_or(0.0);
+    let term = format!("({amp:.4} * Math.sin((time - {start_at:.4}) * Math.PI * 2 * {hz:.4} + {phase:.4}))");
+    if spec["axis"].as_u64().unwrap_or(0) == 1 {
+        osc_y.push(term);
+    } else {
+        if channel == "scale" && spec.get("axis").is_none() {
+            osc_y.push(term.clone());
+        }
+        osc_x.push(term);
+    }
+}
+
+fn push_sparse_channel_keys(spec: &Value, ctx: &ChannelMotionCtx<'_>, out: &mut Vec<Value>) -> bool {
+    let mut added = false;
+    for k in spec["keys"].as_array().into_iter().flatten() {
+        let Some(kt) = k[0].as_f64() else { continue };
+        let value = mirrored(ctx.channel, ctx.layer, rest_value(ctx.channel, ctx.base_pos, &k[1]), ctx.when.mirror);
+        out.push(step(
+            "prop.addKey",
+            json!({"layer": ctx.layer, "path": format!("transform/{}", ctx.channel), "time": ctx.when.at + kt, "timeBase": "comp", "value": value}),
+        ));
+        added = true;
+    }
+    added
+}
+
+fn compile_channel_motion(spec_arr: &[Value], ctx: &ChannelMotionCtx<'_>, out: &mut Vec<Value>) {
+    let mut osc_x = Vec::new();
+    let mut osc_y = Vec::new();
+    let mut has_sparse_keys = false;
+    for spec in spec_arr {
+        match spec["kind"].as_str() {
+            Some("oscillate") => push_oscillate_term(spec, ctx.channel, ctx.when.at, &mut osc_x, &mut osc_y),
+            Some("keys") => has_sparse_keys |= push_sparse_channel_keys(spec, ctx, out),
+            _ => {}
+        }
+    }
+    let expr = if !osc_x.is_empty() || !osc_y.is_empty() {
+        let dx = if osc_x.is_empty() { "0".into() } else { osc_x.join(" + ") };
+        let dy = if osc_y.is_empty() { "0".into() } else { osc_y.join(" + ") };
+        let body = if ctx.channel == "rotation" { format!("value + {dx}") } else { format!("[value[0] + {dx}, value[1] + {dy}]") };
+        let end_t = ctx.when.at + ctx.duration * ctx.when.times as f64;
+        Some(format!("(time >= {:.4} && time <= {:.4}) ? ({body}) : value", ctx.when.at, end_t))
+    } else if has_sparse_keys && ctx.is_loop && ctx.when.times > 1 {
+        Some("loopOut(\"cycle\")".into())
+    } else {
+        None
+    };
+    if let Some(expression) = expr {
+        out.push(step("prop.setExpression", json!({"layer": ctx.layer, "path": format!("transform/{}", ctx.channel), "expression": expression})));
+    }
+}
+
 fn rig_track_native_steps(view: &View, name: &str, rest: &HashMap<String, [f64; 2]>, when: &Placement) -> Option<(f64, bool, Vec<Value>, Vec<String>)> {
     let rig_path = view.dir.parent()?.join("parts/rig.json");
     let rig: Value = serde_json::from_str(&std::fs::read_to_string(rig_path).ok()?).ok()?;
@@ -111,61 +176,11 @@ fn rig_track_native_steps(view: &View, name: &str, rest: &HashMap<String, [f64; 
         let Some(props_obj) = props.as_object() else { continue };
         keyed.push(layer.clone());
         for (channel, specs) in props_obj {
-            if !matches!(channel.as_str(), "position" | "rotation" | "scale") {
-                continue;
-            }
-            let Some(spec_arr) = specs.as_array() else { continue };
-            let mut osc_x = Vec::new();
-            let mut osc_y = Vec::new();
-            let mut has_sparse_keys = false;
-
-            for spec in spec_arr {
-                match spec["kind"].as_str() {
-                    Some("oscillate") => {
-                        let amp = spec["amplitude"].as_f64().unwrap_or(0.0);
-                        let hz = spec["hz"].as_f64().unwrap_or(1.0);
-                        let phase = spec["phase"].as_f64().unwrap_or(0.0);
-                        let axis = spec["axis"].as_u64().unwrap_or(0);
-                        let term = format!("({amp:.4} * Math.sin((time - {:.4}) * Math.PI * 2 * {hz:.4} + {phase:.4}))", when.at);
-                        if axis == 1 {
-                            osc_y.push(term);
-                        } else {
-                            osc_x.push(term.clone());
-                            if channel == "scale" && spec.get("axis").is_none() {
-                                osc_y.push(term);
-                            }
-                        }
-                    }
-                    Some("keys") => {
-                        for k in spec["keys"].as_array().into_iter().flatten() {
-                            let Some(kt) = k[0].as_f64() else { continue };
-                            let value = rest_value(channel, base_pos, &k[1]);
-                            let value = mirrored(channel, layer, value, when.mirror);
-                            out.push(step(
-                                "prop.addKey",
-                                json!({"layer": layer, "path": format!("transform/{channel}"), "time": when.at + kt, "timeBase": "comp", "value": value}),
-                            ));
-                            has_sparse_keys = true;
-                        }
-                    }
-                    _ => {}
-                }
-            }
-
-            let expr = if !osc_x.is_empty() || !osc_y.is_empty() {
-                let dx = if osc_x.is_empty() { "0".into() } else { osc_x.join(" + ") };
-                let dy = if osc_y.is_empty() { "0".into() } else { osc_y.join(" + ") };
-                let body = if channel == "rotation" { format!("value + {dx}") } else { format!("[value[0] + {dx}, value[1] + {dy}]") };
-                let end_t = when.at + duration * when.times as f64;
-                Some(format!("(time >= {:.4} && time <= {:.4}) ? ({body}) : value", when.at, end_t))
-            } else if has_sparse_keys && is_loop && when.times > 1 {
-                Some("loopOut(\"cycle\")".into())
-            } else {
-                None
-            };
-
-            if let Some(expression) = expr {
-                out.push(step("prop.setExpression", json!({"layer": layer, "path": format!("transform/{channel}"), "expression": expression})));
+            if matches!(channel.as_str(), "position" | "rotation" | "scale")
+                && let Some(spec_arr) = specs.as_array()
+            {
+                let ctx = ChannelMotionCtx { layer, channel, base_pos, duration, is_loop, when };
+                compile_channel_motion(spec_arr, &ctx, &mut out);
             }
         }
     }

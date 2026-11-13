@@ -83,7 +83,7 @@ fn finish_capture(
         let opts = WriteOptions::default().with_new_file_permissions(NewFilePermissions::Private);
         opts.atomic_write(target, &png).map_err(|e| format!("could not write {}: {e}", target.display()))?;
     } else {
-        magic::write_file(target, &png).map_err(|e| format!("could not write {}: {e}", target.display()))?;
+        magic_engine::write_file(target, &png).map_err(|e| format!("could not write {}: {e}", target.display()))?;
     }
     Ok(json!({
         "ok": true,
@@ -161,4 +161,61 @@ pub fn target_path(requested: Option<&str>) -> Result<(PathBuf, bool), String> {
         Some(parent) if parent.is_dir() => Ok((path.to_path_buf(), false)),
         _ => Err("the folder for path does not exist".into()),
     }
+}
+
+fn encode_base64(bytes: &[u8]) -> String {
+    const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
+    for chunk in bytes.chunks(3) {
+        let b0 = chunk[0];
+        let b1 = chunk.get(1).copied().unwrap_or(0);
+        let b2 = chunk.get(2).copied().unwrap_or(0);
+        out.push(char::from(TABLE[usize::from(b0 >> 2)]));
+        out.push(char::from(TABLE[usize::from(((b0 & 0x03) << 4) | (b1 >> 4))]));
+        out.push(if chunk.len() > 1 { char::from(TABLE[usize::from(((b1 & 0x0f) << 2) | (b2 >> 6))]) } else { '=' });
+        out.push(if chunk.len() > 2 { char::from(TABLE[usize::from(b2 & 0x3f)]) } else { '=' });
+    }
+    out
+}
+
+/// Apply `EffectCraft`-aligned `render.frame` options (`max_side`, `base64`, `write`) to an engine frame result.
+pub fn finalize_rendered_frame(mut res: Value, params: &Value) -> Result<Value, String> {
+    let max_side = params.get("max_side").and_then(Value::as_u64).unwrap_or(0);
+    let want_base64 = params.get("base64").and_then(Value::as_bool).unwrap_or(false);
+    let want_write = params.get("write").and_then(Value::as_bool).unwrap_or(false);
+    let caller_gave_path = params.get("path").and_then(Value::as_str).is_some_and(|s| !s.trim().is_empty());
+
+    let frame_path = res.get("path").or_else(|| res.get("frame")).or_else(|| res.get("preview_png")).and_then(Value::as_str).map(PathBuf::from);
+    let Some(path) = frame_path.filter(|p| p.is_file()) else {
+        return Ok(res);
+    };
+
+    if max_side > 0 || want_base64 {
+        let raw = std::fs::read(&path).map_err(|e| format!("could not read rendered frame {}: {e}", path.display()))?;
+        let mut dyn_img = image::load_from_memory(&raw).map_err(|e| format!("could not decode rendered frame: {e}"))?;
+        let cap = u32::try_from(max_side).unwrap_or(u32::MAX);
+        if cap > 0 && (dyn_img.width() > cap || dyn_img.height() > cap) {
+            dyn_img = dyn_img.resize(cap, cap, image::imageops::FilterType::Triangle);
+        }
+        let rgba = dyn_img.to_rgba8();
+        let (w, h) = (rgba.width(), rgba.height());
+        let mut png_bytes = Vec::new();
+        PngEncoder::new(&mut png_bytes).write_image(rgba.as_raw(), w, h, ColorType::Rgba8.into()).map_err(|e| format!("PNG encoding failed: {e}"))?;
+        res["width"] = json!(w);
+        res["height"] = json!(h);
+        if want_base64 {
+            res["png"] = Value::String(encode_base64(&png_bytes));
+            if !want_write && !caller_gave_path {
+                let _ = std::fs::remove_file(&path);
+                if let Some(obj) = res.as_object_mut() {
+                    obj.remove("path");
+                }
+            } else if max_side > 0 {
+                magic_engine::write_file(&path, &png_bytes).map_err(|e| format!("could not write {}: {e}", path.display()))?;
+            }
+        } else if max_side > 0 {
+            magic_engine::write_file(&path, &png_bytes).map_err(|e| format!("could not write {}: {e}", path.display()))?;
+        }
+    }
+    Ok(res)
 }

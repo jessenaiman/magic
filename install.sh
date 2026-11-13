@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Magic Studio installer (`magic`, `magic-cli`, `magic-mcp`, desktop launcher, icon, and `.magic` MIME type).
+# Magic Studio installer (`magic`, `magic-cli`, `magic-tui`, desktop launcher, icon, and `.magic` MIME type).
 #
 # Usage:
 #   ./install.sh                              # Install release binaries or build from source into ~/.local
-#   ./install.sh --from-source                # Build pure-Rust `magic`, `magic-cli`, and `magic-mcp` via Cargo
+#   ./install.sh --from-source                # Build pure-Rust `magic`, `magic-cli`, and `magic-tui` via Cargo
 #   sudo ./install.sh --prefix /usr/local     # System-wide installation
 #   ./install.sh --uninstall                  # Cleanly remove installed binaries, desktop entry, and MIME registration
 
@@ -63,18 +63,13 @@ refresh_desktop_caches() {
 }
 
 if [[ "$UNINSTALL" -eq 1 ]]; then
-  rm -f "$BIN_DIR/magic" "$BIN_DIR/magic-cli" "$BIN_DIR/magic-mcp"
+  rm -f "$BIN_DIR/magic" "$BIN_DIR/magic-cli" "$BIN_DIR/magic-mcp" "$BIN_DIR/magic-tui"
   rm -f "$APPS_DIR/$APP_ID.desktop" "$APPS_DIR/magic.desktop"
   rm -f "$MIME_DIR/$APP_ID.xml"
   rm -f "$ICON_DIR/$APP_ID.png"
   refresh_desktop_caches
   echo "Uninstalled Magic Studio from $PREFIX"
   exit 0
-fi
-
-if [[ "$FROM_SOURCE" -eq 1 ]] || [[ ! -x "$SCRIPT_DIR/target/release/magic-cli" && ! -x "$SCRIPT_DIR/bin/magic-cli" ]]; then
-  echo "Building Magic Studio pure-Rust workspace (magic, magic-cli, magic-mcp)..."
-  (cd "$SCRIPT_DIR" && cargo build --release -p magic-cli -p magic)
 fi
 
 resolve_bin() {
@@ -88,13 +83,20 @@ resolve_bin() {
   fi
 }
 
-mkdir -p "$BIN_DIR" "$APPS_DIR" "$MIME_DIR" "$ICON_DIR"
+if [[ "$FROM_SOURCE" -eq 1 ]] || ! resolve_bin "magic-cli" >/dev/null; then
+  echo "Building Magic Studio pure-Rust workspace (magic, magic-cli, magic-tui)..."
+  (cd "$SCRIPT_DIR" && cargo update && cargo build --release -p magic-cli -p magic -p magic-tui)
+fi
 
-for bin_name in magic-cli magic-mcp magic; do
+mkdir -p "$BIN_DIR" "$APPS_DIR" "$MIME_DIR" "$ICON_DIR"
+# Remove legacy standalone magic-mcp binary if left over from an older install
+rm -f "$BIN_DIR/magic-mcp"
+
+for bin_name in magic-cli magic magic-tui; do
   if src_bin="$(resolve_bin "$bin_name")"; then
     install -m 0755 "$src_bin" "$BIN_DIR/$bin_name"
     echo "Installed $BIN_DIR/$bin_name"
-  elif [[ "$bin_name" != "magic" ]]; then
+  elif [[ "$bin_name" == "magic-cli" ]]; then
     echo "install.sh: missing required binary '$bin_name' (run ./install.sh --from-source)" >&2
     exit 1
   fi
@@ -117,6 +119,8 @@ refresh_desktop_caches
 
 echo ""
 echo "Magic Studio installed to $PREFIX"
+echo "  Headless MCP:       claude mcp add magic -- $BIN_DIR/magic-cli mcp"
 echo "  Live Studio + MCP:  $BIN_DIR/magic --control 9875"
-echo "  Register MCP:       claude mcp add magic -- $BIN_DIR/magic-cli mcp"
+echo "                      claude mcp add magic-app -- $BIN_DIR/magic-cli mcp --connect 9875"
+echo "  Backstage TUI:      $BIN_DIR/magic-tui --connect 127.0.0.1:9875"
 echo "  Suite Diagnostics:  $BIN_DIR/magic-cli exec app.doctor"

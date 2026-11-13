@@ -1,22 +1,31 @@
-//! Standard ArtCraft MCP tool router for Magic Studio (`crates/mcp/src/server.rs`).
+//! Standard ArtCraft MCP tool & read-only `magic://` resource router for Magic Studio (`crates/mcp/src/server.rs`).
 //!
-//! Exposes Magic Studio's own command registry and live `egui` UI inspection/input tools
-//! (`command_list`, `command_run`, `command_batch`, `doc_inspect`, `render_preview`, `open_file`,
-//! `save_file`, `inspect_ui`, `ui_elements`, `ui_click`, `ui_drag`, `ui_scroll`, `ui_key`,
-//! `ui_type`, `screenshot`, `ui_control`) without proxying sibling ArtCraft applications.
+//! Exposes Magic Studio's own command registry, live `egui` UI inspection/input tools, and
+//! read-only MCP resources (`magic://project`, `magic://storyboard`, `magic://timeline`, `magic://bridge`)
+//! without proxying sibling ArtCraft applications.
 
 use crate::{Backend, interpolate_batch_params, is_live_shell_method};
 use rmcp::handler::server::{router::tool::ToolRouter, wrapper::Parameters};
-use rmcp::model::{CallToolResult, ContentBlock as Content};
-use rmcp::{ServerHandler, ServiceExt, tool, tool_handler, tool_router};
+use rmcp::model::{
+    CallToolResult, ContentBlock as Content, ListResourcesResult, PaginatedRequestParams, ReadResourceRequestParams, ReadResourceResponse, ReadResourceResult,
+    Resource, ResourceContents,
+};
+use rmcp::service::RequestContext;
+use rmcp::{ErrorData as McpError, RoleServer, ServerHandler, ServiceExt, tool, tool_handler, tool_router};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::sync::{Arc, Mutex};
 
+pub const RESOURCE_PROJECT_URI: &str = "magic://project";
+pub const RESOURCE_STORYBOARD_URI: &str = "magic://storyboard";
+pub const RESOURCE_TIMELINE_URI: &str = "magic://timeline";
+pub const RESOURCE_BRIDGE_URI: &str = "magic://bridge";
+
 #[derive(Clone)]
 pub struct Server {
     backend: Arc<Mutex<Box<dyn Backend + Send>>>,
+    #[allow(dead_code)]
     tool_router: ToolRouter<Self>,
 }
 
@@ -188,6 +197,59 @@ impl Server {
         })
     }
 
+    /// Build the read-only `magic://` resource listing (`B10-04`).
+    pub fn list_magic_resources(&self) -> ListResourcesResult {
+        let resources = vec![
+            Resource::new(RESOURCE_PROJECT_URI, "project")
+                .with_description("Open Magic Studio project and workshop stage status (workshop.status)")
+                .with_mime_type("application/json"),
+            Resource::new(RESOURCE_STORYBOARD_URI, "storyboard")
+                .with_description("Storyboard DesignCraft document status and sections (storyboard.status)")
+                .with_mime_type("application/json"),
+            Resource::new(RESOURCE_TIMELINE_URI, "timeline")
+                .with_description("FilmCraft sequence tracks, clips, and synced markers (video.timeline)")
+                .with_mime_type("application/json"),
+            Resource::new(RESOURCE_BRIDGE_URI, "bridge")
+                .with_description("Live control connection state and ArtCraft host doctor summary")
+                .with_mime_type("application/json"),
+        ];
+        ListResourcesResult::with_all_items(resources)
+    }
+
+    /// Read a `magic://` MCP resource as JSON text (`B10-04`).
+    pub async fn read_magic_resource(&self, uri: &str) -> Result<ReadResourceResult, McpError> {
+        let payload = match uri {
+            RESOURCE_PROJECT_URI => match self.run("workshop.status", json!({})).await {
+                Ok(val) => val,
+                Err(err) => json!({"ok": false, "uri": uri, "error": err}),
+            },
+            RESOURCE_STORYBOARD_URI => match self.run("storyboard.status", json!({})).await {
+                Ok(val) => val,
+                Err(err) => json!({"ok": false, "uri": uri, "error": err}),
+            },
+            RESOURCE_TIMELINE_URI => match self.run("video.timeline", json!({})).await {
+                Ok(val) => val,
+                Err(err) => json!({"ok": false, "uri": uri, "error": err}),
+            },
+            RESOURCE_BRIDGE_URI => {
+                let conn = self.backend.lock().map(|b| b.connection_info()).unwrap_or_else(|_| json!({"mode": "unknown", "live": false}));
+                let is_live = conn["live"].as_bool().unwrap_or(false);
+                let doctor = self.run("app.doctor", json!({})).await.ok();
+                let ui = if is_live { self.run("ui.inspect", json!({})).await.ok() } else { None };
+                compact(json!({
+                    "ok": true,
+                    "connection": conn,
+                    "doctor": doctor,
+                    "ui": ui,
+                }))
+            }
+            _ => {
+                return Err(McpError::resource_not_found("resource_not_found", Some(json!({ "uri": uri }))));
+            }
+        };
+        Ok(ReadResourceResult::new(vec![ResourceContents::text(payload.to_string(), uri.to_owned())]))
+    }
+
     async fn run(&self, id: &str, params: Value) -> Result<Value, String> {
         if !params.is_object() {
             return Err("params must be an object".into());
@@ -257,12 +319,12 @@ impl Server {
     async fn exec_doc_inspect(&self, target: Option<&str>) -> CallToolResult {
         let res = match target.unwrap_or("all") {
             "project" => self.run("workshop.status", json!({})).await,
-            "storyboard" => self.run("storyboard.check", json!({})).await,
+            "storyboard" => self.run("storyboard.status", json!({})).await,
             "timeline" | "sequence" => self.run("video.timeline", json!({})).await,
             "all" => match self.run("workshop.status", json!({})).await {
                 Ok(project) => Ok(json!({
                     "project": project,
-                    "storyboard": self.run("storyboard.check", json!({})).await.unwrap_or(Value::Null),
+                    "storyboard": self.run("storyboard.status", json!({})).await.unwrap_or(Value::Null),
                     "timeline": self.run("video.timeline", json!({})).await.unwrap_or(Value::Null),
                 })),
                 Err(e) => Err(e),
@@ -424,11 +486,95 @@ impl Server {
 #[tool_handler(router = self.tool_router)]
 impl ServerHandler for Server {
     fn get_info(&self) -> rmcp::model::ServerConfig {
-        rmcp::model::ServerConfig::new(rmcp::model::ServerCapabilities::builder().enable_tools().build())
+        rmcp::model::ServerConfig::new(rmcp::model::ServerCapabilities::builder().enable_tools().enable_resources().build())
             .with_server_info(rmcp::model::Implementation::new("magic", env!("CARGO_PKG_VERSION")))
             .with_instructions(
-                "Magic Studio is a pure-Rust eframe/egui 0.37 project, storyboard, puppet-rig, and lyric-timing coordinator built on storytold/craft-libs. Start `magic --control 9875` and connect with `magic-cli mcp --connect 127.0.0.1:9875` to drive the live Magic window, or run `magic-cli mcp` headlessly. Connect directly to each sibling ArtCraft app's own `<app>-cli mcp` server when editing in FilmCraft, EffectCraft, DeckCraft, DesignCraft, PhotoCraft, or VectorCraft."
+                "Magic Studio is an eframe/egui project, storyboard, puppet-rig, and lyric-timing coordinator built on storytold/craft-libs. Start `magic --control 9875` and connect with `magic-cli mcp --connect 127.0.0.1:9875` to drive the live Magic window, or run `magic-cli mcp` headlessly. Connect directly to each sibling ArtCraft app's own `<app>-cli mcp` server when editing in DesignCraft, PhotoCraft, VectorCraft, EffectCraft, or FilmCraft."
                     .to_string(),
             )
+    }
+
+    async fn list_resources(&self, _request: Option<PaginatedRequestParams>, _context: RequestContext<RoleServer>) -> Result<ListResourcesResult, McpError> {
+        Ok(self.list_magic_resources())
+    }
+
+    async fn read_resource(&self, request: ReadResourceRequestParams, _context: RequestContext<RoleServer>) -> Result<ReadResourceResponse, McpError> {
+        self.read_magic_resource(&request.uri).await.map(Into::into)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use rmcp::ServerHandler;
+    use rmcp::model::ResourceContents;
+    use serde_json::{Value, json};
+
+    use super::{RESOURCE_BRIDGE_URI, RESOURCE_PROJECT_URI, RESOURCE_STORYBOARD_URI, RESOURCE_TIMELINE_URI, Server};
+    use crate::Backend;
+
+    #[derive(Default)]
+    struct StubBackend {
+        calls: Vec<String>,
+    }
+
+    impl Backend for StubBackend {
+        fn is_live(&self) -> bool {
+            true
+        }
+
+        fn connection_info(&self) -> Value {
+            json!({"mode": "live", "live": true, "address": "127.0.0.1:9875"})
+        }
+
+        fn execute(&mut self, id: &str, _params: Value) -> Result<Value, String> {
+            self.calls.push(id.to_owned());
+            match id {
+                "workshop.status" => Ok(json!({"ok": true, "name": "Demo Song"})),
+                "storyboard.status" => Ok(json!({"ok": true, "sections": ["Style", "Scenes"]})),
+                "video.timeline" => Ok(json!({"ok": true, "tracks": [{"label": "V1"}]})),
+                "app.doctor" => Ok(json!({"ok": true, "apps": {"filmcraft": true}})),
+                "ui.inspect" => Ok(json!({"view": "studio"})),
+                other => Err(format!("unexpected call: {other}")),
+            }
+        }
+    }
+
+    #[test]
+    fn advertises_resources_capability_and_handles_list_and_read() {
+        let server = Server::new(StubBackend::default());
+        let info_val = serde_json::to_value(ServerHandler::get_info(&server)).unwrap();
+        assert_eq!(info_val["capabilities"]["resources"], json!({}));
+
+        let listed = server.list_magic_resources();
+        let uris: Vec<&str> = listed.resources.iter().map(|r| r.uri.as_str()).collect();
+        assert_eq!(uris, vec![RESOURCE_PROJECT_URI, RESOURCE_STORYBOARD_URI, RESOURCE_TIMELINE_URI, RESOURCE_BRIDGE_URI]);
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            for (uri, expected_key, expected_val) in [
+                (RESOURCE_PROJECT_URI, "name", json!("Demo Song")),
+                (RESOURCE_STORYBOARD_URI, "sections", json!(["Style", "Scenes"])),
+                (RESOURCE_TIMELINE_URI, "tracks", json!([{"label": "V1"}])),
+            ] {
+                let read = server.read_magic_resource(uri).await.unwrap();
+                let Some(ResourceContents::TextResourceContents { text, uri: out_uri, .. }) = read.contents.first() else {
+                    panic!("expected TextResourceContents for {uri}");
+                };
+                assert_eq!(out_uri, uri);
+                let parsed: Value = serde_json::from_str(text).unwrap();
+                assert_eq!(parsed[expected_key], expected_val);
+            }
+
+            let bridge = server.read_magic_resource(RESOURCE_BRIDGE_URI).await.unwrap();
+            let Some(ResourceContents::TextResourceContents { text, .. }) = bridge.contents.first() else {
+                panic!("expected TextResourceContents for bridge");
+            };
+            let bridge_json: Value = serde_json::from_str(text).unwrap();
+            assert_eq!(bridge_json["connection"]["address"], json!("127.0.0.1:9875"));
+            assert_eq!(bridge_json["doctor"]["apps"]["filmcraft"], json!(true));
+
+            let missing = server.read_magic_resource("magic://unknown").await;
+            assert!(missing.is_err(), "unknown magic:// URI must return resource_not_found error");
+        });
     }
 }

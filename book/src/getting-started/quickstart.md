@@ -1,36 +1,28 @@
 # Song-to-Video Quickstart
 
-Every Magic Studio song project starts from an audio recording so word timing drives the storyboard, character lip-sync, kinetic lyrics, and master timeline.
+Every Magic Studio project starts from an audio recording (in a fresh folder or an existing project directory) so word timing drives the DeckCraft storyboard, `02 Animations`, `03 Lyrics`, `04 Motion`, and the `05 Studio` timeline.
 
-## 1. Create a Song Project
-
-```sh
-magic-cli new   --root ~/Videos/Magic   --name "Rendered Yesterday"   --audio ~/Music/rendered-yesterday.wav   --style "Stop-motion workshop puppets, warm amber stage lighting, deep teal shadows"   --world "Candlelit repair-bench theatre with velvet curtains"   --character "Friendly vintage CRT television puppet with expressive screen face"   --motion "Hand-drawn chalk star and wave accents synced to chorus verbs"
-```
-
-This writes `Rendered Yesterday.magic`, `timing-reference.json`, `transcript.srt`, `storyboard.designcraft`, and `film/rendered-yesterday.fcproj`.
-
-## 2. Complete Storyboard Title Pages & Generate Scene Plates
+## 1. Create or Attach a Song Project
 
 ```sh
-magic-cli --project ~/Videos/Magic/rendered-yesterday/"Rendered Yesterday.magic" storyboard check
-magic-cli --project ~/Videos/Magic/rendered-yesterday/"Rendered Yesterday.magic" storyboard bulk_generate
+magic-cli new [existing_project]   --audio ~/Music/rendered-yesterday.wav   --name "Rendered Yesterday"
 ```
 
-## 3. Cut Out, Rig & Lip-Sync Lead Character (`PhotoCraft` + `EffectCraft`)
+This initializes the `.magic` manifest, `timing-reference.json`, `extensions/scribbles/`, the DeckCraft storyboard deck, and `film/rendered-yesterday.fcproj`.
+
+## 2. Save Storyboard Slides in DeckCraft & Run Scribbles
+
+Edit and save your storyboard slides in [`DeckCraft`](https://github.com/storytold/deckcraft) (`.deckcraft` or `.pptx`, with optional PDF export), unlocking `extensions/scribbles/` turnaround and scene generation.
+
+## 3. Add `02 Animations`, `03 Lyrics` & `04 Motion`
+
+Drop renders from Blender, Three.js, After Effects, `AniCraft`, or `EffectCraft` into `02 Animations`, style kinetic lyrics (`03 Lyrics`) and `craft-drawingml` motion cues (`04 Motion`), then map all tracks onto `FilmCraft`:
 
 ```sh
-PROJ=~/Videos/Magic/rendered-yesterday/"Rendered Yesterday.magic"
-magic-cli --project "$PROJ" --save exec character.import path=assets/crt.png
-magic-cli --project "$PROJ" --save exec character.cut character=crt remove_background=true rig=true
-magic-cli --project "$PROJ" --save exec character.puppet.rig_face character=crt
-magic-cli --project "$PROJ" --save exec character.puppet.lipsync character=crt
+PROJ=~/Magic/rendered-yesterday/rendered-yesterday.magic
+magic-cli --project "$PROJ" studio map-tracks --save
 ```
 
-## 4. Publish Kinetic Lyrics (`V3`), Action Motion (`V4`) & Assemble `FilmCraft`
+## 4. Review in `05 Studio` (`Live Breakdown` & `Finishing`) & Export
 
-```sh
-magic-cli --project "$PROJ" --save exec words.letter render=true studio=true
-magic-cli --project "$PROJ" --save exec motion.publish render=true
-magic-cli --project "$PROJ" --save exec video.assemble export=true
-```
+Open **`05 Studio`** to inspect track alignment in **`Live Breakdown`** and grade/export your master video in **`Finishing`** via [`FilmCraft`](https://github.com/storytold/filmcraft).

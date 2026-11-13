@@ -1,12 +1,10 @@
 //! Words composition and EffectCraft/FilmCraft placement (`words.compose`, `words.apply`, `words.design`, `words.track`).
-use crate::time::{TICKS_PER_SECOND, Tick};
-use crate::{Result, Session};
+use std::collections::HashMap;
+use std::fs;
+use std::path::PathBuf;
+
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
 
 pub use super::validate::cmd_words_effect_install;
 pub(crate) use super::validate::{kinetic_design, line_design, text_effect};
@@ -14,126 +12,102 @@ use super::{
     HOLD_TICK, aligned, cmd_words_read, cmd_words_save, cmd_words_studio_track, fill_untimed, invalid, printed_caption_words, studio_times, timing, word_tick,
     word_time_key,
 };
+use crate::time::{TICKS_PER_SECOND, Tick};
+use crate::{Result, Session};
 
-fn build_kinetic_for_design(a: &Value, recipe_doc: &Value, p: &Value, k: usize) -> Value {
-    let kin = &recipe_doc["kinetic"];
-    let pick = |list: &Value, key: &str| {
-        p[key]
-            .as_str()
-            .map(|v| json!(v))
-            .or_else(|| list.as_array().filter(|l| !l.is_empty()).map(|l| l[(p["seed"].as_u64().unwrap_or(0) as usize + k * 7) % l.len()].clone()))
-    };
-    let acts: serde_json::Map<String, Value> = a["words"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(|w| {
-            let key: String = w["text"].as_str()?.chars().filter(|c| c.is_alphabetic()).flat_map(char::to_lowercase).collect();
-            kin["acts"][&key].as_str().map(|act| (w["word_id"].as_str().unwrap_or_default().to_owned(), json!(act)))
-        })
-        .collect();
-    json!({
-        "layout": pick(&kin["layouts"], "layout").unwrap_or(json!("karaoke")),
-        "entrance": pick(&kin["entrances"], "entrance").unwrap_or(json!("fade-up")),
-        "overlay": pick(&kin["overlays"], "overlay").unwrap_or(json!("none")),
-        "acts": acts,
-        "band": recipe_doc["band"],
-        "seed": p["seed"].as_u64().unwrap_or(1) + k as u64,
-        "style": kin["style"]
-    })
-}
-
-fn run_lyrics_layout(_dir: &Path, recipe_doc: &Value, doc: &Value, times: &std::collections::HashMap<String, (Tick, Tick)>) -> Result<Value> {
-    let animations: Vec<Value> = doc["animations"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .map(|a| {
-            let words: Vec<Value> = a["words"]
-                .as_array()
-                .into_iter()
-                .flatten()
-                .map(|w| {
-                    let mut w = w.clone();
-                    if let Some(t) = w["word_id"].as_str().and_then(|id| times.get(&word_time_key(&a["scope"], id))) {
-                        w["start_tick"] = json!(t.0.0);
-                        w["start"] = json!(t.0.seconds());
-                    }
-                    w
-                })
-                .collect();
-            json!({"animation_id":a["animation_id"],"section":a["scope"]["section"],"words":words})
-        })
-        .collect();
-    Ok(crate::cmd::words::lyrics_layout::designs(recipe_doc, &animations))
-}
-
-fn design_one_section(s: &mut Session, a: &Value, k: usize, style: &Value, designs: &Value, recipe_doc: &Value, p: &Value) -> Result<Value> {
-    let id = a["animation_id"].as_str().unwrap_or_default();
-    let mut save = json!({
-        "animation_id": id,
-        "expected_source_revision": a["source_revision"],
-        "origin": "words.design",
-        "style": style,
-        "design": designs[id]
-    });
-    if recipe_doc["kinetic"].is_object() && p["kinetic"] != false {
-        save["kinetic"] = build_kinetic_for_design(a, recipe_doc, p, k);
+fn build_section_designs(doc: &Value, style_cfg: &Value, times: &HashMap<String, (Tick, Tick)>) -> Value {
+    let top_band = style_cfg["band"].as_str() != Some("bottom");
+    let mut out = serde_json::Map::new();
+    for a in doc["animations"].as_array().into_iter().flatten() {
+        let Some(anim_id) = a["animation_id"].as_str() else { continue };
+        let mut by_line: HashMap<String, Vec<(String, String, Option<(Tick, Tick)>)>> = HashMap::new();
+        let mut line_order: Vec<String> = Vec::new();
+        for w in a["words"].as_array().into_iter().flatten() {
+            let lid = w["line_id"].as_str().unwrap_or("l1").to_owned();
+            let wid = w["word_id"].as_str().unwrap_or_default().to_owned();
+            let txt = w["text"].as_str().unwrap_or_default().to_owned();
+            let span =
+                times.get(&word_time_key(&a["scope"], &wid)).copied().or_else(|| word_tick(w, "start_tick", "start").zip(word_tick(w, "end_tick", "end")));
+            if !by_line.contains_key(&lid) {
+                line_order.push(lid.clone());
+            }
+            by_line.entry(lid).or_default().push((wid, txt, span));
+        }
+        let mut section_map = serde_json::Map::new();
+        for lid in line_order {
+            if let Some(words) = by_line.get(&lid) {
+                let items = super::lettering::default_line_items(words, style_cfg, top_band);
+                section_map.insert(lid, json!({"items": items, "draws": []}));
+            }
+        }
+        out.insert(anim_id.to_owned(), Value::Object(section_map));
     }
-    let saved = cmd_words_save(s, &save)?;
-    let applied = if p["apply"] == false { Value::Null } else { cmd_words_apply(s, &json!({"animation_id":id}))?["in_video"].clone() };
-    Ok(json!({
-        "animation_id": id,
-        "lines": designs[id].as_object().map_or(0, |m| m.len()),
-        "revision": saved["animation"]["source_revision"],
-        "in_video": applied,
-        "kinetic": saved["animation"]["kinetic"].as_object().map(|k| json!({
-            "layout": k["layout"],
-            "entrance": k["entrance"],
-            "overlay": k["overlay"],
-            "acts": k["acts"].as_object().map_or(0, |a| a.len())
-        }))
-    }))
+    Value::Object(out)
 }
 
-/// `words.design`: every sung line designed from the project's lyric recipe (`lyrics-design.json`).
+/// `words.design`: lay out non-overlapping word/phrase groups across sung lines using `craft_font_catalog`
+/// glyph widths without requiring a `lyrics-design.json` file.
 pub fn cmd_words_design(s: &mut Session, p: &Value) -> Result<Value> {
-    let dir = crate::cmd::words::workspace_dir(s)?;
-    let recipe = p["recipe"].as_str().map(PathBuf::from).unwrap_or_else(|| dir.join("lyrics-design.json"));
-    if !recipe.is_file() {
-        return Err(invalid(format!("No lyric recipe at {}; write one first", recipe.display())));
-    }
-    let recipe_doc: Value = serde_json::from_slice(&fs::read(&recipe)?).map_err(|e| invalid(format!("lyric recipe: {e}")))?;
+    let optional_recipe = p["recipe"]
+        .as_str()
+        .map(|raw| crate::workspace::resolve_workspace_path(s, raw))
+        .filter(|rp| rp.is_file())
+        .and_then(|rp| fs::read(rp).ok())
+        .and_then(|b| serde_json::from_slice::<Value>(&b).ok());
+    let style_cfg = optional_recipe.unwrap_or_else(|| {
+        json!({
+            "band": p["band"].as_str().unwrap_or("top"),
+            "font": p["font"].as_str().unwrap_or("sans"),
+            "size": p["size"].as_f64().unwrap_or(68.0),
+            "color": p["color"].as_str().unwrap_or("#FFF6E3"),
+            "outline": p["outline"].as_str().unwrap_or("#143042"),
+        })
+    });
     let doc = cmd_words_read(s, &json!({}))?["document"].clone();
     let times = studio_times(s);
-    let designs = run_lyrics_layout(&dir, &recipe_doc, &doc, &times)?;
-    let style = recipe_doc["font"].as_str().map(|f| json!({"font": f})).unwrap_or(json!({}));
+    let designs = build_section_designs(&doc, &style_cfg, &times);
+    let style = style_cfg["font"].as_str().map(|f| json!({"font": f})).unwrap_or_else(|| json!({}));
     let only = p["section"].as_str();
     let mut sections = Vec::new();
-    for (k, a) in doc["animations"].as_array().into_iter().flatten().enumerate() {
+    for a in doc["animations"].as_array().into_iter().flatten() {
         let id = a["animation_id"].as_str().unwrap_or_default();
         if only.is_some_and(|o| o != id) {
             continue;
         }
-        sections.push(design_one_section(s, a, k, &style, &designs, &recipe_doc, p)?);
+        let saved = cmd_words_save(
+            s,
+            &json!({
+                "animation_id": id,
+                "expected_source_revision": a["source_revision"],
+                "origin": "words.design",
+                "style": style,
+                "design": designs[id],
+            }),
+        )?;
+        let applied = if p["apply"] == false { Value::Null } else { cmd_words_apply(s, &json!({"animation_id": id}))?["in_video"].clone() };
+        sections.push(json!({
+            "animation_id": id,
+            "lines": designs[id].as_object().map_or(0, |m| m.len()),
+            "revision": saved["animation"]["source_revision"],
+            "in_video": applied,
+        }));
     }
     Ok(json!({
         "ok": true,
-        "recipe": recipe,
         "sections": sections,
         "lines": sections.iter().filter_map(|x| x["lines"].as_u64()).sum::<u64>(),
-        "next": "run words.letter to build lettering/lyrics.ecproj"
+        "next": "run words.letter to build effects/lyrics.ecproj",
     }))
 }
 
-/// `words.track`: write the song's lyric timing track (`design/words-track.json`), one clip per printed word in `Tick`s.
+/// `words.track`: write the song's lyric timing track (`effects/words-track.json`), one clip per printed word in `Tick`s.
 pub fn cmd_words_track(s: &mut Session, _: &Value) -> Result<Value> {
     let dir = crate::cmd::words::workspace_dir(s)?;
     let (words, _) = printed_caption_words(&aligned(s)?);
     if words.is_empty() {
         return Err(invalid("No printed words with timing; check words.align"));
     }
-    let mut line_end: std::collections::HashMap<String, Tick> = std::collections::HashMap::new();
+    let mut line_end: HashMap<String, Tick> = HashMap::new();
     for w in &words {
         let end = word_tick(w, "end_tick", "end").unwrap_or(Tick::ZERO);
         let e = line_end.entry(word_time_key(w, w["line"].as_str().unwrap_or_default())).or_insert(Tick::ZERO);
@@ -165,7 +139,7 @@ pub fn cmd_words_track(s: &mut Session, _: &Value) -> Result<Value> {
             "duration": dur.seconds()
         }));
     }
-    let path = dir.join("design/words-track.json");
+    let path: PathBuf = dir.join("effects/words-track.json");
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
@@ -200,7 +174,7 @@ pub fn cmd_words_apply(s: &mut Session, p: &Value) -> Result<Value> {
         && let Some(anim) = doc["animations"].as_array_mut().and_then(|a| a.iter_mut().find(|x| x["animation_id"] == id))
     {
         anim["in_video"] = json!(use_it);
-        let _ = crate::cmd::words::save(s, &dir, &doc);
+        crate::cmd::words::save(s, &dir, &doc)?;
     }
     Ok(receipt)
 }
@@ -226,8 +200,8 @@ fn sync_studio_word_times(s: &mut Session, synced: &mut Value) {
     });
     if let (Some(anchor), Some(ns)) = (synced["song_anchor_tick"].as_i64().map(Tick), next_start) {
         let cur_dur = synced["authored_duration_tick"].as_i64().map(Tick).unwrap_or(Tick::ZERO);
-        let gap = Tick(TICKS_PER_SECOND / 25); // 40ms
-        let min_dur = Tick(TICKS_PER_SECOND / 5); // 200ms
+        let gap = Tick(TICKS_PER_SECOND / 25);
+        let min_dur = Tick(TICKS_PER_SECOND / 5);
         let clamped = cur_dur.min(Tick((ns.0 - gap.0 - anchor.0).max(min_dur.0)));
         synced["authored_duration_tick"] = json!(clamped.0);
         synced["authored_duration"] = json!(clamped.seconds());
@@ -261,20 +235,19 @@ fn build_local_words(anim: &Value, anchor: Tick) -> Result<Vec<Value>> {
         .collect()
 }
 
-struct WordsComposeInputs {
-    id: String,
-    instance: Option<String>,
-    composition_id: String,
-}
-
-fn validate_words_compose_inputs(p: &Value, anim: &Value) -> Result<WordsComposeInputs> {
+pub fn cmd_words_compose(s: &mut Session, p: &Value) -> Result<Value> {
+    let dir = crate::cmd::words::workspace_dir(s)?;
     let id = p["animation_id"].as_str().ok_or_else(|| invalid("animation_id is required"))?.to_owned();
     let instance = match p["instance_id"].as_str() {
-        Some(i) if !i.is_empty() && i.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == 95) => Some(i.to_owned()),
+        Some(i) if !i.is_empty() && i.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_') => Some(i.to_owned()),
         Some(_) => return Err(invalid("instance_id must be letters, digits, '-' or '_'")),
         None => None,
     };
     let composition_id = instance.as_deref().map_or_else(|| id.clone(), |i| format!("{id}--{i}"));
+    let read = cmd_words_read(s, &json!({"animation_id": &id}))?;
+    let mut synced = read["document"]["animations"][0].clone();
+    sync_studio_word_times(s, &mut synced);
+    let anim = &synced;
     let untimed: Vec<&str> = anim["words"]
         .as_array()
         .into_iter()
@@ -285,19 +258,6 @@ fn validate_words_compose_inputs(p: &Value, anim: &Value) -> Result<WordsCompose
     if !untimed.is_empty() {
         return Err(invalid(format!("Words without timing cannot be placed: {}; resolve them with words.align", untimed.join(", "))));
     }
-    Ok(WordsComposeInputs { id, instance, composition_id })
-}
-
-/// `words.compose`: write the derived section composition spec (`lettering/sections/<id>.json`) in `Tick`s.
-pub fn cmd_words_compose(s: &mut Session, p: &Value) -> Result<Value> {
-    let dir = crate::cmd::words::workspace_dir(s)?;
-    let id = p["animation_id"].as_str().ok_or_else(|| invalid("animation_id is required"))?;
-    let read = cmd_words_read(s, &json!({"animation_id":id}))?;
-    let mut synced = read["document"]["animations"][0].clone();
-    sync_studio_word_times(s, &mut synced);
-    let anim = &synced;
-    let inputs = validate_words_compose_inputs(p, anim)?;
-    let (id, instance, composition_id) = (inputs.id, inputs.instance, inputs.composition_id);
     let anchor = anim["song_anchor_tick"]
         .as_i64()
         .map(Tick)
@@ -309,7 +269,6 @@ pub fn cmd_words_compose(s: &mut Session, p: &Value) -> Result<Value> {
         .or_else(|| anim["authored_duration"].as_f64().map(Tick::from_seconds_f64))
         .ok_or_else(|| invalid("Animation has no authored_duration"))?;
     let words = build_local_words(anim, anchor)?;
-    let (width, height) = (1920u64, 1080u64);
     let data = json!({
         "composition_id": composition_id,
         "animation_id": id,
@@ -323,37 +282,16 @@ pub fn cmd_words_compose(s: &mut Session, p: &Value) -> Result<Value> {
         "design": anim["design"],
         "words": words
     });
-    let rel_src = "lettering/lyrics.ecproj".to_owned();
+    let rel_src = "effects/lyrics.ecproj".to_owned();
     let file = dir.join(&rel_src);
     let bytes = serde_json::to_vec_pretty(&data).map_err(|e| invalid(e.to_string()))?;
-    let drawings: Vec<Value> = read["graphics"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter(|c| c["kind"] == "drawing")
-        .map(|cue| {
-            let start = word_tick(cue, "start_tick", "start").unwrap_or(anchor);
-            let end = word_tick(cue, "end_tick", "end").unwrap_or(start + HOLD_TICK);
-            let dur = end - start;
-            let index = cue["index"].as_u64().unwrap_or(0);
-            let own = format!("{composition_id}-drawing-{index}");
-            json!({
-                "composition_id": own,
-                "src": "lettering/lyrics.ecproj",
-                "start_tick": start.0,
-                "duration_tick": dur.0,
-                "start": start.seconds(),
-                "duration": dur.seconds()
-            })
-        })
-        .collect();
     Ok(json!({
         "ok": true,
         "animation_id": id,
         "instance_id": instance,
         "composition_id": composition_id,
         "file": file,
-        "drawings": drawings,
+        "drawings": [],
         "src": rel_src,
         "sha256": format!("{:x}", Sha256::digest(&bytes)),
         "source_revision": anim["source_revision"],
@@ -365,8 +303,8 @@ pub fn cmd_words_compose(s: &mut Session, p: &Value) -> Result<Value> {
         "hold_tick": anim["hold_tick"],
         "lead_in": anim["lead_in"],
         "hold": anim["hold"],
-        "width": width,
-        "height": height,
+        "width": 1920u64,
+        "height": 1080u64,
         "saved_source": read["saved"]
     }))
 }

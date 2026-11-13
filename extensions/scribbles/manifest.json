@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "id": "io.magic.scribbles",
+  "kind": "plugin",
+  "name": "Scribbles",
+  "version": "1.0.0",
+  "role": "scribbles.image",
+  "publisher": "Craft",
+  "apps": ["magic"],
+  "permissions": [],
+  "user_editable": true,
+  "requires_storyboard_slide": true,
+  "provider_command": "",
+  "files": {
+    "templates": "templates.json",
+    "steps": "steps.json"
+  },
+  "description": "User-editable storyboard-slide image prompt templates and multi-step character/asset workflows for Magic Studio."
+}

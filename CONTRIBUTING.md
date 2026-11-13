@@ -1,27 +1,24 @@
 # Contributing to Magic Studio
 
-Magic Studio follows the [ArtCraft contribution standards (`storytold/craft-contrib`)](https://github.com/storytold/craft-contrib/blob/main/CONTRIBUTING.md) and [House Rules](https://github.com/storytold/craft-contrib/blob/main/docs/house-rules-core.md).
+Magic Studio follows the [ArtCraft contribution standards (`storytold/craft-contrib`)](https://github.com/storytold/craft-contrib/blob/main/CONTRIBUTING.md), [`docs/house-rules-core.md`](docs/house-rules-core.md), and the standard compiler/Clippy lint setup in [`Cargo.toml`](Cargo.toml).
 
-## Quality Gates
+## Quality Gates (`cargo xtask ci`)
 
-Run the workspace gate before submitting a pull request:
+Run the workspace gate before pushing a branch or opening a pull request into `main`:
 
 ```sh
 cargo xtask ci
 ```
 
 `cargo xtask ci` runs:
-1. `SETS` workspace crate coverage check (`xtask/src/ci.rs`)
-2. `cargo fmt --check`
-3. `cargo xtask layers` (enforcing `magic-util` / `magic-scribbles` L4 -> `magic-engine` L5 -> `magic-mcp` / `magic-ui-egui` L6 -> `magic` / `magic-cli` / `magic-tui` L7, and forbidding sibling app crate imports)
-4. `cargo clippy --workspace --all-targets -- -D warnings` (with `unwrap_used`, `expect_used`, `panic`, `todo`, `unimplemented`, and `unreachable` denied in production code)
-5. `cargo test --workspace --no-run`
+1. `cargo fmt --all --check` ([`rustfmt.toml`](rustfmt.toml), `max_width = 160`)
+2. `cargo clippy --workspace --all-targets --message-format=short -- -D warnings` — enforcing `[workspace.lints]` (`unsafe_code = "forbid"`, `nonstandard_style`, `disallowed_names`, `unwrap_used`, `expect_used`, `panic`, `todo`, `unimplemented`, `unreachable`, `cognitive_complexity`, `too_many_arguments`, `wildcard_imports`) with [`clippy.toml`](clippy.toml)
+3. Optional unit/integration tests (`cargo test --workspace -- --test-threads 4`) when `MAGIC_RUN_TESTS=1` is set (or directly via `cargo xtask test`)
 
-## Commit & Pull Request Rules
+Every run writes stage timings and compiler/Clippy diagnostics to `target/ci-report.txt` and `target/ci-report.jsonl`.
 
-- Pure Rust only (`eframe` + `egui` 0.37 + `storytold/craft-libs`) — no Tauri, webview, JavaScript, or TypeScript.
-- Keep every module single-responsibility and under 900 lines.
-- Delegate raster cutout, vector tracing, motion compositing, and video editing to installed ArtCraft applications through `CraftHub` rather than hand-rolling duplicate implementations.
-- Leave explicit `// TODO:` comments (not `todo!()` panics) where follow-up host verification is needed.
-- **No AI/Agent Trailers**: Never include `Co-Authored-By` agent trailers, `Generated with ...` footers, or session logs in commit messages, pull requests, or issues.
-- Report honestly which verification steps were executed on your machine and which were not.
+## Dependencies, Branches & Pull Requests
+
+- **Shared `storytold/craft-libs` Dependencies**: Workspace crates depend directly on `{ git = "https://github.com/storytold/craft-libs" }` (including `craft-ai-core`) so `cargo update` and `./install.sh --from-source` track `main` cleanly.
+- **Upstream Documentation**: Link directly to live `https://github.com/storytold/<repo>` `README.md` and `docs/` pages rather than maintaining offline snapshots.
+- **Pull Requests Only**: Never push directly to `main`. Open a focused pull request into `main` with no agent attribution trailers (`docs/house-rules-core.md` Rule 8 & Rule 15).

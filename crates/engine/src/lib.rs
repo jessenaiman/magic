@@ -4,8 +4,9 @@
 //! the same command registry and [`Session::execute`] entry point. Magic reads and writes project
 //! assets on disk via [`storytold/craft-libs`](https://github.com/storytold/craft-libs), queries
 //! running local Craft desktop apps over their `--control` JSON-lines sockets (`craft_api`), and
-//! delegates AI/LLM capabilities to [`storytold/craft-ai-integrations`](https://github.com/storytold/craft-ai-integrations).
+//! exposes opt-in AI contract metadata via `craft-ai-core`.
 
+#![forbid(unsafe_code)]
 #![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable))]
 
 pub mod activity;
@@ -21,6 +22,7 @@ pub mod craft_effects;
 pub mod doc_state;
 pub mod doctor;
 pub mod error;
+pub mod extensions;
 pub mod guard;
 pub mod history;
 pub mod link_watch;

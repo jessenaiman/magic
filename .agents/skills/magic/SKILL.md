@@ -1,37 +1,28 @@
 ---
 name: magic
-description: Drive Magic Studio via `magic-cli mcp` (live `magic --control 9875` or `--headless`) and official ArtCraft CLI tools.
+description: Drive Magic Studio via `magic-cli` and `magic-cli mcp` (headless with `magic://` resources or live `magic --control 9875`) across the ArtCraft suite.
 ---
 
-# Magic Studio (`magic-cli` / `magic-mcp`)
+# Magic Studio (`magic-cli` & `magic-cli mcp`)
 
 ## 1. Connect via MCP or CLI (`--control` Live Watching)
 
+- Build & install CLI + desktop binaries: `./install.sh --from-source`
+- Create or attach to a project: `magic-cli new [existing_project] --audio song.wav --name "Song Title"`
+- Reconcile and map tracks onto `FilmCraft`: `magic-cli --project song.magic studio map-tracks --save`
 - Start live desktop session: `magic --control 9875`
-- Attach MCP server to live window: `magic-cli mcp --connect 127.0.0.1:9875` (or `magic-mcp --connect 127.0.0.1:9875`)
-- Auto-attach or fall back to headless: `magic-cli mcp`
-- Headless with confined roots: `magic-cli mcp --headless --automation-read-root <DIR> --automation-write-root <DIR>`
+- Attach MCP server to live window: `magic-cli mcp --connect 9875` (or `127.0.0.1:9875`)
+- Headless stdio session (default, exposes `magic://` resources): `magic-cli mcp`
+- Headless with confined roots: `magic-cli mcp --automation-read-root <DIR> --automation-write-root <DIR>`
 - Discover commands: `list_commands` (MCP) or `magic-cli commands` / `magic-cli describe <id>` (CLI)
 
-## 2. Verified Upstream ArtCraft Documentation
+## 2. Upstream ArtCraft Documentation
 
-Consult the real upstream files in `storytold/*` repositories rather than invented filenames:
+Consult the maintained `README.md` and `docs/` pages in `storytold/*` repositories:
 
 - **Magic Studio MCP & Control**: [`docs/mcp.md`](../../../docs/mcp.md) and [`docs/control-protocol.md`](../../../docs/control-protocol.md)
-- **EffectCraft (`:9877`, `effectcraft-cli`)**:
-  - [EffectCraft Agents & CLI Cookbook](https://github.com/storytold/effectcraft/blob/main/docs/agents.md)
-  - [EffectCraft Control Protocol](https://github.com/storytold/effectcraft/blob/main/docs/control-protocol.md)
-  - [EffectCraft MCP Server (`--autosave` / `--bridge 9877`)](https://github.com/storytold/effectcraft/blob/main/docs/mcp.md)
-  - [EffectCraft Effects Catalog](https://github.com/storytold/effectcraft/blob/main/docs/effects.md)
-  - [EffectCraft Footage & AEP Import](https://github.com/storytold/effectcraft/blob/main/docs/footage.md)
-- **FilmCraft (`:9876`, `FILMCRAFT_CONTROL_TOKEN`, `filmcraft-cli`)**:
-  - [FilmCraft Agents, CLI & MCP Guide](https://github.com/storytold/filmcraft/blob/main/docs/agents.md)
-  - [FilmCraft Control Protocol](https://github.com/storytold/filmcraft/blob/main/docs/control-protocol.md)
-  - [FilmCraft Captions](https://github.com/storytold/filmcraft/blob/main/docs/captions.md) and [Transcripts](https://github.com/storytold/filmcraft/blob/main/docs/transcripts.md)
-  - [FilmCraft Graphics & Titles](https://github.com/storytold/filmcraft/blob/main/docs/graphics.md)
-- **DesignCraft, PdfCraft, PhotoCraft, VectorCraft & Headless AniCraft CLI**:
-  - [DesignCraft Agents & Script Guide](https://github.com/storytold/designcraft/blob/main/docs/agents.md) and [MCP](https://github.com/storytold/designcraft/blob/main/docs/mcp.md)
-  - [PdfCraft Automation & `pdfcraft-cli ui`](https://github.com/storytold/pdfcraft/blob/main/crates/automation/README.md) and [MCP](https://github.com/storytold/pdfcraft/blob/main/docs/mcp.md)
-  - [PhotoCraft Control Protocol](https://github.com/storytold/photocraft/blob/main/docs/control-protocol.md) and [MCP](https://github.com/storytold/photocraft/blob/main/docs/mcp.md)
-  - [VectorCraft Control Protocol](https://github.com/storytold/vectorcraft/blob/main/docs/control-protocol.md) and [MCP](https://github.com/storytold/vectorcraft/blob/main/docs/mcp.md)
-  - [AniCraft Headless CLI (`anicraft-cli`, early alpha — never launch GUI)](https://github.com/storytold/AniCraft)
+- **Shared Libraries (`craft-libs`)**: [README.md](https://github.com/storytold/craft-libs/blob/main/README.md) · [`craft-ai-core` contract](https://github.com/storytold/craft-libs/blob/main/docs/ai-shared-layer.md)
+- **DeckCraft (`:7990`, `deckcraft-cli`)**: [README.md](https://github.com/storytold/deckcraft/blob/main/README.md) · [MCP](https://github.com/storytold/deckcraft/blob/main/docs/mcp.md) · [Control Protocol](https://github.com/storytold/deckcraft/blob/main/docs/control-protocol.md)
+- **EffectCraft (`:9877`, `effectcraft-cli`)**: [README.md](https://github.com/storytold/effectcraft/blob/main/README.md) · [Agents](https://github.com/storytold/effectcraft/blob/main/docs/agents.md) · [MCP](https://github.com/storytold/effectcraft/blob/main/docs/mcp.md) · [Control Protocol](https://github.com/storytold/effectcraft/blob/main/docs/control-protocol.md)
+- **FilmCraft (`:9876`, `filmcraft-cli`)**: [README.md](https://github.com/storytold/filmcraft/blob/main/README.md) · [Agents](https://github.com/storytold/filmcraft/blob/main/docs/agents.md) · [Control Protocol](https://github.com/storytold/filmcraft/blob/main/docs/control-protocol.md) · [Captions](https://github.com/storytold/filmcraft/blob/main/docs/captions.md) · [Transcripts](https://github.com/storytold/filmcraft/blob/main/docs/transcripts.md)
+- **AniCraft, PhotoCraft & VectorCraft**: [AniCraft README.md](https://github.com/storytold/anicraft/blob/main/README.md) · [PhotoCraft README.md](https://github.com/storytold/photocraft/blob/main/README.md) · [VectorCraft README.md](https://github.com/storytold/vectorcraft/blob/main/README.md)

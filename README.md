@@ -1,82 +1,201 @@
 <p align="center">
-  <img src="assets/app-icon/icon.png" width="112" height="112" alt="Magic Studio icon">
+  <a href="https://getartcraft.com/">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/storytold/filmcraft/main/docs/brand/artcraft-logo-white.svg">
+      <img alt="ArtCraft" src="https://raw.githubusercontent.com/storytold/filmcraft/main/docs/brand/artcraft-logo.svg" width="200">
+    </picture>
+  </a>
+</p>
+
+<p align="center">
+  <img src="assets/app-icon/icon.png" width="128" height="128" alt="Magic Studio app icon">
 </p>
 
 <h1 align="center">Magic Studio</h1>
 
 <p align="center">
-  <b>Song-driven storyboard, character puppet-rig, and lyric timing coordinator built in pure Rust on <code>storytold/craft-libs</code>.</b>
+  <b>Song-to-video production studio; creative storyboards, multi-tool character animation, kinetic lyrics and FilmCraft finishing, built in pure Rust.</b>
 </p>
 
 <p align="center">
-  Plan music and educational videos from a recorded audio track, manage printable PDF or slide storyboards,
-  prepare anatomical cutout rigs and timed lyric tracks, and share clean project files across the
-  <a href="https://github.com/storytold">ArtCraft</a> creative suite. Every UI action is also an engine command
-  that <code>magic-cli</code> and AI agents (through MCP) can drive.
+  Turn a recorded song or an existing project into a finished music video, lyric video or animated short across
+  <a href="https://github.com/storytold/deckcraft">DeckCraft</a>,
+  <a href="https://github.com/storytold/effectcraft">EffectCraft</a> and
+  <a href="https://github.com/storytold/filmcraft">FilmCraft</a>.
+  Native on macOS, Windows and Linux. Every button and stage action is also a command that the CLI,
+  a JSON control channel and AI agents (through MCP) can drive.
 </p>
 
 <p align="center">
-  <img alt="Status: early development (pre-alpha)" src="https://img.shields.io/badge/status-early%20development%20(pre--alpha)-f26b1d?style=flat-square">
-  <img alt="Written in Rust" src="https://img.shields.io/badge/written%20in-Rust-b7410e?style=flat-square">
-  <img alt="Platforms" src="https://img.shields.io/badge/platforms-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux%20%C2%B7%20BSD-555?style=flat-square">
-  <a href="LICENSE"><img alt="License: Source-Available Non-Resale" src="https://img.shields.io/badge/license-Source--Available%20Non--Resale-35e1c0?style=flat-square"></a>
+  <a href="#license-and-credits"><img alt="License: Non-Resale" src="https://img.shields.io/badge/license-Non--Resale-8b5cf6?style=flat-square"></a>
+  <img alt="Written in pure Rust" src="https://img.shields.io/badge/pure-Rust-6a3fd6?style=flat-square&logo=rust&logoColor=white">
+  <img alt="Runs on macOS, Windows and Linux" src="https://img.shields.io/badge/runs%20on-macOS%20%7C%20Windows%20%7C%20Linux-8b5cf6?style=flat-square">
+  <a href="ROADMAP.md"><img alt="Status: alpha" src="https://img.shields.io/badge/status-alpha-6a3fd6?style=flat-square"></a>
+  <br>
+  <a href="https://sonarcloud.io/project/overview?id=jessenaiman_magic"><img alt="Scanned by SonarCloud" src="https://img.shields.io/badge/Scanned_by-SonarCloud-4b9fd5?style=flat-square&logo=sonarqubecloud&logoColor=white"></a>
+  <a href="https://coderabbit.ai"><img alt="Reviewed by CodeRabbit" src="https://img.shields.io/coderabbit/prs/github/jessenaiman/magic?style=flat-square&label=Reviewed%20by%20CodeRabbit&logo=coderabbit"></a>
+</p>
+
+<p align="center">
+  <a href="https://discord.gg/artcraft"><img alt="Join the ArtCraft community on Discord" src="https://img.shields.io/badge/Join%20us%20on%20Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" height="40"></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/jessenaiman/magic"><b>Magic Studio on GitHub</b></a> ·
+  <a href="https://getartcraft.com/">ArtCraft</a> ·
+  <a href="https://getartcraft.com/apps">All Crafting Apps</a>
 </p>
 
 > [!NOTE]
-> **Pre-Alpha Status & Contributor Call:** Magic Studio is in **pre-alpha (`early development`)**. The legacy cross-app `CraftHub` / `bridge.*` RPC wrapper layer has been stripped so the workspace follows standard ArtCraft conventions (`craft-libs` file envelopes on disk + a single same-binary `--control` channel). Contributors are welcome to help test workflows, refine stage views, and fix pre-alpha bugs.
+> **ArtCraft is a community of artists from all walks of life.** Digital, generative, music,
+> games &mdash; if you make things, you're one of us. **[Come say hi on Discord](https://discord.gg/artcraft).**
 
-## Standard ArtCraft Architecture (Zero Cross-App Proxying)
+<p align="center">
+  <a href="#storyboard-and-scribbles">Storyboard</a> ·
+  <a href="#open-multi-tool-animations">Animations</a> ·
+  <a href="#live-editing-views-and-studio">Live Views &amp; Studio</a> ·
+  <a href="#built-for-agents">Agents</a> ·
+  <a href="#get-started">Get started</a> ·
+  <a href="#the-crafting-apps">The Crafting Apps</a> ·
+  <a href="#documentation">Docs</a> ·
+  <a href="#license-and-credits">License</a>
+</p>
 
-Magic Studio (`magic`, `magic-cli`, `magic-mcp`, `magic-tui`) is built on `eframe` + `egui` 0.37, [`storytold/craft-libs`](https://github.com/storytold/craft-libs), and [`storytold/craft-ai-integrations`](https://github.com/storytold/craft-ai-integrations) with zero Tauri, Electron, or webview layers:
+<br>
 
-1. **Shared File Envelopes via `craft-libs` (No Bundled Sibling Binaries Required)**:
-   Magic inspects and writes project assets directly on disk using `craft-doc`, `craft-ecproj-format`, `craft-pcraft-format`, `craft-vectorcraft-format`, `craft-audio`, `craft-media`, `craft-atomic`, and `image`. Opening an asset in [`FilmCraft`](https://github.com/storytold/filmcraft), [`EffectCraft`](https://github.com/storytold/effectcraft), [`DeckCraft`](https://github.com/storytold/deckcraft), [`DesignCraft`](https://github.com/storytold/designcraft), [`PhotoCraft`](https://github.com/storytold/photocraft), or [`VectorCraft`](https://github.com/storytold/vectorcraft) uses standard OS file handoff (`workspace.open`) + atomic save watching (`link_watch`), matching PhotoCraft's *Edit Contents* pattern.
-2. **Same-Binary `--control` & MCP (`127.0.0.1:9875`)**:
-   `magic --control 9875` exposes a standard loopback JSON-lines control channel exclusively for `magic-cli` and `magic-cli mcp --connect 127.0.0.1:9875`. AI agents drive sibling ArtCraft apps directly through each installed app's own `<app>-cli mcp` server rather than routing commands through Magic.
+Magic Studio (`magic`, `magic-cli`, `magic-tui`) is a song-driven production coordinator built on [`storytold/craft-libs`](https://github.com/storytold/craft-libs) and `eframe` / `egui` 0.37. Instead of locking artists into a closed format, every project folder holds real creative files — native [DeckCraft](https://github.com/storytold/deckcraft) storyboard decks, open 2D/3D animation renders, [EffectCraft](https://github.com/storytold/effectcraft) lyric and motion compositions, and a sample-accurate [FilmCraft](https://github.com/storytold/filmcraft) multi-track sequence (`254,016,000,000` ticks per second).
 
-## Quickstart (`magic`, `magic-cli`, and MCP)
+<br>
+
+## Storyboard and Scribbles
+
+- **Creative storyboards in DeckCraft (`01 Storyboard`).** Build decks with themes, layouts, shapes, pictures, speaker notes, section dividers and scene timing in native `.deckcraft` or PowerPoint `.pptx` files, present them full screen, and export production PDFs (slides, notes pages and handouts) through [`DeckCraft`](https://github.com/storytold/deckcraft) (`deckcraft --control 7990` or `deckcraft-cli`).
+- **User-editable `extensions/scribbles/` with a saved-Storyboard-slide gate.** Each project carries plain, user-editable templates and prompt recipes under `extensions/scribbles/` backed by `craft-ai-core` ([`storytold/craft-libs`](https://github.com/storytold/craft-libs/blob/main/docs/ai-shared-layer.md)) for character turnarounds, style sheets and scene plates. Scribble generation and batch scene expansion are gated on saved Storyboard slides on disk, so visual generation always follows deliberate storyboard decisions rather than unreviewed prompts.
+
+## Open multi-tool animations
+
+- **Bring any animation tool into `02 Animations` (`V2`).** `02 Animations` is an open production lane rather than a single-tool silo: author character and scene animation in **Blender**, **Three.js**, **After Effects**, **[AniCraft](https://github.com/storytold/anicraft)**, **[EffectCraft](https://github.com/storytold/effectcraft)**, **[PhotoCraft](https://github.com/storytold/photocraft)** or **[VectorCraft](https://github.com/storytold/vectorcraft)**.
+- **Every format FilmCraft understands.** Drop or link any clip, alpha render or image sequence recognized by [`FilmCraft`](https://github.com/storytold/filmcraft) (Apple ProRes 422–4444 XQ, H.264, HEVC, WebM/VP8/VP9/AV1, DNxHR, PNG/WebP alpha sequences) alongside 3D meshes inspected via `craft-mesh` (`GLB`/`glTF`, `OBJ`, `FBX`, `STL`, `PLY`, `3MF`).
+
+## Live editing views and Studio
+
+- **`03 Lyrics` (`V3` + `C1`) and `04 Motion` (`V4`).** Edit word-timed kinetic lyrics with `craft-font-catalog` and `craft-font-manager` (`FontsPanel`), keep broadcast captions (`SRT`, `WebVTT`, `TTML`, `SCC`, `MCC`, `EBU-STL`) synchronized via `craft-captions`, and author `craft-drawingml` vector shapes and text warps in live [`FilmCraft`](https://github.com/storytold/filmcraft)-aligned views.
+- **`05 Studio` with a 2-tab `Live Breakdown` & `Finishing` dock.** Built on `craft_ui::docking`, `05 Studio` pairs the composite Program Monitor and multi-track timeline (`V4` Motion, `V3` Lyrics, `V2` Animations, `V1` Storyboard, `C1` Captions, `A1` Song) with a streamlined 2-tab Studio dock:
+  - **`Live Breakdown`**: inspect and remap active clips across `V1`–`V4`, `C1` and `A1`, verify word/beat alignment, and round-trip timelines via `OTIO`, `FCPXML`, `FCP7 XML`, `EDL` and `ALE`.
+  - **`Finishing`**: grade with linear-light color wheels and waveform/vectorscope scopes, monitor real-time stereo `rmsDbfs`/`peakDbfs` levels, and render master deliverables into `exports/` through [`FilmCraft`](https://github.com/storytold/filmcraft).
+
+## Built for agents
+
+Every menu item, toolbar button, dock command and stage operation in Magic Studio is a **command** with a stable id, typed parameters and an enabled state (`magic-cli commands` lists them all). The desktop UI, **`magic-cli`**, the loopback JSON-lines control channel (**`magic --control 9875`**), the Backstage terminal viewer (**`magic-tui`**) and the **MCP server** (**`magic-cli mcp`**) all dispatch the same commands:
+
+- **Read-only `magic://` MCP resources:** inspect live or headless state without side effects via `magic://` resource URIs (`magic://document`, `magic://storyboard`, `magic://commands`, `magic://tracks`) alongside `list_commands`, `run_command` and `run_batch`.
+- **Automatic track reconciliation (`magic-cli studio map-tracks`):** scan saved DeckCraft storyboard slides, `02 Animations` renders, `03 Lyrics` compositions and `04 Motion` cues and map them onto `FilmCraft` tracks (`V1`–`V4`, `C1`, `A1`) in one deterministic pass.
 
 ```sh
-# Run workspace architecture, formatting, Clippy, and test checks:
-cargo xtask ci
-
-# Launch the desktop app with standard loopback control enabled:
-cargo run -p magic -- --control 9875 &
-
-# Attach the MCP server to the live window (or omit --connect for headless mode):
-claude mcp add magic -- magic-cli mcp
-claude mcp add magic-app -- magic-cli mcp --connect 127.0.0.1:9875
-
-# Quick loopback JSON-lines smoke test (no token required by default):
-printf '{"id":1,"method":"engine.commands","params":{}}\n' | nc 127.0.0.1 9875
-
-# Create a project and inspect storyboard state:
-magic-cli new --root ~/Videos/Magic --name "My Song" --audio song.wav --wizard
-magic-cli --connect 127.0.0.1:9875 storyboard check
-magic-cli app --port 9875 ui.inspect
+magic --control 9875                                        # desktop app + JSON-lines control channel on 127.0.0.1:9875
+magic-cli mcp                                               # headless MCP server over stdio (with magic:// resources)
+magic-cli mcp --connect 9875                                # attach MCP server to the running desktop window
+magic-cli --project song.magic studio map-tracks --save     # map Storyboard, Animations, Lyrics & Motion onto FilmCraft tracks
 ```
 
-## Workspace Layout
+```json
+{"id": 1, "method": "engine.execute", "params": {"command": "studio.mapTracks", "params": {}}}
+{"id": 2, "method": "ui.docking", "params": {}}
+{"id": 3, "method": "ui.screenshot", "params": {"path": "studio.png"}}
+```
 
-| Crate / App | Layer | Responsibility |
-| :--- | :---: | :--- |
-| `crates/util` (`magic-util`) | L4 | Exact `Tick` timing, cubic-Bézier `Easing`, and zero-subprocess `craft-doc` / `craft-media` / `craft-audio` inspection |
-| `crates/scribbles` (`magic-scribbles`) | L4 | Deterministic prompt templates and sprite/parts grid geometry |
-| `crates/engine` (`magic-engine`) | L5 | Headless [`Session`], command registry, pure-Rust `native_media` cutouts/SVG contours, and `.magic` project state |
-| `crates/mcp` (`magic-mcp`) | L6 | Standard ArtCraft MCP server (`command_list`, `command_run`, `command_batch`, `doc_inspect`, `ui_*`) |
-| `crates/ui-egui` (`magic-ui-egui`) | L6 | Pure-Rust `egui` 0.37 views (`Home`, `Project`, `Storyboard`, `Animations`, `Lyrics`, `Motion`, `Studio`) |
-| `apps/magic` | L7 | Native `eframe` + `wgpu` desktop binary + `--control` JSON-lines listener |
-| `apps/magic-cli` | L7 | Headless / `--connect` CLI and `magic-mcp` stdio entrypoint |
-| `apps/magic-tui` | L7 | **Backstage** terminal console for headless or live `--control 9875` sessions |
-| `xtask` | L7 | ArtCraft `ci`, `layers`, `assets` (`ATTRIBUTION.md`), and bounded `test` gates |
+## Get started
+
+Build and install `magic`, `magic-cli` and `magic-tui` from source (`./install.sh` runs `cargo update` automatically so local builds pull the latest [`storytold/craft-libs`](https://github.com/storytold/craft-libs) `main` commits):
+
+```sh
+git clone https://github.com/jessenaiman/magic.git
+cd magic
+./install.sh --from-source
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+Create a brand-new song project or initialize Magic Studio inside an existing project folder:
+
+```sh
+# Start a new project or attach to [existing_project] with song audio
+magic-cli new [existing_project] --audio song.wav --name "Lantern Harbor"
+
+# Check installed Crafting Apps and map tracks into FilmCraft
+magic-cli exec app.doctor
+magic-cli --project ~/Magic/lantern-harbor/lantern-harbor.magic studio map-tracks --save
+```
+
+Optional multilingual UI and title fonts come from [`storytold/craft-fonts`](https://github.com/storytold/craft-fonts):
+
+```sh
+git clone https://github.com/storytold/craft-fonts ../craft-fonts
+CRAFT_FONTS_DIR="$PWD/../craft-fonts" cargo run --release -p magic
+```
+
+The control protocol is documented in [`docs/control-protocol.md`](docs/control-protocol.md) and MCP setup in [`docs/mcp.md`](docs/mcp.md). Stuck, or want to show what you made? Ask in [Discord](https://discord.gg/artcraft).
+
+## The Crafting Apps
+
+Magic Studio coordinates the **Crafting Apps**: free, open-source creative tools from the [ArtCraft](https://getartcraft.com/) team, each written from scratch in Rust and each able to stand on its own.
+
+| | App | What it's for | Code | Learn more |
+|:-:|---|---|---|---|
+| <img src="https://raw.githubusercontent.com/storytold/photocraft/main/assets/app-icon/hicolor/64x64/apps/ai.storyteller.photocraft.png" alt="" width="32" height="32"> | **PhotoCraft** | Image editing: layers, masks, type and real PSD files | [GitHub](https://github.com/storytold/photocraft) | [Website](https://getartcraft.com/apps/photocraft) |
+| <img src="https://raw.githubusercontent.com/storytold/vectorcraft/main/assets/app-icon/hicolor/64x64/apps/ai.storyteller.vectorcraft.png" alt="" width="32" height="32"> | **VectorCraft** | Vector illustration | [GitHub](https://github.com/storytold/vectorcraft) | [Website](https://getartcraft.com/apps/vectorcraft) |
+| <img src="https://raw.githubusercontent.com/storytold/filmcraft/main/assets/app-icon/hicolor/64x64/apps/ai.storyteller.filmcraft.png" alt="" width="32" height="32"> | **FilmCraft** | Video editing, color and sound | [GitHub](https://github.com/storytold/filmcraft) | [Website](https://getartcraft.com/apps/filmcraft) |
+| <img src="https://raw.githubusercontent.com/storytold/lightcraft/main/assets/app-icon/hicolor/64x64/apps/ai.storyteller.lightcraft.png" alt="" width="32" height="32"> | **LightCraft** | Photo library and raw development | [GitHub](https://github.com/storytold/lightcraft) | [Website](https://getartcraft.com/apps/lightcraft) |
+| <img src="https://raw.githubusercontent.com/storytold/pdfcraft/main/assets/app-icon/hicolor/64x64/apps/ai.storyteller.pdfcraft.png" alt="" width="32" height="32"> | **PdfCraft** | Reading, organizing and protecting PDFs | [GitHub](https://github.com/storytold/pdfcraft) | [Website](https://getartcraft.com/apps/pdfcraft) |
+| <img src="https://raw.githubusercontent.com/storytold/effectcraft/main/assets/app-icon/hicolor/64x64/apps/ai.storyteller.effectcraft.png" alt="" width="32" height="32"> | **EffectCraft** | Motion graphics and visual effects | [GitHub](https://github.com/storytold/effectcraft) | [Website](https://getartcraft.com/apps/effectcraft) |
+| <img src="https://raw.githubusercontent.com/storytold/designcraft/main/assets/app-icon/hicolor/64x64/apps/ai.storyteller.designcraft.png" alt="" width="32" height="32"> | **DesignCraft** | Page layout and publishing | [GitHub](https://github.com/storytold/designcraft) | [Website](https://getartcraft.com/apps/designcraft) |
+| <img src="https://raw.githubusercontent.com/storytold/figcraft/main/assets/app-icon/hicolor/64x64/apps/ai.storyteller.figcraft.png" alt="" width="32" height="32"> | **FigCraft** | Interface design and prototyping | [GitHub](https://github.com/storytold/figcraft) | [Website](https://getartcraft.com/apps/figcraft) |
+| <img src="https://raw.githubusercontent.com/storytold/wordcraft/main/assets/app-icon/hicolor/64x64/apps/ai.storyteller.wordcraft.png" alt="" width="32" height="32"> | **WordCraft** | Word processing and documents | [GitHub](https://github.com/storytold/wordcraft) | [Website](https://getartcraft.com/apps/wordcraft) |
+| <img src="https://raw.githubusercontent.com/storytold/soundcraft/main/assets/app-icon/hicolor/64x64/apps/ai.storyteller.soundcraft.png" alt="" width="32" height="32"> | **SoundCraft** | Audio recording and editing | [GitHub](https://github.com/storytold/soundcraft) | [Website](https://getartcraft.com/apps/soundcraft) |
+| <img src="https://raw.githubusercontent.com/storytold/deckcraft/main/assets/app-icon/hicolor/64x64/apps/ai.storyteller.deckcraft.png" alt="" width="32" height="32"> | **DeckCraft** | Presentations and slide decks | [GitHub](https://github.com/storytold/deckcraft) | [Website](https://getartcraft.com/apps/deckcraft) |
+| <img src="https://raw.githubusercontent.com/storytold/cadcraft/main/assets/app-icon/hicolor/64x64/apps/ai.storyteller.cadcraft.png" alt="" width="32" height="32"> | **CADCraft** | Computer-aided design | [GitHub](https://github.com/storytold/cadcraft) | [Website](https://getartcraft.com/apps/cadcraft) |
+| <img src="https://raw.githubusercontent.com/storytold/gridcraft/main/assets/app-icon/hicolor/64x64/apps/ai.storyteller.gridcraft.png" alt="" width="32" height="32"> | **GridCraft** | Spreadsheets and data | [GitHub](https://github.com/storytold/gridcraft) | [Website](https://getartcraft.com/apps/gridcraft) |
+| <img src="https://raw.githubusercontent.com/storytold/texturecraft/main/assets/app-icon/hicolor/64x64/apps/ai.storyteller.texturecraft.png" alt="" width="32" height="32"> | **TextureCraft** | 3D texture painting | [GitHub](https://github.com/storytold/texturecraft) | [Website](https://getartcraft.com/apps/texturecraft) |
+| <img src="https://raw.githubusercontent.com/storytold/anicraft/main/assets/app-icon/hicolor/64x64/apps/ai.storyteller.anicraft.png" alt="" width="32" height="32"> | **AniCraft** | 2D vector animation | [GitHub](https://github.com/storytold/anicraft) | [Website](https://getartcraft.com/apps/anicraft) |
+| <img src="https://raw.githubusercontent.com/storytold/craft-anything/main/assets/app-icon/hicolor/64x64/apps/ai.storyteller.craft-anything.png" alt="" width="32" height="32"> | **Craft Anything** | See how any software works, then build your own | [GitHub](https://github.com/storytold/craft-anything) | [Website](https://getartcraft.com/apps/craft-anything) |
+| <img src="https://raw.githubusercontent.com/tangency-labs/solidcraft/main/assets/icons/app/linux/exports/hicolor/64x64/apps/io.tangencylabs.solidcraft.png" alt="" width="32" height="32"> | **SolidCraft** | Parametric 3D CAD by Tangency Labs (community app) | [GitHub](https://github.com/tangency-labs/solidcraft) | |
+
+And [**ArtCraft**](https://getartcraft.com/) itself, our AI image and video studio for artists who want real control.
+
+<br>
+
+<p align="center">
+  <a href="https://discord.gg/artcraft"><img alt="Join the ArtCraft community on Discord" src="https://img.shields.io/badge/Join%20us%20on%20Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" height="40"></a>
+</p>
+
+<h3 align="center">Come make things with us</h3>
+
+<p align="center">
+  Our Discord is where artists of every kind hang out: people who paint, shoot, draw, cut film,
+  set type, and people still figuring out what they like to make. Share what you're working on,
+  ask for help, tell us what's broken, or tell us what you wish these tools could do.
+  Whatever your medium and however long you've been at it, you're welcome here.
+</p>
+
+<p align="center">
+  <a href="https://discord.gg/artcraft"><b>discord.gg/artcraft</b></a> ·
+  <a href="https://getartcraft.com/">getartcraft.com</a> ·
+  <a href="https://getartcraft.com/apps">The Crafting Apps</a>
+</p>
 
 ## Documentation
 
-- **[Control Protocol (`docs/control-protocol.md`)](docs/control-protocol.md)** — Loopback JSON-lines `--control` specification (`127.0.0.1:9875`).
-- **[MCP Server (`docs/mcp.md`)](docs/mcp.md)** — `magic-cli mcp` / `.mcp.json` configuration and `--automation-read-root` / `--automation-write-root` confinement.
-- **[Architecture (`docs/architecture.md`)](docs/architecture.md)** — Crate layer DAG and `craft-libs` file boundaries.
-- **[Agent Instructions (`AGENTS.md`)](AGENTS.md)** — House rules and standard ArtCraft MCP workflow.
+| Document | Contents |
+|---|---|
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Setup, `cargo xtask ci` (`fmt`, `clippy`, optional `MAGIC_RUN_TESTS=1`), branch and PR conventions |
+| [`AGENTS.md`](AGENTS.md) | Contributor and agent guidelines plus shared ArtCraft house rules |
+| [`docs/architecture.md`](docs/architecture.md) | Workspace crates (`magic-util`, `magic-engine`, `magic-mcp`, `magic-ui-egui`), `extensions/scribbles/`, and `craft_ui::docking` |
+| [`docs/control-protocol.md`](docs/control-protocol.md) | Loopback JSON-lines `--control 9875` protocol reference |
+| [`docs/mcp.md`](docs/mcp.md) | `magic-cli mcp` (`--connect 9875` and headless), `magic://` resources, and root confinement |
+| [`ROADMAP.md`](ROADMAP.md) · [`docs/gaps.md`](docs/gaps.md) | Alpha milestones, live multi-app integration checks, and open items |
+| [`book/`](book/src/README.md) · [`docs/wiki/magic/`](docs/wiki/README.md) | mdBook developer guide and Starlight user guides |
 
-## License
+## License and credits
 
-Copyright (c) 2026 Jesse Naiman. Distributed under the **[Magic Studio Source-Available Non-Resale License](LICENSE)** (brand assets governed by [`docs/brand/LICENSE-brand.txt`](docs/brand/LICENSE-brand.txt)).
+Magic Studio is licensed under [`LicenseRef-Magic-Studio-NonResale`](LICENSE) (Copyright (c) 2026 Jesse Naiman and Magic Studio Contributors). You own 100% of the videos, storyboards, animations and media outputs you create with Magic Studio, including unrestricted commercial monetization; reselling Magic Studio itself or offering it as a paid hosted service requires a separate written commercial license. Required notices are in [`NOTICE`](NOTICE).
+
+Bundled icons, diagrams and design assets keep their respective licenses; every file is listed with its author, source and license in [`ATTRIBUTION.md`](ATTRIBUTION.md). Magic Studio brand assets are governed by [`docs/brand/LICENSE-brand.txt`](docs/brand/LICENSE-brand.txt). Shared Rust foundations from [`storytold/craft-libs`](https://github.com/storytold/craft-libs), [`storytold/egui`](https://github.com/storytold/egui) and [`storytold/winit`](https://github.com/storytold/winit) remain under their upstream `MIT OR Apache-2.0` licenses.

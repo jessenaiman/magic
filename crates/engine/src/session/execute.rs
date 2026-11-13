@@ -94,13 +94,15 @@ fn execute_inner(s: &mut Session, id: &str, params: Value) -> Result<Value> {
             return Err(error);
         }
     };
-    if s.project_path != project_before {
+    let is_lifecycle = matches!(id, "project.open" | "project.new" | "project.close" | "file.open" | "file.new" | "file.close");
+    if is_lifecycle || s.project_path != project_before {
         s.close_documents();
+        s.step_base.clear();
     } else if spec.journal && !matches!(id, "edit.undo" | "edit.redo") {
         s.record_step(id);
     }
     sync_project_file(s, spec, id, assets_before.as_ref())?;
-    if spec.journal {
+    if spec.journal && !matches!(id, "project.close" | "file.close") {
         s.record(out.clone());
     }
     Ok(out)

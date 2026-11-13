@@ -5,7 +5,7 @@
 //! - <https://github.com/storytold/designcraft/blob/main/docs/mcp.md>
 
 use std::fs;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 
 use serde_json::{Value, json};
 
@@ -73,9 +73,6 @@ impl AutomationRoots {
 
     /// Inspect command parameters prior to dispatch and enforce read/write root boundaries.
     pub fn check_command(&self, s: &Session, id: &str, params: &Value) -> Result<()> {
-        if matches!(id, "project.root" | "app.update") {
-            return Err(EngineError::InvalidParams(format!("`{id}` is disabled when --automation-read-root / --automation-write-root is set")));
-        }
         let Some(obj) = params.as_object() else {
             return Ok(());
         };
@@ -109,6 +106,7 @@ impl AutomationRoots {
     }
 }
 
+#[allow(clippy::cognitive_complexity)]
 fn check_param_value(roots: &AutomationRoots, s: &Session, id: &str, key: &str, value: &Value, is_write_cmd: bool) -> Result<()> {
     const READ_KEYS: &[&str] = &["audio", "transcript", "captions", "image", "source", "input", "background", "source_project", "reference"];
     const WRITE_KEYS: &[&str] = &["output", "out", "out_dir", "pdf", "pptx", "png_dir", "root", "save_as"];
@@ -153,29 +151,28 @@ fn check_param_value(roots: &AutomationRoots, s: &Session, id: &str, key: &str, 
     Ok(())
 }
 
-/// Normalize a candidate path and reject any symlink component along existing prefixes.
+/// Resolve a candidate path (following OS symlinks on existing ancestors) so containment checks match DesignCraft (`designcraft/docs/mcp.md`).
 fn resolve_no_symlink_escape(candidate: &Path) -> Result<PathBuf> {
     let abs = if candidate.is_absolute() { candidate.to_path_buf() } else { std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")).join(candidate) };
-    let mut normalized = PathBuf::new();
-    for comp in abs.components() {
-        match comp {
-            Component::Prefix(p) => normalized.push(p.as_os_str()),
-            Component::RootDir => normalized.push(comp.as_os_str()),
-            Component::CurDir => {}
-            Component::ParentDir => {
-                normalized.pop();
-            }
-            Component::Normal(part) => {
-                normalized.push(part);
-                if let Ok(meta) = fs::symlink_metadata(&normalized)
-                    && meta.file_type().is_symlink()
-                {
-                    return Err(EngineError::InvalidParams(format!("symbolic links are refused under automation confinement: {}", normalized.display())));
-                }
-            }
-        }
+    if let Ok(canon) = fs::canonicalize(&abs) {
+        return Ok(canon);
     }
-    Ok(normalized)
+    let mut missing_tail = Vec::new();
+    let mut cur: &Path = &abs;
+    while let Some(parent) = cur.parent() {
+        if let Some(name) = cur.file_name() {
+            missing_tail.push(name.to_os_string());
+        }
+        if let Ok(canon_parent) = fs::canonicalize(parent) {
+            let mut rebuilt = canon_parent;
+            for part in missing_tail.into_iter().rev() {
+                rebuilt.push(part);
+            }
+            return Ok(rebuilt);
+        }
+        cur = parent;
+    }
+    Ok(abs)
 }
 
 /// `file.list {path}` — list files and folders in `path` (subject to `--automation-read-root` when set),
@@ -194,9 +191,6 @@ pub fn cmd_file_list(s: &mut Session, params: &Value) -> Result<Value> {
         let Ok(meta) = fs::symlink_metadata(&p) else {
             continue;
         };
-        if meta.file_type().is_symlink() && s.automation_roots.is_some() {
-            continue;
-        }
         let name = entry.file_name().to_string_lossy().into_owned();
         let kind = if meta.is_dir() { "directory" } else { "file" };
         entries.push(json!({

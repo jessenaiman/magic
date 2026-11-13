@@ -1,6 +1,6 @@
 //! Read and write word motion on the real lyrics EffectCraft project.
 //!
-//! `lettering/lyrics.ecproj` is authoritative for a word group's transform keys. The panel
+//! `effects/lyrics.ecproj` is authoritative for a word group's transform keys. The panel
 //! discovers the comp's transform properties from that project, `set` writes the keyframes
 //! there with `prop.addKey`, saves it, and then records only the binding (comp/layer ids plus
 //! the source word ids) and a read-back of the keys in words.json. `words.letter` remains the
@@ -16,7 +16,7 @@ const FRAME_WIDTH: f64 = 1920.0;
 const PROPERTIES: [&str; 4] = ["transform/position", "transform/rotation", "transform/scale", "transform/opacity"];
 
 fn project_path(dir: &Path) -> PathBuf {
-    dir.join("lettering/lyrics.ecproj")
+    crate::cmd::words::lyrics_ecproj_path(dir)
 }
 
 fn step(command: &str, params: Value) -> Value {
@@ -170,10 +170,10 @@ pub fn properties(s: &mut Session, p: &Value) -> Result<Value> {
     let dir = crate::cmd::words::workspace_dir(s)?;
     let project = project_path(&dir);
     if !project.is_file() {
-        let _ = super::lettering::cmd_words_letter(s, &json!({"render": false}));
+        super::lettering::cmd_words_letter(s, &json!({"render": false}))?;
     }
     if !project.is_file() {
-        return Err(invalid("No lettering/lyrics.ecproj in this project; build the lettering first"));
+        return Err(invalid("No effects/lyrics.ecproj in this project; build the lettering first"));
     }
     let read = stage::cmd_words_read(s, &json!({}))?;
     let document = read["document"].clone();
@@ -301,10 +301,10 @@ pub fn set(s: &mut Session, p: &Value) -> Result<Value> {
     let dir = crate::cmd::words::workspace_dir(s)?;
     let project = project_path(&dir);
     if !project.is_file() {
-        let _ = super::lettering::cmd_words_letter(s, &json!({"render": false}));
+        super::lettering::cmd_words_letter(s, &json!({"render": false}))?;
     }
     if !project.is_file() {
-        return Err(invalid("No lettering/lyrics.ecproj in this project; build the lettering first"));
+        return Err(invalid("No effects/lyrics.ecproj in this project; build the lettering first"));
     }
     let read = stage::cmd_words_read(s, &json!({}))?;
     let document = read["document"].clone();
@@ -429,7 +429,7 @@ pub fn set(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(reply)
 }
 
-/// `effect.save`: persist `lettering/lyrics.ecproj` with EffectCraft `file.save`.
+/// `effect.save`: persist `effects/lyrics.ecproj` with EffectCraft `file.save`.
 ///
 /// Runs the single `file.save` command through `effectcraft` with `save: true`, so a live
 /// EffectCraft saves its open document and a headless run writes the work copy back to the
@@ -438,10 +438,10 @@ pub fn cmd_effect_save(s: &mut Session, _p: &Value) -> Result<Value> {
     let dir = crate::cmd::words::workspace_dir(s)?;
     let project = project_path(&dir);
     if !project.is_file() {
-        let _ = super::lettering::cmd_words_letter(s, &json!({"render": false}));
+        super::lettering::cmd_words_letter(s, &json!({"render": false}))?;
     }
     if !project.is_file() {
-        return Err(invalid("No lettering/lyrics.ecproj in this project; build the lettering first"));
+        return Err(invalid("No effects/lyrics.ecproj in this project; build the lettering first"));
     }
     effectcraft(&dir, Some(&project), &[step("file.save", json!({}))], true)?;
     Ok(json!({"ok": true, "project": project}))

@@ -4,6 +4,7 @@
 //! - [`system`]: UI inspection/controls, Craft CLI pass-throughs, `craft-ai-integrations` (`ai.*`), diagnostics, and settings.
 
 pub mod creative;
+pub(crate) mod film;
 pub mod project;
 pub mod system;
 
@@ -51,9 +52,7 @@ pub(crate) const fn is_long_running_id(id: &str) -> bool {
             | b"character.sprite"
             | b"character.shot"
             | b"character.set"
-            | b"character.model3d.breakout"
-            | b"character.model3d.rig"
-            | b"character.model3d.animate"
+            | b"animation.promote"
             | b"animation.prepare_motion"
     )
 }

@@ -1,0 +1,97 @@
+{
+  "note": "User-editable Scribbles prompt layouts. Every generation must reference a saved Storyboard slide (`slide`).",
+  "shared": "Follow the saved Storyboard slide's visual prompt, style, palette, and proportions exactly. Plain transparent background or flat solid chroma key with no text, frames, or edge clipping.",
+  "stance": "Animation-ready upright stance: feet shoulder-width apart on one baseline, arms held slightly clear of the torso, hands open, limbs non-overlapping.",
+  "kinds": {
+    "new": {
+      "label": "New character",
+      "canvas": [1024, 1536],
+      "save_command": "project.add_asset",
+      "save_kind": "image",
+      "tags": ["character", "new", "front-view"],
+      "layout": "One full-body front view centred horizontally on the canvas, feet on y = 1440.",
+      "rules": ["stance"]
+    },
+    "image": {
+      "label": "Redraw for animation",
+      "canvas": [1024, 1536],
+      "save_command": "project.add_asset",
+      "save_kind": "image",
+      "tags": ["character", "redraw", "front-view"],
+      "layout": "Redraw the character from the saved Storyboard slide as one clean full-body front view on baseline y = 1440.",
+      "rules": ["stance"]
+    },
+    "sheet": {
+      "label": "Turnaround sheet",
+      "canvas": [1536, 1024],
+      "save_command": "project.add_asset",
+      "save_kind": "turnaround",
+      "tags": ["character", "turnaround", "sheet"],
+      "layout": "Four equal 384 x 1024 px cells left to right (front, side, back, opposite side) on shared baseline y = 960.",
+      "rules": ["stance"]
+    },
+    "poses": {
+      "label": "Pose sheet (3x2)",
+      "canvas": [1536, 1024],
+      "save_command": "project.add_asset",
+      "save_kind": "poses",
+      "tags": ["character", "poses", "sheet"],
+      "layout": "Six poses in a 3 x 2 grid of 512 x 512 px cells: idle, walk, jump, wave, talk, cheer.",
+      "rules": []
+    },
+    "poses_2x2": {
+      "label": "Pose sheet (2x2)",
+      "canvas": [1024, 1024],
+      "save_command": "project.add_asset",
+      "save_kind": "poses",
+      "tags": ["character", "cutout_rig", "pose-sheet", "2x2"],
+      "layout": "Four full-body poses in a 2 x 2 grid of 512 x 512 px cells: idle, talk_sing, walk_hop, wave.",
+      "rules": []
+    },
+    "parts_chroma": {
+      "label": "Chroma-green parts sheet (#00FF00)",
+      "canvas": [1024, 1024],
+      "save_command": "project.add_asset",
+      "save_kind": "parts_sheet",
+      "tags": ["character", "cutout_rig", "parts-sheet", "chroma-green"],
+      "layout": "Exploded 2D puppet parts in a 3 x 2 grid on a flat solid #00FF00 background with rounded joint caps.",
+      "rules": []
+    },
+    "actions": {
+      "label": "Action frames",
+      "canvas": [1536, 1024],
+      "save_command": "character.sprite",
+      "save_kind": "image",
+      "tags": ["character", "actions", "sprite-sheet"],
+      "layout": "8 consecutive frames for {action} ({direction}) in a 4 x 2 grid of 384 x 512 px cells.",
+      "rules": []
+    },
+    "layers": {
+      "label": "Overlapping layers",
+      "canvas": [1536, 1536],
+      "save_command": "project.add_asset",
+      "save_kind": "layers",
+      "tags": ["character", "layers", "cutout"],
+      "layout": "Separated cut-out parts in a 3 x 3 grid of 512 x 512 px cells: head, torso, upper/lower limbs.",
+      "rules": []
+    },
+    "cutout_rig": {
+      "label": "Character Rig Pack",
+      "canvas": [1024, 1024],
+      "save_command": "scribbles.ingest",
+      "save_kind": "cutout_rig_pack",
+      "tags": ["character", "cutout_rig", "pack"],
+      "layout": "Multi-step character bundle driven by `steps.json` (`character.png`, `parts-sheet.png`, `pose-sheet.png`).",
+      "rules": ["stance"]
+    },
+    "custom": {
+      "label": "Custom slide prompt",
+      "canvas": [1024, 1536],
+      "save_command": "project.add_asset",
+      "save_kind": "image",
+      "tags": ["custom", "illustration"],
+      "layout": "{prompt}",
+      "rules": []
+    }
+  }
+}

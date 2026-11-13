@@ -1,14 +1,10 @@
-//! Craft design effect catalogs & live `--control` API discovery for Kinetic Lyrics
-//! (`words.effects`, V3), Song-Action Motion (`motion.effects`, V4), EffectCraft's 19-category
-//! 308-effect catalog (`effectcraft/docs/effects.md`, `T29`), and FilmCraft's 27 GPU linear-light
-//! blend modes (`filmcraft/README.md`, `T38`).
-//!
-//! When a user's local Craft desktop app is running with `--control` (`EffectCraft :9877`,
-//! `VectorCraft :7979`, `FilmCraft :9876`), `query_lyrics_effects` and `query_motion_effects`
-//! query the live API over `127.0.0.1` (`crate::craft_api`) and merge live effects with the
-//! documented Craft effect catalog — requiring zero `Cargo.toml` sibling app dependencies.
+//! Dynamic ArtCraft effect & preset discovery (`crates/engine/src/craft_effects.rs`):
+//! queries live `--control` APIs (`PhotoCraft :7878`, `VectorCraft :7980`, `EffectCraft :9877`,
+//! `FilmCraft :9876`) and user `.ectemplate` preset folders (`EC_PRESETS_DIR`), paired with a
+//! compact offline baseline of verified real Craft commands.
 
 use std::collections::HashSet;
+use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
 use serde_json::{Value, json};
@@ -25,7 +21,7 @@ pub struct MappedEffect {
     pub default_params: fn() -> Value,
 }
 
-/// All 19 EffectCraft effect categories (`effectcraft/docs/effects.md`, `T29`).
+/// All 19 EffectCraft effect categories (`effectcraft/README.md`).
 pub const EFFECTCRAFT_19_CATEGORIES: &[(&str, &str)] = &[
     ("blur_sharpen", "Blur & Sharpen"),
     ("channel", "Channel"),
@@ -48,7 +44,7 @@ pub const EFFECTCRAFT_19_CATEGORIES: &[(&str, &str)] = &[
     ("wasm_plugin", "WASM Plug-ins"),
 ];
 
-/// All 38 EffectCraft layer blend modes (`T29`).
+/// All 38 EffectCraft layer blend modes (`effectcraft/README.md`).
 pub const EFFECTCRAFT_38_BLEND_MODES: &[&str] = &[
     "normal",
     "dissolve",
@@ -90,7 +86,7 @@ pub const EFFECTCRAFT_38_BLEND_MODES: &[&str] = &[
     "luminescentPremul",
 ];
 
-/// All 27 FilmCraft GPU linear-light blend modes (`T38`).
+/// All 27 FilmCraft GPU linear-light blend modes (`filmcraft/README.md`).
 pub const FILMCRAFT_27_BLEND_MODES: &[&str] = &[
     "Normal",
     "Dissolve",
@@ -121,219 +117,111 @@ pub const FILMCRAFT_27_BLEND_MODES: &[&str] = &[
     "Luminosity",
 ];
 
+/// Verified real-command baseline for Kinetic Lyrics (`V3`).
 pub const LYRICS_EFFECTS: &[MappedEffect] = &[
     MappedEffect {
-        id: "ec.text.typewriter_range",
+        id: "layer.addTextAnimator:opacity",
         badge: "EC",
         craft_app: "effectcraft",
-        craft_command: "text.addAnimator",
-        match_name: "ADBE Text Animator",
+        craft_command: "layer.addTextAnimator",
+        match_name: "opacity",
         category: "Text Animator",
-        label: "Typewriter Range",
-        summary: "Range selector reveals characters/words synced to vocal syllables",
-        default_params: || json!({"selector": "range", "start": 0.0, "end": 100.0, "opacity": 0.0}),
+        label: "Range Reveal (Opacity)",
+        summary: "EffectCraft range selector revealing characters or words (`layer.addTextAnimator`)",
+        default_params: || json!({"properties": ["opacity"]}),
     },
     MappedEffect {
-        id: "ec.text.per_word_pop",
+        id: "layer.addTextAnimator:scale",
         badge: "EC",
         craft_app: "effectcraft",
-        craft_command: "text.addAnimator",
-        match_name: "ADBE Text Scale 3D",
+        craft_command: "layer.addTextAnimator",
+        match_name: "scale",
         category: "Text Animator",
-        label: "Per-Word Scale Pop",
-        summary: "Overshoots active sung word to 132% with eased range falloff",
-        default_params: || json!({"basedOn": "words", "scale": [132.0, 132.0], "easeHigh": 65.0}),
+        label: "Word Scale Pop",
+        summary: "EffectCraft text animator scaling active sung words (`layer.addTextAnimator`)",
+        default_params: || json!({"properties": ["scale"]}),
     },
     MappedEffect {
-        id: "ec.text.per_char_3d_flip",
+        id: "layer.addTextAnimator:position",
         badge: "EC",
         craft_app: "effectcraft",
-        craft_command: "text.addAnimator",
-        match_name: "ADBE Text Rotation X",
+        craft_command: "layer.addTextAnimator",
+        match_name: "position",
         category: "Text Animator",
-        label: "3D Character Flip",
-        summary: "Enables per-character 3D layer axis and swings glyphs forward",
-        default_params: || json!({"perCharacter3d": true, "rotationX": -80.0, "tracking": 6.0}),
+        label: "Word Rise / Drop",
+        summary: "EffectCraft text animator offsetting word position (`layer.addTextAnimator`)",
+        default_params: || json!({"properties": ["position"]}),
     },
     MappedEffect {
-        id: "ec.stylize.glow",
+        id: "layer.enablePerChar3D",
         badge: "EC",
         craft_app: "effectcraft",
-        craft_command: "effect.apply",
-        match_name: "ec.stylize.glow",
-        category: "Typography Stylize",
-        label: "Glow",
-        summary: "32-bpc GPU halo glow matched to EffectCraft Stylize > Glow",
-        default_params: || json!({"threshold": 60.0, "radius": 14.0, "intensity": 1.1}),
+        craft_command: "layer.enablePerChar3D",
+        match_name: "perChar3D",
+        category: "Text Animator",
+        label: "Per-Character 3D",
+        summary: "Enable EffectCraft 3D per-character glyph transforms (`layer.enablePerChar3D`)",
+        default_params: || json!({"enabled": true}),
     },
     MappedEffect {
-        id: "ec.generate.cclightsweep",
-        badge: "EC",
-        craft_app: "effectcraft",
-        craft_command: "effect.apply",
-        match_name: "ec.generate.cclightsweep",
-        category: "Typography Stylize",
-        label: "CC Light Sweep",
-        summary: "Animated specular shimmer sweeping across chorus hero words",
-        default_params: || json!({"direction": 28.0, "width": 42.0, "sweepIntensity": 38.0}),
+        id: "pc.layer.style.stroke",
+        badge: "PC",
+        craft_app: "photocraft",
+        craft_command: "layer.style.set",
+        match_name: "stroke",
+        category: "Layer Style",
+        label: "Outer Stroke",
+        summary: "PhotoCraft layer-style outline stroke (`:7878` `layer.style.set`)",
+        default_params: || json!({"style": "stroke", "size": 6.0, "position": "outside"}),
     },
     MappedEffect {
-        id: "ec.stylize.roughenedges",
-        badge: "EC",
-        craft_app: "effectcraft",
-        craft_command: "effect.apply",
-        match_name: "ec.stylize.roughenedges",
-        category: "Typography Stylize",
-        label: "Roughen Edges",
-        summary: "Hand-cut storybook ink edge texture on bold display type",
-        default_params: || json!({"border": 4.5, "edgeSharpness": 1.8, "scale": 65.0}),
-    },
-    MappedEffect {
-        id: "ec.perspective.dropshadow",
-        badge: "EC",
-        craft_app: "effectcraft",
-        craft_command: "effect.apply",
-        match_name: "ec.perspective.dropshadow",
-        category: "Perspective & 3D",
+        id: "pc.layer.style.dropShadow",
+        badge: "PC",
+        craft_app: "photocraft",
+        craft_command: "layer.style.set",
+        match_name: "dropShadow",
+        category: "Layer Style",
         label: "Drop Shadow",
-        summary: "Soft stage separation shadow behind bright storybook lettering",
-        default_params: || json!({"opacity": 75.0, "direction": 135.0, "distance": 8.0, "softness": 12.0}),
+        summary: "PhotoCraft layer-style separation shadow (`:7878` `layer.style.set`)",
+        default_params: || json!({"style": "dropShadow", "distance": 8.0, "size": 12.0}),
     },
     MappedEffect {
-        id: "ec.perspective.bevelalpha",
-        badge: "EC",
-        craft_app: "effectcraft",
-        craft_command: "effect.apply",
-        match_name: "ec.perspective.bevelalpha",
-        category: "Perspective & 3D",
-        label: "Bevel Alpha",
-        summary: "Chiseled rim highlight along glyph alpha edges",
-        default_params: || json!({"edgeThickness": 2.4, "lightAngle": -45.0, "lightIntensity": 0.45}),
-    },
-    MappedEffect {
-        id: "ec.generate.audiospectrum",
-        badge: "EC",
-        craft_app: "effectcraft",
-        craft_command: "effect.apply",
-        match_name: "ec.generate.audiospectrum",
-        category: "Audio Reactive",
-        label: "Audio Spectrum",
-        summary: "EffectCraft FFT frequency bars driven directly by the song layer",
-        default_params: || json!({"bands": 48, "maxHeight": 120.0, "softness": 20.0}),
-    },
-    MappedEffect {
-        id: "ec.generate.audiowaveform",
-        badge: "EC",
-        craft_app: "effectcraft",
-        craft_command: "effect.apply",
-        match_name: "ec.generate.audiowaveform",
-        category: "Audio Reactive",
-        label: "Audio Waveform Ribbon",
-        summary: "EffectCraft live vocal waveform ribbon tethered beneath active lyrics",
-        default_params: || json!({"samples": 256, "amplitude": 64.0, "thickness": 4.0}),
-    },
-    MappedEffect {
-        id: "ec.distort.bezierwarp",
-        badge: "EC",
-        craft_app: "effectcraft",
-        craft_command: "effect.apply",
-        match_name: "ec.distort.bezierwarp",
-        category: "Envelope Warp",
-        label: "Bezier Ribbon Warp",
-        summary: "12-tangent cubic mesh bending lyric phrases along stage arcs",
-        default_params: || json!({"quality": 6, "bend": 18.0}),
-    },
-    MappedEffect {
-        id: "ec.distort.wavewarp",
-        badge: "EC",
-        craft_app: "effectcraft",
-        craft_command: "effect.apply",
-        match_name: "ec.distort.wavewarp",
-        category: "Envelope Warp",
-        label: "Wave Warp",
-        summary: "Sinusoidal lyric wave synced to tempo for melodic choruses",
-        default_params: || json!({"waveHeight": 10.0, "waveWidth": 72.0, "waveSpeed": 1.2}),
-    },
-    MappedEffect {
-        id: "ec.distort.turbulentdisplace",
-        badge: "EC",
-        craft_app: "effectcraft",
-        craft_command: "effect.apply",
-        match_name: "ec.distort.turbulentdisplace",
-        category: "Envelope Warp",
-        label: "Turbulent Boil",
-        summary: "Animated hand-lettered cel boil across expressive words",
-        default_params: || json!({"amount": 11.0, "size": 26.0, "complexity": 2.0}),
-    },
-    MappedEffect {
-        id: "ec.sim.ccstarburst",
-        badge: "EC",
-        craft_app: "effectcraft",
-        craft_command: "effect.apply",
-        match_name: "ec.sim.ccstarburst",
-        category: "Simulation & Time",
-        label: "CC Star Burst",
-        summary: "Particle star burst accent on downbeat hero words",
-        default_params: || json!({"scatter": 32.0, "speed": 0.65, "gridSpacing": 6.0}),
-    },
-    MappedEffect {
-        id: "ec.time.echo",
-        badge: "EC",
-        craft_app: "effectcraft",
-        craft_command: "effect.apply",
-        match_name: "ec.time.echo",
-        category: "Simulation & Time",
-        label: "Motion Echo Trail",
-        summary: "Temporal ghost trail behind fast kinetic word leaps",
-        default_params: || json!({"echoTime": -0.033, "numberOfEchoes": 4, "decay": 0.68}),
-    },
-    MappedEffect {
-        id: "vc.envelope.arc",
+        id: "vc.envelope.warp",
         badge: "VC",
         craft_app: "vectorcraft",
         craft_command: "object.envelope.makeWithWarp",
-        match_name: "warp.arc",
-        category: "Envelope Warp",
-        label: "Envelope Arc",
-        summary: "VectorCraft live envelope arc warp preserving crisp cubic outlines",
-        default_params: || json!({"style": "arc", "bend": 22.0, "horizontalDistortion": 0.0, "verticalDistortion": 0.0}),
+        match_name: "arc",
+        category: "Vector Type",
+        label: "Envelope Arc Warp",
+        summary: "VectorCraft live vector envelope warp (`:7980` `object.envelope.makeWithWarp`)",
+        default_params: || json!({"style": "arc", "bend": 22.0}),
     },
     MappedEffect {
-        id: "vc.path.offset_halo",
+        id: "vc.path.offsetPath",
         badge: "VC",
         craft_app: "vectorcraft",
         craft_command: "object.path.offsetPath",
         match_name: "offsetPath",
-        category: "Layer Style",
-        label: "Vector Offset Sticker",
-        summary: "VectorCraft round-join offset contour behind display type",
-        default_params: || json!({"offset": 6.0, "joins": "round", "miterLimit": 4.0}),
-    },
-    MappedEffect {
-        id: "pc.layerStyle.stroke_halo",
-        badge: "PC",
-        craft_app: "photocraft",
-        craft_command: "layerStyle",
-        match_name: "stroke",
-        category: "Layer Style",
-        label: "Outer Stroke Halo",
-        summary: "PhotoCraft outside layer-style stroke for high-contrast read clarity",
-        default_params: || json!({"size": 6.0, "position": "outside", "opacity": 100.0}),
-    },
-    MappedEffect {
-        id: "pc.filter.paper_grain",
-        badge: "PC",
-        craft_app: "photocraft",
-        craft_command: "filter.noise.addNoise",
-        match_name: "addNoise",
-        category: "Layer Style",
-        label: "Paper Grain Press",
-        summary: "PhotoCraft warm monochromatic letterpress grain on title cards",
-        default_params: || json!({"amount": 4.5, "distribution": "gaussian", "monochromatic": true}),
+        category: "Vector Type",
+        label: "Vector Offset Contour",
+        summary: "VectorCraft round-join offset path behind display type (`:7980` `object.path.offsetPath`)",
+        default_params: || json!({"offset": 6.0, "joins": "round"}),
     },
 ];
 
+/// Verified real-command baseline for Song-Action Motion (`V4`).
 pub const MOTION_EFFECTS: &[MappedEffect] = &[
+    MappedEffect {
+        id: "layer.addShapeItem:trim",
+        badge: "EC",
+        craft_app: "effectcraft",
+        craft_command: "layer.addShapeItem",
+        match_name: "trim",
+        category: "Shape & Stroke Reveal",
+        label: "Trim Paths",
+        summary: "EffectCraft shape-layer `contents/trim/end` 0% -> 100% draw-on (`layer.addShapeItem`)",
+        default_params: || json!({"kind": "trim"}),
+    },
     MappedEffect {
         id: "vc.trace.line_art",
         badge: "VC",
@@ -342,7 +230,7 @@ pub const MOTION_EFFECTS: &[MappedEffect] = &[
         match_name: "lineArt",
         category: "Vector Trace & Brush",
         label: "Ink Line Trace",
-        summary: "VectorCraft background-free stroke extraction (`ignoreWhite: true`)",
+        summary: "VectorCraft stroke extraction (`:7980` `imageTrace.make`)",
         default_params: || json!({"preset": "lineArt", "ignoreWhite": true, "strokes": true}),
     },
     MappedEffect {
@@ -353,30 +241,8 @@ pub const MOTION_EFFECTS: &[MappedEffect] = &[
         match_name: "silhouettes",
         category: "Vector Trace & Brush",
         label: "Cutout Silhouette",
-        summary: "VectorCraft clean filled action silhouette without paper backdrop",
+        summary: "VectorCraft filled silhouette extraction (`:7980` `imageTrace.make`)",
         default_params: || json!({"preset": "silhouettes", "ignoreWhite": true, "strokes": false}),
-    },
-    MappedEffect {
-        id: "vc.brush.chalk_charcoal",
-        badge: "VC",
-        craft_app: "vectorcraft",
-        craft_command: "brush.apply",
-        match_name: "chalkCharcoal",
-        category: "Vector Trace & Brush",
-        label: "Chalk Art Brush",
-        summary: "VectorCraft dry storybook chalk stroke along action splines",
-        default_params: || json!({"library": "artistic_chalk", "width": 8.0}),
-    },
-    MappedEffect {
-        id: "vc.stroke.tapered_quill",
-        badge: "VC",
-        craft_app: "vectorcraft",
-        craft_command: "stroke.widthProfile.set",
-        match_name: "widthProfile1",
-        category: "Vector Trace & Brush",
-        label: "Tapered Quill Profile",
-        summary: "VectorCraft variable-width stroke tapering from tail to tip",
-        default_params: || json!({"profile": "widthProfile1", "taper": 65.0}),
     },
     MappedEffect {
         id: "vc.effect.roughen",
@@ -386,85 +252,19 @@ pub const MOTION_EFFECTS: &[MappedEffect] = &[
         match_name: "roughen",
         category: "Vector Distort",
         label: "Roughen Sketch",
-        summary: "VectorCraft organic hand-inked edge jitter on clean SVG paths",
+        summary: "VectorCraft hand-inked edge jitter on SVG paths (`:7980` `effect.apply`)",
         default_params: || json!({"size": 2.5, "detail": 14.0, "points": "smooth"}),
     },
     MappedEffect {
-        id: "vc.effect.zig_zag",
-        badge: "VC",
-        craft_app: "vectorcraft",
-        craft_command: "effect.apply",
-        match_name: "zigZag",
-        category: "Vector Distort",
-        label: "Zig-Zag Wave",
-        summary: "VectorCraft smooth sinusoidal ripples on water and wind cues",
-        default_params: || json!({"size": 6.0, "ridgesPerSegment": 5, "points": "smooth"}),
-    },
-    MappedEffect {
-        id: "ec.shape.trim_paths",
-        badge: "EC",
-        craft_app: "effectcraft",
-        craft_command: "layer.addShapeItem",
-        match_name: "trim",
-        category: "Shape & Stroke Reveal",
-        label: "Trim Paths",
-        summary: "EffectCraft shape-layer `contents/trim/end` 0% -> 100% draw-on",
-        default_params: || json!({"kind": "trim", "start": 0.0, "end": 100.0}),
-    },
-    MappedEffect {
-        id: "ec.generate.writeon",
-        badge: "EC",
-        craft_app: "effectcraft",
-        craft_command: "effect.apply",
-        match_name: "ec.generate.writeon",
-        category: "Shape & Stroke Reveal",
-        label: "Write-On Reveal",
-        summary: "EffectCraft animated brush nib revealing custom motion trails",
-        default_params: || json!({"brushSize": 9.0, "hardness": 85.0, "strokeLength": 1.2}),
-    },
-    MappedEffect {
-        id: "ec.generate.scribble",
-        badge: "EC",
-        craft_app: "effectcraft",
-        craft_command: "effect.apply",
-        match_name: "ec.generate.scribble",
-        category: "Shape & Stroke Reveal",
-        label: "Hand Scribble Fill",
-        summary: "EffectCraft animated cross-hatch scribble inside closed vector cues",
-        default_params: || json!({"angle": 35.0, "strokeWidth": 3.5, "wigglesPerSecond": 6.0}),
-    },
-    MappedEffect {
-        id: "ec.distort.turbulentdisplace",
-        badge: "EC",
-        craft_app: "effectcraft",
-        craft_command: "effect.apply",
-        match_name: "ec.distort.turbulentdisplace",
-        category: "Motion Boil & Trail",
-        label: "Turbulent Line Boil",
-        summary: "EffectCraft animated cel-animation line boil on drawn props",
-        default_params: || json!({"amount": 12.0, "size": 28.0, "complexity": 2.0}),
-    },
-    MappedEffect {
-        id: "ec.distort.wavewarp",
-        badge: "EC",
-        craft_app: "effectcraft",
-        craft_command: "effect.apply",
-        match_name: "ec.distort.wavewarp",
-        category: "Motion Boil & Trail",
-        label: "Swimming Wave Warp",
-        summary: "EffectCraft continuous phase-traveling wave across action drawings",
-        default_params: || json!({"waveHeight": 8.0, "waveWidth": 64.0, "waveSpeed": 1.4}),
-    },
-    MappedEffect {
-        id: "pc.filter.motion_trail",
+        id: "pc.action.play",
         badge: "PC",
         craft_app: "photocraft",
-        craft_command: "filter.blur.motionBlur",
-        match_name: "motionBlur",
-        category: "Motion Boil & Trail",
-        label: "Motion Trail Stamp",
-        summary: "PhotoCraft directional velocity smear behind fast-moving stamps",
-        default_params: || json!({"angle": 18.0, "distance": 16.0}),
+        craft_command: "action.play",
+        match_name: "default",
+        category: "Photo Actions",
+        label: "PhotoCraft Action",
+        summary: "Run a saved PhotoCraft `.atn` / macro action (`:7878` `action.play`)",
+        default_params: || json!({}),
     },
 ];
 
@@ -472,13 +272,57 @@ fn installed_apps_status() -> &'static Value {
     static STATUS: OnceLock<Value> = OnceLock::new();
     STATUS.get_or_init(|| {
         json!({
-            "effectcraft": crate::workspace::resolve_executable_path("effectcraft").is_some(),
-            "vectorcraft": crate::workspace::resolve_executable_path("vectorcraft").is_some(),
-            "photocraft": crate::workspace::resolve_executable_path("photocraft").is_some(),
-            "designcraft": crate::workspace::resolve_executable_path("designcraft").is_some(),
-            "filmcraft": crate::workspace::resolve_executable_path("filmcraft").is_some(),
+            "effectcraft": crate::workspace::resolve_executable_path("effectcraft-cli").is_some()
+                || crate::workspace::resolve_executable_path("effectcraft").is_some(),
+            "vectorcraft": crate::workspace::resolve_executable_path("vectorcraft-cli").is_some()
+                || crate::workspace::resolve_executable_path("vectorcraft").is_some(),
+            "photocraft": crate::workspace::resolve_executable_path("photocraft-cli").is_some()
+                || crate::workspace::resolve_executable_path("photocraft").is_some(),
+            "deckcraft": crate::workspace::resolve_executable_path("deckcraft-cli").is_some()
+                || crate::workspace::resolve_executable_path("deckcraft").is_some(),
+            "filmcraft": crate::workspace::resolve_executable_path("filmcraft-cli").is_some()
+                || crate::workspace::resolve_executable_path("filmcraft").is_some(),
         })
     })
+}
+
+fn ec_preset_dirs() -> Vec<PathBuf> {
+    let mut dirs = Vec::new();
+    if let Some(raw) = std::env::var_os("EC_PRESETS_DIR").filter(|v| !v.is_empty()) {
+        dirs.extend(std::env::split_paths(&raw));
+    }
+    if let Some(data) = crate::workspace::magic_data_dir().and_then(|p| p.parent().map(Path::to_path_buf)) {
+        dirs.push(data.join("effectcraft/presets"));
+    }
+    dirs
+}
+
+fn discover_ectemplate_presets() -> Vec<Value> {
+    let mut out = Vec::new();
+    for dir in ec_preset_dirs() {
+        let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_file() || !crate::workspace::has_extension(&path, &["ectemplate", "json"]) {
+                continue;
+            }
+            let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else { continue };
+            out.push(json!({
+                "id": format!("preset:{stem}"),
+                "badge": "EC",
+                "craft_app": "effectcraft",
+                "craft_command": "layer.applyTextPreset",
+                "match_name": stem,
+                "category": "EffectCraft Preset",
+                "label": stem.replace(['-', '_'], " "),
+                "summary": format!("User EffectCraft preset ({})", path.display()),
+                "params": {"preset": path},
+                "cli_available": true,
+                "live_api": false,
+            }));
+        }
+    }
+    out
 }
 
 fn filter_effects_value_list(items: Vec<Value>, app_filter: Option<&str>, cat_filter: Option<&str>, text_filter: Option<&str>) -> Vec<Value> {
@@ -506,7 +350,6 @@ fn serialize_table(table: &[MappedEffect], live_extras: &[&Option<Vec<Value>>]) 
     let mut seen = HashSet::new();
     let mut out: Vec<Value> = Vec::new();
 
-    // Merge live effects queried directly from open `--control` Craft apps first, then fill catalog items.
     for live in live_extras.iter().copied().flatten() {
         for item in live {
             if let Some(id) = item["id"].as_str()
@@ -516,7 +359,13 @@ fn serialize_table(table: &[MappedEffect], live_extras: &[&Option<Vec<Value>>]) 
             }
         }
     }
-
+    for preset in discover_ectemplate_presets() {
+        if let Some(id) = preset["id"].as_str()
+            && seen.insert(id.to_owned())
+        {
+            out.push(preset);
+        }
+    }
     for e in table {
         if !seen.insert(e.id.to_owned()) {
             continue;
@@ -539,13 +388,13 @@ fn serialize_table(table: &[MappedEffect], live_extras: &[&Option<Vec<Value>>]) 
 }
 
 pub fn lyrics_catalog_json() -> Vec<Value> {
-    let (_, ec_live, vc_live, _) = crate::craft_api::live_craft_snapshot(false);
-    serialize_table(LYRICS_EFFECTS, &[&ec_live, &vc_live])
+    let (_, ec_live, vc_pc_live, _) = crate::craft_api::live_craft_snapshot(false);
+    serialize_table(LYRICS_EFFECTS, &[&ec_live, &vc_pc_live])
 }
 
 pub fn motion_catalog_json() -> Vec<Value> {
-    let (_, ec_live, vc_live, _) = crate::craft_api::live_craft_snapshot(false);
-    serialize_table(MOTION_EFFECTS, &[&vc_live, &ec_live])
+    let (_, ec_live, vc_pc_live, _) = crate::craft_api::live_craft_snapshot(false);
+    serialize_table(MOTION_EFFECTS, &[&vc_pc_live, &ec_live])
 }
 
 pub fn find_lyrics_effect(id: &str) -> Option<&'static MappedEffect> {
@@ -558,20 +407,23 @@ pub fn find_motion_effect(id: &str) -> Option<&'static MappedEffect> {
 
 pub fn query_lyrics_effects(params: &Value) -> Value {
     let force_refresh = params.get("refresh").and_then(Value::as_bool).unwrap_or(false);
-    let (endpoints, ec_live, vc_live, _) = crate::craft_api::live_craft_snapshot(force_refresh);
-    let app = params.get("app").and_then(Value::as_str);
-    let category = params.get("category").and_then(Value::as_str);
-    let filter = params.get("filter").and_then(Value::as_str);
-    let merged = serialize_table(LYRICS_EFFECTS, &[&ec_live, &vc_live]);
-    let effects = filter_effects_value_list(merged, app, category, filter);
-    let live_connected = endpoints["effectcraft"]["connected"] == true || endpoints["vectorcraft"]["connected"] == true;
+    let (endpoints, ec_live, vc_pc_live, _) = crate::craft_api::live_craft_snapshot(force_refresh);
+    let effects = filter_effects_value_list(
+        serialize_table(LYRICS_EFFECTS, &[&ec_live, &vc_pc_live]),
+        params.get("app").and_then(Value::as_str),
+        params.get("category").and_then(Value::as_str),
+        params.get("filter").and_then(Value::as_str),
+    );
+    let live_connected =
+        endpoints["effectcraft"]["connected"] == true || endpoints["vectorcraft"]["connected"] == true || endpoints["photocraft"]["connected"] == true;
     json!({
         "ok": true,
         "domain": "lyrics",
         "track": "V3 (Kinetic Lyrics)",
-        "sources": ["effectcraft", "vectorcraft", "photocraft"],
+        "sources": ["effectcraft", "photocraft", "vectorcraft"],
         "api_connected": live_connected,
         "api_endpoints": endpoints,
+        "fonts": crate::craft_api::discover_suite_fonts(),
         "installed": installed_apps_status().clone(),
         "count": effects.len(),
         "effects": effects,
@@ -580,14 +432,16 @@ pub fn query_lyrics_effects(params: &Value) -> Value {
 
 pub fn query_motion_effects(params: &Value) -> Value {
     let force_refresh = params.get("refresh").and_then(Value::as_bool).unwrap_or(false);
-    let (endpoints, ec_live, vc_live, _) = crate::craft_api::live_craft_snapshot(force_refresh);
-    let app = params.get("app").and_then(Value::as_str);
-    let category = params.get("category").and_then(Value::as_str);
-    let filter = params.get("filter").and_then(Value::as_str);
-    let merged = serialize_table(MOTION_EFFECTS, &[&vc_live, &ec_live]);
-    let effects = filter_effects_value_list(merged, app, category, filter);
+    let (endpoints, ec_live, vc_pc_live, _) = crate::craft_api::live_craft_snapshot(force_refresh);
+    let effects = filter_effects_value_list(
+        serialize_table(MOTION_EFFECTS, &[&vc_pc_live, &ec_live]),
+        params.get("app").and_then(Value::as_str),
+        params.get("category").and_then(Value::as_str),
+        params.get("filter").and_then(Value::as_str),
+    );
     let categories_19: Vec<Value> = EFFECTCRAFT_19_CATEGORIES.iter().map(|(id, lbl)| json!({"id": id, "label": lbl})).collect();
-    let live_connected = endpoints["vectorcraft"]["connected"] == true || endpoints["effectcraft"]["connected"] == true;
+    let live_connected =
+        endpoints["vectorcraft"]["connected"] == true || endpoints["effectcraft"]["connected"] == true || endpoints["photocraft"]["connected"] == true;
     json!({
         "ok": true,
         "domain": "motion",

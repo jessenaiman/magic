@@ -10,10 +10,10 @@ use sha2::{Digest, Sha256};
 
 use super::compose::{kinetic_design, line_design, text_effect};
 use crate::cmd::words::{
-    ACTIONS, ENTRANCES, EXITS, HOLD_TICK, KINETIC_LIBRARY, aligned, default_document, document_path, fill_untimed, invalid, load, reference, save,
-    studio_times, timing, with_sung_sections, word_tick, word_time_key,
+    ACTIONS, ENTRANCES, EXITS, aligned, default_document, document_path, fill_untimed, invalid, load, reference, save, studio_times, timing,
+    with_sung_sections, word_tick, word_time_key,
 };
-use crate::time::{Tick, parse_tick};
+use crate::time::Tick;
 use crate::{Result, Session};
 
 const TEACHING_MODES: &[&str] = &["sing_along", "call_response", "echo_teach", "word_spotlight"];
@@ -103,12 +103,12 @@ fn inspect_lettering_ecproj(ecproj: &Path) -> Value {
 
 type PreviewFrames = Vec<(u64, PathBuf)>;
 fn collect_lettering_previews(dir: &Path) -> (PreviewFrames, PreviewFrames) {
-    let preview_dir = dir.join("lettering/.preview");
+    let preview_dir = if dir.join("effects/.preview").is_dir() { dir.join("effects/.preview") } else { dir.join("lettering/.preview") };
     let mut stage_frames = Vec::new();
     let mut lyrics_frames = Vec::new();
     for entry in fs::read_dir(&preview_dir).into_iter().flatten().flatten() {
         let path = entry.path();
-        if !path.extension().is_some_and(|e| e == "png") {
+        if path.extension().is_none_or(|e| e != "png") {
             continue;
         }
         let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else { continue };
@@ -143,13 +143,13 @@ pub fn cmd_words_lyrics_view(s: &mut Session, p: &Value) -> Result<Value> {
     if show == "still" && p["animation_id"].as_str().is_none() {
         return Err(invalid("still needs animation_id"));
     }
-    let ecproj = dir.join("lettering/lyrics.ecproj");
+    let ecproj = crate::cmd::words::lyrics_ecproj_path(&dir);
     let doc_path = document_path(&dir);
     let bytes = fs::read(&ecproj).or_else(|_| fs::read(&doc_path)).unwrap_or_default();
     Ok(json!({
         "ok": true,
         "show": show,
-        "src": format!("lettering/{show}.ecproj"),
+        "src": "effects/lyrics.ecproj",
         "file": ecproj,
         "ecproj": inspect_lettering_ecproj(&ecproj),
         "written": false,
@@ -198,7 +198,7 @@ fn runtime_filmcraft_tools() -> &'static Value {
     })
 }
 
-pub(crate) fn runtime_words_tools(lib: &Value) -> Value {
+pub(crate) fn runtime_words_tools() -> Value {
     let move_meta = |m: &'static str| -> (&'static str, &'static str, &'static str) {
         match m {
             "quiet" => ("quiet", "Quiet", "Fades in and holds"),
@@ -217,8 +217,7 @@ pub(crate) fn runtime_words_tools(lib: &Value) -> Value {
         .into_iter()
         .map(|key| {
             let (id, name, does) = move_meta(key);
-            let desc = lib["acts"][id]["does"].as_str().unwrap_or(does);
-            json!({"id": id, "name": name, "does": desc})
+            json!({"id": id, "name": name, "does": does})
         })
         .collect();
     let letterings = json!([
@@ -264,8 +263,7 @@ pub fn cmd_words_effects(_s: &mut Session, p: &Value) -> Result<Value> {
     {
         return Err(invalid("kind must be one of text, warp or style"));
     }
-    let kinetic_library: Value = serde_json::from_str(KINETIC_LIBRARY).map_err(|e| invalid(e.to_string()))?;
-    let tools = runtime_words_tools(&kinetic_library);
+    let tools = runtime_words_tools();
     let mapped = crate::craft_effects::query_lyrics_effects(p);
     Ok(json!({
         "ok": true,
@@ -302,42 +300,6 @@ fn hydrate_animation_times(anim: &mut Value, times: &std::collections::HashMap<S
     if anim["teaching_mode"].as_str().is_none() {
         anim["teaching_mode"] = json!("sing_along");
     }
-}
-
-fn graphic_cues(doc: &Value, lib: &Value, times: &std::collections::HashMap<String, (Tick, Tick)>) -> Vec<Value> {
-    let mut cues = Vec::new();
-    for source in doc["animations"].as_array().into_iter().flatten() {
-        let mut anim = source.clone();
-        hydrate_animation_times(&mut anim, times);
-        let anchor = anim["song_anchor_tick"].as_i64().map(Tick).or_else(|| anim["song_anchor"].as_f64().map(Tick::from_seconds_f64)).unwrap_or(Tick::ZERO);
-        let dur =
-            anim["authored_duration_tick"].as_i64().map(Tick).or_else(|| anim["authored_duration"].as_f64().map(Tick::from_seconds_f64)).unwrap_or(HOLD_TICK);
-        let section_end = anchor + dur;
-        if let Some(key) = anim["kinetic"]["overlay"].as_str().filter(|key| *key != "none")
-            && let Some(overlay) = lib["overlays"].get(key)
-        {
-            let offset = anim["kinetic"].get("overlay_offset").and_then(parse_tick).unwrap_or(Tick::ZERO);
-            let start = Tick((anchor.0 + offset.0).max(0));
-            let duration = anim["kinetic"].get("overlay_duration").and_then(parse_tick).unwrap_or(section_end - anchor);
-            let end = start + duration;
-            cues.push(json!({
-                "id": format!("{}-overlay", anim["animation_id"].as_str().unwrap_or("words")),
-                "kind": "overlay",
-                "animation_id": anim["animation_id"],
-                "name": overlay["name"],
-                "overlay": key,
-                "anchor_tick": anchor.0,
-                "anchor": anchor.seconds(),
-                "start_tick": start.0,
-                "end_tick": end.0,
-                "start": start.seconds(),
-                "end": end.seconds(),
-                "word_ids": [],
-            }));
-        }
-    }
-    cues.sort_by_key(|a| a["start_tick"].as_i64().unwrap_or(0));
-    cues
 }
 
 fn load_or_default_doc(s: &mut Session, dir: &Path) -> Result<(Value, bool)> {
@@ -436,19 +398,17 @@ pub fn cmd_words_read(s: &mut Session, p: &Value) -> Result<Value> {
         .filter(|a| a["in_video"].as_bool() != Some(false))
         .filter_map(|a| a["animation_id"].as_str().map(str::to_owned))
         .collect();
-    let kinetic_library: Value = serde_json::from_str(KINETIC_LIBRARY).map_err(|e| invalid(e.to_string()))?;
-    let tools = runtime_words_tools(&kinetic_library);
-    let graphics = graphic_cues(&doc, &kinetic_library, &studio_times(s));
+    let tools = runtime_words_tools();
     let scene_clips = project_scene_clips(&dir, &doc);
-    let ecproj_file = dir.join("lettering/lyrics.ecproj");
+    let ecproj_file = crate::cmd::words::lyrics_ecproj_path(&dir);
     let ecproj = inspect_lettering_ecproj(&ecproj_file);
-    let render_mov = dir.join("lettering/lyrics.mov");
+    let render_mov = crate::cmd::words::lyrics_mov_path(&dir);
     let stage_paths: Vec<PathBuf> = stage_frames.into_iter().map(|(_, p)| p).collect();
     let lyrics_paths: Vec<PathBuf> = lyrics_frames.into_iter().map(|(_, p)| p).collect();
     Ok(json!({
         "images": images,
         "scene_clips": scene_clips,
-        "graphics": graphics,
+        "graphics": [],
         "ecproj": ecproj,
         "ecproj_path": ecproj_file.is_file().then_some(ecproj_file),
         "render": render_mov.is_file().then_some(render_mov),
@@ -460,8 +420,7 @@ pub fn cmd_words_read(s: &mut Session, p: &Value) -> Result<Value> {
         "path": document_path(&dir),
         "document": doc,
         "in_video": in_video,
-        "fonts": magic_util::media::discover_installed_font_families(),
-        "kinetic_library": kinetic_library,
+        "fonts": crate::craft_api::discover_suite_fonts(),
         "tools": tools,
     }))
 }
@@ -606,7 +565,7 @@ pub fn cmd_words_save(s: &mut Session, p: &Value) -> Result<Value> {
     anim["origin"] = p.get("origin").filter(|v| v.is_string()).cloned().unwrap_or(json!("magic"));
     let saved = anim.clone();
     save(s, &dir, &doc)?;
-    let ecproj = dir.join("lettering/lyrics.ecproj");
+    let ecproj = crate::cmd::words::lyrics_ecproj_path(&dir);
     let live_saved = crate::craft_api::save_in_live_app("effectcraft", ecproj.is_file().then_some(ecproj.as_path())).is_ok();
     Ok(json!({"ok": true, "conflict": false, "path": document_path(&dir), "live_app_saved": live_saved, "animation": saved}))
 }

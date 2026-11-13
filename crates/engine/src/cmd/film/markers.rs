@@ -24,6 +24,7 @@ fn map_fc_color_to_ec_label(color: &str) -> &'static str {
     }
 }
 
+#[allow(dead_code)]
 fn map_ec_label_to_fc_color(label: &str) -> &'static str {
     match label.trim().to_ascii_lowercase().as_str() {
         "lavender" | "purple" => "Lavender",
@@ -37,7 +38,7 @@ fn map_ec_label_to_fc_color(label: &str) -> &'static str {
     }
 }
 
-pub(crate) fn extract_synced_markers(dir: &Path, seq: Option<&Value>) -> Vec<Value> {
+pub(crate) fn extract_synced_markers(_dir: &Path, seq: Option<&Value>) -> Vec<Value> {
     let mut out: Vec<Value> = Vec::new();
 
     if let Some(seq_val) = seq
@@ -70,36 +71,11 @@ pub(crate) fn extract_synced_markers(dir: &Path, seq: Option<&Value>) -> Vec<Val
         }
     }
 
-    let ec_sidecar = dir.join("lettering/.lyrics.ecproj.steps.json");
-    if let Ok(raw) = std::fs::read_to_string(&ec_sidecar)
-        && let Ok(val) = serde_json::from_str::<Value>(&raw)
-        && val["id"].as_str() == Some("markers.set")
-    {
-        let mp = &val["params"];
-        let time_sec = mp["time"].as_f64().unwrap_or(0.0);
-        let duration_sec = mp["duration"].as_f64().unwrap_or(0.0);
-        let start_tick = (time_sec * (TICKS_PER_SECOND as f64)).round() as i64;
-        let duration_tick = (duration_sec * (TICKS_PER_SECOND as f64)).round() as i64;
-        let label = mp["label"].as_str().unwrap_or("Blue");
-        let comment = mp["comment"].as_str().unwrap_or_default();
-        out.push(json!({
-            "id": Value::Null,
-            "index": out.len(),
-            "name": mp["cuePoint"]["name"].as_str().unwrap_or(comment),
-            "comment": comment,
-            "color": map_ec_label_to_fc_color(label),
-            "start_tick": start_tick,
-            "duration_tick": duration_tick,
-            "time_sec": time_sec,
-            "duration_sec": duration_sec,
-            "source": "effectcraft",
-        }));
-    }
-
     out.sort_by_key(|m| m["start_tick"].as_i64().unwrap_or(0));
     out
 }
 
+#[allow(clippy::cognitive_complexity)]
 fn markers_add(f: &super::Film, ecproj: &Path, p: &Value) -> Result<Value> {
     let start_tick = p.get("tick").or_else(|| p.get("time")).or_else(|| p.get("seconds")).and_then(parse_tick).unwrap_or(Tick::ZERO).max(Tick::ZERO);
     let duration_tick =
@@ -173,7 +149,7 @@ fn markers_add(f: &super::Film, ecproj: &Path, p: &Value) -> Result<Value> {
                 ]
             }
         });
-        let _ = crate::native_media::write_staged_steps(ecproj, &json!({"id": "markers.set", "params": ec_params}));
+        let _ = crate::craft_api::execute_in_live_app("effectcraft", "markers.set", ec_params);
     }
 
     let seq = if f.project.is_file() { execute(&f.project, "sequence.inspect", json!({})).ok() } else { None };
@@ -220,8 +196,30 @@ fn markers_export_csv(f: &super::Film, p: &Value) -> Result<Value> {
     if let Some(parent) = out.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    craft_atomic::atomic_write(&out, b"Marker Name,Description,In,Out,Duration,Marker Type\n")?;
-    let result = json!({"exported": out});
+    let doc = super::fcproj_doc::load_fcproj(&project);
+    let rate = crate::time::FrameRate::FPS_24;
+    let mut csv = String::from("Marker Name,Description,In,Out,Duration,Marker Type\n");
+    for m in doc["sequence"]["markers"].as_array().into_iter().flatten() {
+        let st = parse_raw_tick(&m["start"]).unwrap_or(Tick::ZERO);
+        let dur = parse_raw_tick(&m["duration"]).unwrap_or(Tick::ZERO);
+        let name = m["name"].as_str().unwrap_or("Marker").replace('"', "");
+        let desc = m["comment"].as_str().unwrap_or("").replace('"', "");
+        let kind = m["kind"].as_str().unwrap_or("Comment");
+        let st_frame = rate.frame_at(st);
+        let out_frame = rate.frame_at(st + dur);
+        let dur_frame = rate.frame_at(dur);
+        csv.push_str(&format!(
+            "\"{}\",\"{}\",{},{},{},{}\n",
+            name.replace('"', ""),
+            desc.replace('"', ""),
+            craft_timeline::time::format_timecode_frames(st_frame, rate, false),
+            craft_timeline::time::format_timecode_frames(out_frame, rate, false),
+            craft_timeline::time::format_timecode_frames(dur_frame, rate, false),
+            kind,
+        ));
+    }
+    craft_atomic::atomic_write(&out, csv.as_bytes())?;
+    let result = json!({"exported": out, "bytes": csv.len()});
     Ok(json!({
         "ok": true,
         "csv_path": out,
@@ -230,14 +228,9 @@ fn markers_export_csv(f: &super::Film, p: &Value) -> Result<Value> {
     }))
 }
 
+#[allow(clippy::cognitive_complexity)]
 fn markers_seed(f: &super::Film, ecproj: &Path, p: &Value) -> Result<Value> {
-    let words_path = f.dir.join("design/words.json");
-    let doc: Value = if words_path.is_file() {
-        let bytes = std::fs::read(&words_path)?;
-        serde_json::from_slice(&bytes).map_err(|e| bad(e.to_string()))?
-    } else {
-        json!({})
-    };
+    let doc: Value = if let Some(saved) = crate::project::read_magic_section_in_dir(&f.dir, "lyrics", "design/words.json") { saved } else { json!({}) };
     let animations = doc["animations"].as_array().cloned().unwrap_or_default();
 
     let clear = p["clear"].as_bool().unwrap_or(true);
@@ -356,11 +349,20 @@ fn markers_seed(f: &super::Film, ecproj: &Path, p: &Value) -> Result<Value> {
         ));
     }
 
-    if f.project.is_file() && !fc_steps.is_empty() {
-        let _ = run_steps(Some(&f.project), false, true, &fc_steps);
+    let mut sync_warnings = Vec::new();
+    if f.project.is_file()
+        && !fc_steps.is_empty()
+        && let Err(e) = run_steps(Some(&f.project), false, true, &fc_steps)
+    {
+        sync_warnings.push(format!("FilmCraft marker seed warning: {e}"));
     }
     if ecproj.is_file() {
-        ec_steps.is_empty();
+        for (method, params) in &ec_steps {
+            if let Err(e) = crate::craft_api::execute_in_live_app("effectcraft", method, params.clone()) {
+                sync_warnings.push(format!("EffectCraft {method} deferred ({e})"));
+                break;
+            }
+        }
     }
 
     let seq = if f.project.is_file() { execute(&f.project, "sequence.inspect", json!({})).ok() } else { None };
@@ -370,90 +372,47 @@ fn markers_seed(f: &super::Film, ecproj: &Path, p: &Value) -> Result<Value> {
         "seeded_sections": sections.len(),
         "seeded_lines": lines.len(),
         "markers": markers,
+        "sync_warnings": sync_warnings,
     }))
 }
 
 fn markers_delete(f: &super::Film, ecproj: &Path, action: &str, p: &Value) -> Result<Value> {
+    let mut sync_warnings = Vec::new();
     if action == "clear" || p["all"].as_bool() == Some(true) {
-        if f.project.is_file() {
-            let _ = run_steps(Some(&f.project), false, true, &[json!({"id": "markers.clearAll", "params": {"target": "program"}})]);
+        if f.project.is_file()
+            && let Err(e) = run_steps(Some(&f.project), false, true, &[json!({"id": "markers.clearAll", "params": {"target": "program"}})])
+        {
+            sync_warnings.push(format!("FilmCraft markers.clearAll warning: {e}"));
         }
-        if ecproj.is_file() {}
     } else {
         if let Some(marker_id) = p.get("id").and_then(Value::as_u64)
             && f.project.is_file()
+            && let Err(e) = run_steps(Some(&f.project), false, true, &[json!({"id": "markers.delete", "params": {"target": "program", "marker": marker_id}})])
         {
-            let _ = run_steps(Some(&f.project), false, true, &[json!({"id": "markers.delete", "params": {"target": "program", "marker": marker_id}})]);
+            sync_warnings.push(format!("FilmCraft markers.delete warning: {e}"));
         }
         if ecproj.is_file() {
-            if let Some(ec_idx) = p.get("ec_index").or_else(|| p.get("index")).and_then(Value::as_u64) {
-                let _ = crate::native_media::write_staged_steps(ecproj, &json!({"id": "markers.delete", "params": {"index": ec_idx}}));
-            } else if let Some(at_sec) = p.get("time_sec").or_else(|| p.get("seconds")).and_then(Value::as_f64) {
-                let _ = crate::native_media::write_staged_steps(ecproj, &json!({"id": "markers.delete", "params": {"at": at_sec}}));
+            let ec_del = p
+                .get("ec_index")
+                .or_else(|| p.get("index"))
+                .and_then(Value::as_u64)
+                .map(|idx| json!({"index": idx}))
+                .or_else(|| p.get("time_sec").or_else(|| p.get("seconds")).and_then(Value::as_f64).map(|at| json!({"at": at})));
+            if let Some(del_params) = ec_del
+                && let Err(e) = crate::craft_api::execute_in_live_app("effectcraft", "markers.delete", del_params)
+            {
+                sync_warnings.push(format!("EffectCraft markers.delete deferred ({e})"));
             }
         }
     }
     let seq = if f.project.is_file() { execute(&f.project, "sequence.inspect", json!({})).ok() } else { None };
     let markers = extract_synced_markers(&f.dir, seq.as_ref());
-    Ok(json!({"ok": true, "markers": markers}))
-}
-
-fn markers_interchange(f: &super::Film, default_ecproj: &Path, p: &Value) -> Result<Value> {
-    let format = p["format"].as_str().unwrap_or("otio");
-    let raw_dir = p["direction"].as_str().unwrap_or("film_to_effect");
-    let direction = match raw_dir {
-        "import" | "effect_to_film" => "effect_to_film",
-        _ => "film_to_effect",
-    };
-    let prerender = p["prerender"].as_str().unwrap_or_else(|| if p["prerender"].as_bool() == Some(false) { "none" } else { "unsupported" });
-    let ext = match format {
-        "fcpxml" => "fcpxml",
-        "otio" => "otio",
-        "edl" => "edl",
-        "aaf" => "aaf",
-        "omf" => "omf",
-        "ale" => "ale",
-        _ => "xml",
-    };
-    let ecproj = p["ecproj"]
-        .as_str()
-        .filter(|s| !s.trim().is_empty())
-        .map(|raw| {
-            let pb = PathBuf::from(raw);
-            if pb.is_absolute() { pb } else { f.dir.join(pb) }
-        })
-        .unwrap_or_else(|| default_ecproj.to_path_buf());
-    let interchange_path = p["path"]
-        .as_str()
-        .filter(|s| !s.trim().is_empty())
-        .map(|raw| {
-            let pb = PathBuf::from(raw);
-            if pb.is_absolute() { pb } else { f.dir.join(pb) }
-        })
-        .unwrap_or_else(|| f.dir.join("film/interchange").join(format!("{}-interchange.{ext}", f.name)));
-    if let Some(parent) = interchange_path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-
-    let spec_out = interchange_path.with_extension(format!("{format}.json"));
-    crate::doc_state::write_json(
-        &spec_out,
-        &json!({"direction": direction, "format": format, "prerender": prerender, "ecproj": ecproj, "path": interchange_path}),
-    )?;
-    Ok(json!({
-        "ok": true,
-        "direction": direction,
-        "format": format,
-        "prerender": prerender,
-        "ecproj": ecproj,
-        "interchange_path": interchange_path,
-        "staged_spec": spec_out,
-    }))
+    Ok(json!({"ok": true, "markers": markers, "sync_warnings": sync_warnings}))
 }
 
 pub fn cmd_video_markers(s: &mut Session, p: &Value) -> Result<Value> {
     let f = film(s)?;
-    let ecproj = f.dir.join("lettering/lyrics.ecproj");
+    let ecproj = crate::cmd::words::lyrics_ecproj_path(&f.dir);
     let has_time_or_name = p.get("time").is_some() || p.get("seconds").is_some() || p.get("tick").is_some() || p.get("name").is_some();
     let action = p["action"].as_str().unwrap_or(if has_time_or_name { "add" } else { "list" });
 
@@ -474,7 +433,7 @@ pub fn cmd_video_markers(s: &mut Session, p: &Value) -> Result<Value> {
         "export_csv" | "csv" => markers_export_csv(&f, p),
         "seed" | "seed_from_lyrics" => markers_seed(&f, &ecproj, p),
         "delete" | "clear" => markers_delete(&f, &ecproj, action, p),
-        "interchange" => markers_interchange(&f, &ecproj, p),
+        "interchange" => super::timeline_interchange::run_markers_interchange(s, &f, &ecproj, p),
         other => Err(EngineError::InvalidParams(format!(
             "unknown video.markers action `{other}`; expected list, add, edit, palette, export_csv, seed, delete, clear, or interchange"
         ))),

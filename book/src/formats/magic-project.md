@@ -1,22 +1,19 @@
 # `.magic` Project Format
 
-A `.magic` file (`application/vnd.artcraft.magic+json`) is an atomic UTF-8 JSON manifest (`"format": "magic.project"`, `"version": 1`) written via `craft_atomic::atomic_write` at the root of a song workspace folder (with orphaned `.craft_tmp` siblings swept on open).
+A `.magic` file (`application/vnd.artcraft.magic+json`) is an atomic UTF-8 JSON manifest written via `craft_atomic::atomic_write` inside the project directory, with relative paths validated through `craft_docpath`.
 
-## Workspace Layout
+## Project Layout (`magic-cli new [existing_project] --audio song.wav --name "..."`)
 
 ```text
-my-song/
-├── My Song.magic              # Coordinator manifest (paths canonicalized via craft-docpath)
-├── storyboard.designcraft     # DesignCraft production book + locked *_cli fineprint instructions
-├── storyboard/
-│   ├── references.json        # Maps placed flat PNG slots back to source .ecproj/.pcraft/.vectorcraft files
-│   └── renders/               # Flattened Craft snapshots placed onto storyboard frames
-├── timing-reference.json      # Word/line timestamps driving V2 lip-sync, V3 lyrics, and V4 motion
-├── transcript.srt             # Synced caption sidecar imported into FilmCraft
-├── assets/
-│   ├── backgrounds/           # Scene plates for V1
-│   └── characters/<id>/       # PhotoCraft cutouts (.pcraft) + EffectCraft puppet rigs (.ecproj)
-├── lettering/lyrics.ecproj    # EffectCraft Kinetic Teaching Lyrics composition (exports V3)
-├── motion/actions.ecproj      # EffectCraft Song-Action Trim-Path composition (exports V4)
-└── film/my-song.fcproj        # Master FilmCraft NLE project (A1 + V1..V4)
+<project>/
+├── <slug>.magic               # Project manifest
+├── <slug>.deckcraft           # Native DeckCraft storyboard slide deck (.deckcraft / .pptx + PDF export)
+├── timing-reference.json      # Word/line timestamps in craft-timeline Ticks (254,016,000,000/s)
+├── extensions/
+│   └── scribbles/             # User-editable turnaround & scene recipes (craft-ai-core; gated on saved Storyboard slides)
+├── audio/                     # Master song audio + stems
+├── assets/                    # Multi-tool 2D/3D assets, PhotoCraft (.pcraft), VectorCraft (.svg), Blender/AniCraft renders
+├── effects/                   # EffectCraft compositions (lyrics.ecproj, motion.ecproj, animation.ecproj)
+├── film/                      # FilmCraft NLE timeline (<slug>.fcproj)
+└── exports/                   # Final rendered MP4/MOV/ProRes masters, PDFs, captions, and OTIO/FCPXML/EDL files
 ```

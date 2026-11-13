@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 
 use crate::cmd::project::cmd_project_add_asset;
 use crate::cmd::project::workshop::{
-    ASSETS_DIR, IMAGE_EXTENSIONS, STORYBOARD_DIR, STORYBOARD_PDF, VIDEO_TARGETS, files_in, panel_files, project_dir, transcript_files, video_project_path,
+    ASSETS_DIR, IMAGE_EXTENSIONS, STORYBOARD_DIR, VIDEO_TARGETS, files_in, panel_files, project_dir, transcript_files, video_project_path,
     workshop_asset_files, workshop_status,
 };
 use crate::workspace::{has_extension, resolve_workspace_path, song_audio_path};
@@ -86,7 +86,7 @@ fn requested_paths(s: &Session, params: &Value) -> Result<Vec<PathBuf>> {
 }
 
 fn require_addable(path: &Path, only: Option<&[&str]>) -> Result<()> {
-    if !magic_util::media::is_craft_doc_path(path) {
+    if !magic_util::media::is_file_or_pcraft_bundle(path) {
         return Err(EngineError::InvalidParams(format!("file not found: {}", path.display())));
     }
     if let Some(exts) = only
@@ -235,19 +235,6 @@ pub fn cmd_workshop_split_panels(s: &mut Session, params: &Value) -> Result<Valu
     let out_dir = dir.join(STORYBOARD_DIR);
     std::fs::create_dir_all(&out_dir)?;
     let panels = crop_panels(&image, &out_dir, columns, rows, inset, (cw, ch))?;
-    if params.get("place_in_storyboard").and_then(Value::as_bool).unwrap_or(false) {
-        for (idx, panel_png) in panels.iter().enumerate() {
-            let _ = crate::cmd::storyboard::cmd_storyboard_set(
-                s,
-                &json!({
-                    "scene": idx + 1,
-                    "label": "scene_image",
-                    "image": panel_png,
-                    "linked_file": image,
-                }),
-            );
-        }
-    }
     let prompts_written = write_prompts(s, params, &panels, &image)?;
     let mut status = workshop_status(s)?;
     status["panels"] = json!(panels);
@@ -288,9 +275,11 @@ pub fn cmd_workshop_files(s: &mut Session, params: &Value) -> Result<Value> {
     for p in panel_files(&dir) {
         add_catalog_row(&mut rows, &dir, "panel", p, &filter);
     }
-    let pdf = dir.join(STORYBOARD_PDF);
-    if pdf.is_file() {
-        add_catalog_row(&mut rows, &dir, "storyboard_pdf", pdf, &filter);
+    for rel in [crate::cmd::storyboard::DEFAULT_STORYBOARD_FILE, "storyboard.pptx"] {
+        let deck = dir.join(rel);
+        if deck.is_file() {
+            add_catalog_row(&mut rows, &dir, "storyboard_deck", deck, &filter);
+        }
     }
     for p in workshop_asset_files(&dir) {
         add_catalog_row(&mut rows, &dir, "asset", p, &filter);

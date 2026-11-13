@@ -17,10 +17,8 @@ template = "new"
 [project]
 # Optional explicit workspace overrides (defaults to `<data_dir>/magic/projects` and `magic/animations`).
 # root = "/abs/path/to/magic/projects"
-# characters_root = "/abs/path/to/magic/animations"
 storyboard_template = "magic"
-storyboard_format = "pdfcraft"
-storyboard_locked = true
+storyboard_format = "designcraft"
 
 [craft]
 effectcraft_mcp_autosave = true

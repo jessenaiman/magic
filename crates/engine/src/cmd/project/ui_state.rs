@@ -1,5 +1,5 @@
 //! Rust-computed UI view-models (`project.snapshot` with `drawer`, `footer`, and `storyboard`
-//! traffic-light state) and theatre timeline persistence, keeping domain logic out of `.tsx` views.
+//! status) and theatre timeline persistence, keeping domain logic out of views.
 
 use serde_json::{Value, json};
 
@@ -102,8 +102,8 @@ fn build_drawer_model(assets_list: &[Value], characters: &[Value]) -> Value {
                 "role": "background",
                 "badge": "Plate",
                 "thumb": a.get("project_image").unwrap_or(&a["path"]),
-            "linked_file": a["linked_file"],
-            "craft_app": a["craft_app"],
+                "linked_file": a["linked_file"],
+                "craft_app": a["craft_app"],
                 "ready": true,
             }))
         })
@@ -121,8 +121,8 @@ fn build_footer_model(status: &Value, storyboard: &Value, characters_len: usize)
     let stage_done = |id: &str| status["stages"].as_array().into_iter().flatten().any(|st| st["id"] == id && st["done"] == true);
     let song_done = stage_done("song");
     let transcript_done = stage_done("transcript");
-    let sb_light = storyboard["light"].as_str().unwrap_or("red");
-    let sb_done = storyboard["production_ready"] == true;
+    let sb_exists = storyboard["exists"] == true;
+    let sb_light = if sb_exists { "green" } else { storyboard["light"].as_str().unwrap_or("optional") };
     let lyrics_done = status["lyrics_ready"] == true;
     let motion_done = status["motion_ready"] == true;
     let animate_done = characters_len > 0;
@@ -132,8 +132,8 @@ fn build_footer_model(status: &Value, storyboard: &Value, characters_len: usize)
     if status["timing_reference_exists"] == true {
         summary.push("Timing Ref ✓".to_string());
     }
-    if storyboard["title_sections_complete"] == true {
-        summary.push("Titles Green".to_string());
+    if sb_exists {
+        summary.push("Deck ✓".to_string());
     }
     if characters_len > 0 {
         summary.push(format!("{characters_len} Cast"));
@@ -141,14 +141,17 @@ fn build_footer_model(status: &Value, storyboard: &Value, characters_len: usize)
 
     json!({
         "stages": [
-            {"id": "song", "label": "Song", "view": "project", "done": song_done, "light": if song_done && transcript_done { "green" } else if song_done { "amber" } else { "red" }},
-            {"id": "storyboard", "label": "Board", "view": "storyboard", "done": sb_done, "light": sb_light},
+            {
+                "id": "song", "label": "Song", "view": "project", "done": song_done,
+                "light": if song_done && transcript_done { "green" } else if song_done { "amber" } else { "red" },
+            },
+            {"id": "storyboard", "label": "Board", "view": "storyboard", "done": sb_exists, "light": sb_light},
             {"id": "lyrics", "label": "Lyrics", "view": "design", "done": lyrics_done, "light": if lyrics_done { "green" } else { "red" }},
             {"id": "motion", "label": "Motion", "view": "motion", "done": motion_done, "light": if motion_done { "green" } else { "red" }},
             {"id": "animation", "label": "Animate", "view": "animation", "done": animate_done, "light": if animate_done { "green" } else { "red" }},
             {"id": "studio", "label": "Studio", "view": "studio", "done": studio_done, "light": if studio_done { "green" } else { "red" }},
         ],
-        "production_ready": sb_done,
+        "production_ready": song_done && transcript_done,
         "summary": summary.join(" · "),
     })
 }
@@ -159,7 +162,8 @@ pub fn cmd_project_snapshot(s: &mut Session, _: &Value) -> Result<Value> {
         return Ok(json!({"project": null, "data": null}));
     };
     let status = crate::cmd::project::workshop::workshop_status(s)?;
-    let storyboard = crate::cmd::storyboard::cmd_storyboard_check(s, &json!({})).unwrap_or_else(|_| json!({"light": "red", "production_ready": false}));
+    let storyboard = crate::cmd::storyboard::cmd_storyboard_status(s, &json!({}))
+        .unwrap_or_else(|_| json!({"exists": false, "light": "optional", "production_ready": true}));
     let assets = cmd_project_list_assets(s, &json!({}))?;
     let trunk = s.execute("project.trunk", json!({})).unwrap_or_else(|error| json!({"files": [], "error": error.to_string()}));
     let characters_arr =

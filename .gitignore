@@ -1,134 +1,41 @@
-# Rust & mdBook build artifacts
+# Rust, Cargo, and mdBook build outputs
 /target/
 **/target/
 /book/book/
-**/*.rs.bak
-*.craft_tmp
-
-# Build & release staging outputs
 /dist/
 /build/
 /output/
 /exports/
+plan/
+*.craft_tmp
+**/*.rs.bak
 
 # Environment & credentials — never commit
 .env
 .env.local
 .env.*.local
 *.env
+!.env.example
 .youtube-token.json
 gcp-*.json
 *-service-account.json
 service-account*.json
 service_account*.json
 
-# IDE / editor / OS
+# OS & editor swap files
+.DS_Store
+Thumbs.db
 .idea/
 .vscode/
 *.swp
 *.swo
 *~
-.DS_Store
-Thumbs.db
 
-# Logs & scratch directories
+# Local logs, worktrees, and scratch tooling
 *.log
-/build-activity.log
 /tmp/
 .tmp/
-/scratch/
-/internal/
 .worktrees/
-.backlot/
-.runtime/
-
-# Python scratch / local tooling
 __pycache__/
 *.py[cod]
-*$py.class
-.python-version
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.coverage
-htmlcov/
-.tox/
-venv/
 .venv/
-.venv-wan/
-
-# Agent local state (repo skills under .agents/skills/ stay tracked)
-.agents/skills/*
-!.agents/skills/magic/
-.github/skills/
-.github/instructions/codacy.instructions.md
-.claude/
-.opencode/
-.commandcode/
-.hermes/
-.agent/
-.archify/
-.codacy/
-.superpowers/
-docs/codacy-report.md
-.mcp.json.bak-*
-skills-lock.json
-/crew/.cast.lock
-WATCHDOG.yml
-/craft.json
-/feed.json
-/usage.json
-/capture/
-/investigation.cany/
-
-# Local model downloads (fetched on demand — never source)
-*.onnx
-*.onnx.json
-
-# Generated scratch workspaces, corpora & media
-/projects/
-/corpus/
-**/corpus/
-/music_library/
-/media/
-/animations/
-/assets/*
-!/assets/app-icon/
-!/assets/app-icon/**
-pexels_video_*.mp4
-pixabay_music_*
-logo_*.png
-generated_image.png
-
-# User project & media documents (never source unless explicitly unignored below)
-*.magic
-*.fcproj
-*.ecproj
-*.pcraft
-*.deckcraft
-*.vectorcraft
-*.tcraft
-*.scraft
-*.potx
-*.pptx
-*.psd
-*.glb
-*.gltf
-*.fbx
-*.blend
-*.blend1
-*.mov
-*.mp4
-*.webm
-*.wav
-*.mp3
-*.flac
-*.m4a
-*.steps.jsonl
-
-# Tracked repository templates, and UI design specs
-!/Magic Studio Design*.figcraft
-!/crates/engine/templates/*.designcraft
-!/pipeline/templates/*.deckcraft
-!/references/storyboard/*.potx
-!/crates/ui-egui/assets/**

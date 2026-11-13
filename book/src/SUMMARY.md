@@ -9,27 +9,28 @@
 
 # Architecture
 
-- [Lightweight Coordinator Overview](architecture/overview.md)
+- [Workspace Architecture Overview](architecture/overview.md)
 - [ArtCraft Suite Delegation & Track Isolation](architecture/craft-suite-delegation.md)
 - [Native `egui` & `craft-ui` Widget System](architecture/base-controls.md)
 
 # Formats & Pipelines
 
 - [`.magic` Project Format](formats/magic-project.md)
-- [`storyboard.designcraft` & Fine-Print CLI](formats/storyboard-designcraft.md)
-- [`EffectCraft` & `FilmCraft` `V1`–`V4` Tracks](formats/effectcraft-filmcraft-tracks.md)
+- [DeckCraft Storyboards & `extensions/scribbles/`](formats/storyboard-deckcraft.md)
+- [`02 Animations`, `EffectCraft` & `FilmCraft` Tracks](formats/effectcraft-filmcraft-tracks.md)
 
 # Automation & Control
 
 - [Automation Overview](automation/overview.md)
 - [`magic-cli` Reference](automation/cli.md)
 - [`--control` Protocol](automation/control-protocol.md)
-- [`magic-cli mcp` Server](automation/mcp.md)
+- [`magic-cli mcp` Server & `magic://` Resources](automation/mcp.md)
 
 # Development
 
 - [Building & Quality Gates](development/building.md)
 - [Contributing & House Rules](development/contributing.md)
+- [Feature Gaps & Host Checklist](development/gaps.md)
 
 # Security
 
