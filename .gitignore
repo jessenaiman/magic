@@ -1,0 +1,41 @@
+# Rust, Cargo, and mdBook build outputs
+/target/
+**/target/
+/book/book/
+/dist/
+/build/
+/output/
+/exports/
+plan/
+*.craft_tmp
+**/*.rs.bak
+
+# Environment & credentials — never commit
+.env
+.env.local
+.env.*.local
+*.env
+!.env.example
+.youtube-token.json
+gcp-*.json
+*-service-account.json
+service-account*.json
+service_account*.json
+
+# OS & editor swap files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Local logs, worktrees, and scratch tooling
+*.log
+/tmp/
+.tmp/
+.worktrees/
+__pycache__/
+*.py[cod]
+.venv/

@@ -1,0 +1,47 @@
+{
+  "schema": "artcraft.app.v1",
+  "id": "io.github.jessenaiman.magic",
+  "name": "Magic Studio",
+  "slug": "magic",
+  "status": "pre-alpha",
+  "description": "Song-driven storyboard, puppet rig, and lyric timing studio built in pure Rust on storytold/craft-libs",
+  "license": "LicenseRef-Magic-Studio-NonResale",
+  "repository": "https://github.com/jessenaiman/magic",
+  "binaries": {
+    "desktop": "magic",
+    "cli": "magic-cli",
+    "mcp": "magic-mcp",
+    "tui": "magic-tui"
+  },
+  "control": {
+    "flag": "--control",
+    "env": "MAGIC_CONTROL_PORT",
+    "default_port": 9875,
+    "mcp_command": [
+      "magic-cli",
+      "mcp"
+    ],
+    "mcp_connect_command": [
+      "magic-cli",
+      "mcp",
+      "--connect",
+      "127.0.0.1:9875"
+    ],
+    "mcp_headless_command": [
+      "magic-cli",
+      "mcp",
+      "--headless"
+    ]
+  },
+  "mime_types": [
+    {
+      "mime": "application/vnd.artcraft.magic+json",
+      "extensions": [
+        "magic"
+      ]
+    }
+  ],
+  "license_file": "LICENSE",
+  "commercial_output_allowed": true,
+  "software_resale_allowed": false
+}

@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "magic": {
+      "command": "magic-cli",
+      "args": ["mcp"]
+    },
+    "magic-app": {
+      "command": "magic-cli",
+      "args": ["mcp", "--connect", "127.0.0.1:9875"]
+    }
+  }
+}

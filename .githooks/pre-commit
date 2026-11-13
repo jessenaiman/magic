@@ -1,0 +1,16 @@
+#!/bin/sh
+# Pre-commit hook: fast local formatter check only.
+# Full gates (fmt, layers, clippy, ui) run in CI via `cargo xtask ci`, not on commit.
+#
+# To bypass: git commit --no-verify
+
+set -e
+
+# Only Rust-affecting files care about rustfmt; other commits skip entirely.
+if git diff --cached --name-only \
+    | grep -qE '\.(rs|toml|lock)$|^xtask/|^crates/|^apps/magic.*\.rs$'; then
+    echo "Running format check (cargo fmt --check)..."
+    cargo fmt --check
+fi
+
+echo "Pre-commit ok (full gates run in CI)."

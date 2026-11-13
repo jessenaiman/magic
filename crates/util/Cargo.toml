@@ -1,0 +1,32 @@
+[package]
+name = "magic-util"
+description = "Magic Studio headless utilities built on craft-timeline, craft-audio, craft-media, craft-text, craft-font-catalog, craft-fonts-build, craft-i18n, and craft-doc"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+craft-atomic = { workspace = true }
+craft-audio = { workspace = true }
+craft-doc = { workspace = true }
+craft-docpath = { workspace = true }
+craft-font-catalog = { workspace = true }
+craft-fonts-build = { workspace = true }
+craft-i18n = { workspace = true }
+craft-media = { workspace = true }
+craft-settings = { workspace = true }
+craft-text = { workspace = true }
+craft-timeline = { workspace = true }
+image = { workspace = true }
+log = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[build-dependencies]
+craft-fonts-build = { workspace = true, features = ["subset"] }

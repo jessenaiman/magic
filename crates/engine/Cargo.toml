@@ -1,0 +1,44 @@
+[package]
+name = "magic-engine"
+description = "Magic Studio engine: command registry and session coordinating DesignCraft, PhotoCraft, VectorCraft, EffectCraft, and FilmCraft"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+image = { workspace = true }
+log = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+
+# Shared Craft foundation libraries (`storytold/craft-libs`, `storytold/craft-ai-integrations`)
+craft-ai-client = { workspace = true }
+craft-ai-core = { workspace = true }
+craft-ai-features = { workspace = true }
+craft-ai-native = { workspace = true }
+craft-atomic = { workspace = true }
+craft-audio = { workspace = true }
+craft-captions = { workspace = true }
+craft-doc = { workspace = true }
+craft-docpath = { workspace = true }
+craft-drawingml = { workspace = true }
+craft-font-catalog = { workspace = true }
+craft-media = { workspace = true }
+craft-mesh = { workspace = true }
+craft-settings = { workspace = true }
+craft-text = { workspace = true }
+craft-timeline = { workspace = true }
+craft-update = { workspace = true }
+craft-zip = { workspace = true }
+magic-scribbles = { workspace = true }
+magic-util = { workspace = true }
+
+[target.'cfg(unix)'.dependencies]
+rustix = { workspace = true }

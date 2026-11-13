@@ -1,0 +1,17 @@
+pub mod animation;
+pub mod animation_dock;
+pub mod animation_inspector;
+pub mod home;
+pub mod lyrics;
+pub mod lyrics_dock;
+pub mod lyrics_inspector;
+pub mod motion;
+pub mod motion_dock;
+pub mod motion_inspector;
+pub mod project;
+pub mod project_interchange;
+pub mod storyboard;
+pub mod storyboard_page;
+pub mod studio;
+pub mod studio_audio_titles;
+pub mod studio_finishing;

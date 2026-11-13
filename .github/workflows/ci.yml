@@ -1,0 +1,23 @@
+name: CI
+
+on:
+  push:
+    branches: [main, release]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  git-sources:
+    uses: storytold/craft-common-actions/.github/workflows/git-sources.yml@main
+
+  gate:
+    uses: storytold/craft-common-actions/.github/workflows/gate.yml@main
+    with:
+      packages: pkg-config libxkbcommon-dev libwayland-dev libx11-dev libxcb1-dev libxcursor-dev libxrandr-dev libxi-dev libfontconfig1-dev libfreetype-dev libgtk-3-dev libasound2-dev mesa-vulkan-drivers

@@ -1,0 +1,10 @@
+Magic Studio
+Copyright (c) 2026 Jesse Naiman and Contributors
+
+Magic Studio is licensed under the Magic Studio Source-Available Non-Resale License (`LICENSE`):
+- Free to use for creating, publishing, and commercially monetizing videos and media outputs.
+- Free to inspect, modify, and fork non-commercially with notices intact.
+- Commercial resale, paid hosting/SaaS, or commercial redistribution of Magic Studio itself or its design requires a separate written commercial license from Jesse Naiman (https://github.com/jessenaiman/magic).
+
+Magic Studio's brand and design assets are governed by `docs/brand/LICENSE-brand.txt`.
+Third-party open-source libraries (`storytold/craft-libs`, `storytold/craft-ai-integrations`, and crates.io dependencies) retain their own permissive licenses (`MIT OR Apache-2.0` etc.); see `ATTRIBUTION.md`.

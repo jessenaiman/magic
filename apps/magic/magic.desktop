@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Magic Studio
+Comment=Song-driven storyboard, animation, kinetic lyrics, and FilmCraft studio over the ArtCraft suite
+Exec=magic %f
+Icon=io.github.jessenaiman.magic
+Terminal=false
+Categories=Graphics;AudioVideo;
+MimeType=application/vnd.artcraft.magic+json;
+StartupWMClass=io.github.jessenaiman.magic
