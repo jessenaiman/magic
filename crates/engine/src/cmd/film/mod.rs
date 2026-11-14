@@ -66,7 +66,9 @@ pub(crate) fn is_local_shim_fcproj(path: &Path) -> bool {
     let Ok(raw) = std::fs::read_to_string(path) else {
         return !path.is_file();
     };
-    serde_json::from_str::<Value>(&raw).ok().is_some_and(|v| v.get("format").and_then(Value::as_str) == Some("filmcraft.project"))
+    serde_json::from_str::<Value>(&raw)
+        .ok()
+        .is_some_and(|v| v.get("format").and_then(Value::as_str) == Some("filmcraft.project") && v.get("next_item_id").is_some())
 }
 
 impl Film {

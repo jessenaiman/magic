@@ -114,8 +114,9 @@ pub fn cmd_storyboard_new(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(tpl) = tpl_opt.filter(|t| t.is_file()) {
         crate::doc_state::atomic_copy_file(&tpl, &deck, overwrite)?;
     } else if let Some(dp) = deck.to_str().filter(|_| crate::workspace::resolve_executable_path("deckcraft-cli").is_some()) {
-        let cmd_arg = format!("slide.new={}", json!({"layout": "titleOnly", "title": title}));
-        crate::craft_api::run_host_cli("deckcraft", &["run", "--sample", "--cmd", &cmd_arg, "--save", dp]).map_err(bad)?;
+        let new_arg = format!("file.new={}", json!({"blank": true}));
+        let slide_arg = format!("slide.new={}", json!({"layout": "titleOnly", "title": title}));
+        crate::craft_api::run_host_cli("deckcraft", &["run", "--cmd", &new_arg, "--cmd", &slide_arg, "--save", dp]).map_err(bad)?;
     } else {
         write_minimal_deck_seed(&deck, title, w, h)?;
     }

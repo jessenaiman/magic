@@ -111,7 +111,11 @@ fn new_project_file_path(s: &Session, params: &Value, mode: Option<&str>) -> Res
         }
         let parent = resolved.parent().unwrap_or(Path::new("."));
         let parent_matches = parent.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.eq_ignore_ascii_case(&slug) || n.eq_ignore_ascii_case(&stem));
-        return if parent_matches && !parent_has_other_magic_file(parent, &fname) { Ok(parent.join(fname)) } else { Ok(parent.join(&slug).join(fname)) };
+        return if (parent_matches || parent.is_dir()) && !parent_has_other_magic_file(parent, &fname) {
+            Ok(parent.join(fname))
+        } else {
+            Ok(parent.join(&slug).join(fname))
+        };
     }
 
     let name = explicit_name.ok_or_else(|| EngineError::InvalidParams("project.new requires `name` (optionally with `root`), or `path`".into()))?;
@@ -209,6 +213,15 @@ fn bootstrap_song_workshop(s: &mut Session, path: &Path, project_dir: &Path, par
     }
 
     let (Some(audio_in_project), false) = (s.song_audio.clone(), params["skip_audio_setup"] == true) else {
+        if s.song_audio.is_none() {
+            match crate::cmd::film::assembly::cmd_video_assemble(s, &json!({"name": project_title, "export": false})) {
+                Ok(res) => {
+                    let _ = write_project_file(s);
+                    steps.push(json!({"command": "video.assemble", "status": "empty FilmCraft shell initialized", "fcproj": res["project"]}));
+                }
+                Err(e) => steps.push(json!({"command": "video.assemble", "status": "deferred", "error": e.to_string()})),
+            }
+        }
         return steps;
     };
 
@@ -267,9 +280,6 @@ pub fn cmd_project_new(s: &mut Session, params: &Value) -> Result<Value> {
     let is_scratch = params["allow_empty_audio"] == true;
     let source_audio = match params.get("audio").and_then(Value::as_str).filter(|v| !v.trim().is_empty()) {
         Some(raw) => Some(crate::workspace::song_audio_path(s, raw)?),
-        None if mode.is_none() && !is_scratch => {
-            return Err(EngineError::InvalidParams("project.new requires `audio` (<song file>) or mode=\"animation\"".into()));
-        }
         None => None,
     };
 
@@ -325,11 +335,7 @@ pub fn cmd_project_new(s: &mut Session, params: &Value) -> Result<Value> {
     }
 
     if !is_scratch {
-        if s.project_mode.is_some() {
-            copy_initial_collections(s, params, overwrite, &mut copied_files, &mut steps);
-        } else {
-            steps.extend(bootstrap_song_workshop(s, &path, &project_dir, params, overwrite, &mut copied_files));
-        }
+        steps.extend(bootstrap_song_workshop(s, &path, &project_dir, params, overwrite, &mut copied_files));
         write_project_file(s)?;
     }
 
