@@ -518,7 +518,7 @@ fn draw_autosave_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     ctx.pal.inset_frame().show(ui, |ui| {
         ui.vertical(|ui| {
             ui.label(RichText::new("App Default Folders & Storyboard System Template").size(12.0).strong().color(ctx.pal.accent_sky));
-            let note = "Projects default to ~/Magic; optional starter deck lives in ~/.local/share/magic/templates/storyboard.deckcraft";
+            let note = "Projects default to ~/Magic; optional starter document lives in ~/.local/share/magic/templates/storyboard.designcraft";
             ui.label(RichText::new(note).size(10.5).color(ctx.pal.text_muted));
             ui.horizontal_wrapped(|ui| {
                 if action_button(
@@ -529,14 +529,14 @@ fn draw_autosave_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                         "pref-open-system-storyboard-tpl",
                         "external",
                         "Inspect System Template",
-                        "Open ~/.local/share/magic/templates/storyboard.deckcraft in DeckCraft",
+                        "Open ~/.local/share/magic/templates/storyboard.designcraft in DesignCraft",
                     ),
                 )
                 .clicked()
                     && let Some(dir) = magic_engine::workspace::ensure_default_app_folders()
                 {
-                    let tpl = dir.join("templates/storyboard.deckcraft");
-                    ctx.exec("workspace.open", json!({"app": "deckcraft", "path": tpl}), None);
+                    let tpl = dir.join("templates/storyboard.designcraft");
+                    ctx.exec("workspace.open", json!({"app": "designcraft", "path": tpl}), None);
                 }
                 if action_button(
                     ui,

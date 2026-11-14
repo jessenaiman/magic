@@ -86,7 +86,7 @@ pub(crate) fn stage_body(s: &Session, stage: &str) -> String {
             "Stage 2 — Transcription & Timing Reference (`timing-reference.json` + `transcript.srt`).\n  magic-cli exec audio.analyze\nVideo target: {target}."
         ),
         "storyboard" => {
-            "Stage 3 — Creative DeckCraft Storyboard (`storyboard.deckcraft` / `storyboard.pptx`) & exported slides (`storyboard/slides/`).".to_string()
+            "Stage 3 — Creative DesignCraft Storyboard (`storyboard.designcraft` / `storyboard.idml`) & exported slides (`storyboard/slides/`).".to_string()
         }
         _ => "Stage 4 — Video Production: Kinetic Lyrics (`words.*`), Motion (`motion.*`), Animation (`character.*`), and FilmCraft (`video.*`).".to_string(),
     }
@@ -233,8 +233,8 @@ pub(crate) fn workshop_status(s: &mut Session) -> Result<Value> {
         json!({"id": "transcript", "title": "Transcript & Timing Ref", "done": transcript_valid, "why": transcript_why,
             "inputs": s.song_audio.iter().map(|p| file_chip(p)).collect::<Vec<_>>(), "outputs": transcript_outputs,
             "document": supplied_transcript, "problems": transcript_errors, "brief": stage_brief(s, &dir, "transcript")}),
-        json!({"id": "storyboard", "title": "DeckCraft Storyboard", "done": sb_exists, "optional": true,
-            "why": if sb_exists { "DeckCraft storyboard deck ready." } else { "Optional creative DeckCraft storyboard (`storyboard.new`)." },
+        json!({"id": "storyboard", "title": "DesignCraft Storyboard", "done": sb_exists, "optional": true,
+            "why": if sb_exists { "DesignCraft storyboard document ready." } else { "Optional creative DesignCraft storyboard (`storyboard.new`)." },
             "light": sb_status["light"],
             "inputs": [file_chip(&sb_path)],
             "outputs": assets.iter().map(|p| file_chip(p)).collect::<Vec<_>>(),

@@ -58,7 +58,6 @@ pub fn is_read_only_command(id: &str, params: &Value) -> bool {
         | "backstage.events"
         | "app.errors"
         | "app.extensions"
-        | "craft.api_status"
         | "project.identity"
         | "project.list_assets"
         | "project.snapshot"

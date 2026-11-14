@@ -137,7 +137,6 @@ impl Session {
         self.docs.clear();
         self.history.clear();
         self.step_base.clear();
-        crate::craft_api::invalidate_cached_probe();
     }
 
     pub fn record(&mut self, value: Value) {

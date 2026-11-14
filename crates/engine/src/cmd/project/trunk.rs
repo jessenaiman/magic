@@ -78,7 +78,7 @@ fn visual_kind(class: &FileClass) -> &'static str {
     match class.badge {
         "FC" | "MP4" | "MOV" | "WEBM" => "film",
         "EC" => "motion",
-        "DK" | "DC" => "design",
+        "DC" => "design",
         "VCRAFT" | "SVG" | "EMF" | "WMF" => "vector",
         "PCRAFT" | "PNG" | "JPG" | "WEBP" => "image",
         "MP3" | "WAV" | "FLAC" => "audio",
@@ -91,8 +91,7 @@ fn visual_kind(class: &FileClass) -> &'static str {
 fn classify_craft_or_video(ext: &str) -> Option<FileClass> {
     match ext {
         "magic" => Some(FileClass::new("project_files", "Project & Supporting Files", 6, 0, "MAGIC", "Open", true)),
-        "deckcraft" | "pptx" | "potx" => Some(FileClass::new("deckcraft", "DeckCraft Storyboard (.deckcraft / .pptx)", 1, 1, "DK", "Open in DeckCraft", true)),
-        "designcraft" | "idml" => Some(FileClass::new("designcraft", "DesignCraft Layout (.designcraft)", 1, 2, "DC", "Open in DesignCraft", true)),
+        "designcraft" | "idml" | "indt" => Some(FileClass::new("designcraft", "DesignCraft Storyboard (.designcraft / .idml)", 1, 1, "DC", "Open in DesignCraft", true)),
         "fcproj" => Some(FileClass::new("filmcraft", "FilmCraft (.fcproj)", 0, 1, "FC", "Open in FilmCraft", true)),
         "ecproj" => Some(FileClass::new("effect_film", "EffectCraft (.ecproj)", 2, 1, "EC", "Open in EffectCraft", true)),
         "mp4" | "mov" | "webm" | "mkv" => {
@@ -204,7 +203,7 @@ fn resolve_craft_preview(project_dir: &Path, path: &Path, badge: &str, modified_
     if matches!(ext.as_str(), "png" | "jpg" | "jpeg" | "webp" | "svg") {
         return Some(path.to_path_buf());
     }
-    if matches!(ext.as_str(), "pcraft" | "vectorcraft" | "vcraft" | "drawcraft" | "deckcraft" | "designcraft") {
+    if matches!(ext.as_str(), "pcraft" | "vectorcraft" | "vcraft" | "drawcraft" | "designcraft") {
         let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("craft");
         let cache_png = project_dir.join(".preview/trunk").join(format!("{stem}-{modified_ms}.png"));
         if cache_png.is_file() || (magic_util::media::extract_craft_preview(path, &cache_png).unwrap_or(false) && cache_png.is_file()) {
@@ -213,7 +212,7 @@ fn resolve_craft_preview(project_dir: &Path, path: &Path, badge: &str, modified_
     }
     match badge {
         "FC" => first_png_in_dir(&project_dir.join("film/frames")),
-        "DK" | "DC" => first_png_in_dir(&project_dir.join("storyboard/slides")),
+        "DC" => first_png_in_dir(&project_dir.join("storyboard/slides")),
         "EC" => path.parent().and_then(|p| first_png_in_dir(&p.join(".preview")).or_else(|| first_png_in_dir(p))),
         _ => None,
     }
@@ -411,7 +410,7 @@ pub fn cmd_project_trunk(s: &mut Session, _params: &Value) -> Result<Value> {
 
 fn target_subfolder_for_ext(ext: &str) -> &'static str {
     match ext {
-        "deckcraft" | "pptx" | "potx" | "designcraft" | "idml" => ".",
+        "designcraft" | "idml" | "indt" => ".",
         "ecproj" => "effects",
         "fcproj" | "mp4" | "mov" | "webm" | "mkv" | "srt" | "lrc" => "film",
         _ if AUDIO_EXTENSIONS.contains(&ext) => "audio",

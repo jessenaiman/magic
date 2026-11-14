@@ -2,8 +2,13 @@
 //! panels (`Sheet 08` Zone E — `T32`–`T38`), wired 1:1 to `crates/engine/src/cmd/film/finishing.rs`.
 
 use egui::{Align2, Color32, CornerRadius, FontId, Pos2, Rect, RichText, ScrollArea, Sense, Stroke, StrokeKind, Ui, Vec2};
-use magic_engine::craft_effects::FILMCRAFT_27_BLEND_MODES;
 use serde_json::{Value, json};
+
+const FILMCRAFT_BLEND_MODES: &[&str] = &[
+    "normal", "dissolve", "darken", "multiply", "colorBurn", "linearBurn", "darkerColor", "lighten", "screen", "colorDodge", "linearDodge",
+    "lighterColor", "overlay", "softLight", "hardLight", "vividLight", "linearLight", "pinLight", "hardMix", "difference", "exclusion", "subtract",
+    "divide", "hue", "saturation", "color", "luminosity",
+];
 
 use crate::controls::{ScalarSpec, fill_card, paint_cubic_bezier, pill_toggle, ring_slider_h};
 use crate::docking::PanelId;
@@ -579,7 +584,7 @@ pub fn draw_fx_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     ui.label(RichText::new("27 Linear-Light Blend Modes & Clip Motion").size(11.5).strong().color(ctx.pal.accent_sky));
     ScrollArea::horizontal().id_salt("fc_27_blend_scroll").show(ui, |ui| {
         ui.horizontal(|ui| {
-            for mode in FILMCRAFT_27_BLEND_MODES {
+            for mode in FILMCRAFT_BLEND_MODES {
                 let id = format!("fc-blend-{mode}");
                 let sel = ctx.state.studio.clip_blend_mode == *mode;
                 if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, mode, "clip.setBlendMode").selected(sel)).clicked() {

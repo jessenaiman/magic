@@ -157,30 +157,6 @@ fn specs_words() -> Vec<CommandSpec> {
             always,
             crate::cmd::words::cmd_words_compose
         ),
-        query_spec!(
-            "craft.api_status",
-            "Probe Live Local Craft Apps Over --control (:9877 / :7979 / :9876)",
-            "{\"refresh\":true}",
-            crate::craft_api::cmd_craft_api_status
-        ),
-        cmd_spec!(
-            "craft.live_save",
-            "Trigger Built-In file.save in Open Local Craft App Over --control",
-            ["File"],
-            None,
-            "{\"app\":\"effectcraft|vectorcraft|filmcraft\",\"path\":\"optional\"}",
-            always,
-            crate::craft_api::cmd_craft_live_save
-        ),
-        cmd_spec!(
-            "effect.exec",
-            "Execute Any Real EffectCraft Engine Command via :9877 Bridge or effectcraft-cli exec",
-            ["Lyrics"],
-            None,
-            "{\"command\":\"comp.info\",\"params\":{},\"project\":\"optional effects/lyrics.ecproj\",\"save\":false}",
-            always,
-            crate::craft_api::cmd_effect_exec
-        ),
     ]
 }
 

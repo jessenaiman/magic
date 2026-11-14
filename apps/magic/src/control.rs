@@ -5,9 +5,9 @@
 //! Security & architecture properties:
 //! - Binds strictly to `127.0.0.1` (`Ipv4Addr::LOCALHOST`, never `::1` or `0.0.0.0`); port `0` picks a free OS port.
 //! - Unauthenticated on `127.0.0.1` (`designcraft/docs/control-protocol.md`), bounds each request line
-//!   to `16 MiB` (`take(MAX_LINE + 1).read_until`), and closes immediately on non-JSON or oversized lines.
+//!   to `4 MiB` (`take(MAX_LINE + 1).read_until`), and closes immediately on non-JSON or oversized lines.
 //! - Direct single-binary control listener: Magic controls its own coordinator UI
-//!   here while querying/saving open sibling Craft apps via `magic_engine::craft_api` over their own `--control` ports.
+//!   here while querying/opening sibling Craft apps over their own documented `--control` / CLI interfaces.
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener};
@@ -26,7 +26,7 @@ use serde_json::{Value, json};
 
 use crate::{MagicDesktopApp, capture, input, keymap, lifecycle, only_keys};
 
-const MAX_LINE: usize = 16 * 1024 * 1024;
+const MAX_LINE: usize = 4 * 1024 * 1024;
 const MAX_CONNECTIONS: usize = 16;
 pub type Dispatch = Arc<dyn Fn(&str, Value) -> Result<Value, String> + Send + Sync>;
 
@@ -241,6 +241,14 @@ impl MagicDesktopApp {
             }
             other => return Err(format!("unsupported synthetic input `{other}`")),
         };
+        if self.synthetic_events.len().saturating_add(events.len()) > input::MAX_PENDING_SYNTHETIC_EVENTS {
+            return Err(format!(
+                "{method}: pending synthetic event queue exceeds {} events ({} queued, {} requested)",
+                input::MAX_PENDING_SYNTHETIC_EVENTS,
+                self.synthetic_events.len(),
+                events.len()
+            ));
+        }
         self.synthetic_events.extend(events);
         Ok(summary)
     }

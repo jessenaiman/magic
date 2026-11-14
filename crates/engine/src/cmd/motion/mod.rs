@@ -69,8 +69,20 @@ fn save_doc(s: &mut Session, dir: &Path, doc: &Value) -> Result<()> {
     Ok(())
 }
 
-pub fn cmd_motion_effects(_s: &mut Session, p: &Value) -> Result<Value> {
-    Ok(crate::craft_effects::query_motion_effects(p))
+pub fn cmd_motion_effects(_s: &mut Session, _p: &Value) -> Result<Value> {
+    let (connected, effects) = crate::cmd::words::stage::live_effectcraft_catalog();
+    let endpoint = crate::workspace::control_endpoint("effectcraft").map(|(a, _)| format!("tcp://{a}"));
+    let installed = effects.as_array().map_or(0, Vec::len);
+    Ok(json!({
+        "ok": true,
+        "source": "effectcraft (--control API / effectcraft-cli)",
+        "domain": "motion",
+        "track": "V4",
+        "api_connected": connected,
+        "api_endpoints": {"effectcraft": endpoint},
+        "effects": effects,
+        "installed": installed,
+    }))
 }
 
 #[allow(clippy::type_complexity)]
@@ -528,12 +540,11 @@ fn sync_actions_ecproj(dir: &Path, cues: &[Value], duration_sec: f64) -> Result<
         if let Some(bend) = cue["arc_bend"].as_f64().filter(|b| b.abs() > 0.01) {
             steps.push(("prop.set".into(), json!({ "layer": layer_name, "path": "transform/rotation", "value": bend })));
         }
-        if let Some(fx_id) = cue["effect_id"].as_str()
-            && let Some(mapped) = crate::craft_effects::find_motion_effect(fx_id)
-            && mapped.craft_app == "effectcraft"
-            && mapped.craft_command == "effect.apply"
+        if let Some(fx_id) = cue["effect_id"].as_str().map(str::trim).filter(|id| !id.is_empty())
+            && !fx_id.starts_with("vc.")
         {
-            steps.push(("effect.apply".into(), json!({ "layer": layer_name, "effect": mapped.match_name })));
+            let effect = fx_id.strip_prefix("ec.").unwrap_or(fx_id);
+            steps.push(("effect.apply".into(), json!({ "layer": layer_name, "effect": effect })));
         }
         steps.push(("layer.addShapeItem".into(), json!({ "layer": layer_name, "kind": "trim" })));
         steps.push(("prop.addKey".into(), json!({ "layer": layer_name, "path": "contents/trim/end", "value": 0.0, "time": start, "timeBase": "comp" })));
@@ -549,7 +560,7 @@ fn sync_actions_ecproj(dir: &Path, cues: &[Value], duration_sec: f64) -> Result<
 
     let mut step_values: Vec<Value> = steps.into_iter().map(|(command, params)| json!({"command": command, "params": params})).collect();
     step_values.push(json!({"command": "file.saveAs", "params": {"path": ecproj}}));
-    crate::craft_api::run_effectcraft_steps(None, true, &step_values).map_err(|e| EngineError::ExternalTool("effectcraft".into(), e))?;
+    crate::cmd::character::effectcraft(dir, None, &step_values, true)?;
     Ok(ecproj)
 }
 
@@ -627,7 +638,7 @@ pub fn cmd_motion_read(s: &mut Session, _p: &Value) -> Result<Value> {
         "lines": lines,
         "cues": cues,
         "presets": presets,
-        "craft_effects": crate::craft_effects::motion_catalog_json(),
+        "craft_effects": crate::cmd::words::stage::live_effectcraft_catalog().1,
         "backdrop": backdrop,
     }))
 }
@@ -723,12 +734,9 @@ pub fn cmd_motion_save(s: &mut Session, p: &Value) -> Result<Value> {
         "taper": p["taper"].as_f64().unwrap_or(65.0),
         "tangent_in": p.get("tangent_in").cloned().unwrap_or_else(|| json!([-120.0, -54.0])),
         "tangent_out": p.get("tangent_out").cloned().unwrap_or_else(|| json!([120.0, -54.0])),
-        "craft_app": p["effect_id"]
-            .as_str()
-            .and_then(crate::craft_effects::find_motion_effect)
-            .map(|m| m.craft_app)
-            .or_else(|| p["craft_app"].as_str())
-            .unwrap_or("vectorcraft"),
+        "craft_app": p["craft_app"].as_str().unwrap_or_else(|| {
+            if p["effect_id"].as_str().is_some_and(|id| id.starts_with("ec.")) { "effectcraft" } else { "vectorcraft" }
+        }),
     });
 
     if let Some(cues) = doc["cues"].as_array_mut() {
@@ -746,11 +754,10 @@ pub fn cmd_motion_save(s: &mut Session, p: &Value) -> Result<Value> {
     let mut studio = None;
     if p["render"].as_bool() == Some(true) || p["studio"].as_bool() == Some(true) {
         let out_mov = dir.join("effects/motion.mov");
-        crate::craft_api::render_effectcraft_comp(
+        crate::cmd::character::effectcraft_render(
             &ecproj,
-            &json!({"comp": COMP_NAME, "output": out_mov, "format": "prores", "proresProfile": "4444", "channels": "rgba"}),
-        )
-        .map_err(|e| EngineError::ExternalTool("effectcraft".into(), e))?;
+            json!({"comp": COMP_NAME, "output": out_mov, "format": "prores", "proresProfile": "4444", "channels": "rgba"}),
+        )?;
         if p["studio"].as_bool() == Some(true) {
             studio = Some(crate::cmd::film::publish_motion(s, &out_mov)?);
         }
@@ -774,11 +781,10 @@ pub fn cmd_motion_publish(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let out_mov = p["path"].as_str().map(|raw| crate::workspace::resolve_workspace_path(s, raw)).unwrap_or_else(|| dir.join("effects/motion.mov"));
     if p["render"].as_bool().unwrap_or(!out_mov.is_file()) {
-        crate::craft_api::render_effectcraft_comp(
+        crate::cmd::character::effectcraft_render(
             &ecproj,
-            &json!({"comp": COMP_NAME, "output": out_mov, "format": "prores", "proresProfile": "4444", "channels": "rgba"}),
-        )
-        .map_err(|e| EngineError::ExternalTool("effectcraft".into(), e))?;
+            json!({"comp": COMP_NAME, "output": out_mov, "format": "prores", "proresProfile": "4444", "channels": "rgba"}),
+        )?;
     }
     let studio = crate::cmd::film::publish_motion(s, &out_mov)?;
     Ok(json!({ "ok": true, "ecproj": ecproj, "render": out_mov, "track": "Action Motion", "studio": studio }))
@@ -828,9 +834,8 @@ pub fn cmd_motion_preview_frame(s: &mut Session, p: &Value) -> Result<Value> {
     std::fs::create_dir_all(&preview_dir)?;
     let out = preview_dir.join(format!("motion-{}.png", (time * 1000.0).round() as u64));
     if ecproj.is_file() {
-        if crate::craft_api::probe_live_app("effectcraft")["connected"] == true || crate::craft_api::effectcraft_cli_available() {
-            crate::craft_api::render_effectcraft_frame(&ecproj, Some(COMP_NAME), time, 960, true, &out)
-                .map_err(|e| EngineError::ExternalTool("effectcraft".into(), e))?;
+        if crate::cmd::character::effectcraft_available() {
+            crate::cmd::character::effectcraft_frame(&ecproj, COMP_NAME, time, 960, &out)?;
         } else {
             let _ = crate::native_media::extract_or_copy_preview(&ecproj, &out, 960);
         }

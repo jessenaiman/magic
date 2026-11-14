@@ -5,7 +5,7 @@
 
 use serde_json::{Value, json};
 
-use crate::craft_api::{HOST_CRAFT_APPS, probe_live_app};
+use crate::workspace::{CRAFT_APPS, control_probe, resolve_executable_path};
 use crate::{Result, Session};
 
 struct Check {
@@ -36,10 +36,9 @@ impl Check {
 fn checks(s: &Session) -> Vec<Check> {
     let mut out = Vec::new();
 
-    for (app, cli, port, _, _, _) in HOST_CRAFT_APPS {
-        let probe = probe_live_app(app);
-        let live = probe["connected"].as_bool() == Some(true);
-        let cli_ok = probe["cli_installed"].as_bool() == Some(true);
+    for (app, cli, port) in CRAFT_APPS {
+        let live = control_probe(app);
+        let cli_ok = resolve_executable_path(cli).is_some();
         if live || cli_ok {
             out.push(Check::ok(format!("host:{app}"), format!("{app} ready (control_connected={live} on 127.0.0.1:{port}, {cli}_installed={cli_ok})")));
         } else {
@@ -50,6 +49,17 @@ fn checks(s: &Session) -> Vec<Check> {
                 format!("Install {app} via ArtCraft Launcher (putting `{cli}` on PATH) or start `{app} --control {port}`"),
             ));
         }
+    }
+    let anicraft_cli_ok = resolve_executable_path("anicraft-cli").is_some();
+    if anicraft_cli_ok {
+        out.push(Check::ok("host:anicraft", "anicraft ready (anicraft-cli installed for stdio serve/mcp)"));
+    } else {
+        out.push(Check::problem(
+            "warn",
+            "host:anicraft",
+            "`anicraft-cli` is not installed on PATH",
+            "Install AniCraft (`anicraft-cli` for stdio `serve` / `mcp` / `render`) when using animated vector sprites",
+        ));
     }
 
     let ai = crate::craft_ai::craft_ai_status();

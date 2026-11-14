@@ -69,7 +69,7 @@ pub struct ProjectPrefs {
 
 impl Default for ProjectPrefs {
     fn default() -> Self {
-        Self { root: None, storyboard_template: String::new(), storyboard_format: "deckcraft".into() }
+        Self { root: None, storyboard_template: String::new(), storyboard_format: "designcraft".into() }
     }
 }
 
@@ -281,7 +281,7 @@ impl MagicPrefs {
                 let raw = value.as_str().map(str::trim).unwrap_or_default();
                 self.project.storyboard_template = if raw == "magic" { String::new() } else { raw.to_owned() };
             }
-            "project.storyboard_format" => self.project.storyboard_format = value.as_str().unwrap_or("deckcraft").to_owned(),
+            "project.storyboard_format" => self.project.storyboard_format = value.as_str().unwrap_or("designcraft").to_owned(),
             "lyrics.default_size" => self.lyrics.default_size = value.as_i64().unwrap_or(72),
             "lyrics.outline" => self.lyrics.outline = value.as_bool().unwrap_or(true),
             "lyrics.font_dirs" => self.lyrics.font_dirs = opt_str_from_value(value),

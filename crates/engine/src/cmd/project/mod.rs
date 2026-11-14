@@ -1,7 +1,7 @@
 //! Self-contained `.magic` project lifecycle (`project.*` and ArtCraft `file.*` suite aliases).
 //!
 //! Every Magic Studio project is a self-contained `<project-slug>/` directory that owns copies of
-//! its audio, assets, `storyboard.deckcraft`, `effects/*.ecproj`, and `film/*.fcproj`, storing
+//! its audio, assets, `storyboard.designcraft`, `effects/*.ecproj`, and `film/*.fcproj`, storing
 //! relative paths inside `<slug>.magic`.
 
 pub mod assets;
@@ -58,8 +58,8 @@ pub fn project_document(s: &Session) -> Value {
         return Value::Null;
     };
     let name = path.file_stem().and_then(|n| n.to_str()).unwrap_or("Untitled");
-    let sb_name = if path.with_file_name("storyboard.pptx").is_file() && !path.with_file_name(crate::cmd::storyboard::DEFAULT_STORYBOARD_FILE).is_file() {
-        "storyboard.pptx"
+    let sb_name = if path.with_file_name("storyboard.idml").is_file() && !path.with_file_name(crate::cmd::storyboard::DEFAULT_STORYBOARD_FILE).is_file() {
+        "storyboard.idml"
     } else {
         crate::cmd::storyboard::DEFAULT_STORYBOARD_FILE
     };

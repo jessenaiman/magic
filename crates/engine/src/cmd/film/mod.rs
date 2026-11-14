@@ -71,6 +71,69 @@ pub(crate) fn is_local_shim_fcproj(path: &Path) -> bool {
         .is_some_and(|v| v.get("format").and_then(Value::as_str) == Some("filmcraft.project") && v.get("next_item_id").is_some())
 }
 
+fn filmcraft_cli_available() -> bool {
+    crate::workspace::resolve_executable_path("filmcraft-cli").is_some()
+}
+
+fn is_readonly_filmcraft_command(id: &str) -> bool {
+    id.ends_with(".inspect") || id.ends_with(".list") || id.ends_with(".get") || matches!(id, "sequence.renderBar" | "edit.find")
+}
+
+fn filmcraft_global_args(project: Option<&Path>, fresh: bool, save: bool) -> Vec<String> {
+    let mut args = Vec::new();
+    let Some(p) = project else {
+        return args;
+    };
+    let use_existing = !fresh && p.is_file() && !is_local_shim_fcproj(p);
+    if use_existing {
+        args.extend(["--project".to_owned(), p.to_string_lossy().into_owned()]);
+        if save {
+            args.push("--save".to_owned());
+        }
+    } else if save {
+        args.extend(["--save-as".to_owned(), p.to_string_lossy().into_owned()]);
+    }
+    args
+}
+
+fn filmcraft_run_steps_cli(project: Option<&Path>, fresh: bool, save: bool, steps: &[Value]) -> std::result::Result<Vec<Value>, String> {
+    let mut args = filmcraft_global_args(project, fresh, save);
+    args.extend(["run".to_owned(), "-".to_owned()]);
+    let mut script = String::new();
+    for st in steps {
+        let id = st["id"].as_str().or_else(|| st["command"].as_str()).unwrap_or_default();
+        let params = st.get("params").cloned().unwrap_or_else(|| json!({}));
+        script.push_str(&json!({"id": id, "params": params}).to_string());
+        script.push('\n');
+    }
+    let out = crate::workspace::run_cli("filmcraft-cli", &args, Some(&script))?;
+    let parsed = out
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .map(|l| serde_json::from_str::<Value>(l).unwrap_or_else(|_| json!({"raw": l})))
+        .collect();
+    Ok(parsed)
+}
+
+fn filmcraft_exec_live(project: Option<&Path>, save: bool, id: &str, params: Value) -> std::result::Result<Value, String> {
+    if let Some(p) = project.filter(|p| p.is_file() && !is_local_shim_fcproj(p)) {
+        let _ = crate::workspace::control_exec("filmcraft", "file.open", json!({"path": p}));
+    }
+    let res = crate::workspace::control_exec("filmcraft", id, params)?;
+    if save {
+        let save_params = project.map_or_else(|| json!({}), |p| json!({"path": p}));
+        crate::workspace::control_exec("filmcraft", "file.save", save_params)?;
+    }
+    Ok(res)
+}
+
+fn filmcraft_exec_cli(project: Option<&Path>, save: bool, id: &str, params: &Value) -> std::result::Result<Value, String> {
+    let mut args = filmcraft_global_args(project, false, save);
+    args.extend(["exec".to_owned(), id.to_owned(), params.to_string()]);
+    crate::workspace::run_cli_json("filmcraft-cli", &args, None)
+}
+
 impl Film {
     pub(crate) fn ensure_on_disk(&self, s: &Session) -> Result<&Path> {
         if !self.project.is_file() {
@@ -81,10 +144,7 @@ impl Film {
                 json!({"id": "file.newProject", "params": {"name": self.name}}),
                 json!({"id": "file.newSequence", "params": {"name": self.name, "width": 1920, "height": 1080, "fps": 24}}),
             ];
-            if crate::craft_api::filmcraft_cli_available()
-                && crate::craft_api::run_filmcraft_steps(Some(&self.project), true, true, &seed_steps).is_ok()
-                && self.project.is_file()
-            {
+            if filmcraft_cli_available() && filmcraft_run_steps_cli(Some(&self.project), true, true, &seed_steps).is_ok() && self.project.is_file() {
                 return Ok(&self.project);
             }
             let mut doc = fcproj_doc::load_fcproj(&self.project);
@@ -171,22 +231,22 @@ pub(crate) fn timeline_file(s: &Session) -> Result<Value> {
 
 pub(crate) fn run_steps(project: Option<&Path>, fresh: bool, save: bool, steps: &[Value]) -> Result<Vec<Value>> {
     if let Some(proj) = project {
-        if crate::craft_api::probe_live_app("filmcraft")["connected"] == true {
+        if crate::workspace::control_probe("filmcraft") {
             let mut live_results = Vec::with_capacity(steps.len());
             for step in steps {
                 let id = step["id"].as_str().unwrap_or_default();
                 let params = step.get("params").cloned().unwrap_or_else(|| json!({}));
-                let reply = crate::craft_api::execute_in_live_app("filmcraft", id, params)
+                let reply = crate::workspace::control_exec("filmcraft", id, params)
                     .map_err(|e| EngineError::ExternalTool("filmcraft".into(), format!("live `--control 9876` failed at `{id}`: {e}")))?;
                 live_results.push(reply);
             }
             if save || fresh {
-                crate::craft_api::save_in_live_app("filmcraft", Some(proj))
+                crate::workspace::control_exec("filmcraft", "file.save", json!({"path": proj}))
                     .map_err(|e| EngineError::ExternalTool("filmcraft".into(), format!("live `--control 9876` save failed: {e}")))?;
             }
             return Ok(live_results);
         }
-        if crate::craft_api::filmcraft_cli_available() {
+        if filmcraft_cli_available() {
             let use_fresh = fresh || is_local_shim_fcproj(proj);
             let mut cli_steps = Vec::with_capacity(steps.len() + 2);
             let mut stripped_prefix = 0usize;
@@ -197,7 +257,7 @@ pub(crate) fn run_steps(project: Option<&Path>, fresh: bool, save: bool, steps: 
                 stripped_prefix = 2;
             }
             cli_steps.extend_from_slice(steps);
-            let mut out = crate::craft_api::run_filmcraft_steps(Some(proj), use_fresh, save, &cli_steps)
+            let mut out = filmcraft_run_steps_cli(Some(proj), use_fresh, save, &cli_steps)
                 .map_err(|err| EngineError::ExternalTool("filmcraft-cli".into(), err))?;
             if stripped_prefix > 0 && out.len() >= stripped_prefix {
                 out.drain(0..stripped_prefix);
@@ -327,21 +387,20 @@ fn publish_track_sequence(
 }
 
 pub(crate) fn execute(project: &Path, id: &str, params: Value) -> Result<Value> {
-    let is_query = crate::craft_api::is_readonly_filmcraft_command(id);
-    let has_host = crate::craft_api::probe_live_app("filmcraft")["connected"] == true || crate::craft_api::filmcraft_cli_available();
-    if !is_local_shim_fcproj(project) || has_host {
-        let dispatched = crate::craft_api::execute_filmcraft_command(Some(project), Some(!is_query), id, params)
-            .map_err(|err| EngineError::ExternalTool("filmcraft-cli".into(), err))?;
+    let is_query = is_readonly_filmcraft_command(id);
+    if crate::workspace::control_probe("filmcraft") {
+        let res = filmcraft_exec_live(Some(project), !is_query, id, params).map_err(|e| EngineError::ExternalTool("filmcraft".into(), e))?;
         if is_query {
-            return Ok(dispatched.get("result").cloned().unwrap_or(dispatched));
+            return Ok(res);
         }
-        return Ok(json!({
-            "ok": true,
-            "command": id,
-            "transport": dispatched["transport"],
-            "result": dispatched["result"],
-            "live_dispatched": dispatched["transport"] == "control",
-        }));
+        return Ok(json!({"ok": true, "command": id, "transport": "control", "result": res, "live_dispatched": true}));
+    }
+    if !is_local_shim_fcproj(project) && filmcraft_cli_available() {
+        let res = filmcraft_exec_cli(Some(project), !is_query, id, &params).map_err(|err| EngineError::ExternalTool("filmcraft-cli".into(), err))?;
+        if is_query {
+            return Ok(res);
+        }
+        return Ok(json!({"ok": true, "command": id, "transport": "cli", "result": res, "live_dispatched": false}));
     }
     let mut doc = fcproj_doc::load_fcproj(project);
     let local = fcproj_doc::apply_step(&mut doc, id, &params);
@@ -352,41 +411,6 @@ pub(crate) fn execute(project: &Path, id: &str, params: Value) -> Result<Value> 
         return Ok(local);
     }
     Ok(json!({"ok": true, "command": id, "transport": "local-shim", "result": local, "live_dispatched": false}))
-}
-
-/// Pass any `FilmCraft` engine command (`sequence.inspect`, `timeline.razor`, `effects.setParam`, etc.)
-/// straight to a live `filmcraft --control 9876` session or `filmcraft-cli --project <song.fcproj> [--save] exec`.
-pub fn cmd_video_exec(s: &mut Session, p: &Value) -> Result<Value> {
-    let command = p
-        .get("command")
-        .or_else(|| p.get("id"))
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|c| !c.is_empty())
-        .ok_or_else(|| bad("video.exec requires non-empty `command` (e.g. `sequence.inspect` or `timeline.razor`)"))?;
-    let params = match p.get("params") {
-        Some(v) if v.is_object() => v.clone(),
-        Some(v) if v.is_null() => json!({}),
-        Some(_) => return Err(bad("`params` must be a JSON object")),
-        None => {
-            let mut extra = p.clone();
-            if let Some(obj) = extra.as_object_mut() {
-                obj.remove("command");
-                obj.remove("id");
-                obj.remove("save");
-                obj.remove("project");
-            }
-            extra
-        }
-    };
-    let save_override = p.get("save").and_then(Value::as_bool);
-    let f = film(s)?;
-    let proj = if let Some(raw_proj) = p.get("project").and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty()) {
-        crate::workspace::resolve_workspace_path(s, raw_proj)
-    } else {
-        f.ensure_on_disk(s)?.to_path_buf()
-    };
-    crate::craft_api::execute_filmcraft_command(Some(&proj), save_override, command, params).map_err(|e| EngineError::ExternalTool("filmcraft-cli".into(), e))
 }
 
 pub(crate) fn run(project: &Path, fresh: bool, steps: &[Value]) -> Result<Vec<Value>> {
@@ -460,16 +484,34 @@ fn check_offline_export_result(result: &Value, draft: bool, options: &Value) -> 
     Ok(())
 }
 
+fn filmcraft_export_cli(project: &Path, output: &Path, draft: bool, params: &Value, options: &Value) -> std::result::Result<Value, String> {
+    let proj_s = project.to_string_lossy().into_owned();
+    let out_s = output.to_string_lossy().into_owned();
+    let mut args = vec!["--project".to_owned(), proj_s, "export".to_owned(), out_s];
+    if let Some(preset) = params["preset"].as_str().map(str::trim).filter(|s| !s.is_empty()) {
+        args.extend(["--preset".to_owned(), preset.to_owned()]);
+    }
+    if let Some(fmt) = options["format"].as_str().map(str::trim).filter(|s| !s.is_empty()) {
+        args.extend(["--format".to_owned(), fmt.to_owned()]);
+    }
+    if draft || options.get("allowOffline").and_then(Value::as_bool) == Some(true) {
+        args.push("--allow-offline".to_owned());
+    }
+    crate::workspace::run_cli_json("filmcraft-cli", &args, None)
+}
+
 pub(crate) fn export_with_options(project: &Path, output: &Path, draft: bool, options: &Value) -> Result<()> {
     let params = export_params(output, draft, options);
     let queue = options.get("queue").and_then(Value::as_bool) == Some(true);
     let cmd_id = if queue { "export.queue.add" } else { "file.exportMedia" };
 
-    if let Ok(live) = crate::craft_api::execute_in_live_app("filmcraft", cmd_id, params.clone()) {
+    if crate::workspace::control_probe("filmcraft") {
+        let live = crate::workspace::control_exec("filmcraft", cmd_id, params)
+            .map_err(|err| EngineError::ExternalTool("filmcraft".into(), err))?;
         return check_offline_export_result(&live, draft, options);
     }
-    if crate::craft_api::filmcraft_cli_available() && (!is_local_shim_fcproj(project) || project.is_file()) {
-        let res = crate::craft_api::export_filmcraft_media(project, output, draft, &params, options)
+    if filmcraft_cli_available() && project.is_file() && !is_local_shim_fcproj(project) {
+        let res = filmcraft_export_cli(project, output, draft, &params, options)
             .map_err(|err| EngineError::ExternalTool("filmcraft-cli".into(), err))?;
         return check_offline_export_result(&res, draft, options);
     }
@@ -490,12 +532,26 @@ pub(crate) fn export_with_options(project: &Path, output: &Path, draft: bool, op
 }
 
 pub(crate) fn frame_at_tick(project_dir: &Path, project: &Path, tick: Tick, output: &Path) -> Result<()> {
-    let frame_params = json!({"path": output, "seconds": tick.seconds()});
-    if (!is_local_shim_fcproj(project) || crate::craft_api::probe_live_app("filmcraft")["connected"] == true)
-        && crate::craft_api::execute_filmcraft_command(Some(project), Some(false), "file.exportFrame", frame_params).is_ok()
+    if crate::workspace::control_probe("filmcraft")
+        && crate::workspace::control_call("filmcraft", "render.frame", json!({"seconds": tick.seconds(), "path": output})).is_ok()
         && output.is_file()
     {
         return Ok(());
+    }
+    if !is_local_shim_fcproj(project) && filmcraft_cli_available() {
+        let proj_s = project.to_string_lossy().into_owned();
+        let sec_s = tick.seconds().to_string();
+        let out_s = output.to_string_lossy().into_owned();
+        if crate::workspace::run_cli(
+            "filmcraft-cli",
+            &["--project", &proj_s, "render", "--seconds", &sec_s, "--out", &out_s, "--allow-offline"],
+            None,
+        )
+        .is_ok()
+            && output.is_file()
+        {
+            return Ok(());
+        }
     }
     fcproj_doc::render_composite_frame(project_dir, project, tick, output)
 }

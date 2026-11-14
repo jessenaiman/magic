@@ -3,7 +3,6 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
 
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -157,44 +156,29 @@ pub fn cmd_words_lyrics_view(s: &mut Session, p: &Value) -> Result<Value> {
     }))
 }
 
+pub(crate) fn live_effectcraft_catalog() -> (bool, Value) {
+    let connected = crate::workspace::control_probe("effectcraft");
+    let list = if connected {
+        crate::workspace::control_exec("effectcraft", "library.list", json!({}))
+            .ok()
+            .and_then(|v| v.get("effects").or_else(|| v.get("items")).or_else(|| v.get("catalog")).cloned().or_else(|| v.is_array().then_some(v)))
+            .unwrap_or_else(|| json!([]))
+    } else {
+        json!([])
+    };
+    (connected, list)
+}
+
 fn runtime_effectcraft_tools() -> Value {
-    let (endpoints, ec_live, _, _) = crate::craft_api::live_craft_snapshot(false);
-    let effects = ec_live.unwrap_or_default();
+    let endpoint = crate::workspace::control_endpoint("effectcraft").map(|(addr, _)| format!("tcp://{addr}"));
+    let (connected, effects) = live_effectcraft_catalog();
     json!({
-        "endpoint": endpoints["effectcraft"]["endpoint"],
-        "connected": endpoints["effectcraft"]["connected"],
+        "endpoint": endpoint,
+        "connected": connected,
         "text_presets": [],
         "animator_properties": ["position", "scale", "rotation", "skew", "opacity", "tracking", "fillColor", "strokeWidth"],
         "paint_presets": [],
         "effects": effects,
-    })
-}
-
-fn runtime_filmcraft_tools() -> &'static Value {
-    static CACHE: OnceLock<Value> = OnceLock::new();
-    CACHE.get_or_init(|| {
-        let run = |_id: &str| -> Value { json!([]) };
-        let effects: Vec<Value> = run("effects.list")
-            .as_array()
-            .cloned()
-            .into_iter()
-            .flatten()
-            .map(|fx| {
-                json!({
-                    "id": fx["id"],
-                    "name": fx["name"],
-                    "category": fx.get("folder").or_else(|| fx.get("category")).unwrap_or(&Value::Null),
-                    "kind": fx["kind"],
-                })
-            })
-            .collect();
-        let presets = run("presets.list");
-        let export_presets = run("export.presets.list");
-        json!({
-            "effects": effects,
-            "presets": if presets.is_array() { presets } else { json!([]) },
-            "export_presets": if export_presets.is_array() { export_presets } else { json!([]) },
-        })
     })
 }
 
@@ -252,8 +236,6 @@ pub(crate) fn runtime_words_tools() -> Value {
         "entrances": ENTRANCES,
         "exits": EXITS,
         "effectcraft": runtime_effectcraft_tools(),
-        "filmcraft": runtime_filmcraft_tools().clone(),
-        "craft_effects": crate::craft_effects::lyrics_catalog_json(),
     })
 }
 
@@ -264,21 +246,23 @@ pub fn cmd_words_effects(_s: &mut Session, p: &Value) -> Result<Value> {
         return Err(invalid("kind must be one of text, warp or style"));
     }
     let tools = runtime_words_tools();
-    let mapped = crate::craft_effects::query_lyrics_effects(p);
+    let (connected, effects) = live_effectcraft_catalog();
+    let endpoint = crate::workspace::control_endpoint("effectcraft").map(|(a, _)| format!("tcp://{a}"));
+    let installed = effects.as_array().map_or(0, Vec::len);
     Ok(json!({
         "ok": true,
-        "source": "effectcraft + vectorcraft + photocraft (--control API)",
+        "source": "effectcraft (--control API / effectcraft-cli)",
         "domain": "lyrics",
         "track": "V3",
-        "api_connected": mapped["api_connected"],
-        "api_endpoints": mapped["api_endpoints"],
-        "effects": mapped["effects"],
-        "installed": mapped["installed"],
+        "api_connected": connected,
+        "api_endpoints": {"effectcraft": endpoint},
+        "effects": effects,
+        "installed": installed,
         "kinds": {
             "text": {
                 "query": "typography animators, warps and layer styles",
                 "tier": "native",
-                "effects": mapped["effects"],
+                "effects": effects,
             }
         },
         "tools": tools,
@@ -420,7 +404,7 @@ pub fn cmd_words_read(s: &mut Session, p: &Value) -> Result<Value> {
         "path": document_path(&dir),
         "document": doc,
         "in_video": in_video,
-        "fonts": crate::craft_api::discover_suite_fonts(),
+        "fonts": magic_util::media::discover_installed_font_families(),
         "tools": tools,
     }))
 }
@@ -566,7 +550,9 @@ pub fn cmd_words_save(s: &mut Session, p: &Value) -> Result<Value> {
     let saved = anim.clone();
     save(s, &dir, &doc)?;
     let ecproj = crate::cmd::words::lyrics_ecproj_path(&dir);
-    let live_saved = crate::craft_api::save_in_live_app("effectcraft", ecproj.is_file().then_some(ecproj.as_path())).is_ok();
+    let save_params = if ecproj.is_file() { json!({"path": ecproj}) } else { json!({}) };
+    let live_saved =
+        crate::workspace::control_probe("effectcraft") && crate::workspace::control_exec("effectcraft", "file.save", save_params).is_ok();
     Ok(json!({"ok": true, "conflict": false, "path": document_path(&dir), "live_app_saved": live_saved, "animation": saved}))
 }
 

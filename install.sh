@@ -85,7 +85,7 @@ resolve_bin() {
 
 if [[ "$FROM_SOURCE" -eq 1 ]] || ! resolve_bin "magic-cli" >/dev/null; then
   echo "Building Magic Studio pure-Rust workspace (magic, magic-cli, magic-tui)..."
-  (cd "$SCRIPT_DIR" && cargo update && cargo build --release -p magic-cli -p magic -p magic-tui)
+  (cd "$SCRIPT_DIR" && cargo build --release --locked -p magic-cli -p magic -p magic-tui)
 fi
 
 mkdir -p "$BIN_DIR" "$APPS_DIR" "$MIME_DIR" "$ICON_DIR"

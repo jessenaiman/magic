@@ -8,11 +8,13 @@ Magic Studio exposes the standard ArtCraft loopback JSON-lines control channel (
 magic --control 9875          # or MAGIC_CONTROL_PORT=9875
 ```
 
-- **Transport**: Opt-in TCP on `127.0.0.1` (`Ipv4Addr::LOCALHOST`) only; `--control 0` picks a free port and prints `MAGIC_CONTROL_PORT=<port>`, one JSON object per line in each direction, persistent connections, up to 16 concurrent clients, `16 MiB` max line, and `60 s` UI reply timeout with expired-in-queue skip (`timeout: not-run` vs `timeout: outcome unknown`).
+- **Transport**: Opt-in TCP on `127.0.0.1` (`Ipv4Addr::LOCALHOST`) only; `--control 0` picks a free port and prints `MAGIC_CONTROL_PORT=<port>`, one JSON object per line in each direction, persistent connections, up to 16 concurrent clients, `4 MiB` max line, and `60 s` UI reply timeout with expired-in-queue skip (`timeout: not-run` vs `timeout: outcome unknown`).
+- **Isolated Test Profiles & Recovery**: Set `MAGIC_CONFIG_DIR` to a dedicated directory so preferences and `Recovery/` autosaves stay under that root; set `MAGIC_CONFIG_DIR=""` to run purely in memory without touching disk. Set `MAGIC_NO_PREFS=1` to disable preference reads and writes independently of `Recovery/`.
 - **Request**: `{"id": 1, "method": "engine.execute", "params": {"command": "workshop.status", "params": {}}}`
 - **Reply**: `{"id": 1, "ok": true, "result": ...}` or `{"id": 1, "ok": false, "error": "..."}`
 - **Authentication**: Unauthenticated on `127.0.0.1`, matching [`DesignCraft` `docs/control-protocol.md`](https://github.com/storytold/designcraft/blob/main/docs/control-protocol.md) — enable `--control` only while actively automating or testing.
 - **Framing & Smuggling Protection**: Any non-JSON line, missing `method`, invalid UTF-8, or oversized line receives one error ending in `"; closing the connection"` and closes the socket immediately.
+- **Synthetic Input Budget**: Queued synthetic input events are capped at `10,003` pending `egui::Event` entries (`ui.click` accepts `count` `1..=255` producing `1 + 2*count` events; `ui.drag` defaults `steps` to `8` in `1..=10,000` and `count` `1..=255` producing `1 + steps + 2*count` events, accepting `{from, to}` or `{x1, y1, x2, y2}`).
 
 ## Quick Test
 

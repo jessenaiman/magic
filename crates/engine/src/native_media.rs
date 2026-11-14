@@ -1,12 +1,14 @@
 //! Host Craft application media delegation & local project preview helpers (`crates/engine/src/native_media.rs`).
 //!
 //! Subject isolation (`PhotoCraft`) and vector contour tracing (`VectorCraft`) execute against the
-//! host machine's running Craft applications via `--control` (`crate::craft_api`) or `<app>-cli`,
+//! host machine's running Craft applications via `--control` or `<app>-cli`,
 //! while local thumbnail/cell cropping and `craft-doc` preview extraction keep project UI cards fast.
 
 use std::fmt::Write as _;
 use std::io::Cursor;
 use std::path::Path;
+
+use craft_doc::{Limits, RenditionKind};
 
 use image::{DynamicImage, GenericImageView, ImageFormat, RgbaImage};
 use serde_json::{Value, json};
@@ -34,47 +36,55 @@ pub fn load_rgba(input: &Path) -> Result<RgbaImage> {
     if let Ok(img) = image::open(input) {
         return Ok(img.to_rgba8());
     }
-    let tmp = std::env::temp_dir().join(format!("magic-preview-{}.png", std::process::id()));
-    let extracted = magic_util::media::extract_craft_preview(input, &tmp).unwrap_or(false);
-    if extracted && let Ok(img) = image::open(&tmp) {
-        let _ = std::fs::remove_file(&tmp);
-        return Ok(img.to_rgba8());
+    if input.is_dir() {
+        for rel in ["preview.png", "QuickLook/Thumbnail.png"] {
+            let p = input.join(rel);
+            if p.is_file()
+                && let Ok(img) = image::open(&p)
+            {
+                return Ok(img.to_rgba8());
+            }
+        }
+    } else if input.is_file()
+        && let Ok(bytes) = std::fs::read(input)
+        && craft_doc::sniff(&bytes).is_some()
+    {
+        let limits = Limits::default();
+        if let Ok(rend) = craft_doc::rendition(&bytes, RenditionKind::Composite, &limits)
+            .or_else(|_| craft_doc::rendition(&bytes, RenditionKind::Thumbnail, &limits))
+            && let Ok(img) = image::load_from_memory(&rend.bytes)
+        {
+            return Ok(img.to_rgba8());
+        }
     }
-    let _ = std::fs::remove_file(&tmp);
     Err(bad(format!("cannot decode raster or embedded Craft preview from {}", input.display())))
 }
 
-/// Isolate a subject to transparent RGBA via host `PhotoCraft` (`photocraft --control 7878` or
-/// `photocraft-cli` `layer.removeBackground`), falling back to chroma/corner keying only when
-/// generating offline preview thumbnails before `PhotoCraft` saves back.
-pub fn isolate_subject_rgba(input: &Path, output: &Path, chroma_hex: Option<&str>, feather_px: f64) -> Result<Value> {
-    if input == output {
-        return Err(bad(format!("refusing to overwrite source image {}", input.display())));
+fn try_photocraft_isolate(input: &Path, output: &Path) -> bool {
+    if crate::workspace::control_probe("photocraft") {
+        let ok = crate::workspace::control_exec("photocraft", "file.open", json!({"path": input})).is_ok()
+            && crate::workspace::control_exec("photocraft", "layer.removeBackground", json!({})).is_ok()
+            && crate::workspace::control_exec("photocraft", "file.saveACopy", json!({"path": output, "overwrite": true})).is_ok();
+        if ok && output.is_file() {
+            return true;
+        }
     }
-    if let Some(parent) = output.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-
-    if crate::craft_api::execute_on_host_app("photocraft", Some(input), "layer.removeBackground", json!({})).is_ok()
-        && crate::craft_api::execute_on_host_app("photocraft", Some(input), "file.saveACopy", json!({"path": output, "overwrite": true})).is_ok()
+    let Some(in_s) = input.to_str() else {
+        return false;
+    };
+    let Some(out_s) = output.to_str() else {
+        return false;
+    };
+    crate::workspace::run_cli(
+        "photocraft-cli",
+        &["run", in_s, "--cmd", "layer.removeBackground", "--params", "{}", "--out", out_s],
+        None,
+    )
+    .is_ok()
         && output.is_file()
-    {
-        let (w, h, _) = magic_util::media::fast_dimensions(output).unwrap_or((0, 0, true));
-        return Ok(json!({
-            "ok": true,
-            "input": input,
-            "output": output,
-            "width": w,
-            "height": h,
-            "engine": "photocraft",
-        }));
-    }
+}
 
-    let mut rgba = load_rgba(input)?;
-    let (w, h) = rgba.dimensions();
-    if w == 0 || h == 0 {
-        return Err(bad("empty image dimensions"));
-    }
+pub fn isolate_rgba_in_memory(rgba: &mut RgbaImage, chroma_hex: Option<&str>, feather_px: f64) {
     let key_rgb = chroma_hex
         .and_then(|hex| {
             let clean = hex.trim().trim_start_matches('#');
@@ -103,6 +113,37 @@ pub fn isolate_subject_rgba(input: &Path, output: &Path, chroma_hex: Option<&str
             px[3] = (f64::from(px[3]) * t).round() as u8;
         }
     }
+}
+
+/// Isolate a subject to transparent RGBA via host `PhotoCraft` (`photocraft --control 7878` or
+/// `photocraft-cli` `layer.removeBackground`), falling back to chroma/corner keying only when
+/// generating offline preview thumbnails before `PhotoCraft` saves back.
+pub fn isolate_subject_rgba(input: &Path, output: &Path, chroma_hex: Option<&str>, feather_px: f64) -> Result<Value> {
+    if input == output {
+        return Err(bad(format!("refusing to overwrite source image {}", input.display())));
+    }
+    if let Some(parent) = output.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+
+    if try_photocraft_isolate(input, output) {
+        let (w, h, _) = magic_util::media::fast_dimensions(output).unwrap_or((0, 0, true));
+        return Ok(json!({
+            "ok": true,
+            "input": input,
+            "output": output,
+            "width": w,
+            "height": h,
+            "engine": "photocraft",
+        }));
+    }
+
+    let mut rgba = load_rgba(input)?;
+    let (w, h) = rgba.dimensions();
+    if w == 0 || h == 0 {
+        return Err(bad("empty image dimensions"));
+    }
+    isolate_rgba_in_memory(&mut rgba, chroma_hex, feather_px);
     encode_png_atomic(&rgba, output)?;
     Ok(json!({
         "ok": true,
@@ -114,8 +155,46 @@ pub fn isolate_subject_rgba(input: &Path, output: &Path, chroma_hex: Option<&str
     }))
 }
 
-/// Trace a vector contour SVG via host `VectorCraft` (`vectorcraft --control` or `vectorcraft-cli`),
-/// returning `(summary_json, centered_outline_points)`.
+fn try_vectorcraft_trace(input: &Path, output: &Path) -> bool {
+    if crate::workspace::control_probe("vectorcraft") {
+        let ok = crate::workspace::control_exec("vectorcraft", "document.open", json!({"path": input})).is_ok()
+            && crate::workspace::control_exec("vectorcraft", "imageTrace.makeAndExpand", json!({})).is_ok()
+            && crate::workspace::control_exec("vectorcraft", "document.export", json!({"path": output, "format": "svg"})).is_ok();
+        if ok && output.is_file() {
+            return true;
+        }
+    }
+    let Some(in_s) = input.to_str() else {
+        return false;
+    };
+    let Some(out_s) = output.to_str() else {
+        return false;
+    };
+    crate::workspace::run_cli("vectorcraft-cli", &["run", "--in", in_s, "--cmd", "imageTrace.makeAndExpand", "--export", out_s], None).is_ok()
+        && output.is_file()
+}
+
+fn try_photocraft_split_layers(src: &Path, layers_dir: &Path) -> bool {
+    let export_params = json!({"dir": layers_dir, "prefix": "part"});
+    if crate::workspace::control_probe("photocraft") {
+        let ok = crate::workspace::control_exec("photocraft", "file.open", json!({"path": src})).is_ok()
+            && crate::workspace::control_exec("photocraft", "layer.maskAllObjects", json!({})).is_ok()
+            && crate::workspace::control_exec("photocraft", "file.export.layersToFiles", export_params.clone()).is_ok();
+        if ok {
+            return true;
+        }
+    }
+    let Some(src_s) = src.to_str() else {
+        return false;
+    };
+    let exp_s = export_params.to_string();
+    crate::workspace::run_cli(
+        "photocraft-cli",
+        &["run", src_s, "--cmd", "layer.maskAllObjects", "--params", "{}", "--cmd", "file.export.layersToFiles", "--params", &exp_s],
+        None,
+    )
+    .is_ok()
+}
 fn scan_alpha_contour(rgba: &image::RgbaImage, step: u32) -> (Vec<(u32, u32)>, Vec<(u32, u32)>) {
     let (w, h) = rgba.dimensions();
     let mut left_pts = Vec::new();
@@ -168,16 +247,7 @@ pub fn trace_silhouette_svg(input: &Path, output: &Path, simplify_px: f64, strok
         left_pts.iter().chain(right_pts.iter().rev()).map(|&(x, py)| [f64::from(x) - cx, f64::from(py) - cy]).collect()
     };
 
-    if crate::craft_api::execute_on_host_app(
-        "vectorcraft",
-        Some(input),
-        "image.trace",
-        json!({"simplify": simplify_px, "strokes": strokes, "ignoreWhite": true}),
-    )
-    .is_ok()
-        && crate::craft_api::execute_on_host_app("vectorcraft", Some(input), "file.export", json!({"path": output, "format": "svg"})).is_ok()
-        && output.is_file()
-    {
+    if try_vectorcraft_trace(input, output) {
         return Ok((json!({ "ok": true, "input": input, "output": output, "width": w, "height": h, "engine": "vectorcraft" }), centered));
     }
 
@@ -243,9 +313,8 @@ pub fn split_parts_sheet(sheet: &Path, view_dir: &Path, char_id: &str, view: &st
     let isolated = view_dir.join(format!("{char_id}-{view}-sheet-isolated.png"));
     let src_for_cells = if isolate_subject_rgba(sheet, &isolated, chroma, 1.0).is_ok() && isolated.is_file() { isolated } else { sheet.to_path_buf() };
 
-    let used_photocraft = crate::craft_api::execute_on_host_app("photocraft", Some(&src_for_cells), "layer.maskAllObjects", json!({})).is_ok()
-        && crate::craft_api::execute_on_host_app("photocraft", Some(&src_for_cells), "file.export.layersToFiles", json!({"dir": layers_dir, "prefix": "part"}))
-            .is_ok();
+    let _ = simplify_px;
+    let used_photocraft = try_photocraft_split_layers(&src_for_cells, &layers_dir);
 
     let rgba = load_rgba(&src_for_cells)?;
     let (w, h) = rgba.dimensions();

@@ -426,25 +426,21 @@ impl Server {
 
     #[tool(description = "Click a visible enabled widget by automation ID (`{id, fx?, fy?}`) or logical window coordinates `{x, y}`. Requires `--connect`.")]
     async fn ui_click(&self, Parameters(p): Parameters<ClickParams>) -> CallToolResult {
-        if p.count.is_some_and(|c| c > 10) {
-            return output(Err("ui.click: count must be between 0 and 10".into()));
+        if p.count.is_some_and(|c| !(1..=255).contains(&c)) {
+            return output(Err("ui.click: count must be between 1 and 255".into()));
         }
         output(self.run("ui.click", compact(json!(p))).await)
     }
 
-    #[tool(description = "Drag between `from` and `to` (`{id, fx?, fy?}` or `{x, y}`). Requires `--connect`.")]
+    #[tool(description = "Drag between `from` and `to` (`{id, fx?, fy?}` or `{x, y}`) or `{x1, y1, x2, y2}`. Requires `--connect`.")]
     async fn ui_drag(&self, Parameters(p): Parameters<DragParams>) -> CallToolResult {
-        if p.steps.is_some_and(|s| s > 1024) {
-            return output(Err("ui.drag: steps must be between 0 and 1024".into()));
+        if p.steps.is_some_and(|s| !(1..=10_000).contains(&s)) {
+            return output(Err("ui.drag: steps must be between 1 and 10000".into()));
         }
-        let params = json!({
-            "from": compact(json!(p.from)),
-            "to": compact(json!(p.to)),
-            "button": p.button,
-            "steps": p.steps,
-            "modifiers": p.modifiers,
-        });
-        output(self.run("ui.drag", compact(params)).await)
+        if p.count.is_some_and(|c| !(1..=255).contains(&c)) {
+            return output(Err("ui.drag: count must be between 1 and 255".into()));
+        }
+        output(self.run("ui.drag", compact(json!(p))).await)
     }
 
     #[tool(description = "Scroll a widget or logical point by `dx`, `dy`. Requires `--connect`.")]

@@ -5,19 +5,44 @@
 //!   while preserving full Bezier Masks, 19-Category 308-FX Browser, 38 Blend Modes, and Track/EXR.
 
 use egui::{Align, Layout, Pos2, RichText, ScrollArea, Ui};
-use magic_engine::craft_effects::{EFFECTCRAFT_19_CATEGORIES, EFFECTCRAFT_38_BLEND_MODES};
 use serde_json::{Value, json};
+
+const EFFECTCRAFT_CATEGORIES: &[(&str, &str)] = &[
+    ("blur_sharpen", "Blur & Sharpen"),
+    ("channel", "Channel"),
+    ("color_correction", "Color Correction"),
+    ("distort", "Distort"),
+    ("expression_controls", "Expression Controls"),
+    ("generate", "Generate"),
+    ("immersive", "Immersive Video"),
+    ("keying", "Keying"),
+    ("matte", "Matte"),
+    ("noise_grain", "Noise & Grain"),
+    ("perspective", "Perspective"),
+    ("simulation", "Simulation"),
+    ("stylize", "Stylize"),
+    ("text", "Text"),
+    ("time", "Time"),
+    ("transition", "Transition"),
+    ("utility", "Utility"),
+    ("audio", "Audio"),
+    ("wasm_plugin", "WASM Plug-in"),
+];
+
+const EFFECTCRAFT_BLEND_MODES: &[&str] = &[
+    "normal", "dissolve", "dancingDissolve", "darken", "multiply", "colorBurn", "linearBurn", "darkerColor", "add", "lighten", "screen",
+    "colorDodge", "linearDodge", "lighterColor", "overlay", "softLight", "hardLight", "linearLight", "vividLight", "pinLight", "hardMix",
+    "difference", "classicDifference", "exclusion", "subtract", "divide", "hue", "saturation", "color", "luminosity", "stencilAlpha",
+    "stencilLuma", "silhouetteAlpha", "silhouetteLuma", "alphaAdd", "luminescentPremul",
+];
 
 use crate::controls::{EffectRowSpec, ScalarSpec, badge_accent_color, effect_row_button, fill_card, pill_toggle, ring_slider_h, rotary_dial};
 use crate::state::{PickerTarget, UiAction, ViewCtx};
 use crate::widgets::{BtnSpec, action_button, status_pill, text_input};
 
-/// Read dynamic `motion.effects` entries hydrated via `motion.effects` (`craft_api` `:7979`/`:9877` + catalog).
+/// Read dynamic `motion.effects` entries hydrated via `motion.effects` (`effectcraft --control 9877`).
 pub fn resolved_motion_effects(ctx: &ViewCtx<'_>) -> Vec<Value> {
-    if let Some(arr) = ctx.state.cache.motion_effects.get("effects").and_then(Value::as_array).filter(|a| !a.is_empty()) {
-        return arr.clone();
-    }
-    magic_engine::craft_effects::motion_catalog_json()
+    ctx.state.cache.motion_effects.get("effects").and_then(Value::as_array).cloned().unwrap_or_default()
 }
 
 /// Apply a Craft motion effect to the active motion cue and persist via `motion.save`.
@@ -133,16 +158,16 @@ pub fn draw_craft_motion_effects_browser(ui: &mut Ui, ctx: &mut ViewCtx<'_>, id_
             ctx.pal,
             BtnSpec::label_only(
                 &format!("{id_prefix}-live-save"),
-                "Save in App",
-                "Trigger built-in file.save inside your open local EffectCraft / VectorCraft session",
+                "Open in EffectCraft",
+                "Open effects/motion.ecproj in EffectCraft",
             ),
         )
         .clicked()
         {
             ctx.exec(
-                "craft.live_save",
-                json!({"app": "effectcraft", "path": "effects/motion.ecproj"}),
-                Some("Saved effects/motion.ecproj via open Craft session"),
+                "workspace.open",
+                json!({"app": "effectcraft", "domain": "motion"}),
+                Some("Opened effects/motion.ecproj in EffectCraft"),
             );
         }
     });
@@ -192,7 +217,7 @@ pub fn draw_layer_compositing_switches(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing.x = 3.5;
             ui.spacing_mut().item_spacing.y = 3.5;
-            for mode in EFFECTCRAFT_38_BLEND_MODES {
+            for mode in EFFECTCRAFT_BLEND_MODES {
                 let id = format!("motion-blend-{mode}");
                 let sel = ctx.state.motion.blend_mode == *mode;
                 if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, mode, "Set EffectCraft layer blend mode").selected(sel)).clicked() {
@@ -459,7 +484,7 @@ fn draw_fx_308_and_blend_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) -> Option<Pos2>
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 3.5;
         ui.spacing_mut().item_spacing.y = 3.5;
-        for (cid, clbl) in EFFECTCRAFT_19_CATEGORIES {
+        for (cid, clbl) in EFFECTCRAFT_CATEGORIES {
             let id = format!("motion-cat-{cid}");
             let sel = ctx.state.motion.fx_category == *cid;
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, clbl, "Select EffectCraft category").selected(sel)).clicked() {

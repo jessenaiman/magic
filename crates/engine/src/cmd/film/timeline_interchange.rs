@@ -171,7 +171,11 @@ pub(crate) fn export_timeline_document(s: &Session, f: &Film, format_str: &str, 
 
     let fmt = parse_format_name(&fmt_lower)?;
     if matches!(fmt, Format::Aaf | Format::Omf) {
-        let live = crate::craft_api::execute_in_live_app("filmcraft", "file.exportInterchange", json!({"path": out_path, "format": fmt.extension()})).ok();
+        let live = if crate::workspace::control_probe("filmcraft") {
+            crate::workspace::control_exec("filmcraft", "file.exportInterchange", json!({"path": out_path, "format": fmt.extension()})).ok()
+        } else {
+            None
+        };
         if live.is_some() && out_path.is_file() {
             return Ok(json!({
                 "ok": true,
@@ -412,8 +416,8 @@ pub(crate) fn run_markers_interchange(s: &mut Session, f: &Film, default_ecproj:
         .unwrap_or_else(|| f.dir.join("film/interchange").join(format!("{}-interchange.{ext}", f.name)));
 
     if direction == "effect_to_film" {
-        if !interchange_path.is_file() && ecproj.is_file() {
-            let _ = crate::craft_api::execute_in_live_app("effectcraft", "file.exportTimeline", json!({"path": interchange_path, "format": format}));
+        if !interchange_path.is_file() && ecproj.is_file() && crate::workspace::control_probe("effectcraft") {
+            let _ = crate::workspace::control_exec("effectcraft", "file.exportTimeline", json!({"path": interchange_path, "format": format}));
         }
         if interchange_path.is_file() {
             let imported = import_timeline_document(s, f, &interchange_path, Some(format), true)?;

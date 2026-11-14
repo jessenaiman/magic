@@ -23,6 +23,15 @@ pub(super) fn specs_film() -> Vec<CommandSpec> {
             always,
             crate::cmd::film::cmd_video_map_tracks
         ),
+        cmd_spec!(
+            "studio.mapTracks",
+            "Batch-Map FilmCraft Studio Tracks into Reusable Lyrics & Motion Groups",
+            ["Studio"],
+            None,
+            "{\"mappings\":[{\"tracks\":[\"V3\",\"V5\"],\"target\":\"lyrics\",\"group\":\"chorus\"},{\"tracks\":[\"V4\"],\"target\":\"motion\",\"group\":\"beats\"}]}",
+            always,
+            crate::cmd::film::cmd_video_map_tracks
+        ),
         query_spec!(
             "video.list_ec_comps",
             "List Compositions & Alpha Formats in an EffectCraft .ecproj",
@@ -55,15 +64,6 @@ pub(super) fn specs_film() -> Vec<CommandSpec> {
             "{\"link_id\":\"comp-id\",\"unbake\":false}",
             always,
             crate::cmd::film::cmd_video_bake_link
-        ),
-        cmd_spec!(
-            "video.exec",
-            "Execute Any Real FilmCraft Engine Command via :9876 Bridge or filmcraft-cli --project --save exec",
-            ["Studio"],
-            None,
-            "{\"command\":\"sequence.inspect\",\"params\":{},\"save\":false}",
-            always,
-            crate::cmd::film::cmd_video_exec
         ),
         cmd_spec!(
             "video.finish",

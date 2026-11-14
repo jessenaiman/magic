@@ -1,7 +1,7 @@
 //! Settings schema for Magic Studio (`prefs.schema`, `prefs.get`, `prefs.set`).
 //!
 //! Scoped strictly to Magic Studio's coordinator responsibilities (AI contract via `craft-ai-core`,
-//! appearance, project root, custom `DeckCraft` starter storyboard template, lyrics font paths,
+//! appearance, project root, custom `DesignCraft` starter storyboard template, lyrics font paths,
 //! character preview, and `.magic` autosave).
 
 #[derive(Clone, Copy, Debug)]
@@ -164,7 +164,7 @@ pub fn fields_with_cat() -> Vec<(&'static str, Field)> {
             "project",
             Field {
                 key: "project.storyboard_template",
-                label: "Custom Storyboard Starter Template (.deckcraft / .pptx / .potx)",
+                label: "Custom Storyboard Starter Template (.designcraft / .idml / .indt)",
                 kind: Kind::Text,
                 wired: true,
                 enabled_by: None,

@@ -243,18 +243,17 @@ fn render_or_resolve_animation(project_dir: &Path, ecproj: &Path, comp: &str, ca
     }
     check_ecproj_head(ecproj)?;
     let companion = companion_media_for_ecproj(project_dir, ecproj);
-    let can_render = crate::craft_api::probe_live_app("effectcraft")["connected"] == true || crate::craft_api::effectcraft_cli_available();
+    let can_render = crate::cmd::character::effectcraft_available();
     if (force_render || !companion.is_file()) && can_render {
         let stem = ecproj.file_stem().and_then(|s| s.to_str()).unwrap_or("comp");
         let out_media = project_dir.join("effects").join(format!("{stem}.{ext}"));
         if let Some(parent) = out_media.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        crate::craft_api::render_effectcraft_comp(
+        crate::cmd::character::effectcraft_render(
             ecproj,
-            &json!({"comp": comp, "output": out_media, "format": cache_format, "proresProfile": "4444", "channels": "rgba"}),
-        )
-        .map_err(|e| EngineError::ExternalTool("effectcraft".into(), e))?;
+            json!({"comp": comp, "output": out_media, "format": cache_format, "proresProfile": "4444", "channels": "rgba"}),
+        )?;
         return Ok(out_media);
     }
     if companion.is_file() {
@@ -330,14 +329,12 @@ pub fn cmd_video_link_effectcraft(s: &mut Session, p: &Value) -> Result<Value> {
     let mut otio_exported: Option<PathBuf> = None;
     if p["otio"].as_bool() == Some(true) && is_ecproj_file(&ecproj) {
         let otio_path = dir.join("film").join(format!("{}.otio", build_link_id(&ecproj, &comp)));
-        crate::craft_api::execute_effectcraft_command(
+        crate::cmd::character::effectcraft(
+            &dir,
             Some(&ecproj),
+            &[json!({"command": "file.exportTimeline", "params": {"comp": comp, "path": otio_path, "prerender": "unsupported"}})],
             false,
-            Some(false),
-            "file.exportTimeline",
-            json!({"comp": comp, "path": otio_path, "prerender": "unsupported"}),
-        )
-        .map_err(|e| EngineError::ExternalTool("effectcraft".into(), e))?;
+        )?;
         otio_exported = Some(otio_path);
     }
 

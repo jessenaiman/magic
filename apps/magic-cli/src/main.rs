@@ -10,8 +10,8 @@ use std::io::{BufRead, Write};
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use serde_json::{Value, json};
 use subcommands::{
-    AnimationArgs, CaptionsArgs, ControlsArgs, EffectArgs, ExportArgs, FilmArgs, FinishArgs, InterchangeArgs, MarkersArgs, MeshCliArgs, StoryboardArgs,
-    StudioArgs, TimelineCliArgs,
+    AnimationArgs, CaptionsArgs, ControlsArgs, ExportArgs, FinishArgs, InterchangeArgs, MarkersArgs, MeshCliArgs, StoryboardArgs, StudioArgs,
+    TimelineCliArgs,
 };
 
 const AFTER_HELP: &str = "\
@@ -91,12 +91,8 @@ struct NewArgs {
 
 #[derive(Subcommand)]
 enum Cmd {
-    /// Create a new song project (`--audio` transcribes timestamps, creates the FilmCraft project, and starts `storyboard.deckcraft`)
+    /// Create a new song project (`--audio` transcribes timestamps, creates the FilmCraft project, and starts `storyboard.designcraft`)
     New(NewArgs),
-    /// Direct pass-through to live `filmcraft --control 9876` or `filmcraft-cli --project <song.fcproj> [--save] exec`
-    Film(FilmArgs),
-    /// Direct pass-through to live `effectcraft --control 9877` or `effectcraft-cli exec <id> --params '<json>' ... --json`
-    Effect(EffectArgs),
     /// One-step Animation promotion (`promote`), host registry (`hosts`), and reverse Studio lookup (`locate`)
     Animation(AnimationArgs),
     /// Ergonomic Studio commands (`map-tracks` batch track-to-group mapping into Lyrics & Motion)
@@ -173,7 +169,8 @@ enum Cmd {
 }
 
 pub(crate) fn emit(v: &Value) {
-    println!("{}", serde_json::to_string_pretty(v).unwrap_or_default());
+    let text = serde_json::to_string_pretty(v).unwrap_or_default();
+    let _ = writeln!(std::io::stdout(), "{text}");
 }
 
 fn dry_result(id: &str, params: &Value) -> Value {
@@ -535,8 +532,6 @@ fn run(cli: Cli) -> Result<(), String> {
         }
         (None, Some(command)) => match command {
             Cmd::New(args) => run_new(&mut target, args),
-            Cmd::Film(args) => subcommands::run_film(&mut target, args),
-            Cmd::Effect(args) => subcommands::run_effect(&mut target, args),
             Cmd::Animation(args) => subcommands::run_animation(&mut target, args),
             Cmd::Studio(args) => subcommands::run_studio(&mut target, args),
             Cmd::Storyboard(args) => subcommands::run_storyboard(&mut target, args),
@@ -591,7 +586,7 @@ mod tests {
     use serde_json::json;
 
     use super::{AFTER_HELP, Cli, Cmd, build_new_params};
-    use crate::subcommands::{FilmCmd, StudioCmd, build_film_call, build_storyboard_call, parse_studio_mappings};
+    use crate::subcommands::{StudioCmd, build_storyboard_call, parse_studio_mappings};
 
     #[test]
     fn cli_new_existing_project_and_removed_wizard_archive_flags() {
@@ -644,21 +639,8 @@ mod tests {
             assert_eq!(cmd_id, expected_id);
         }
 
-        let film_cli = Cli::try_parse_from(["magic-cli", "film", "exec", "timeline.razor", "seconds=3.5"]).unwrap();
-        let Some(Cmd::Film(f_args)) = film_cli.command else {
-            panic!("expected Cmd::Film");
-        };
-        let (f_id, f_payload) = build_film_call(f_args.command).unwrap();
-        assert_eq!(f_id, "video.exec");
-        assert_eq!(f_payload["command"], json!("timeline.razor"));
-        assert_eq!(f_payload["params"], json!({"seconds": 3.5}));
-
-        let film_ro = Cli::try_parse_from(["magic-cli", "film", "exec", "sequence.inspect", "--no-save"]).unwrap();
-        let Some(Cmd::Film(ro_args)) = film_ro.command else {
-            panic!("expected Cmd::Film");
-        };
-        let FilmCmd::Exec { .. } = &ro_args.command;
-        let (_, ro_payload) = build_film_call(ro_args.command).unwrap();
-        assert_eq!(ro_payload["save"], json!(false));
+        // Middleman wrapper subcommands `film` and `effect` were removed in favor of direct FilmCraft / EffectCraft CLI/control usage.
+        assert!(Cli::try_parse_from(["magic-cli", "film", "exec", "sequence.inspect"]).is_err());
+        assert!(Cli::try_parse_from(["magic-cli", "effect", "exec", "comp.info"]).is_err());
     }
 }

@@ -168,10 +168,10 @@ fn discover_project_craft_badges(dir: &Path, doc: &Value) -> Vec<&'static str> {
     if has_fcproj {
         badges.push(".fcproj");
     }
-    if dir.join("storyboard.deckcraft").is_file() {
-        badges.push(".deckcraft");
-    } else if dir.join("storyboard.pptx").is_file() {
-        badges.push(".pptx");
+    if dir.join("storyboard.designcraft").is_file() {
+        badges.push(".designcraft");
+    } else if dir.join("storyboard.idml").is_file() {
+        badges.push(".idml");
     }
     let has_ecproj = dir.join("effects/lyrics.ecproj").is_file()
         || dir.join("effects/motion.ecproj").is_file()

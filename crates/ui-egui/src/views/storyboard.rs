@@ -1,9 +1,9 @@
-//! `Storyboard` view (`#view-storyboard`): Editable `DeckCraft` (`storyboard.deckcraft`)
-//! design document (`612 × 792 pt` US Letter) coordinated with host `DeckCraft` (`--control 7979` / `designcraft-cli`):
+//! `Storyboard` view (`#view-storyboard`): Editable `DesignCraft` (`storyboard.designcraft`)
+//! design document (`612 × 792 pt` US Letter) coordinated with host `DesignCraft` (`--control 7979` / `designcraft-cli`):
 //! 1. Left (`Book Hierarchy · Sections & Spreads`): scrollable navigator driven directly by
-//!    `doc["sections"]` in `storyboard.deckcraft` (`Cover`, `Backgrounds`, `Characters`,
+//!    `doc["sections"]` in `storyboard.designcraft` (`Cover`, `Backgrounds`, `Characters`,
 //!    `Scenes`, `Assets`, `Final`).
-//! 2. Center (`DeckCraft Storyboard · Editable Spreads`): 1-page or 2-page spread scroll reading
+//! 2. Center (`DesignCraft Storyboard · Editable Spreads`): 1-page or 2-page spread scroll reading
 //!    `document.json` frames directly without intermediate slide interpretations, with inline text
 //!    editing and drag/drop/paste/click `PhotoCraft` / `VectorCraft` / `EffectCraft` artwork slots.
 //! 3. Right (`Field Checklist`): Red/Green readiness navigator synced 1:1 with `storyboard.check`.
@@ -117,8 +117,8 @@ fn draw_empty_storyboard_state(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             rect,
             ctx.pal,
             "DC",
-            "DeckCraft Storyboard (storyboard.deckcraft)",
-            "Initialize the editable storyboard.deckcraft design document from the DeckCraft master.",
+            "DesignCraft Storyboard (storyboard.designcraft)",
+            "Initialize the editable storyboard.designcraft design document from the DesignCraft master.",
         );
         ui.add_space(8.0);
         ui.horizontal_wrapped(|ui| {
@@ -130,13 +130,13 @@ fn draw_empty_storyboard_state(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                     "storyboard-empty-init",
                     "plus",
                     "Initialize Storyboard (.designcraft)",
-                    "Create storyboard.deckcraft as a complete editable DeckCraft design document",
+                    "Create storyboard.designcraft as a complete editable DesignCraft design document",
                 )
                 .primary(),
             )
             .clicked()
             {
-                ctx.exec("storyboard.new", json!({}), Some("Initialized storyboard.deckcraft"));
+                ctx.exec("storyboard.new", json!({}), Some("Initialized storyboard.designcraft"));
                 ctx.exec("storyboard.pages", json!({"full": true}), None);
                 ctx.exec("storyboard.check", json!({}), None);
             }
@@ -160,7 +160,7 @@ fn draw_toolbar(ui: &mut Ui, ctx: &mut ViewCtx<'_>, pages: &[PageSummary]) {
 
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 5.0;
-        status_pill(ui, ctx.pal, &format!("DeckCraft · {} Pages · {filled}/{total} Fields", pages.len()), pill_col);
+        status_pill(ui, ctx.pal, &format!("DesignCraft · {} Pages · {filled}/{total} Fields", pages.len()), pill_col);
 
         let cur = ctx.state.storyboard.current_page.min(pages.len().saturating_sub(1));
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("sb-prev-slide", "chevronLeft", "Previous Storyboard page").enabled(cur > 0)).clicked() {
@@ -177,7 +177,7 @@ fn draw_toolbar(ui: &mut Ui, ctx: &mut ViewCtx<'_>, pages: &[PageSummary]) {
         }
 
         let single_sel = !ctx.state.storyboard.double_page_mode;
-        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("sb-mode-single", "pageSingle", "Single-page DeckCraft view").selected(single_sel)).clicked()
+        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("sb-mode-single", "pageSingle", "Single-page DesignCraft view").selected(single_sel)).clicked()
         {
             ctx.state.storyboard.double_page_mode = false;
         }
@@ -185,7 +185,7 @@ fn draw_toolbar(ui: &mut Ui, ctx: &mut ViewCtx<'_>, pages: &[PageSummary]) {
             ui,
             ctx.reg,
             ctx.pal,
-            BtnSpec::icon_only("sb-mode-double", "spreadTwoPage", "Side-by-side DeckCraft 2-page spread view").selected(!single_sel),
+            BtnSpec::icon_only("sb-mode-double", "spreadTwoPage", "Side-by-side DesignCraft 2-page spread view").selected(!single_sel),
         )
         .clicked()
         {
@@ -215,7 +215,7 @@ fn draw_toolbar(ui: &mut Ui, ctx: &mut ViewCtx<'_>, pages: &[PageSummary]) {
             ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("sb-zoom", "Zoom", 65.0..=145.0, "%", ctx.pal.accent_emerald), &mut ctx.state.storyboard.zoom);
         });
 
-        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("storyboard-refresh", "refresh", "Sync storyboard.deckcraft pages & checklist")).clicked() {
+        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("storyboard-refresh", "refresh", "Sync storyboard.designcraft pages & checklist")).clicked() {
             ctx.exec("storyboard.pages", json!({"full": true}), None);
             ctx.exec("storyboard.check", json!({}), None);
         }
@@ -224,33 +224,33 @@ fn draw_toolbar(ui: &mut Ui, ctx: &mut ViewCtx<'_>, pages: &[PageSummary]) {
             ui,
             ctx.reg,
             ctx.pal,
-            BtnSpec::new("storyboard-render-spreads", "eye", "Render Spreads", "Render storyboard.deckcraft spreads via host DeckCraft"),
+            BtnSpec::new("storyboard-render-spreads", "eye", "Render Spreads", "Render storyboard.designcraft spreads via host DesignCraft"),
         )
         .clicked()
         {
-            ctx.exec("storyboard.export", json!({"format": "png"}), Some("Rendered DeckCraft storyboard slide PNGs"));
+            ctx.exec("storyboard.export", json!({"format": "png"}), Some("Rendered DesignCraft storyboard slide PNGs"));
         }
 
         if action_button(
             ui,
             ctx.reg,
             ctx.pal,
-            BtnSpec::new("storyboard-export", "download", "Export", "Export storyboard.deckcraft spreads via host DeckCraft"),
+            BtnSpec::new("storyboard-export", "download", "Export", "Export storyboard.designcraft spreads via host DesignCraft"),
         )
         .clicked()
         {
-            ctx.exec("storyboard.export", json!({}), Some("Exported storyboard.deckcraft spreads"));
+            ctx.exec("storyboard.export", json!({}), Some("Exported storyboard.designcraft spreads"));
         }
 
         if action_button(
             ui,
             ctx.reg,
             ctx.pal,
-            BtnSpec::new("storyboard-open-designcraft", "external", "DeckCraft", "Open storyboard.deckcraft in host DeckCraft").primary(),
+            BtnSpec::new("storyboard-open-designcraft", "external", "DesignCraft", "Open storyboard.designcraft in host DesignCraft").primary(),
         )
         .clicked()
         {
-            ctx.exec("storyboard.open", json!({"app": "deckcraft", "page": cur}), Some("Opened storyboard.deckcraft in DeckCraft"));
+            ctx.exec("storyboard.open", json!({"app": "designcraft", "page": cur}), Some("Opened storyboard.designcraft in DesignCraft"));
         }
     });
 }

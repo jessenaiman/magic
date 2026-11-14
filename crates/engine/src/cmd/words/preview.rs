@@ -17,7 +17,7 @@ pub fn frame(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let dir = super::workspace_dir(s)?;
     let project = crate::cmd::words::lyrics_ecproj_path(&dir);
-    if !project.is_file() && (crate::craft_api::probe_live_app("effectcraft")["connected"] == true || crate::craft_api::effectcraft_cli_available()) {
+    if !project.is_file() && crate::cmd::character::effectcraft_available() {
         super::lettering::cmd_words_letter(s, &json!({"render": false}))?;
     }
     let folder = dir.join("effects/.preview");
@@ -29,9 +29,8 @@ pub fn frame(s: &mut Session, p: &Value) -> Result<Value> {
     let scale = p["scale"].as_f64().unwrap_or(0.67).clamp(0.25, 1.0);
     let max_side = (1920.0 * scale).round() as u32;
     if project.is_file() {
-        if crate::craft_api::probe_live_app("effectcraft")["connected"] == true || crate::craft_api::effectcraft_cli_available() {
-            crate::craft_api::render_effectcraft_frame(&project, Some("Lyrics"), time, max_side, true, &out)
-                .map_err(|e| EngineError::ExternalTool("effectcraft".into(), e))?;
+        if crate::cmd::character::effectcraft_available() {
+            crate::cmd::character::effectcraft_frame(&project, "Lyrics", time, max_side, &out)?;
             return Ok(json!({"frame": out, "source": project, "kind": kind, "time": time}));
         }
         if crate::native_media::extract_or_copy_preview(&project, &out, max_side)? {

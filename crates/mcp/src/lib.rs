@@ -19,8 +19,8 @@ use serde_json::{Value, json};
 /// Default IPv4 loopback control address (`127.0.0.1:9875`).
 pub const DEFAULT_CONTROL_ADDR: &str = "127.0.0.1:9875";
 
-/// Maximum reply frame length on `--connect` (`16 MiB` including terminating `\n`, matching DesignCraft).
-pub const MAX_REPLY_BYTES: usize = 16 * 1024 * 1024;
+/// Maximum reply frame length on `--connect` (`4 MiB` including terminating `\n`, matching DesignCraft).
+pub const MAX_REPLY_BYTES: usize = 4 * 1024 * 1024;
 
 /// Normalize `"9875"` or `"localhost:9875"` to `"127.0.0.1:9875"` with zero DNS lookup.
 pub fn normalize_control_addr(spec: &str) -> String {

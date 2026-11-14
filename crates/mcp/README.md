@@ -1,6 +1,6 @@
 # `magic-mcp` Library Crate (`crates/mcp`)
 
-Model Context Protocol (MCP) stdio server library linked into `magic-cli` (`magic-cli mcp` and `magic-cli mcp --connect 9875`), following [`docs/mcp.md`](../../docs/mcp.md), [`storytold/deckcraft/docs/mcp.md`](https://github.com/storytold/deckcraft/blob/main/docs/mcp.md), and [`storytold/designcraft/docs/mcp.md`](https://github.com/storytold/designcraft/blob/main/docs/mcp.md).
+Model Context Protocol (MCP) stdio server library linked into `magic-cli` (`magic-cli mcp` and `magic-cli mcp --connect 9875`), following [`docs/mcp.md`](../../docs/mcp.md) and [`storytold/designcraft/docs/mcp.md`](https://github.com/storytold/designcraft/blob/main/docs/mcp.md).
 
 ## Where & Why to Explore Code
 

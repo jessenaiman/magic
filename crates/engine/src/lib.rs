@@ -3,7 +3,7 @@
 //! The pure-Rust `eframe` + `egui` desktop shell (`magic`), `magic-cli`, and `magic-cli mcp` share
 //! the same command registry and [`Session::execute`] entry point. Magic reads and writes project
 //! assets on disk via [`storytold/craft-libs`](https://github.com/storytold/craft-libs), queries
-//! running local Craft desktop apps over their `--control` JSON-lines sockets (`craft_api`), and
+//! running local Craft desktop apps over their `--control` JSON-lines sockets, and
 //! exposes opt-in AI contract metadata via `craft-ai-core`.
 
 #![forbid(unsafe_code)]
@@ -17,8 +17,6 @@ pub mod command_sets;
 pub mod commands;
 pub mod confinement;
 pub mod craft_ai;
-pub mod craft_api;
-pub mod craft_effects;
 pub mod doc_state;
 pub mod doctor;
 pub mod error;

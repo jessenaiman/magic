@@ -1,6 +1,6 @@
 # MCP Server (`magic-cli mcp`)
 
-Magic Studio exposes its MCP server directly from `magic-cli` (`crates/mcp`, JSON-RPC 2.0 over stdio), following [`storytold/deckcraft/docs/mcp.md`](https://github.com/storytold/deckcraft/blob/main/docs/mcp.md) and [`storytold/designcraft/docs/mcp.md`](https://github.com/storytold/designcraft/blob/main/docs/mcp.md).
+Magic Studio exposes its MCP server directly from `magic-cli` (`crates/mcp`, JSON-RPC 2.0 over stdio), following [`storytold/designcraft/docs/mcp.md`](https://github.com/storytold/designcraft/blob/main/docs/mcp.md).
 
 ## Install & Register `magic-cli mcp`
 
@@ -43,7 +43,7 @@ claude mcp add magic-app -- magic-cli mcp --connect 9875
 - **Read-only `magic://` resources**: Exposes `magic://` resource URIs (`magic://document`, `magic://storyboard`, `magic://commands`, `magic://tracks`) so agents can read project, storyboard, command, and track state without mutating the session.
 - **Live window (`magic-cli mcp --connect 9875` or `127.0.0.1:9875`)**: Forwards tool calls over loopback TCP to a running `magic --control 9875` window, bounds replies at `16 MiB`, and never replays mutating requests on lost replies (`outcome unknown`).
 - **Confined headless (`magic-cli mcp --automation-read-root <DIR> --automation-write-root <DIR>`)**: Canonicalizes roots and target paths via `std::fs::canonicalize` to confine headless reads and writes (`--connect` together with root flags is rejected).
-- **Crafting App MCP Servers**: Register each installed Craft app's `<slug>-cli mcp` directly from its upstream `README.md` and `docs/mcp.md` ([`DeckCraft`](https://github.com/storytold/deckcraft/blob/main/docs/mcp.md), [`EffectCraft`](https://github.com/storytold/effectcraft/blob/main/docs/mcp.md), [`PhotoCraft`](https://github.com/storytold/photocraft/blob/main/docs/mcp.md), [`VectorCraft`](https://github.com/storytold/vectorcraft/blob/main/docs/mcp.md), and [`FilmCraft`](https://github.com/storytold/filmcraft/blob/main/docs/agents.md)).
+- **Crafting App MCP Servers**: Register each installed Craft app's `<slug>-cli mcp` directly from its upstream `README.md` and `docs/mcp.md` ([`DesignCraft`](https://github.com/storytold/designcraft/blob/main/docs/mcp.md), [`EffectCraft`](https://github.com/storytold/effectcraft/blob/main/docs/mcp.md), [`PhotoCraft`](https://github.com/storytold/photocraft/blob/main/docs/mcp.md), [`VectorCraft`](https://github.com/storytold/vectorcraft/blob/main/docs/mcp.md), and [`FilmCraft`](https://github.com/storytold/filmcraft/blob/main/docs/agents.md)).
 
 ## Core Tools & Resources
 

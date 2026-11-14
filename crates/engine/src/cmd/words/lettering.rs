@@ -454,17 +454,16 @@ pub fn cmd_words_letter(s: &mut Session, p: &Value) -> Result<Value> {
         std::fs::create_dir_all(parent)?;
     }
     steps.push(json!({"command": "file.saveAs", "params": {"path": project}}));
-    crate::craft_api::run_effectcraft_steps(None, true, &steps).map_err(|e| EngineError::ExternalTool("effectcraft".into(), e))?;
+    crate::cmd::character::effectcraft(&dir, None, &steps, true)?;
 
     let head = crate::cmd::character::check_ecproj_head(&project).ok();
     let should_render = p["render"].as_bool().unwrap_or(false) || p["studio"].as_bool().unwrap_or(false);
     let render = if should_render {
         let movie = dir.join("effects/lyrics.mov");
-        crate::craft_api::render_effectcraft_comp(
+        crate::cmd::character::effectcraft_render(
             &project,
-            &json!({"comp": COMP, "output": movie, "format": "prores", "proresProfile": "4444", "channels": "rgba"}),
-        )
-        .map_err(|e| EngineError::ExternalTool("effectcraft".into(), e))?;
+            json!({"comp": COMP, "output": movie, "format": "prores", "proresProfile": "4444", "channels": "rgba"}),
+        )?;
         Some(movie)
     } else {
         None

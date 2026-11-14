@@ -1,25 +1,4 @@
-# Agent Instructions (`Magic Studio`)
-
-Magic Studio (`magic`, `magic-cli`, `magic-tui`) is a pure-Rust ArtCraft production studio built on `eframe` + `egui` 0.37 + [`storytold/craft-libs`](https://github.com/storytold/craft-libs/blob/main/README.md) and governed by [`docs/house-rules-core.md`](docs/house-rules-core.md) ([`storytold/craft-contrib`](https://github.com/storytold/craft-contrib/blob/main/standards/house-rules-core.md)).
-
-## 1. Upstream References & Workspace Build
-
-- **Read Actual Upstream `README.md` & `docs/` Pages**: Consult [`README.md`](README.md) and the live upstream repositories directly before changing integrations:
-  - Shared Rust libraries & `craft-ai-core`: [`storytold/craft-libs/README.md`](https://github.com/storytold/craft-libs/blob/main/README.md) and [`docs/ai-shared-layer.md`](https://github.com/storytold/craft-libs/blob/main/docs/ai-shared-layer.md)
-  - Crafting Apps: [`DeckCraft`](https://github.com/storytold/deckcraft/blob/main/README.md), [`AniCraft`](https://github.com/storytold/anicraft/blob/main/README.md), [`PhotoCraft`](https://github.com/storytold/photocraft/blob/main/README.md), [`VectorCraft`](https://github.com/storytold/vectorcraft/blob/main/README.md), [`EffectCraft`](https://github.com/storytold/effectcraft/blob/main/README.md), [`DesignCraft`](https://github.com/storytold/designcraft/blob/main/README.md), and [`FilmCraft`](https://github.com/storytold/filmcraft/blob/main/README.md)
-  - Shared CI & contribution standards: [`storytold/craft-common-actions`](https://github.com/storytold/craft-common-actions/blob/main/README.md) and [`storytold/craft-contrib`](https://github.com/storytold/craft-contrib/blob/main/README.md)
-- **Floating `craft-libs` & `cargo xtask ci`**: Workspace dependencies in [`Cargo.toml`](Cargo.toml) track `storytold/craft-libs` `main` (`./install.sh --from-source` runs `cargo update` before building). Run `cargo xtask ci` (`fmt`, `clippy --workspace --all-targets -- -D warnings`, and opt-in `MAGIC_RUN_TESTS=1`), which writes diagnostics to `target/ci-report.txt` and `target/ci-report.jsonl`.
-
-## 2. Drive Magic Through `magic-cli`, `--control 9875`, and `magic-cli mcp`
-
-Follow [`docs/mcp.md`](docs/mcp.md) and [`docs/control-protocol.md`](docs/control-protocol.md):
-
-- **Headless & Live Desktop (`--control`)**: Install binaries via `./install.sh --from-source` (or `cargo install --path apps/magic-cli`). Register headless MCP with `claude mcp add magic -- magic-cli mcp` (serving commands and read-only `magic://` resources), or launch `magic --control 9875` and attach live via `magic-cli mcp --connect 9875`, `magic-cli --connect 127.0.0.1:9875`, or `magic-tui --connect 127.0.0.1:9875`.
-- **Stage Architecture**:
-  - **`01 Storyboard` & `extensions/scribbles/`**: Creative storyboards live in native [`DeckCraft`](https://github.com/storytold/deckcraft) `.deckcraft` / `.pptx` decks with PDF export (`deckcraft --control 7990` / `deckcraft-cli`). User-editable `extensions/scribbles/` templates (`craft-ai-core`) require saved Storyboard slides on disk before generating turnaround or scene plates.
-  - **`02 Animations` (`V2`)**: Open multi-tool lane accepting renders and meshes from Blender, Three.js, After Effects, `AniCraft`, `EffectCraft`, `PhotoCraft`, and `VectorCraft` in any format recognized by `FilmCraft`.
-  - **`03 Lyrics` (`V3` + `C1`), `04 Motion` (`V4`), & `05 Studio`**: Live `FilmCraft`-aligned editing views, `magic-cli studio map-tracks` reconciliation, and a 2-tab `Live Breakdown` & `Finishing` dock in `05 Studio`.
-
+<!-- craft-house-rules:start core source=dde09ea31e2e457f5b4653a6e76f7cdf55944bdf sha256=540e6cea75d12d0710c3dca89658328e81e508ecef102446ca5bb95b7c0b92bb -->
 ## House rules
 
 These apply in every Craft repository. A later rule may be stricter, not weaker. The source is `standards/house-rules-core.md` in `storytold/craft-contrib`. Propose changes there, not in a copy.
@@ -39,3 +18,57 @@ These apply in every Craft repository. A later rule may be stricter, not weaker.
 13. **Instructions must be readable by everyone.** No notes about one machine, and no links to files a reader cannot open. `craftrules` is retired. Do not link to it.
 14. **Keep pull requests moving.** Concurrent pull requests are fine; unanswered actionable feedback is not. Respond in 7 days, a reminder at 14, closure eligible at 30, from when an actionable request waits on the author. Suggestions and unconfirmed bot findings do not start the clock. A fix, explanation or agreed plan resets it; unrelated activity does not. Waiting on a reviewer or maintainer pauses it and does not count against the author. A maintainer decides closure; it is never automatic. Reuse search results, do not poll, and stop at a rate limit.
 15. **No agent attribution.** A pull request does not say an agent wrote it. A repository rule may not require that.
+<!-- craft-house-rules:end -->
+<!-- craft-house-rules:start rust source=dde09ea31e2e457f5b4653a6e76f7cdf55944bdf sha256=387e0ccb4b49e567f60951d7d6fff7305054c89f43ad812b9993dc7c38528013 -->
+## Rust Craft repositories
+
+These apply to native Craft apps and to shared Rust libraries. Select them by repository type. A repository that merely contains some Rust does not take this block. Rules later in a repository's file may be stricter, but not weaker. The source is `standards/house-rules-rust.md` in [storytold/craft-contrib](https://github.com/storytold/craft-contrib).
+
+1. **Never crash.** Non-test code does not panic and has no `unsafe`, except where the repository file names an exception. Return errors, treat input as hostile, and bound recursion and allocations. New production crate roots copy the `deny` attribute from an existing crate: `clippy::unwrap_used`, `clippy::expect_used`, `clippy::panic`, `clippy::unimplemented`, `clippy::todo`, `clippy::unreachable`. Every crash fix comes with a test that panicked before the fix.
+2. **Clean room.** Learn from observed behaviour and public specifications. Do not copy another product's code, assets, strings or artwork. Check a dependency's licence before adding it.
+3. **Assets and fonts.** Every asset is original or suitably licensed, and is recorded in `ATTRIBUTION.md` in the same change. Font files live in [storytold/craft-fonts](https://github.com/storytold/craft-fonts), not in the app repository.
+4. **Rust only for native Craft apps.** No handwritten JavaScript or TypeScript, and no Tauri, Electron or webview shell, in those apps. Shared tooling follows its documented technical scope and maintainer-approved exceptions. Craft PR Review's existing Tauri and TypeScript UI is one such exception. It does not relax this rule for native apps. Preserve any existing web build.
+5. **Time goes through `chrono`.** Do not hand-roll calendar conversion. For dates beyond what `chrono` can represent, follow [standards/time.md](https://github.com/storytold/craft-contrib/blob/main/standards/time.md).
+6. **Contributor credits.** Add or edit only your own person's entry in `contributors/people.toml`, and only after asking them. Never guess a name or hand-edit `contributors.json`.
+
+## Licence allowlist
+
+Dependencies and assets use SPDX identifiers. An expression is allowed when every identifier is in this list. A repository may name a shorter list. It may not add an identifier here by editing its own copy of these rules.
+
+- `ISC`
+- `MIT`
+- `BSD-2-Clause`
+- `BSD-3-Clause`
+- `Apache-2.0`
+- `OFL-1.1`
+- `Ubuntu-font-1.0`
+- `Bitstream-Vera`
+- `CC0-1.0`
+- `CC-BY-4.0`
+- `CC-BY-SA-4.0`
+- `LicenseRef-Public-Domain`
+
+`LicenseRef-Storyteller-Trademark` is not in this list. It covers Storyteller brand marks only, where a repository already says so.
+<!-- craft-house-rules:end -->
+
+# Magic Studio — instructions for agents
+
+Magic Studio (`magic`, `magic-cli`, `magic-tui`) is a pure-Rust ArtCraft production coordinator built on `eframe` + `egui` 0.37 and [`storytold/craft-libs`](https://github.com/storytold/craft-libs/blob/main/README.md). *(Root workspace license: `LicenseRef-Magic-Studio-NonResale` in [`LICENSE`](LICENSE); all shared crates and dependencies follow the Craft allowlist above.)*
+
+## 1. Workspace & Pinned Dependencies
+
+- **Crates**: `crates/util` (`magic-util`), `crates/engine` (`magic-engine`), `crates/mcp` (`magic-mcp`), `crates/ui-egui` (`magic-ui-egui`), `apps/magic`, `apps/magic-cli`, `apps/magic-tui`, and `xtask`.
+- **Pinned `storytold/*` revisions (`--locked`)**: [`Cargo.toml`](Cargo.toml) pins [`storytold/craft-libs`](https://github.com/storytold/craft-libs) to a reviewed commit and patches all 14 `egui` family crates from [`storytold/egui`](https://github.com/storytold/egui) (`6d518fc799681571963842f95b55a6b68431b15a`) plus [`storytold/winit`](https://github.com/storytold/winit) (`a517b3846ee8457d84ee4975110bfda6797c44dc`). Build reproducibly with `--locked` and verify with `MAGIC_RUN_TESTS=1 cargo xtask ci` (writing `target/ci-report.txt` and `target/ci-report.jsonl`).
+- **Read actual upstream docs before integrating**:
+  - [`storytold/craft-libs`](https://github.com/storytold/craft-libs/blob/main/README.md) & [`docs/ai-shared-layer.md`](https://github.com/storytold/craft-libs/blob/main/docs/ai-shared-layer.md)
+  - [`storytold/craft-ai-integrations`](https://github.com/storytold/craft-ai-integrations/blob/main/README.md)
+  - [`DesignCraft`](https://github.com/storytold/designcraft/blob/main/README.md), [`EffectCraft`](https://github.com/storytold/effectcraft/blob/main/README.md), [`FilmCraft`](https://github.com/storytold/filmcraft/blob/main/README.md), [`PhotoCraft`](https://github.com/storytold/photocraft/blob/main/README.md), [`VectorCraft`](https://github.com/storytold/vectorcraft/blob/main/README.md), and [`AniCraft`](https://github.com/storytold/anicraft/blob/main/README.md)
+
+## 2. Architecture, Control & Stage Boundaries
+
+Follow [`README.md`](README.md), [`docs/architecture.md`](docs/architecture.md), [`docs/control-protocol.md`](docs/control-protocol.md), and [`docs/mcp.md`](docs/mcp.md):
+
+- **All docs live under `docs/`**: developer/agent specifications live in `docs/*.md`, brand marks in `docs/brand/`, and user documentation in `docs/user/`.
+- **Single-point save/load/recovery**: `.magic` reads and writes flow through `magic_engine::cmd::project` and `craft_atomic`; recovery journals write exclusively under `<MAGIC_CONFIG_DIR>/Recovery` (or settings dir), never overwriting committed `.magic` files or creating project-local `.history/` backups.
+- **Control & MCP**: `magic --control 9875` (`MAGIC_CONTROL_PORT`), `magic-cli mcp` (headless stdio with `magic://` resources), and `magic-cli mcp --connect 9875`.
+- **Suite tools**: `01 Storyboard` uses [`DesignCraft`](https://github.com/storytold/designcraft) (`designcraft --control 7979` / `designcraft-cli`, `.designcraft` / `.idml` / `.indt`); `02 Animations` (`V2`) is an open multi-tool lane; `03 Lyrics` (`V3` + `C1`) & `04 Motion` (`V4`) target [`EffectCraft`](https://github.com/storytold/effectcraft) (`:9877` / `effectcraft-cli`); `05 Studio` reconciles tracks into [`FilmCraft`](https://github.com/storytold/filmcraft) (`:9876` / `filmcraft-cli`).

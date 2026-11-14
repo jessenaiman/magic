@@ -26,10 +26,30 @@ pub(crate) fn sprite_dir(s: &Session, id: &str, name: &str) -> Result<PathBuf> {
 
 fn try_photocraft_align_cell(sheet: &Path, rect: [u32; 4], lock_baseline: bool, out: &Path) -> bool {
     let [x, y, w, h] = rect;
-    let align_mode = if lock_baseline { "bottomCenter" } else { "center" };
-    crate::craft_api::execute_on_host_app("photocraft", Some(sheet), "image.crop", json!({"x": x, "y": y, "width": w, "height": h})).is_ok()
-        && crate::craft_api::execute_on_host_app("photocraft", Some(sheet), "layer.align", json!({"anchor": align_mode})).is_ok()
-        && crate::craft_api::execute_on_host_app("photocraft", Some(sheet), "file.saveACopy", json!({"path": out, "overwrite": true})).is_ok()
+    let crop_params = json!({"x": x, "y": y, "width": w, "height": h});
+    let align_cmd = if lock_baseline { "layer.align.bottomEdges" } else { "layer.align.horizontalCenters" };
+    if crate::workspace::control_probe("photocraft") {
+        let ok = crate::workspace::control_exec("photocraft", "file.open", json!({"path": sheet})).is_ok()
+            && crate::workspace::control_exec("photocraft", "image.crop", crop_params.clone()).is_ok()
+            && crate::workspace::control_exec("photocraft", align_cmd, json!({})).is_ok()
+            && crate::workspace::control_exec("photocraft", "file.saveACopy", json!({"path": out, "overwrite": true})).is_ok();
+        if ok && out.is_file() {
+            return true;
+        }
+    }
+    let Some(sheet_s) = sheet.to_str() else {
+        return false;
+    };
+    let Some(out_s) = out.to_str() else {
+        return false;
+    };
+    let crop_s = crop_params.to_string();
+    crate::workspace::run_cli(
+        "photocraft-cli",
+        &["run", sheet_s, "--cmd", "image.crop", "--params", &crop_s, "--cmd", align_cmd, "--params", "{}", "--out", out_s],
+        None,
+    )
+    .is_ok()
         && out.is_file()
 }
 

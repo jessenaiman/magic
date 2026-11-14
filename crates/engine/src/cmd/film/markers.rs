@@ -149,7 +149,9 @@ fn markers_add(f: &super::Film, ecproj: &Path, p: &Value) -> Result<Value> {
                 ]
             }
         });
-        let _ = crate::craft_api::execute_in_live_app("effectcraft", "markers.set", ec_params);
+        if crate::workspace::control_probe("effectcraft") {
+            let _ = crate::workspace::control_exec("effectcraft", "markers.set", ec_params);
+        }
     }
 
     let seq = if f.project.is_file() { execute(&f.project, "sequence.inspect", json!({})).ok() } else { None };
@@ -356,9 +358,9 @@ fn markers_seed(f: &super::Film, ecproj: &Path, p: &Value) -> Result<Value> {
     {
         sync_warnings.push(format!("FilmCraft marker seed warning: {e}"));
     }
-    if ecproj.is_file() {
+    if ecproj.is_file() && crate::workspace::control_probe("effectcraft") {
         for (method, params) in &ec_steps {
-            if let Err(e) = crate::craft_api::execute_in_live_app("effectcraft", method, params.clone()) {
+            if let Err(e) = crate::workspace::control_exec("effectcraft", method, params.clone()) {
                 sync_warnings.push(format!("EffectCraft {method} deferred ({e})"));
                 break;
             }
@@ -399,7 +401,8 @@ fn markers_delete(f: &super::Film, ecproj: &Path, action: &str, p: &Value) -> Re
                 .map(|idx| json!({"index": idx}))
                 .or_else(|| p.get("time_sec").or_else(|| p.get("seconds")).and_then(Value::as_f64).map(|at| json!({"at": at})));
             if let Some(del_params) = ec_del
-                && let Err(e) = crate::craft_api::execute_in_live_app("effectcraft", "markers.delete", del_params)
+                && crate::workspace::control_probe("effectcraft")
+                && let Err(e) = crate::workspace::control_exec("effectcraft", "markers.delete", del_params)
             {
                 sync_warnings.push(format!("EffectCraft markers.delete deferred ({e})"));
             }

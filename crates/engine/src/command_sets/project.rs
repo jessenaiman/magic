@@ -199,25 +199,25 @@ fn specs_storyboard() -> Vec<CommandSpec> {
     vec![
         query_spec!(
             "storyboard.status",
-            "Inspect DeckCraft Storyboard (.deckcraft / .pptx) & Rendered Slides",
-            "{\"path\":\"optional storyboard.deckcraft\"}",
+            "Inspect DesignCraft Storyboard (.designcraft / .idml) & Rendered Pages",
+            "{\"path\":\"optional storyboard.designcraft\"}",
             crate::cmd::storyboard::cmd_storyboard_status
         ),
         query_spec!(
             "storyboard.pages",
-            "Inspect DeckCraft Storyboard Slides (Alias for storyboard.status)",
-            "{\"path\":\"optional storyboard.deckcraft\"}",
+            "Inspect DesignCraft Storyboard Pages (Alias for storyboard.status)",
+            "{\"path\":\"optional storyboard.designcraft\"}",
             crate::cmd::storyboard::cmd_storyboard_status
         ),
         query_spec!(
             "storyboard.check",
-            "Inspect DeckCraft Storyboard Readiness (Alias for storyboard.status)",
-            "{\"path\":\"optional storyboard.deckcraft\"}",
+            "Inspect DesignCraft Storyboard Readiness (Alias for storyboard.status)",
+            "{\"path\":\"optional storyboard.designcraft\"}",
             crate::cmd::storyboard::cmd_storyboard_status
         ),
         cmd_spec!(
             "storyboard.thumbnail",
-            "Render Storyboard Slide Previews via deckcraft-cli (Alias for storyboard.export)",
+            "Render Storyboard Page Previews via designcraft-cli (Alias for storyboard.export)",
             ["Storyboard"],
             None,
             "{\"format\":\"png\"}",
@@ -226,34 +226,34 @@ fn specs_storyboard() -> Vec<CommandSpec> {
         ),
         cmd_spec!(
             "storyboard.open",
-            "Open Storyboard Deck in Host DeckCraft (.deckcraft / .pptx)",
+            "Open Storyboard Document in Host DesignCraft (.designcraft / .idml)",
             ["Storyboard"],
             None,
-            "{\"path\":\"optional storyboard.deckcraft\"}",
+            "{\"path\":\"optional storyboard.designcraft\"}",
             always,
             crate::cmd::storyboard::cmd_storyboard_open
         ),
         cmd_spec!(
             "storyboard.new",
-            "Create DeckCraft Storyboard From Starter Template or Flexible Seed",
+            "Create DesignCraft Storyboard From Starter Template or Flexible Seed",
             ["Storyboard"],
             None,
-            "{\"path\":\"optional storyboard.deckcraft\",\"template\":\"optional .deckcraft/.pptx/.potx\",\"width\":1920,\"height\":1080,\"overwrite\":false}",
+            "{\"path\":\"optional storyboard.designcraft\",\"template\":\"optional .designcraft/.idml/.indt\",\"width\":612,\"height\":792,\"overwrite\":false}",
             always,
             crate::cmd::storyboard::cmd_storyboard_new
         ),
         cmd_spec!(
             "storyboard.add_section",
-            "Add Section to Storyboard Deck via deckcraft-cli",
+            "Add Section to Storyboard Document via designcraft-cli",
             ["Storyboard"],
             None,
-            "{\"section\":\"section name\",\"path\":\"optional storyboard.deckcraft\"}",
+            "{\"section\":\"section name\",\"path\":\"optional storyboard.designcraft\"}",
             always,
             crate::cmd::storyboard::cmd_storyboard_add_section
         ),
         cmd_spec!(
             "storyboard.add_element",
-            "Add Text or Picture Element to Storyboard Section via deckcraft-cli",
+            "Add Text or Placed Image Element to Storyboard Section via designcraft-cli",
             ["Storyboard"],
             None,
             "{\"section\":\"section name\",\"name\":\"element name\",\"text\":\"optional text\",\"image\":\"optional image path\"}",
@@ -262,10 +262,10 @@ fn specs_storyboard() -> Vec<CommandSpec> {
         ),
         cmd_spec!(
             "storyboard.export",
-            "Export Storyboard Deck to PDF, PPTX, or Slide PNGs via deckcraft-cli",
+            "Export Storyboard Document to PDF, IDML, EPUB, or Page PNGs via designcraft-cli",
             ["Storyboard"],
             None,
-            "{\"format\":\"png|pdf|pptx\",\"output\":\"optional file\",\"png_dir\":\"optional storyboard/slides\"}",
+            "{\"format\":\"png|pdf|idml|epub\",\"output\":\"optional file\",\"png_dir\":\"optional storyboard/slides\"}",
             always,
             crate::cmd::storyboard::cmd_storyboard_export
         ),

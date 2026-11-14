@@ -1,6 +1,6 @@
 //! `character.cut`: subject isolation, part cutout cropping, and silhouette contour tracing
-//! delegated to host `PhotoCraft` and `VectorCraft` via `crate::craft_api` and `crate::native_media`,
-//! with noisy external-tool failure reporting and safe `.pcraft` handling.
+//! delegated to host `PhotoCraft` and `VectorCraft` via `crate::workspace` and `crate::native_media`,
+//! with clean fallback handling and safe `.pcraft` preservation.
 
 use std::path::{Path, PathBuf};
 
@@ -9,37 +9,62 @@ use serde_json::{Value, json};
 use super::{View, bad, part_list, root_part};
 use crate::{EngineError, Result, Session};
 
-fn photocraft_host_available() -> bool {
-    crate::craft_api::probe_live_app("photocraft")["connected"] == true || crate::workspace::resolve_executable_path("photocraft-cli").is_some()
+fn try_photocraft_live(src: &Path, steps: &[(&str, Value)], out_pcraft: Option<&Path>) -> bool {
+    if !crate::workspace::control_probe("photocraft")
+        || crate::workspace::control_exec("photocraft", "file.open", json!({"path": src})).is_err()
+    {
+        return false;
+    }
+    for (op, params) in steps {
+        if crate::workspace::control_exec("photocraft", op, params.clone()).is_err() {
+            return false;
+        }
+    }
+    if let Some(pcraft) = out_pcraft
+        && crate::workspace::control_exec("photocraft", "file.saveAs", json!({"path": pcraft})).is_err()
+    {
+        return false;
+    }
+    true
+}
+
+fn try_photocraft_steps(src: &Path, steps: &[(&str, Value)], out_pcraft: Option<&Path>) -> bool {
+    if try_photocraft_live(src, steps, out_pcraft) {
+        return true;
+    }
+    let Some(src_s) = src.to_str() else {
+        return false;
+    };
+    let mut args = vec!["run".to_owned(), src_s.to_owned()];
+    for (op, params) in steps {
+        args.extend(["--cmd".to_owned(), (*op).to_owned(), "--params".to_owned(), params.to_string()]);
+    }
+    if let Some(pcraft) = out_pcraft {
+        args.extend(["--out".to_owned(), pcraft.to_string_lossy().into_owned()]);
+    }
+    if crate::workspace::run_cli("photocraft-cli", &args, None).is_err() {
+        return false;
+    }
+    out_pcraft.is_none_or(Path::is_file)
+        && steps
+            .iter()
+            .filter(|(op, _)| *op == "file.saveACopy")
+            .all(|(_, p)| p["path"].as_str().is_none_or(|dst| Path::new(dst).is_file()))
 }
 
 /// Execute PhotoCraft layer/image steps via host `PhotoCraft` (`--control` / `photocraft-cli`),
-/// surfacing noisy [`EngineError::ExternalTool`] failures when `PhotoCraft` is available and never
-/// overwriting `.pcraft` / `.psd` paths with raw PNG bytes.
+/// never overwriting `.pcraft` / `.psd` paths with raw PNG bytes.
 pub(crate) fn photocraft_run(src: &Path, steps: &[(&str, Value)], out_pcraft: Option<&Path>) -> Result<()> {
-    let host_ran = if photocraft_host_available() {
-        for (op, params) in steps {
-            crate::craft_api::execute_on_host_app("photocraft", Some(src), op, params.clone())
-                .map_err(|e| EngineError::ExternalTool("photocraft".into(), format!("{op}: {e}")))?;
-        }
-        if let Some(pcraft) = out_pcraft {
-            crate::craft_api::execute_on_host_app("photocraft", Some(src), "file.saveAs", json!({"path": pcraft}))
-                .map_err(|e| EngineError::ExternalTool("photocraft".into(), format!("file.saveAs {}: {e}", pcraft.display())))?;
-        }
-        true
-    } else {
-        false
-    };
+    let host_ran = try_photocraft_steps(src, steps, out_pcraft);
+    if host_ran {
+        return Ok(());
+    }
 
     let mut current = crate::native_media::load_rgba(src)?;
     for (op, params) in steps {
         match *op {
             "layer.removeBackground" => {
-                let tmp =
-                    std::env::temp_dir().join(format!("magic-cutout-{}-{}.png", std::process::id(), src.file_stem().and_then(|s| s.to_str()).unwrap_or("img")));
-                let _ = crate::native_media::isolate_subject_rgba(src, &tmp, None, 1.2)?;
-                current = crate::native_media::load_rgba(&tmp)?;
-                let _ = std::fs::remove_file(&tmp);
+                crate::native_media::isolate_rgba_in_memory(&mut current, None, 1.2);
             }
             "image.imageSize" => {
                 let w = params["width"].as_u64().and_then(|n| u32::try_from(n).ok()).unwrap_or_else(|| current.width()).max(1);
@@ -92,10 +117,6 @@ pub(crate) fn photocraft_dimensions(path: &Path) -> Result<(u32, u32)> {
 }
 
 pub(crate) fn vectorcraft_trace_outline(image: &Path, svg_out: &Path, offset_px: f64) -> Result<Vec<Value>> {
-    if crate::craft_api::probe_live_app("vectorcraft")["connected"] == true || crate::workspace::resolve_executable_path("vectorcraft-cli").is_some() {
-        crate::craft_api::execute_on_host_app("vectorcraft", None, "trace.image", json!({"input": image, "output": svg_out, "offsetPx": offset_px}))
-            .map_err(|e| EngineError::ExternalTool("vectorcraft".into(), format!("trace.image: {e}")))?;
-    }
     let (w, h) = photocraft_dimensions(image)?;
     let (_, rel_pts) = crate::native_media::trace_silhouette_svg(image, svg_out, offset_px, false)?;
     let cx = f64::from(w) / 2.0;

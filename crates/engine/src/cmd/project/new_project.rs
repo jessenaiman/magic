@@ -1,5 +1,5 @@
 //! `project.new` / `file.new`: creates a self-contained `<project-slug>/` directory owning copies
-//! of all audio, assets, `storyboard.deckcraft`, `effects/`, `film/`, and `exports/` (plus an
+//! of all audio, assets, `storyboard.designcraft`, `effects/`, `film/`, and `exports/` (plus an
 //! inline `original-project.zip` strictly when `existing_project` / `migrate_from` points to a
 //! folder without a `.magic` file, `B10-ARCH`).
 
@@ -207,7 +207,7 @@ fn bootstrap_song_workshop(s: &mut Session, path: &Path, project_dir: &Path, par
     if !sb.is_file() || overwrite {
         let sb_req = json!({"path": sb, "overwrite": overwrite, "title": project_title});
         match crate::cmd::storyboard::cmd_storyboard_new(s, &sb_req) {
-            Ok(_) => steps.push(json!({"command": "storyboard.new", "status": "storyboard.deckcraft initialized"})),
+            Ok(_) => steps.push(json!({"command": "storyboard.new", "status": "storyboard.designcraft initialized"})),
             Err(e) => steps.push(json!({"command": "storyboard.new", "status": "failed", "error": e.to_string()})),
         }
     }
@@ -395,7 +395,7 @@ mod tests {
     }
 
     #[test]
-    fn project_new_creates_deckcraft_storyboard_and_zips_only_non_magic_existing_project() {
+    fn project_new_creates_designcraft_storyboard_and_zips_only_non_magic_existing_project() {
         let sandbox = temp_sandbox("self_contained");
         let external_src = sandbox.join("external_inputs");
         let legacy_src = sandbox.join("legacy_proj");
@@ -431,7 +431,7 @@ mod tests {
         for sub in ["audio", "assets", "effects", "film", "exports"] {
             assert!(created_dir.join(sub).is_dir(), "expected {sub}/ inside self-contained project");
         }
-        assert!(created_dir.join("storyboard.deckcraft").is_file());
+        assert!(created_dir.join("storyboard.designcraft").is_file());
         let zip_path = created_dir.join("original-project.zip");
         assert!(zip_path.is_file());
         let zip_bytes = std::fs::read(&zip_path).unwrap();
@@ -460,7 +460,7 @@ mod tests {
         let _ = cmd_project_new(&mut session, &json!({"path": created_magic, "overwrite": true, "audio": ext_wav, "skip_audio_setup": true})).unwrap();
         let saved_doc = read_project_document(&created_magic).unwrap();
         assert_eq!(saved_doc["workshop"]["audio"].as_str().unwrap(), "audio/song-demo.wav");
-        assert_eq!(saved_doc["workshop"]["storyboard"].as_str().unwrap(), "storyboard.deckcraft");
+        assert_eq!(saved_doc["workshop"]["storyboard"].as_str().unwrap(), "storyboard.designcraft");
 
         let auto = cmd_project_autosave(&mut session, &json!({})).unwrap();
         let journal = PathBuf::from(auto["journal"].as_str().unwrap());

@@ -13,12 +13,9 @@ use crate::controls::{EffectRowSpec, ScalarSpec, badge_accent_color, effect_row_
 use crate::state::{PickerTarget, UiAction, ViewCtx};
 use crate::widgets::{BtnSpec, action_button, status_pill, text_input};
 
-/// Read dynamic `words.effects` entries hydrated via `words.effects` (`craft_api` `:9877` + catalog).
+/// Read dynamic `words.effects` entries hydrated via `words.effects` (`effectcraft --control 9877`).
 pub fn resolved_lyrics_effects(ctx: &ViewCtx<'_>) -> Vec<Value> {
-    if let Some(arr) = ctx.state.cache.words_effects.get("effects").and_then(Value::as_array).filter(|a| !a.is_empty()) {
-        return arr.clone();
-    }
-    magic_engine::craft_effects::lyrics_catalog_json()
+    ctx.state.cache.words_effects.get("effects").and_then(Value::as_array).cloned().unwrap_or_default()
 }
 
 /// Apply a Craft typography effect to the currently selected stage word AND push via `words.effect_install`.
@@ -139,16 +136,16 @@ pub fn draw_craft_typography_effects_browser(ui: &mut Ui, ctx: &mut ViewCtx<'_>,
             ctx.pal,
             BtnSpec::label_only(
                 &format!("{id_prefix}-live-save"),
-                "Save in App",
-                "Trigger built-in file.save inside your open local EffectCraft session (:9877)",
+                "Open in EffectCraft",
+                "Open effects/lyrics.ecproj in EffectCraft",
             ),
         )
         .clicked()
         {
             ctx.exec(
-                "craft.live_save",
-                json!({"app": "effectcraft", "path": "effects/lyrics.ecproj"}),
-                Some("Saved effects/lyrics.ecproj via open EffectCraft session"),
+                "workspace.open",
+                json!({"app": "effectcraft", "domain": "lyrics"}),
+                Some("Opened effects/lyrics.ecproj in EffectCraft"),
             );
         }
     });

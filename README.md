@@ -19,7 +19,7 @@
 
 <p align="center">
   Turn a recorded song or an existing project into a finished music video, lyric video or animated short across
-  <a href="https://github.com/storytold/deckcraft">DeckCraft</a>,
+  <a href="https://github.com/storytold/designcraft">DesignCraft</a>,
   <a href="https://github.com/storytold/effectcraft">EffectCraft</a> and
   <a href="https://github.com/storytold/filmcraft">FilmCraft</a>.
   Native on macOS, Windows and Linux. Every button and stage action is also a command that the CLI,
@@ -63,13 +63,13 @@
 
 <br>
 
-Magic Studio (`magic`, `magic-cli`, `magic-tui`) is a song-driven production coordinator built on [`storytold/craft-libs`](https://github.com/storytold/craft-libs) and `eframe` / `egui` 0.37. Instead of locking artists into a closed format, every project folder holds real creative files — native [DeckCraft](https://github.com/storytold/deckcraft) storyboard decks, open 2D/3D animation renders, [EffectCraft](https://github.com/storytold/effectcraft) lyric and motion compositions, and a sample-accurate [FilmCraft](https://github.com/storytold/filmcraft) multi-track sequence (`254,016,000,000` ticks per second).
+Magic Studio (`magic`, `magic-cli`, `magic-tui`) is a song-driven production coordinator built on [`storytold/craft-libs`](https://github.com/storytold/craft-libs) and `eframe` / `egui` 0.37. Instead of locking artists into a closed format, every project folder holds real creative files — native [DesignCraft](https://github.com/storytold/designcraft) storyboard documents, open 2D/3D animation renders, [EffectCraft](https://github.com/storytold/effectcraft) lyric and motion compositions, and a sample-accurate [FilmCraft](https://github.com/storytold/filmcraft) multi-track sequence (`254,016,000,000` ticks per second).
 
 <br>
 
 ## Storyboard and Scribbles
 
-- **Creative storyboards in DeckCraft (`01 Storyboard`).** Build decks with themes, layouts, shapes, pictures, speaker notes, section dividers and scene timing in native `.deckcraft` or PowerPoint `.pptx` files, present them full screen, and export production PDFs (slides, notes pages and handouts) through [`DeckCraft`](https://github.com/storytold/deckcraft) (`deckcraft --control 7990` or `deckcraft-cli`).
+- **Creative storyboards in DesignCraft (`01 Storyboard`).** Build multi-page layouts, master templates, shapes, placed artwork and director notes in native `.designcraft`, `.idml` or `.indt` files, and export production PDFs and page PNGs through [`DesignCraft`](https://github.com/storytold/designcraft) (`designcraft --control 7979` or `designcraft-cli`).
 - **User-editable `extensions/scribbles/` with a saved-Storyboard-slide gate.** Each project carries plain, user-editable templates and prompt recipes under `extensions/scribbles/` backed by `craft-ai-core` ([`storytold/craft-libs`](https://github.com/storytold/craft-libs/blob/main/docs/ai-shared-layer.md)) for character turnarounds, style sheets and scene plates. Scribble generation and batch scene expansion are gated on saved Storyboard slides on disk, so visual generation always follows deliberate storyboard decisions rather than unreviewed prompts.
 
 ## Open multi-tool animations
@@ -89,7 +89,7 @@ Magic Studio (`magic`, `magic-cli`, `magic-tui`) is a song-driven production coo
 Every menu item, toolbar button, dock command and stage operation in Magic Studio is a **command** with a stable id, typed parameters and an enabled state (`magic-cli commands` lists them all). The desktop UI, **`magic-cli`**, the loopback JSON-lines control channel (**`magic --control 9875`**), the Backstage terminal viewer (**`magic-tui`**) and the **MCP server** (**`magic-cli mcp`**) all dispatch the same commands:
 
 - **Read-only `magic://` MCP resources:** inspect live or headless state without side effects via `magic://` resource URIs (`magic://document`, `magic://storyboard`, `magic://commands`, `magic://tracks`) alongside `list_commands`, `run_command` and `run_batch`.
-- **Automatic track reconciliation (`magic-cli studio map-tracks`):** scan saved DeckCraft storyboard slides, `02 Animations` renders, `03 Lyrics` compositions and `04 Motion` cues and map them onto `FilmCraft` tracks (`V1`–`V4`, `C1`, `A1`) in one deterministic pass.
+- **Automatic track reconciliation (`magic-cli studio map-tracks`):** scan saved DesignCraft storyboard slides, `02 Animations` renders, `03 Lyrics` compositions and `04 Motion` cues and map them onto `FilmCraft` tracks (`V1`–`V4`, `C1`, `A1`) in one deterministic pass.
 
 ```sh
 magic --control 9875                                        # desktop app + JSON-lines control channel on 127.0.0.1:9875
@@ -106,7 +106,7 @@ magic-cli --project song.magic studio map-tracks --save     # map Storyboard, An
 
 ## Get started
 
-Build and install `magic`, `magic-cli` and `magic-tui` from source (`./install.sh` runs `cargo update` automatically so local builds pull the latest [`storytold/craft-libs`](https://github.com/storytold/craft-libs) `main` commits):
+Build and install `magic`, `magic-cli` and `magic-tui` from source (`./install.sh` builds with `--locked` against the pinned [`storytold/craft-libs`](https://github.com/storytold/craft-libs) revision in `Cargo.lock`):
 
 ```sh
 git clone https://github.com/jessenaiman/magic.git
@@ -151,7 +151,6 @@ Magic Studio coordinates the **Crafting Apps**: free, open-source creative tools
 | <img src="https://raw.githubusercontent.com/storytold/figcraft/main/assets/app-icon/hicolor/64x64/apps/ai.storyteller.figcraft.png" alt="" width="32" height="32"> | **FigCraft** | Interface design and prototyping | [GitHub](https://github.com/storytold/figcraft) | [Website](https://getartcraft.com/apps/figcraft) |
 | <img src="https://raw.githubusercontent.com/storytold/wordcraft/main/assets/app-icon/hicolor/64x64/apps/ai.storyteller.wordcraft.png" alt="" width="32" height="32"> | **WordCraft** | Word processing and documents | [GitHub](https://github.com/storytold/wordcraft) | [Website](https://getartcraft.com/apps/wordcraft) |
 | <img src="https://raw.githubusercontent.com/storytold/soundcraft/main/assets/app-icon/hicolor/64x64/apps/ai.storyteller.soundcraft.png" alt="" width="32" height="32"> | **SoundCraft** | Audio recording and editing | [GitHub](https://github.com/storytold/soundcraft) | [Website](https://getartcraft.com/apps/soundcraft) |
-| <img src="https://raw.githubusercontent.com/storytold/deckcraft/main/assets/app-icon/hicolor/64x64/apps/ai.storyteller.deckcraft.png" alt="" width="32" height="32"> | **DeckCraft** | Presentations and slide decks | [GitHub](https://github.com/storytold/deckcraft) | [Website](https://getartcraft.com/apps/deckcraft) |
 | <img src="https://raw.githubusercontent.com/storytold/cadcraft/main/assets/app-icon/hicolor/64x64/apps/ai.storyteller.cadcraft.png" alt="" width="32" height="32"> | **CADCraft** | Computer-aided design | [GitHub](https://github.com/storytold/cadcraft) | [Website](https://getartcraft.com/apps/cadcraft) |
 | <img src="https://raw.githubusercontent.com/storytold/gridcraft/main/assets/app-icon/hicolor/64x64/apps/ai.storyteller.gridcraft.png" alt="" width="32" height="32"> | **GridCraft** | Spreadsheets and data | [GitHub](https://github.com/storytold/gridcraft) | [Website](https://getartcraft.com/apps/gridcraft) |
 | <img src="https://raw.githubusercontent.com/storytold/texturecraft/main/assets/app-icon/hicolor/64x64/apps/ai.storyteller.texturecraft.png" alt="" width="32" height="32"> | **TextureCraft** | 3D texture painting | [GitHub](https://github.com/storytold/texturecraft) | [Website](https://getartcraft.com/apps/texturecraft) |
@@ -192,7 +191,7 @@ And [**ArtCraft**](https://getartcraft.com/) itself, our AI image and video stud
 | [`docs/control-protocol.md`](docs/control-protocol.md) | Loopback JSON-lines `--control 9875` protocol reference |
 | [`docs/mcp.md`](docs/mcp.md) | `magic-cli mcp` (`--connect 9875` and headless), `magic://` resources, and root confinement |
 | [`ROADMAP.md`](ROADMAP.md) · [`docs/gaps.md`](docs/gaps.md) | Alpha milestones, live multi-app integration checks, and open items |
-| [`book/`](book/src/README.md) · [`docs/wiki/magic/`](docs/wiki/README.md) | mdBook developer guide and Starlight user guides |
+| [`docs/README.md`](docs/README.md) | Documentation index, brand marks, and upstream suite references |
 
 ## License and credits
 

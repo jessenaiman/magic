@@ -23,66 +23,6 @@ pub struct ControlsArgs {
 }
 
 #[derive(Args)]
-pub struct EffectArgs {
-    #[command(subcommand)]
-    pub command: EffectCmd,
-}
-
-#[derive(Subcommand)]
-pub enum EffectCmd {
-    /// Pass any EffectCraft engine command straight to live `:9877` `--control` or `effectcraft-cli exec <id> --params '<json>' ... --json`
-    Exec {
-        /// EffectCraft command ID (e.g. `comp.info`, `layer.newText`, `prop.addKey`, `file.exportTimeline`)
-        id: String,
-        /// Force `--save` even on read-only commands
-        #[arg(long, conflicts_with = "no_save")]
-        save: bool,
-        /// Omit `--save` on `effectcraft-cli exec`
-        #[arg(long)]
-        no_save: bool,
-        /// Run against a fresh `--empty` EffectCraft project
-        #[arg(long)]
-        empty: bool,
-        /// Optional explicit `.ecproj` path override (defaults to `effects/lyrics.ecproj` or `--domain motion`)
-        #[arg(long)]
-        ecproj: Option<String>,
-        /// Default domain (`lyrics` or `motion`) when `--ecproj` is omitted
-        #[arg(long)]
-        domain: Option<String>,
-        #[arg(long)]
-        params: Option<String>,
-        arguments: Vec<String>,
-    },
-}
-
-#[derive(Args)]
-pub struct FilmArgs {
-    #[command(subcommand)]
-    pub command: FilmCmd,
-}
-
-#[derive(Subcommand)]
-pub enum FilmCmd {
-    /// Pass any FilmCraft engine command straight to live `:9876` `--control` or `filmcraft-cli --project <song.fcproj> [--save] exec`
-    Exec {
-        /// FilmCraft command ID (e.g. `sequence.inspect`, `timeline.razor`, `effects.setParam`)
-        id: String,
-        /// Force `--save` even on read-only commands
-        #[arg(long, conflicts_with = "no_save")]
-        save: bool,
-        /// Omit `--save` on `filmcraft-cli exec`
-        #[arg(long)]
-        no_save: bool,
-        /// Optional explicit `.fcproj` path override
-        #[arg(long)]
-        fcproj: Option<String>,
-        #[arg(long)]
-        params: Option<String>,
-        arguments: Vec<String>,
-    },
-}
-
-#[derive(Args)]
 pub struct AnimationArgs {
     #[command(subcommand)]
     pub command: AnimationCmd,
@@ -183,7 +123,7 @@ pub struct StoryboardArgs {
 
 #[derive(Subcommand)]
 pub enum StoryboardCmd {
-    /// Inspect Storyboard DeckCraft status (`storyboard.status`)
+    /// Inspect Storyboard DesignCraft status (`storyboard.status`)
     Status {
         #[arg(long)]
         path: Option<String>,
@@ -191,7 +131,7 @@ pub enum StoryboardCmd {
         params: Option<String>,
         arguments: Vec<String>,
     },
-    /// Open `storyboard.deckcraft` in host DeckCraft (`storyboard.open`)
+    /// Open `storyboard.designcraft` in host DesignCraft (`storyboard.open`)
     Open {
         #[arg(long)]
         path: Option<String>,
@@ -201,7 +141,7 @@ pub enum StoryboardCmd {
         params: Option<String>,
         arguments: Vec<String>,
     },
-    /// Initialize `storyboard.deckcraft` (`storyboard.new`)
+    /// Initialize `storyboard.designcraft` (`storyboard.new`)
     New {
         #[arg(long)]
         path: Option<String>,
@@ -211,7 +151,7 @@ pub enum StoryboardCmd {
         params: Option<String>,
         arguments: Vec<String>,
     },
-    /// Add a section to `storyboard.deckcraft` (`storyboard.add_section`)
+    /// Add a section to `storyboard.designcraft` (`storyboard.add_section`)
     AddSection {
         name: String,
         #[arg(long)]
@@ -220,7 +160,7 @@ pub enum StoryboardCmd {
         params: Option<String>,
         arguments: Vec<String>,
     },
-    /// Add an element to a section in `storyboard.deckcraft` (`storyboard.add_element`)
+    /// Add an element to a section in `storyboard.designcraft` (`storyboard.add_element`)
     AddElement {
         section: String,
         name: String,
@@ -230,7 +170,7 @@ pub enum StoryboardCmd {
         params: Option<String>,
         arguments: Vec<String>,
     },
-    /// Export `storyboard.deckcraft` (`storyboard.export`)
+    /// Export `storyboard.designcraft` (`storyboard.export`)
     Export {
         out: Option<String>,
         #[arg(long)]
@@ -424,64 +364,6 @@ pub fn parse_studio_mappings(args: &StudioMapTracksArgs) -> Result<Value, String
         return Err("provide `--mappings '<json>'` or repeatable `--map <lyrics|motion>:<V3,V5>[:<group>]`".into());
     }
     Ok(json!({ "mappings": list }))
-}
-
-pub fn build_effect_call(cmd: EffectCmd) -> Result<(&'static str, Value), String> {
-    match cmd {
-        EffectCmd::Exec { id, save, no_save, empty, ecproj, domain, params, arguments } => {
-            let cmd_params = parse_params(&arguments, params.as_deref())?;
-            let mut payload = json!({
-                "command": id,
-                "params": cmd_params,
-            });
-            if save {
-                payload["save"] = json!(true);
-            } else if no_save {
-                payload["save"] = json!(false);
-            }
-            if empty {
-                payload["empty"] = json!(true);
-            }
-            if let Some(proj) = ecproj {
-                payload["project"] = json!(proj);
-            }
-            if let Some(dom) = domain {
-                payload["domain"] = json!(dom);
-            }
-            Ok(("effect.exec", payload))
-        }
-    }
-}
-
-pub fn run_effect(target: &mut Target, args: EffectArgs) -> Result<(), String> {
-    let (id, payload) = build_effect_call(args.command)?;
-    target.run(id, payload)
-}
-
-pub fn build_film_call(cmd: FilmCmd) -> Result<(&'static str, Value), String> {
-    match cmd {
-        FilmCmd::Exec { id, save, no_save, fcproj, params, arguments } => {
-            let cmd_params = parse_params(&arguments, params.as_deref())?;
-            let mut payload = json!({
-                "command": id,
-                "params": cmd_params,
-            });
-            if save {
-                payload["save"] = json!(true);
-            } else if no_save {
-                payload["save"] = json!(false);
-            }
-            if let Some(proj) = fcproj {
-                payload["project"] = json!(proj);
-            }
-            Ok(("video.exec", payload))
-        }
-    }
-}
-
-pub fn run_film(target: &mut Target, args: FilmArgs) -> Result<(), String> {
-    let (id, payload) = build_film_call(args.command)?;
-    target.run(id, payload)
 }
 
 pub fn run_studio(target: &mut Target, args: StudioArgs) -> Result<(), String> {

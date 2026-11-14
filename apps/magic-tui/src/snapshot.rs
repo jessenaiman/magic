@@ -157,7 +157,7 @@ fn load_project_summary(explicit: Option<&Path>) -> ProjectSummary {
             name: "No .magic project specified (pass --project <file.magic>)".into(),
             path: None,
             audio: None,
-            storyboard: "storyboard.deckcraft (inspect via storyboard.status)".into(),
+            storyboard: "storyboard.designcraft (inspect via storyboard.status)".into(),
             video_project: None,
             draft_approved: false,
             asset_count: 0,
@@ -168,10 +168,10 @@ fn load_project_summary(explicit: Option<&Path>) -> ProjectSummary {
         return ProjectSummary { name: path_str.clone(), path: Some(path_str), ..ProjectSummary::default() };
     };
     let doc = serde_json::from_slice::<Value>(&bytes).unwrap_or(Value::Null);
-    let sb_default = if path.with_file_name("storyboard.deckcraft").is_file() {
-        "storyboard.deckcraft (present · storyboard.status)"
+    let sb_default = if path.with_file_name("storyboard.designcraft").is_file() {
+        "storyboard.designcraft (present · storyboard.status)"
     } else {
-        "storyboard.deckcraft (not created · storyboard.new)"
+        "storyboard.designcraft (not created · storyboard.new)"
     };
     ProjectSummary {
         name: str_or(&doc, "name", "Untitled"),
