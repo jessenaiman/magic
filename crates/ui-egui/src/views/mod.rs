@@ -9,7 +9,6 @@ pub mod motion;
 pub mod motion_dock;
 pub mod motion_inspector;
 pub mod project;
-pub mod project_interchange;
 pub mod storyboard;
 pub mod storyboard_page;
 pub mod studio;

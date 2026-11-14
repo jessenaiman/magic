@@ -10,17 +10,21 @@ use std::path::Path;
 
 use craft_audio::{BitDepth, DecodeOptions, Decoder, EncodeFormat, EncodeOptions, ReadSeekSource};
 use craft_doc::{Kind, Limits, RenditionKind};
+use craft_ecproj_format::{Head as EcprojHead, ReadError as EcprojReadError};
 use craft_font_catalog::Catalog;
 use craft_media::isobmff::{TrackKind as IsoTrackKind, open as open_isobmff};
 use craft_media::matroska::{TrackKind as MkvTrackKind, open as open_matroska};
+use craft_pcraft_bundle::{DirectoryBundle, Limits as PcraftBundleLimits};
+use craft_pcraft_format::{
+    COMPOSITE as PCRAFT_COMPOSITE, FORMAT_VERSION as PCRAFT_FORMAT_VERSION, FULL_COMPOSITE as PCRAFT_FULL_COMPOSITE, Limits as PcraftManifestLimits,
+    MANIFEST as PCRAFT_MANIFEST, SAVE_LOCK as PCRAFT_SAVE_LOCK, THUMB as PCRAFT_THUMB, read_manifest as read_pcraft_manifest,
+};
 use serde_json::{Value, json};
 
 use crate::time::Tick;
 use crate::{Result, UtilError};
 
-const PCRAFT_MANIFEST: &str = "manifest.json";
-const PCRAFT_SAVE_LOCK: &str = ".save.lock";
-const PCRAFT_PREVIEWS: &[&str] = &["full-composite.png", "composite.png", "thumb.png"];
+const PCRAFT_PREVIEWS: &[&str] = &[PCRAFT_FULL_COMPOSITE, PCRAFT_COMPOSITE, PCRAFT_THUMB];
 
 /// True when `path` has one of Magic Studio's Craft project extensions
 /// (`DesignCraft`, `PhotoCraft`, `VectorCraft`, `EffectCraft`, `FilmCraft`) or `.magic`.
@@ -66,8 +70,7 @@ pub fn is_craft_doc_path(path: &Path) -> bool {
     (path.is_file() && has_craft_doc_extension(path)) || is_unpacked_pcraft_dir(path)
 }
 
-/// Metadata read from an `.ecproj` header via `craft_doc::info`, tolerating newer schema versions
-/// saved by a host `EffectCraft` installation.
+/// Metadata read from an `.ecproj` header via `craft_doc::info` and `craft_ecproj_format::Head::read`.
 #[derive(Clone, Debug)]
 pub struct EcprojHeaderInfo {
     pub schema: Option<u32>,
@@ -82,13 +85,13 @@ pub fn inspect_ecproj_head(path: &Path) -> Result<EcprojHeaderInfo> {
             Ok(EcprojHeaderInfo { schema: Some(info.version), saved_by: info.generator, newer_than_lib: !info.supported })
         }
         Ok(other) => Err(UtilError::Invalid(format!("{}: expected EffectCraft .ecproj, found {}", path.display(), other.kind.extension()))),
-        Err(err) => {
-            let parsed: Value = serde_json::from_slice(&bytes).map_err(|_| UtilError::Invalid(format!("{}: {err}", path.display())))?;
-            Ok(EcprojHeaderInfo {
-                schema: parsed["schema"].as_u64().and_then(|v| u32::try_from(v).ok()),
-                saved_by: parsed["savedBy"].as_str().map(str::to_owned),
-                newer_than_lib: true,
-            })
+        Err(doc_err) => {
+            let text = std::str::from_utf8(&bytes).map_err(|_| UtilError::Invalid(format!("{}: {doc_err}", path.display())))?;
+            match EcprojHead::read(text) {
+                Ok(head) => Ok(EcprojHeaderInfo { schema: Some(head.schema), saved_by: head.saved_by, newer_than_lib: false }),
+                Err(EcprojReadError::TooNew { too_new, saved_by, .. }) => Ok(EcprojHeaderInfo { schema: Some(too_new.schema), saved_by, newer_than_lib: true }),
+                Err(err) => Err(UtilError::Invalid(format!("{}: {err}", path.display()))),
+            }
         }
     }
 }
@@ -102,13 +105,16 @@ fn inspect_pcraft_dir_bundle(dir: &Path) -> Option<Value> {
             "supported": true,
         }));
     }
-    let manifest: Value = serde_json::from_slice(&std::fs::read(dir.join(PCRAFT_MANIFEST)).ok()?).ok()?;
+    let bundle = DirectoryBundle::open(dir, PcraftBundleLimits::default()).ok()?;
+    let raw = bundle.manifest().ok()?;
+    let manifest: craft_pcraft_format::Manifest<Value> =
+        read_pcraft_manifest::<Value, craft_pcraft_format::Error>(&raw, &PcraftManifestLimits::default(), &[], PCRAFT_FORMAT_VERSION).ok()?;
     Some(json!({
         "kind": "pcraft",
         "bundle": "directory",
-        "version": manifest["format_version"].as_u64().unwrap_or(1),
-        "generator": manifest["generator"],
-        "supported": true,
+        "version": manifest.format_version,
+        "generator": manifest.generator,
+        "supported": manifest.format_version <= PCRAFT_FORMAT_VERSION,
     }))
 }
 
@@ -154,10 +160,11 @@ pub fn extract_craft_preview(path: &Path, out_png: &Path) -> Result<bool> {
         if path.join(PCRAFT_SAVE_LOCK).exists() {
             return Ok(false);
         }
+        let Ok(bundle) = DirectoryBundle::open(path, PcraftBundleLimits::default()) else {
+            return Ok(false);
+        };
         for rel in PCRAFT_PREVIEWS {
-            let candidate = path.join(rel);
-            if candidate.is_file() {
-                let png = std::fs::read(&candidate).map_err(|e| UtilError::Invalid(format!("{}: {e}", candidate.display())))?;
+            if let Ok(Some(png)) = bundle.preview(rel) {
                 if let Some(parent) = out_png.parent() {
                     std::fs::create_dir_all(parent).map_err(|e| UtilError::Invalid(format!("{}: {e}", parent.display())))?;
                 }
@@ -423,5 +430,6 @@ pub fn font_family_styles(family: &str) -> Vec<String> {
 }
 
 pub fn is_font_family_installed(family: &str) -> bool {
-    Catalog::global().family(family).is_some()
+    let catalog = Catalog::global();
+    catalog.family(family).is_some() || catalog.resolve(family, "Regular").is_some()
 }

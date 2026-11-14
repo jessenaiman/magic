@@ -3,7 +3,7 @@
 //! `effects/lyrics.ecproj` is authoritative for a word group's transform keys. The panel
 //! discovers the comp's transform properties from that project, `set` writes the keyframes
 //! there with `prop.addKey`, saves it, and then records only the binding (comp/layer ids plus
-//! the source word ids) and a read-back of the keys in words.json. `words.letter` remains the
+//! the source word ids) and a read-back of the keys in `Project.lyrics`. `words.letter` remains the
 //! full-rebuild path.
 use super::{invalid, motion_curve, stage};
 use crate::cmd::character::effectcraft;
@@ -66,7 +66,7 @@ fn layer_by_id(layers: &[Value], id: u64) -> Option<&Value> {
     layers.iter().find(|layer| layer["id"].as_u64() == Some(id))
 }
 
-/// The first text layer, used when words.json records no binding yet.
+/// The first text layer, used when `Project.lyrics` records no binding yet.
 fn first_text_layer(layers: &[Value]) -> Option<&Value> {
     layers.iter().find(|layer| layer["type"] == "Text")
 }
@@ -120,7 +120,7 @@ fn find_layer<'a>(layers: &'a [Value], line: &str, index: usize, start: f64, bin
         })
 }
 
-/// The word group's source item in words.json, with the animation and line ids.
+/// The word group's source item in `Project.lyrics`, with the animation and line ids.
 fn find_item<'a>(document: &'a Value, animation_id: &str, line: &str, word_ids: &[Value]) -> Result<(&'a Value, &'a Value, &'a Value)> {
     let animation = document["animations"]
         .as_array()
@@ -138,7 +138,7 @@ fn find_item<'a>(document: &'a Value, animation_id: &str, line: &str, word_ids: 
     Ok((animation, design, item))
 }
 
-/// The first binding words.json records, optionally narrowed to a line and word group.
+/// The first binding `Project.lyrics` records, optionally narrowed to a line and word group.
 fn find_binding<'a>(document: &'a Value, line: Option<&str>, word_ids: Option<&[Value]>) -> Option<(&'a str, &'a str, &'a Value)> {
     for animation in document["animations"].as_array().into_iter().flatten() {
         let animation_id = animation["animation_id"].as_str().unwrap_or_default();
@@ -165,7 +165,7 @@ fn find_binding<'a>(document: &'a Value, line: Option<&str>, word_ids: Option<&[
 }
 
 /// `words.motion.properties`: the transform tree of the real lyrics comp, plus the binding
-/// words.json records for the requested (or first) word group.
+/// `Project.lyrics` records for the requested (or first) word group.
 pub fn properties(s: &mut Session, p: &Value) -> Result<Value> {
     let dir = crate::cmd::words::workspace_dir(s)?;
     let project = project_path(&dir);
@@ -260,7 +260,7 @@ fn item_origin(item: &Value, animation: &Value, word_ids: &[Value]) -> (f64, f64
     (x + width / 2.0, y + height / 2.0)
 }
 
-/// The first key time and the values a comp writes, in words.json's seven-column curve rows.
+/// The first key time and the values a comp writes, in `Project.lyrics`'s seven-column curve rows.
 fn read_back(tree: &Value, path: &str, origin: (f64, f64), rotate: f64) -> Result<Vec<Value>> {
     let property = transform_property(tree, path).ok_or_else(|| invalid(format!("The lyrics layer has no {path} property")))?;
     let keys = property["keys"].as_array().filter(|keys| keys.len() >= 2).ok_or_else(|| invalid("The lyrics comp did not record the new keyframes"))?;
@@ -292,7 +292,7 @@ fn read_back(tree: &Value, path: &str, origin: (f64, f64), rotate: f64) -> Resul
 }
 
 /// `words.motion.set`: write a word group's curve into the existing lyrics comp and layer,
-/// save it, then store only the binding and a read-back of the keys in words.json.
+/// save it, then store only the binding and a read-back of the keys in `Project.lyrics`.
 pub fn set(s: &mut Session, p: &Value) -> Result<Value> {
     let section = p["animation_id"].as_str().ok_or_else(|| invalid("animation_id is required"))?;
     let line = p["line_id"].as_str().ok_or_else(|| invalid("line_id is required"))?;

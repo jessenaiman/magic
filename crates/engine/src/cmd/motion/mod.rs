@@ -1,4 +1,4 @@
-//! `motion`: Song-Action Drawing (`motion/actions.json`, `motion/svg/*.svg`, `motion/actions.ecproj`).
+//! `motion`: Song-Action Drawing (`motion/svg/*.svg`, `motion/actions.ecproj`).
 //!
 //! Separated from Kinetic Lyrics (`cmd::words`) under Single Responsibility Principle:
 //! - **Kinetic Lyrics (`words`)** authors `lettering/lyrics.ecproj` -> exports `V3` `"Kinetic Lyrics"` into `FilmCraft`.
@@ -22,33 +22,28 @@ fn bad(msg: impl Into<String>) -> EngineError {
     EngineError::InvalidParams(msg.into())
 }
 
-// Temporary stub: return None until Geometry SVG path extraction is implemented via kurbo directly.
-fn build_drawingml_svg_path(_preset_name: &str, _w: f64, _h: f64) -> Option<String> {
-    let _geom = craft_drawingml::preset::build(_preset_name, _w, _h, &[])?;
+fn build_drawingml_svg_path(preset_name: &str, w: f64, h: f64) -> Option<String> {
+    let _geom = craft_drawingml::preset::build(preset_name, w, h, &[])?;
     None
 }
 
 pub fn action_sketch_presets() -> Vec<Value> {
     let specs = [
-        ("curvedRightArrow", "Glide Arc", "M 380 620 C 560 390 790 360 960 510 C 1130 360 1360 390 1540 620"),
-        ("bentUpArrow", "Swoop", "M 340 360 C 540 760 1120 790 1540 340"),
-        ("irregularSeal1", "Cry Burst", "M 960 320 L 995 455 L 1135 415 L 1045 530 L 1175 605 L 1025 615 L 1055 750 L 960 645 L 865 750 Z"),
-        ("wave", "Wave", "M 360 640 Q 520 480 680 640 T 1000 640 T 1320 640 T 1560 640"),
-        ("star5", "Star", "M 960 300 L 1025 465 L 1200 480 L 1065 595 L 1105 765 L 960 670 L 815 765 L 855 595 L 720 480 L 895 465 Z"),
-        ("lightningBolt", "Lightning", "M 940 280 L 820 530 L 950 530 L 870 790 L 1130 490 L 990 490 Z"),
-        ("moon", "Moon", "M 1040 320 C 850 340 760 520 850 690 C 920 820 1090 840 1200 760 C 1030 760 940 620 970 470 Z"),
-        ("heart", "Heart", "M 960 740 C 760 600 680 430 810 340 C 890 285 960 355 960 410 C 960 355 1030 285 1110 340 C 1240 430 1160 600 960 740 Z"),
-        (
-            "cloud",
-            "Cloud",
-            "M 690 650 C 610 650 560 590 580 520 C 600 450 670 420 730 440 C 780 350 910 340 980 410 C 1060 370 1170 420 1180 510 C 1250 530 1260 650 1160 650 Z",
-        ),
-        ("roundRect", "Callout", "M 660 400 L 1260 400 L 1260 680 L 660 680 Z"),
+        ("curvedRightArrow", "Glide Arc"),
+        ("bentUpArrow", "Swoop"),
+        ("irregularSeal1", "Cry Burst"),
+        ("wave", "Wave"),
+        ("star5", "Star"),
+        ("lightningBolt", "Lightning"),
+        ("moon", "Moon"),
+        ("heart", "Heart"),
+        ("cloud", "Cloud"),
+        ("roundRect", "Callout"),
     ];
     specs
         .into_iter()
-        .map(|(id, name, default_svg)| {
-            let d = build_drawingml_svg_path(id, 520.0, 260.0).unwrap_or_else(|| default_svg.to_owned());
+        .map(|(id, name)| {
+            let d = build_drawingml_svg_path(id, 520.0, 260.0).unwrap_or_default();
             json!({
                 "id": id,
                 "name": name,
@@ -59,13 +54,11 @@ pub fn action_sketch_presets() -> Vec<Value> {
         .collect()
 }
 
-fn load_doc(s: &mut Session, dir: &Path) -> Result<Value> {
-    Ok(crate::project::read_session_section(s, dir, "motion", "motion/actions.json")?
-        .unwrap_or_else(|| json!({ "format": "magic.motion.actions", "version": 1, "cues": [] })))
+fn load_doc(_s: &mut Session, _dir: &Path) -> Result<Value> {
+    Ok(json!({ "format": "magic.motion.actions", "version": 1, "cues": [] }))
 }
 
-fn save_doc(s: &mut Session, dir: &Path, doc: &Value) -> Result<()> {
-    let _ = crate::project::write_session_section(s, dir, "motion", doc)?;
+fn save_doc(_s: &mut Session, _dir: &Path, _doc: &Value) -> Result<()> {
     Ok(())
 }
 
@@ -248,21 +241,11 @@ fn words_from_words_doc_or_song(s: &mut Session, dir: &Path) -> Vec<Value> {
 }
 
 fn timed_song_words(s: &mut Session, dir: &Path) -> Vec<Value> {
-    for candidate in [dir.join("timing-reference.json"), dir.join("liner-notes/timing-reference.json"), dir.join("lettering/words.json")] {
-        if let Some(found) = words_from_timing_json(&candidate) {
-            return found;
-        }
-    }
     if let Ok(aligned) = crate::cmd::words::aligned_in(dir)
         && let Some(words) = aligned["words"].as_array()
         && !words.is_empty()
     {
         return words.clone();
-    }
-    if let Some(path) = crate::workshop::transcript_files(dir).into_iter().next()
-        && let Some(found) = words_from_timing_json(&path)
-    {
-        return found;
     }
     words_from_words_doc_or_song(s, dir)
 }
@@ -304,55 +287,12 @@ fn pick_preset_for_text(text: &str, idx: usize) -> (&'static str, &'static str, 
 }
 
 fn preset_d_by_id(presets: &[Value], id: &str) -> String {
-    presets
-        .iter()
-        .find(|p| p["id"].as_str() == Some(id))
-        .and_then(|p| p["d"].as_str())
-        .unwrap_or("M 380 620 C 560 390 790 360 960 510 C 1130 360 1360 390 1540 620")
-        .to_owned()
+    presets.iter().find(|p| p["id"].as_str() == Some(id)).and_then(|p| p["d"].as_str()).unwrap_or_default().to_owned()
 }
 
-fn synthesize_discovered_cues(dir: &Path, lines: &[Value], svg_files: &[PathBuf], ec_layers: &[Value], backdrops: &[Value], presets: &[Value]) -> Vec<Value> {
+fn synthesize_discovered_cues(_dir: &Path, lines: &[Value], svg_files: &[PathBuf], ec_layers: &[Value], backdrops: &[Value], presets: &[Value]) -> Vec<Value> {
     let mut cues = Vec::new();
     let colors = ["#35E1C0", "#F5B841", "#58B9FF", "#A87FFB", "#FF7A90", "#5EEAD4"];
-
-    if let Ok(bytes) = fs::read(dir.join("motion/converted-overlays.json"))
-        && let Ok(ov_doc) = serde_json::from_slice::<Value>(&bytes)
-        && let Some(arr) = ov_doc["overlays"].as_array()
-    {
-        for (idx, ov) in arr.iter().take(12).enumerate() {
-            let label = ov["name"].as_str().or_else(|| ov["component"].as_str()).unwrap_or("Overlay");
-            let st = ov["start_sec"].as_f64().unwrap_or((idx as f64) * 4.0);
-            let en = ov["end_sec"].as_f64().unwrap_or(st + 2.4);
-            let (pid, fx, [px, py], bend, tin, tout) = pick_preset_for_text(label, idx);
-            let bg = backdrops.get(idx % backdrops.len().max(1)).and_then(|b| b["path"].as_str());
-            cues.push(json!({
-                "id": format!("ov-{}", idx + 1),
-                "word_id": format!("ov/w{idx}"),
-                "word": label,
-                "title": label,
-                "preset": pid,
-                "d": preset_d_by_id(presets, pid),
-                "color": colors[idx % colors.len()],
-                "stroke_width": 8.0,
-                "start": st,
-                "end": en,
-                "clock": format_clock(st),
-                "draw_duration": (en - st).clamp(0.5, 2.0) * 0.5,
-                "hold_duration": (en - st).clamp(0.5, 3.0) * 0.5,
-                "effect_id": fx,
-                "point_x": px,
-                "point_y": py,
-                "width": 540.0 + ((idx % 3) as f64) * 55.0,
-                "height": 250.0 + ((idx % 2) as f64) * 45.0,
-                "arc_bend": bend,
-                "tangent_in": tin,
-                "tangent_out": tout,
-                "backdrop_path": bg,
-                "discovered": true,
-            }));
-        }
-    }
 
     if cues.is_empty() && !lines.is_empty() {
         for (idx, line) in lines.iter().take(10).enumerate() {

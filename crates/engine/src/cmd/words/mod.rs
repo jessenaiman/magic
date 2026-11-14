@@ -112,7 +112,6 @@ pub fn cmd_words_workspace(s: &mut Session, params: &Value) -> Result<Value> {
             }
         };
         if s.lyrics_workspace.as_ref() != Some(&folder) {
-            s.close_documents();
             s.lyrics_workspace = Some(folder);
         }
         s.song_audio = audio;
@@ -474,28 +473,8 @@ pub(crate) fn word_time_key(scope: &Value, id: &str) -> String {
     format!("{}#{}:{id}", scope["section"].as_str().unwrap_or(""), scope["occurrence"].as_u64().unwrap_or(1))
 }
 
-pub(crate) fn studio_times(s: &mut Session) -> std::collections::HashMap<String, (Tick, Tick)> {
-    let Ok(dir) = workspace_dir(s) else {
-        return std::collections::HashMap::new();
-    };
-    let track_file = if dir.join("effects/words-track.json").is_file() { dir.join("effects/words-track.json") } else { dir.join("design/words-track.json") };
-    let Ok(bytes) = fs::read(track_file) else {
-        return std::collections::HashMap::new();
-    };
-    let Ok(track) = serde_json::from_slice::<Value>(&bytes) else {
-        return std::collections::HashMap::new();
-    };
-    track["clips"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(|c| {
-            let key = word_time_key(c, c["word_id"].as_str()?);
-            let start = word_tick(c, "start_tick", "start")?;
-            let end = word_tick(c, "end_tick", "end")?;
-            Some((key, (start, end)))
-        })
-        .collect()
+pub(crate) fn studio_times(_s: &mut Session) -> std::collections::HashMap<String, (Tick, Tick)> {
+    std::collections::HashMap::new()
 }
 
 pub(crate) fn fill_untimed(anim: &mut Value) {
@@ -592,13 +571,11 @@ fn normalize_words_doc(mut doc: Value) -> Value {
     doc
 }
 
-pub(crate) fn load(s: &mut Session, dir: &Path) -> Result<Option<Value>> {
-    Ok(crate::project::read_session_section(s, dir, "lyrics", "design/words.json")?.map(normalize_words_doc))
+pub(crate) fn load(_s: &mut Session, _dir: &Path) -> Result<Option<Value>> {
+    Ok(None)
 }
 
-pub(crate) fn save(s: &mut Session, dir: &Path, doc: &Value) -> Result<()> {
-    let normalized = normalize_words_doc(doc.clone());
-    let _ = crate::project::write_session_section(s, dir, "lyrics", &normalized)?;
+pub(crate) fn save(_s: &mut Session, _dir: &Path, _doc: &Value) -> Result<()> {
     Ok(())
 }
 

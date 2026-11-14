@@ -7,7 +7,6 @@ members = [
     "crates/ui-egui",
     "apps/magic",
     "apps/magic-cli",
-    "apps/magic-tui",
     "xtask",
 ]
 
@@ -40,35 +39,41 @@ egui_extras = { version = "0.37", default-features = false, features = ["svg", "
 
 # Shared Craft foundation libraries (`storytold/craft-libs`)
 # Optional embedded font & locale checkouts (`CRAFT_FONTS_DIR` and `CRAFT_I18N_DIR`) are read by `crates/util/build.rs`.
-craft-ai-core = { git = "https://github.com/storytold/craft-libs", rev = "a9949872bd91ecf6bcec4e86339e3f50ad007fb9" }
-craft-atomic = { git = "https://github.com/storytold/craft-libs", rev = "a9949872bd91ecf6bcec4e86339e3f50ad007fb9" }
-craft-audio = { git = "https://github.com/storytold/craft-libs", rev = "a9949872bd91ecf6bcec4e86339e3f50ad007fb9", features = ["decode", "encode", "peaks", "serde"] }
-craft-captions = { git = "https://github.com/storytold/craft-libs", rev = "a9949872bd91ecf6bcec4e86339e3f50ad007fb9" }
-craft-dialogs = { git = "https://github.com/storytold/craft-libs", rev = "a9949872bd91ecf6bcec4e86339e3f50ad007fb9" }
-craft-doc = { git = "https://github.com/storytold/craft-libs", rev = "a9949872bd91ecf6bcec4e86339e3f50ad007fb9" }
-craft-docpath = { git = "https://github.com/storytold/craft-libs", rev = "a9949872bd91ecf6bcec4e86339e3f50ad007fb9" }
-craft-drawingml = { git = "https://github.com/storytold/craft-libs", rev = "a9949872bd91ecf6bcec4e86339e3f50ad007fb9" }
-craft-font-catalog = { git = "https://github.com/storytold/craft-libs", rev = "a9949872bd91ecf6bcec4e86339e3f50ad007fb9", features = ["system"] }
-craft-font-manager = { git = "https://github.com/storytold/craft-libs", rev = "a9949872bd91ecf6bcec4e86339e3f50ad007fb9", features = ["egui"] }
-craft-font-store = { git = "https://github.com/storytold/craft-libs", rev = "a9949872bd91ecf6bcec4e86339e3f50ad007fb9", features = ["bundled-index"] }
-craft-fonts-build = { git = "https://github.com/storytold/craft-libs", rev = "a9949872bd91ecf6bcec4e86339e3f50ad007fb9" }
-craft-i18n = { git = "https://github.com/storytold/craft-libs", rev = "a9949872bd91ecf6bcec4e86339e3f50ad007fb9" }
-craft-keymap = { git = "https://github.com/storytold/craft-libs", rev = "a9949872bd91ecf6bcec4e86339e3f50ad007fb9", features = ["egui"] }
-craft-media = { git = "https://github.com/storytold/craft-libs", rev = "a9949872bd91ecf6bcec4e86339e3f50ad007fb9", default-features = false, features = ["isobmff", "matroska", "ogg", "serde"] }
-craft-menu = { git = "https://github.com/storytold/craft-libs", rev = "a9949872bd91ecf6bcec4e86339e3f50ad007fb9" }
-craft-mesh = { git = "https://github.com/storytold/craft-libs", rev = "a9949872bd91ecf6bcec4e86339e3f50ad007fb9" }
-craft-platform = { git = "https://github.com/storytold/craft-libs", rev = "a9949872bd91ecf6bcec4e86339e3f50ad007fb9", features = ["egui", "appearance"] }
-craft-quit = { git = "https://github.com/storytold/craft-libs", rev = "a9949872bd91ecf6bcec4e86339e3f50ad007fb9", features = ["egui"] }
-craft-settings = { git = "https://github.com/storytold/craft-libs", rev = "a9949872bd91ecf6bcec4e86339e3f50ad007fb9" }
-craft-text = { git = "https://github.com/storytold/craft-libs", rev = "a9949872bd91ecf6bcec4e86339e3f50ad007fb9" }
-craft-timeline = { git = "https://github.com/storytold/craft-libs", rev = "a9949872bd91ecf6bcec4e86339e3f50ad007fb9", features = ["serde", "xml", "otio"] }
-craft-ui = { git = "https://github.com/storytold/craft-libs", rev = "a9949872bd91ecf6bcec4e86339e3f50ad007fb9", features = ["serde", "color_fonts", "native-windows"] }
-craft-update = { git = "https://github.com/storytold/craft-libs", rev = "a9949872bd91ecf6bcec4e86339e3f50ad007fb9" }
-craft-window = { git = "https://github.com/storytold/craft-libs", rev = "a9949872bd91ecf6bcec4e86339e3f50ad007fb9", features = ["egui"] }
-craft-zip = { git = "https://github.com/storytold/craft-libs", rev = "a9949872bd91ecf6bcec4e86339e3f50ad007fb9" }
+craft-ai-core = { git = "https://github.com/storytold/craft-libs", branch = "main" }
+craft-atomic = { git = "https://github.com/storytold/craft-libs", branch = "main" }
+craft-audio = { git = "https://github.com/storytold/craft-libs", branch = "main", features = ["decode", "encode", "peaks", "serde"] }
+craft-captions = { git = "https://github.com/storytold/craft-libs", branch = "main" }
+craft-designcraft-format = { git = "https://github.com/storytold/craft-libs", branch = "main" }
+craft-dialogs = { git = "https://github.com/storytold/craft-libs", branch = "main" }
+craft-doc = { git = "https://github.com/storytold/craft-libs", branch = "main" }
+craft-docpath = { git = "https://github.com/storytold/craft-libs", branch = "main" }
+craft-drawingml = { git = "https://github.com/storytold/craft-libs", branch = "main" }
+craft-ecproj-format = { git = "https://github.com/storytold/craft-libs", branch = "main" }
+craft-font-catalog = { git = "https://github.com/storytold/craft-libs", branch = "main", features = ["system"] }
+craft-font-manager = { git = "https://github.com/storytold/craft-libs", branch = "main", features = ["egui"] }
+craft-font-store = { git = "https://github.com/storytold/craft-libs", branch = "main", features = ["bundled-index"] }
+craft-fonts-build = { git = "https://github.com/storytold/craft-libs", branch = "main" }
+craft-i18n = { git = "https://github.com/storytold/craft-libs", branch = "main" }
+craft-keymap = { git = "https://github.com/storytold/craft-libs", branch = "main", features = ["egui"] }
+craft-media = { git = "https://github.com/storytold/craft-libs", branch = "main", default-features = false, features = ["isobmff", "matroska", "ogg", "serde"] }
+craft-menu = { git = "https://github.com/storytold/craft-libs", branch = "main" }
+craft-mesh = { git = "https://github.com/storytold/craft-libs", branch = "main" }
+craft-pcraft-bundle = { git = "https://github.com/storytold/craft-libs", branch = "main" }
+craft-pcraft-format = { git = "https://github.com/storytold/craft-libs", branch = "main" }
+craft-platform = { git = "https://github.com/storytold/craft-libs", branch = "main", features = ["egui", "appearance"] }
+craft-quit = { git = "https://github.com/storytold/craft-libs", branch = "main", features = ["egui"] }
+craft-settings = { git = "https://github.com/storytold/craft-libs", branch = "main" }
+craft-svg = { git = "https://github.com/storytold/craft-libs", branch = "main" }
+craft-text = { git = "https://github.com/storytold/craft-libs", branch = "main" }
+craft-timeline = { git = "https://github.com/storytold/craft-libs", branch = "main", features = ["serde", "xml", "otio"] }
+craft-ui = { git = "https://github.com/storytold/craft-libs", branch = "main", features = ["serde", "color_fonts", "native-windows"] }
+craft-update = { git = "https://github.com/storytold/craft-libs", branch = "main" }
+craft-window = { git = "https://github.com/storytold/craft-libs", branch = "main", features = ["egui"] }
+craft-zip = { git = "https://github.com/storytold/craft-libs", branch = "main" }
 
 # System, serialization, and CLI foundations
 arboard = { version = "3", features = ["wayland-data-control"] }
+chrono = { version = "0.4", default-features = false, features = ["clock", "std", "serde"] }
 clap = { version = "4", features = ["derive", "env"] }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "bmp", "tiff"] }
 log = "0.4"
@@ -76,35 +81,30 @@ rustix = { version = "1", features = ["fs", "net", "process"] }
 serde = { version = "1", features = ["derive", "rc"] }
 serde_json = "1"
 sha2 = "0.10"
+skrifa = { version = "0.47", default-features = false, features = ["std"] }
 thiserror = "2"
 
-# Reviewed ArtCraft `storytold/egui` and `storytold/winit` commits
+# Reviewed ArtCraft `storytold/egui` and `storytold/winit` branches
 [patch.crates-io]
-ecolor = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
-eframe = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
-egui = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
-egui-wgpu = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
-egui-winit = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
-egui_extras = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
-egui_glow = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
-egui_kittest = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
-egui_system_font_provider = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
-egui_demo_lib = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
-egui_inspection = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
-emath = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
-epaint = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
-epaint_default_fonts = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
-winit = { git = "https://github.com/storytold/winit.git", rev = "a517b3846ee8457d84ee4975110bfda6797c44dc" }
+ecolor = { git = "https://github.com/storytold/egui.git", branch = "main" }
+eframe = { git = "https://github.com/storytold/egui.git", branch = "main" }
+egui = { git = "https://github.com/storytold/egui.git", branch = "main" }
+egui-wgpu = { git = "https://github.com/storytold/egui.git", branch = "main" }
+egui-winit = { git = "https://github.com/storytold/egui.git", branch = "main" }
+egui_extras = { git = "https://github.com/storytold/egui.git", branch = "main" }
+egui_glow = { git = "https://github.com/storytold/egui.git", branch = "main" }
+emath = { git = "https://github.com/storytold/egui.git", branch = "main" }
+epaint = { git = "https://github.com/storytold/egui.git", branch = "main" }
+epaint_default_fonts = { git = "https://github.com/storytold/egui.git", branch = "main" }
+winit = { git = "https://github.com/storytold/winit.git", branch = "craft/0.30.13" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
-nonstandard_style = { level = "deny", priority = -1 }
 
 [workspace.lints.clippy]
 cognitive_complexity = "deny"
 too_many_arguments = "deny"
 wildcard_imports = "deny"
-disallowed_names = "deny"
 dbg_macro = "warn"
 # Shipped code returns `Result`/`Option` instead of panicking (`vectorcraft/Cargo.toml`, `filmcraft/AGENTS.md`).
 # Tests may unwrap (`clippy.toml`).

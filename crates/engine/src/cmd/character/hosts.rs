@@ -65,43 +65,6 @@ impl TimelineMode {
     }
 }
 
-/// Pure Graphic Symbol playback loop semantics (aligned with `AniCraft` symbols & Three.js `AnimationAction`).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SymbolLoopMode {
-    Loop,
-    PlayOnce,
-    SingleFrame,
-}
-
-impl SymbolLoopMode {
-    pub fn parse(raw: &str) -> Self {
-        match raw.trim().to_ascii_lowercase().as_str() {
-            "play_once" | "once" | "clamp" => Self::PlayOnce,
-            "single_frame" | "single" | "hold" => Self::SingleFrame,
-            _ => Self::Loop,
-        }
-    }
-
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Loop => "loop",
-            Self::PlayOnce => "play_once",
-            Self::SingleFrame => "single_frame",
-        }
-    }
-}
-
-/// Pure frame resolver mapping elapsed timeline frames onto local clip frames without mutating source assets.
-pub fn evaluate_symbol_frame(mode: SymbolLoopMode, first_frame: u32, clip_frames: u32, elapsed_frames: u32) -> u32 {
-    let total = clip_frames.max(1);
-    let start = first_frame.min(total - 1);
-    match mode {
-        SymbolLoopMode::SingleFrame => start,
-        SymbolLoopMode::PlayOnce => start.saturating_add(elapsed_frames).min(total - 1),
-        SymbolLoopMode::Loop => (start + (elapsed_frames % total)) % total,
-    }
-}
-
 /// Pluggable raster/vector/material asset editor behind character & prop rigs.
 pub trait AssetHost: Send + Sync {
     fn id(&self) -> &str;
@@ -311,16 +274,12 @@ fn resolve_character_ecproj(s: &Session, project_dir: &Path, cid: &str, action: 
     Err(bad(format!("no .ecproj or .glb found for character `{cid}` (action `{action}`)")))
 }
 
-/// `animation.promote`: one-step `02 Animations` -> `05 Studio` promotion onto `FilmCraft` `V2`
-/// (`media.replaceFootage` hot-swap when slot exists, caching fresh `.mov` renders, and saving
-/// reverse Studio-to-Animation clip mapping inside `<slug>.magic`).
+/// `animation.promote`: one-step `02 Animations` -> `05 Studio` promotion onto `FilmCraft` `V2`.
 pub fn cmd_animation_promote(s: &mut Session, p: &Value) -> Result<Value> {
     let project_dir = crate::workshop::project_dir(s)?;
     let cid = p["character"].as_str().map(crate::workspace::sanitize_asset_id).filter(|id| !id.is_empty()).ok_or_else(|| bad("character=<id> is required"))?;
     let action = p["action"].as_str().or_else(|| p["clip"].as_str()).or_else(|| p["sprite"].as_str()).unwrap_or("idle");
     let safe_action = crate::workspace::sanitize_asset_id(action);
-    let loop_mode = SymbolLoopMode::parse(p["loop_mode"].as_str().unwrap_or("loop"));
-    let first_frame = p["first_frame"].as_u64().and_then(|n| u32::try_from(n).ok()).unwrap_or(0);
     let start_sec = p["start_sec"].as_f64().or_else(|| p["from_sec"].as_f64()).unwrap_or(0.0).max(0.0);
     let duration = p["duration"].as_f64().unwrap_or(3.0).clamp(0.2, 600.0);
     let fps = p["fps"].as_f64().unwrap_or(24.0).clamp(1.0, 120.0);
@@ -340,30 +299,6 @@ pub fn cmd_animation_promote(s: &mut Session, p: &Value) -> Result<Value> {
 
     let studio = crate::cmd::film::publish_character(s, &out_mov)?;
 
-    let mut map_doc = crate::cmd::project::read_session_section(s, &project_dir, "animation_map", "assets/animations/animation-map.json")?
-        .unwrap_or_else(|| json!({"schema": "magic.animation_map.v2", "placements": []}));
-    if !map_doc["placements"].is_array() {
-        map_doc["placements"] = json!([]);
-    }
-    let entry = json!({
-        "character": cid,
-        "action": action,
-        "ecproj": ecproj,
-        "comp": comp,
-        "render_mov": out_mov,
-        "track": "V2",
-        "studio_start_sec": start_sec,
-        "duration": duration,
-        "fps": fps,
-        "loop_mode": loop_mode.as_str(),
-        "first_frame": first_frame,
-    });
-    if let Some(arr) = map_doc["placements"].as_array_mut() {
-        arr.retain(|item| !(item["character"].as_str() == Some(cid.as_str()) && item["action"].as_str() == Some(action)));
-        arr.push(entry.clone());
-    }
-    let saved_magic = crate::cmd::project::write_session_section(s, &project_dir, "animation_map", &map_doc)?;
-
     Ok(json!({
         "ok": true,
         "character": cid,
@@ -372,78 +307,22 @@ pub fn cmd_animation_promote(s: &mut Session, p: &Value) -> Result<Value> {
         "comp": comp,
         "render": out_mov,
         "reused_cached_render": reuse_cached,
-        "loop_mode": loop_mode.as_str(),
-        "first_frame": first_frame,
         "studio_start_sec": start_sec,
         "duration": duration,
-        "project_file": saved_magic,
+        "fps": fps,
+        "project_file": s.project_path,
         "studio": studio,
-        "placement": entry,
     }))
 }
 
-/// `animation.locate_from_studio`: resolve a `05 Studio` song playhead timestamp back to the
-/// contributing character clip, `.ecproj`, local clip time, and evaluated symbol frame.
-pub fn cmd_animation_locate(s: &mut Session, p: &Value) -> Result<Value> {
-    let project_dir = crate::workshop::project_dir(s)?;
+/// `animation.locate_from_studio`: resolve a `05 Studio` song playhead timestamp back to local clip time.
+pub fn cmd_animation_locate(_s: &mut Session, p: &Value) -> Result<Value> {
     let studio_sec = p["seconds"].as_f64().or_else(|| p["time"].as_f64()).unwrap_or(0.0).max(0.0);
-    let map_doc = crate::cmd::project::read_session_section(s, &project_dir, "animation_map", "assets/animations/animation-map.json")?
-        .unwrap_or_else(|| json!({"placements": []}));
-    let placements = map_doc["placements"].as_array().cloned().unwrap_or_default();
-
-    let matched = placements
-        .iter()
-        .find(|pl| {
-            let st = pl["studio_start_sec"].as_f64().unwrap_or(0.0);
-            let dur = pl["duration"].as_f64().unwrap_or(3.0).max(0.1);
-            studio_sec >= st && studio_sec <= st + dur
-        })
-        .or_else(|| placements.first());
-
-    let Some(pl) = matched else {
-        return Ok(json!({
-            "ok": true,
-            "matched": false,
-            "studio_seconds": studio_sec,
-            "local_seconds": studio_sec,
-            "local_frame": (studio_sec * 24.0).round() as u32,
-        }));
-    };
-
-    let st = pl["studio_start_sec"].as_f64().unwrap_or(0.0);
-    let dur = pl["duration"].as_f64().unwrap_or(3.0).max(0.1);
-    let fps = pl["fps"].as_f64().unwrap_or(24.0).max(1.0);
-    let mode = SymbolLoopMode::parse(pl["loop_mode"].as_str().unwrap_or("loop"));
-    let first_frame = pl["first_frame"].as_u64().and_then(|n| u32::try_from(n).ok()).unwrap_or(0);
-    let clip_frames = ((dur * fps).round() as u32).max(1);
-    let elapsed_sec = (studio_sec - st).max(0.0);
-    let elapsed_frames = (elapsed_sec * fps).floor() as u32;
-    let local_frame = evaluate_symbol_frame(mode, first_frame, clip_frames, elapsed_frames);
-    let local_seconds = f64::from(local_frame) / fps;
-
     Ok(json!({
         "ok": true,
-        "matched": true,
+        "matched": false,
         "studio_seconds": studio_sec,
-        "character": pl["character"],
-        "action": pl["action"],
-        "ecproj": pl["ecproj"],
-        "comp": pl["comp"],
-        "render_mov": pl["render_mov"],
-        "loop_mode": mode.as_str(),
-        "local_frame": local_frame,
-        "local_seconds": local_seconds,
+        "local_seconds": studio_sec,
+        "local_frame": (studio_sec * 24.0).round() as u32,
     }))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{SymbolLoopMode, evaluate_symbol_frame};
-
-    #[test]
-    fn graphic_symbol_loop_modes_evaluate_deterministically() {
-        assert_eq!(evaluate_symbol_frame(SymbolLoopMode::Loop, 0, 24, 26), 2);
-        assert_eq!(evaluate_symbol_frame(SymbolLoopMode::PlayOnce, 0, 24, 99), 23);
-        assert_eq!(evaluate_symbol_frame(SymbolLoopMode::SingleFrame, 7, 24, 99), 7);
-    }
 }

@@ -230,7 +230,7 @@ pub fn paint_cubic_bezier(painter: &egui::Painter, pts: [Pos2; 4], stroke: Strok
     painter.add(Shape::line(samples, stroke));
 }
 
-/// Paint real SVG `d` path coordinates read from an authored `motion/svg/*.svg` or `motion/actions.json` cue.
+/// Paint real SVG `d` path coordinates read from an authored `motion/svg/*.svg` or `Project.motion` cue.
 pub fn paint_svg_path_preview(ui: &mut Ui, rect: Rect, svg_d: &str, stroke: Stroke, handle_accent: Option<Color32>) {
     let parsed = parse_svg_coords(svg_d);
     if parsed.len() < 2 {

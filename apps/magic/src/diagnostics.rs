@@ -2,8 +2,6 @@
 //! `storytold/craft-ai-integrations`, project
 //! cache refresh, and safe HTTPS opener.
 
-use std::path::PathBuf;
-
 use magic_engine::Session;
 use magic_ui_egui::{AccentChoice, InterfaceStyle, ThemeMode, UiShellState};
 use serde_json::{Value, json};
@@ -91,13 +89,6 @@ pub fn hydrate_prefs_and_ai(session: &mut Session, ui_state: &mut UiShellState) 
         if let Some(as_min) = p.pointer("/autosave/interval_minutes").and_then(Value::as_f64) {
             ui_state.autosave_minutes = as_min.clamp(1.0, 60.0);
         }
-        if let Some(fdirs) = p.pointer("/lyrics/font_dirs").and_then(Value::as_str) {
-            ui_state.lyrics.font_dir_extra = fdirs.to_owned();
-            apply_app_font_dirs(fdirs);
-        }
-        if let Some(fp_url) = p.pointer("/fonts/preview_service_url").and_then(Value::as_str).filter(|u| !u.trim().is_empty()) {
-            ui_state.font_preview_url = fp_url.to_owned();
-        }
     }
     if let Ok(ai) = session.execute("ai.status", json!({})) {
         sync_ai_ui_from_status(ui_state, &ai);
@@ -108,30 +99,6 @@ pub fn hydrate_prefs_and_ai(session: &mut Session, ui_state: &mut UiShellState) 
 pub fn sync_ai_ui_from_status(ui_state: &mut UiShellState, ai: &Value) {
     if let Some(en) = ai.get("enabled").and_then(Value::as_bool) {
         ui_state.ai.enabled = en;
-    }
-    if let Some(fe) = ai.pointer("/fidget/enabled").and_then(Value::as_bool) {
-        ui_state.ai.fidget_enabled = fe;
-    }
-    if let Some(fs) = ai.pointer("/fidget/seamless").and_then(Value::as_bool) {
-        ui_state.ai.fidget_seamless = fs;
-    }
-    if let Some(fc) = ai.pointer("/fidget/connection").and_then(Value::as_str) {
-        ui_state.ai.fidget_connection = fc.to_owned();
-    }
-    if let Some(fm) = ai.pointer("/fidget/model").and_then(Value::as_str) {
-        ui_state.ai.fidget_model = fm.to_owned();
-    }
-    if let Some(se) = ai.pointer("/scribbles/enabled").and_then(Value::as_bool) {
-        ui_state.ai.scribbles_enabled = se;
-    }
-    if let Some(sc) = ai.pointer("/scribbles/connection").and_then(Value::as_str) {
-        ui_state.ai.scribbles_connection = sc.to_owned();
-    }
-    if let Some(sm) = ai.pointer("/scribbles/model").and_then(Value::as_str) {
-        ui_state.ai.scribbles_model = sm.to_owned();
-    }
-    if let Some(tpl) = ai.pointer("/scribbles/template").and_then(Value::as_str) {
-        ui_state.ai.scribbles_template = tpl.to_owned();
     }
 }
 
@@ -243,10 +210,4 @@ pub fn open_https_url(ctx: &egui::Context, url: &str) {
     if (trimmed.starts_with("https://") || trimmed.starts_with("http://")) && !trimmed.chars().any(char::is_control) {
         ctx.open_url(egui::OpenUrl::new_tab(trimmed));
     }
-}
-
-pub fn apply_app_font_dirs(raw: &str) {
-    let dirs: Vec<PathBuf> = std::env::split_paths(raw).filter(|p| !p.as_os_str().is_empty()).collect();
-    craft_font_catalog::Catalog::global().set_app_dirs(dirs);
-    craft_font_catalog::Catalog::global().rescan_if_changed();
 }

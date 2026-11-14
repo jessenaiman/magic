@@ -285,17 +285,6 @@ fn draw_roster_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             {
                 ctx.exec("video.link_effectcraft", json!({"project": ec_path, "track": "V2"}), Some("Linked character .ecproj onto FilmCraft V2"));
             }
-            if action_button(
-                ui,
-                ctx.reg,
-                ctx.pal,
-                BtnSpec::icon_only("anim-scribbles-open", "sparkles", "Open Fidget & Scribbles character/sheet stager")
-                    .selected(ctx.state.docking.is_panel_visible(PanelId::Fidget)),
-            )
-            .clicked()
-            {
-                ctx.state.docking.set_panel_visible(PanelId::Fidget, true);
-            }
         });
     });
     ctx.reg.record("anim-roster-bar", "Character Roster", &roster_bar.response, None);

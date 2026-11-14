@@ -1,7 +1,6 @@
 //! `app.doctor` (`magic-cli app doctor`): verify host Craft applications (`DesignCraft`,
 //! `PhotoCraft`, `VectorCraft`, `EffectCraft`, `FilmCraft` via live `--control` API or `<app>-cli`),
-//! `storytold/craft-ai-integrations` SharedStore health, `storytold/craft-extensions` store status,
-//! and `craft-settings` configuration.
+//! `craft-ai-core` configuration, and `craft-settings` health.
 
 use serde_json::{Value, json};
 
@@ -65,20 +64,7 @@ fn checks(s: &Session) -> Vec<Check> {
     let ai = crate::craft_ai::craft_ai_status();
     let ai_enabled = ai["enabled"].as_bool().unwrap_or(false);
     let conn_count = ai["connections"].as_array().map_or(0, Vec::len);
-    out.push(Check::ok(
-        "ai:craft-ai-integrations",
-        format!("ai.enabled={ai_enabled}, {conn_count} SharedStore connection(s) configured via storytold/craft-ai-integrations"),
-    ));
-
-    let ext = crate::extensions::extensions_status();
-    out.push(Check::ok(
-        "extensions:craft-extensions",
-        format!(
-            "store_exists={}, installed_packages={} (third-party disabled)",
-            ext["exists"].as_bool().unwrap_or(false),
-            ext["installed_packages"].as_u64().unwrap_or(0)
-        ),
-    ));
+    out.push(Check::ok("ai:craft-ai-core", format!("ai.enabled={ai_enabled}, {conn_count} connection(s) configured via craft-ai-core")));
 
     let settings_report = s.settings.report_json();
     if settings_report["has_problems"].as_bool() == Some(true) || settings_report["read_only"].as_bool() == Some(true) {

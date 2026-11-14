@@ -4,7 +4,6 @@
 //! host machine's running Craft applications via `--control` or `<app>-cli`,
 //! while local thumbnail/cell cropping and `craft-doc` preview extraction keep project UI cards fast.
 
-use std::fmt::Write as _;
 use std::io::Cursor;
 use std::path::Path;
 
@@ -50,8 +49,8 @@ pub fn load_rgba(input: &Path) -> Result<RgbaImage> {
         && craft_doc::sniff(&bytes).is_some()
     {
         let limits = Limits::default();
-        if let Ok(rend) = craft_doc::rendition(&bytes, RenditionKind::Composite, &limits)
-            .or_else(|_| craft_doc::rendition(&bytes, RenditionKind::Thumbnail, &limits))
+        if let Ok(rend) =
+            craft_doc::rendition(&bytes, RenditionKind::Composite, &limits).or_else(|_| craft_doc::rendition(&bytes, RenditionKind::Thumbnail, &limits))
             && let Ok(img) = image::load_from_memory(&rend.bytes)
         {
             return Ok(img.to_rgba8());
@@ -75,50 +74,12 @@ fn try_photocraft_isolate(input: &Path, output: &Path) -> bool {
     let Some(out_s) = output.to_str() else {
         return false;
     };
-    crate::workspace::run_cli(
-        "photocraft-cli",
-        &["run", in_s, "--cmd", "layer.removeBackground", "--params", "{}", "--out", out_s],
-        None,
-    )
-    .is_ok()
+    crate::workspace::run_cli("photocraft-cli", &["run", in_s, "--cmd", "layer.removeBackground", "--params", "{}", "--out", out_s], None).is_ok()
         && output.is_file()
 }
 
-pub fn isolate_rgba_in_memory(rgba: &mut RgbaImage, chroma_hex: Option<&str>, feather_px: f64) {
-    let key_rgb = chroma_hex
-        .and_then(|hex| {
-            let clean = hex.trim().trim_start_matches('#');
-            (clean.len() == 6).then(|| {
-                Some([u8::from_str_radix(&clean[0..2], 16).ok()?, u8::from_str_radix(&clean[2..4], 16).ok()?, u8::from_str_radix(&clean[4..6], 16).ok()?])
-            })?
-        })
-        .unwrap_or_else(|| {
-            let p = rgba.get_pixel(0, 0);
-            [p[0], p[1], p[2]]
-        });
-    let low_thresh = 26.0_f64;
-    let high_thresh = (low_thresh + feather_px.clamp(0.2, 16.0) * 18.0).max(low_thresh + 4.0);
-    for px in rgba.pixels_mut() {
-        if px[3] == 0 {
-            continue;
-        }
-        let dr = f64::from(px[0]) - f64::from(key_rgb[0]);
-        let dg = f64::from(px[1]) - f64::from(key_rgb[1]);
-        let db = f64::from(px[2]) - f64::from(key_rgb[2]);
-        let dist = (dr * dr + dg * dg + db * db).sqrt();
-        if dist <= low_thresh {
-            px[3] = 0;
-        } else if dist < high_thresh {
-            let t = ((dist - low_thresh) / (high_thresh - low_thresh)).clamp(0.0, 1.0);
-            px[3] = (f64::from(px[3]) * t).round() as u8;
-        }
-    }
-}
-
-/// Isolate a subject to transparent RGBA via host `PhotoCraft` (`photocraft --control 7878` or
-/// `photocraft-cli` `layer.removeBackground`), falling back to chroma/corner keying only when
-/// generating offline preview thumbnails before `PhotoCraft` saves back.
-pub fn isolate_subject_rgba(input: &Path, output: &Path, chroma_hex: Option<&str>, feather_px: f64) -> Result<Value> {
+/// Isolate a subject to transparent RGBA via host `PhotoCraft` (`photocraft --control` or `photocraft-cli`).
+pub fn isolate_subject_rgba(input: &Path, output: &Path, _chroma_hex: Option<&str>, _feather_px: f64) -> Result<Value> {
     if input == output {
         return Err(bad(format!("refusing to overwrite source image {}", input.display())));
     }
@@ -138,21 +99,7 @@ pub fn isolate_subject_rgba(input: &Path, output: &Path, chroma_hex: Option<&str
         }));
     }
 
-    let mut rgba = load_rgba(input)?;
-    let (w, h) = rgba.dimensions();
-    if w == 0 || h == 0 {
-        return Err(bad("empty image dimensions"));
-    }
-    isolate_rgba_in_memory(&mut rgba, chroma_hex, feather_px);
-    encode_png_atomic(&rgba, output)?;
-    Ok(json!({
-        "ok": true,
-        "input": input,
-        "output": output,
-        "width": w,
-        "height": h,
-        "engine": "preview-keyer",
-    }))
+    Err(EngineError::ExternalTool("photocraft".into(), "PhotoCraft subject isolation unavailable or failed".into()))
 }
 
 fn try_vectorcraft_trace(input: &Path, output: &Path) -> bool {
@@ -195,80 +142,15 @@ fn try_photocraft_split_layers(src: &Path, layers_dir: &Path) -> bool {
     )
     .is_ok()
 }
-fn scan_alpha_contour(rgba: &image::RgbaImage, step: u32) -> (Vec<(u32, u32)>, Vec<(u32, u32)>) {
-    let (w, h) = rgba.dimensions();
-    let mut left_pts = Vec::new();
-    let mut right_pts = Vec::new();
-    let mut y = 0;
-    while y < h {
-        let first_opaque = (0..w).find(|&x| rgba.get_pixel(x, y)[3] > 24);
-        let last_opaque = (0..w).rev().find(|&x| rgba.get_pixel(x, y)[3] > 24);
-        if let (Some(lx), Some(rx)) = (first_opaque, last_opaque) {
-            left_pts.push((lx, y));
-            right_pts.push((rx + 1, y));
-        }
-        y = y.saturating_add(step);
-    }
-    (left_pts, right_pts)
-}
-
-fn contour_svg_path_data(w: u32, h: u32, left_pts: &[(u32, u32)], right_pts: &[(u32, u32)]) -> String {
-    let mut d = String::new();
-    if left_pts.is_empty() {
-        let _ = write!(d, "M 0 0 L {w} 0 L {w} {h} L 0 {h} Z");
-        return d;
-    }
-    for (idx, (x, py)) in left_pts.iter().enumerate() {
-        let cmd = if idx == 0 { 'M' } else { 'L' };
-        let _ = write!(d, "{cmd} {x} {py} ");
-    }
-    for (x, py) in right_pts.iter().rev() {
-        let _ = write!(d, "L {x} {py} ");
-    }
-    d.push('Z');
-    d
-}
-
-pub fn trace_silhouette_svg(input: &Path, output: &Path, simplify_px: f64, strokes: bool) -> Result<(Value, Vec<[f64; 2]>)> {
+pub fn trace_silhouette_svg(input: &Path, output: &Path, _simplify_px: f64, _strokes: bool) -> Result<(Value, Vec<[f64; 2]>)> {
     if let Some(parent) = output.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let rgba = load_rgba(input)?;
-    let (w, h) = rgba.dimensions();
-    if w == 0 || h == 0 {
-        return Err(bad("empty image dimensions"));
-    }
-    let step = (simplify_px.round() as u32).clamp(1, 8);
-    let (left_pts, right_pts) = scan_alpha_contour(&rgba, step);
-    let (cx, cy) = (f64::from(w) * 0.5, f64::from(h) * 0.5);
-    let centered: Vec<[f64; 2]> = if left_pts.is_empty() {
-        vec![[-cx, -cy], [cx, -cy], [cx, cy], [-cx, cy]]
-    } else {
-        left_pts.iter().chain(right_pts.iter().rev()).map(|&(x, py)| [f64::from(x) - cx, f64::from(py) - cy]).collect()
-    };
-
     if try_vectorcraft_trace(input, output) {
-        return Ok((json!({ "ok": true, "input": input, "output": output, "width": w, "height": h, "engine": "vectorcraft" }), centered));
+        let (w, h, _) = magic_util::media::fast_dimensions(input).unwrap_or((0, 0, true));
+        return Ok((json!({ "ok": true, "input": input, "output": output, "width": w, "height": h, "engine": "vectorcraft" }), Vec::new()));
     }
-
-    let d = contour_svg_path_data(w, h, &left_pts, &right_pts);
-    let attr = if strokes { "fill=\"none\" stroke=\"#111827\" stroke-width=\"2\"" } else { "fill=\"#111827\"" };
-    let svg = format!(
-        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 {w} {h}\" width=\"{w}\" height=\"{h}\">\n  <path d=\"{}\" {attr}/>\n</svg>\n",
-        d.trim()
-    );
-    craft_atomic::atomic_write(output, svg.as_bytes())?;
-    Ok((
-        json!({
-            "ok": true,
-            "input": input,
-            "output": output,
-            "width": w,
-            "height": h,
-            "engine": "contour-outline",
-        }),
-        centered,
-    ))
+    Err(EngineError::ExternalTool("vectorcraft".into(), "VectorCraft silhouette trace unavailable or failed".into()))
 }
 
 pub fn crop_and_anchor_cell(rgba: &RgbaImage, cell: [u32; 4], trim_alpha: bool, out: &Path) -> Result<[f64; 2]> {
@@ -305,53 +187,22 @@ pub fn crop_and_anchor_cell(rgba: &RgbaImage, cell: [u32; 4], trim_alpha: bool, 
     Ok([f64::from(tw) * 0.5, f64::from(th) * 0.5])
 }
 
-/// Separate a character `parts-sheet.png` via host `PhotoCraft` (`layer.maskAllObjects` +
-/// `file.export.layersToFiles`) or 3x2 grid slicing into `<view_dir>/layers/` + `parts.json`.
+/// Separate a character `parts-sheet.png` via host `PhotoCraft`.
 pub fn split_parts_sheet(sheet: &Path, view_dir: &Path, char_id: &str, view: &str, chroma: Option<&str>) -> Result<Value> {
     let layers_dir = view_dir.join("layers");
     std::fs::create_dir_all(&layers_dir)?;
     let isolated = view_dir.join(format!("{char_id}-{view}-sheet-isolated.png"));
     let src_for_cells = if isolate_subject_rgba(sheet, &isolated, chroma, 1.0).is_ok() && isolated.is_file() { isolated } else { sheet.to_path_buf() };
 
-    let _ = simplify_px;
-    let used_photocraft = try_photocraft_split_layers(&src_for_cells, &layers_dir);
-
-    let rgba = load_rgba(&src_for_cells)?;
-    let (w, h) = rgba.dimensions();
-    let cols = 3_u32;
-    let rows = 2_u32;
-    let cw = (w / cols).max(1);
-    let ch = (h / rows).max(1);
-    let default_parts = ["torso", "head", "arm_l", "arm_r", "leg_l", "leg_r"];
-    let mut part_entries = Vec::new();
-    for (idx, part_id) in default_parts.iter().enumerate() {
-        let c = (idx as u32) % cols;
-        let r = (idx as u32) / cols;
-        let out_png = layers_dir.join(format!("{part_id}.png"));
-        let anchor = crop_and_anchor_cell(&rgba, [c * cw, r * ch, cw, ch], true, &out_png)?;
-        part_entries.push(json!({
-            "id": part_id,
-            "parent": if *part_id == "torso" { Value::Null } else { json!("torso") },
-            "source": out_png,
-            "pivot": anchor,
-        }));
+    if !try_photocraft_split_layers(&src_for_cells, &layers_dir) {
+        return Err(EngineError::ExternalTool("photocraft".into(), "PhotoCraft parts separation unavailable or failed".into()));
     }
-    let parts_doc = json!({
-        "character": char_id,
-        "view": view,
-        "image": src_for_cells.file_name().and_then(|n| n.to_str()).unwrap_or("parts-sheet.png"),
-        "parts": part_entries,
-    });
-    let parts_json_path = view_dir.join("parts.json");
-    craft_atomic::atomic_write(&parts_json_path, serde_json::to_string_pretty(&parts_doc).unwrap_or_default().as_bytes())?;
     Ok(json!({
         "ok": true,
         "character": char_id,
         "view": view,
-        "parts_json": parts_json_path,
         "layers_dir": layers_dir,
-        "count": default_parts.len(),
-        "engine": if used_photocraft { "photocraft" } else { "grid-slicer" },
+        "engine": "photocraft",
     }))
 }
 

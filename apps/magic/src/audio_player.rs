@@ -293,7 +293,7 @@ pub(crate) fn dispatch_picker_answer(app: &mut MagicDesktopApp, ctx: &egui::Cont
                         let _ = app.execute_engine(ctx, "project.add_asset", json!({"path": path_str, "kind": "image"}));
                     }
                 }
-                PickerTarget::ImportTrunkFile => {
+                PickerTarget::ImportCraftFile => {
                     if matches!(ext.as_str(), "ecproj" | "pcraft" | "psd" | "vectorcraft") {
                         let _ = app.execute_engine(ctx, "character.import", json!({"path": path_str}));
                     } else {
@@ -317,13 +317,6 @@ pub(crate) fn dispatch_picker_answer(app: &mut MagicDesktopApp, ctx: &egui::Cont
                 PickerTarget::ImportFcgt => {
                     let _ = app.execute_engine(ctx, "project.import_file", json!({"path": path_str}));
                     app.ui_state.set_toast(now, "Installed native graphic template");
-                }
-                PickerTarget::ImportFontDir => {
-                    app.ui_state.lyrics.font_dir_extra = path_str.clone();
-                    diagnostics::apply_app_font_dirs(&path_str);
-                    magic_ui_egui::fonts_ui::refresh_available_fonts(&mut app.ui_state);
-                    let _ = app.execute_engine(ctx, "prefs.set", json!({"key": "lyrics.font_dirs", "value": path_str}));
-                    app.ui_state.set_toast(now, "Saved EFFECTCRAFT_FONT_DIRS folder");
                 }
                 PickerTarget::ImportWasmPlugin => {
                     let _ = app.execute_engine(ctx, "project.import_file", json!({"path": path_str}));

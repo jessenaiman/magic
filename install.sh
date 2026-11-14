@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Magic Studio installer (`magic`, `magic-cli`, `magic-tui`, desktop launcher, icon, and `.magic` MIME type).
+# Magic Studio installer (`magic`, `magic-cli`, desktop launcher, icon, and `.magic` MIME type).
 #
 # Usage:
 #   ./install.sh                              # Install release binaries or build from source into ~/.local
-#   ./install.sh --from-source                # Build pure-Rust `magic`, `magic-cli`, and `magic-tui` via Cargo
+#   ./install.sh --from-source                # Update Craft dependencies and build pure-Rust `magic` and `magic-cli` via Cargo
 #   sudo ./install.sh --prefix /usr/local     # System-wide installation
 #   ./install.sh --uninstall                  # Cleanly remove installed binaries, desktop entry, and MIME registration
 
@@ -84,15 +84,15 @@ resolve_bin() {
 }
 
 if [[ "$FROM_SOURCE" -eq 1 ]] || ! resolve_bin "magic-cli" >/dev/null; then
-  echo "Building Magic Studio pure-Rust workspace (magic, magic-cli, magic-tui)..."
-  (cd "$SCRIPT_DIR" && cargo build --release --locked -p magic-cli -p magic -p magic-tui)
+  echo "Updating workspace dependencies and building Magic Studio pure-Rust binaries (magic, magic-cli)..."
+  (cd "$SCRIPT_DIR" && cargo update && cargo build --release -p magic-cli -p magic)
 fi
 
 mkdir -p "$BIN_DIR" "$APPS_DIR" "$MIME_DIR" "$ICON_DIR"
-# Remove legacy standalone magic-mcp binary if left over from an older install
-rm -f "$BIN_DIR/magic-mcp"
+# Remove legacy standalone magic-mcp / magic-tui binaries if left over from an older install
+rm -f "$BIN_DIR/magic-mcp" "$BIN_DIR/magic-tui"
 
-for bin_name in magic-cli magic magic-tui; do
+for bin_name in magic-cli magic; do
   if src_bin="$(resolve_bin "$bin_name")"; then
     install -m 0755 "$src_bin" "$BIN_DIR/$bin_name"
     echo "Installed $BIN_DIR/$bin_name"
@@ -122,5 +122,4 @@ echo "Magic Studio installed to $PREFIX"
 echo "  Headless MCP:       claude mcp add magic -- $BIN_DIR/magic-cli mcp"
 echo "  Live Studio + MCP:  $BIN_DIR/magic --control 9875"
 echo "                      claude mcp add magic-app -- $BIN_DIR/magic-cli mcp --connect 9875"
-echo "  Backstage TUI:      $BIN_DIR/magic-tui --connect 127.0.0.1:9875"
 echo "  Suite Diagnostics:  $BIN_DIR/magic-cli exec app.doctor"

@@ -42,7 +42,8 @@ pub fn draw_font_shaping_strip(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         ctx.actions,
     ) {
         ctx.state.dirty_drafts.insert("lyrics".into());
-        ctx.exec("project.autosave", json!({}), Some("Updated lyric font family"));
+        let now = ui.input(|i| i.time);
+        ctx.state.set_toast(now, "Updated lyric font family");
     }
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 3.5;
@@ -51,18 +52,8 @@ pub fn draw_font_shaping_strip(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         {
             craft_font_catalog::Catalog::global().rescan();
             crate::fonts_ui::refresh_available_fonts(ctx.state);
-            ctx.exec("project.autosave", json!({}), Some("Rescanned system & Craft Font Store families"));
-        }
-        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("words-font-dir", "+ Folder", "Add folder to Catalog::set_app_dirs (EFFECTCRAFT_FONT_DIRS)"))
-            .clicked()
-        {
-            ctx.push(UiAction::PickFile {
-                target: PickerTarget::ImportFontDir,
-                title: "Select Custom Font Directory (EFFECTCRAFT_FONT_DIRS)".into(),
-                extensions: Vec::new(),
-                directory: true,
-                save: false,
-            });
+            let now = ui.input(|i| i.time);
+            ctx.state.set_toast(now, "Rescanned system & Craft Font Store families");
         }
     });
     ui.horizontal_wrapped(|ui| {
@@ -134,19 +125,11 @@ pub fn draw_craft_typography_effects_browser(ui: &mut Ui, ctx: &mut ViewCtx<'_>,
             ui,
             ctx.reg,
             ctx.pal,
-            BtnSpec::label_only(
-                &format!("{id_prefix}-live-save"),
-                "Open in EffectCraft",
-                "Open effects/lyrics.ecproj in EffectCraft",
-            ),
+            BtnSpec::label_only(&format!("{id_prefix}-live-save"), "Open in EffectCraft", "Open effects/lyrics.ecproj in EffectCraft"),
         )
         .clicked()
         {
-            ctx.exec(
-                "workspace.open",
-                json!({"app": "effectcraft", "domain": "lyrics"}),
-                Some("Opened effects/lyrics.ecproj in EffectCraft"),
-            );
+            ctx.exec("workspace.open", json!({"app": "effectcraft", "domain": "lyrics"}), Some("Opened effects/lyrics.ecproj in EffectCraft"));
         }
     });
 
@@ -346,7 +329,8 @@ fn draw_styles_and_3d_extrude_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             let sel = ctx.state.lyrics.layer_style_kind == skind;
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, lbl, "Toggle layer.layerStyle").selected(sel)).clicked() {
                 ctx.state.lyrics.layer_style_kind = skind.into();
-                ctx.exec("project.autosave", json!({}), Some("Applied Layer Style"));
+                let now = ui.input(|i| i.time);
+                ctx.state.set_toast(now, "Applied Layer Style");
             }
         }
     });
@@ -403,7 +387,8 @@ fn draw_styles_and_3d_extrude_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         )
         .clicked()
         {
-            ctx.exec("project.autosave", json!({}), Some("Applied 3D text extrusion & bevel"));
+            let now = ui.input(|i| i.time);
+            ctx.state.set_toast(now, "Applied 3D text extrusion & bevel");
         }
     });
 }
@@ -529,7 +514,8 @@ fn draw_range_and_curves_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) -> Option<Pos2>
     )
     .clicked()
     {
-        ctx.exec("project.autosave", json!({}), Some("Added Text Range Animator to lyrics.ecproj"));
+        let now = ui.input(|i| i.time);
+        ctx.state.set_toast(now, "Added Text Range Animator to lyrics.ecproj");
     }
 
     ui.separator();
@@ -573,7 +559,8 @@ fn draw_range_and_curves_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) -> Option<Pos2>
     )
     .clicked()
     {
-        ctx.exec("project.autosave", json!({}), Some("Applied Variable Font axes & OpenType shaping"));
+        let now = ui.input(|i| i.time);
+        ctx.state.set_toast(now, "Applied Variable Font axes & OpenType shaping");
     }
 
     ui.separator();
@@ -607,7 +594,8 @@ fn draw_range_and_curves_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) -> Option<Pos2>
         }
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("words-expr-whip", "@ Pick-Whip", "Bind lyric property via EffectCraft Pick-Whip")).clicked()
         {
-            ctx.exec("project.autosave", json!({}), Some("Bound lyric property via Pick-Whip"));
+            let now = ui.input(|i| i.time);
+            ctx.state.set_toast(now, "Bound lyric property via Pick-Whip");
         }
         if action_button(
             ui,
@@ -617,7 +605,8 @@ fn draw_range_and_curves_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) -> Option<Pos2>
         )
         .clicked()
         {
-            ctx.exec("project.autosave", json!({}), Some("Applied procedural motion curve to lyric layer"));
+            let now = ui.input(|i| i.time);
+            ctx.state.set_toast(now, "Applied procedural motion curve to lyric layer");
         }
     });
 
@@ -667,7 +656,8 @@ pub fn draw_captions_and_template_strip(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             }
             text_input(ui, ctx.reg, "words-tpl-name", "Template Name", &mut ctx.state.lyrics.template_name, "chorus-lower-third", 118.0);
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("words-export-ectpl", "Export .ectemplate", "Package Essential Graphics .ectemplate (T06)")).clicked() {
-                ctx.exec("project.autosave", json!({}), Some("Exported .ectemplate Essential Graphics package"));
+                let now = ui.input(|i| i.time);
+                ctx.state.set_toast(now, "Exported .ectemplate Essential Graphics package");
             }
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("words-import-fcgt", "+ .fcgt", "Import FilmCraft Graphic Template (T06)")).clicked() {
                 ctx.push(UiAction::PickFile {

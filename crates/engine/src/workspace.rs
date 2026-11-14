@@ -376,11 +376,7 @@ pub fn run_cli_json<S: AsRef<str>>(cli_name: &str, args: &[S], stdin_text: Optio
     if out.is_empty() {
         return Ok(json!({"ok": true}));
     }
-    serde_json::from_str(&out)
-        .or_else(|_| {
-            out.lines()
-                .rev()
-                .find(|l| !l.trim().is_empty())
-                .map_or(Ok(json!({"raw": out})), |last| serde_json::from_str(last).or_else(|_| Ok(json!({"raw": out}))))
-        })
+    serde_json::from_str(&out).or_else(|_| {
+        out.lines().rev().find(|l| !l.trim().is_empty()).map_or(Ok(json!({"raw": out})), |last| serde_json::from_str(last).or_else(|_| Ok(json!({"raw": out}))))
+    })
 }

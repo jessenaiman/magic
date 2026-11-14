@@ -1,6 +1,6 @@
 //! `character.puppet.*`: Native `EffectCraft` Puppet Controls (`puppet.addPin`, `puppet.movePin`,
 //! `puppet.recordPin`, `puppet.follow`) for facial expressions, lip-sync mouth movements synced to
-//! `timing-reference.json`, cranium/eye `starch` stabilization, `overlap` depth pins, and secondary
+//! project timed words, cranium/eye `starch` stabilization, `overlap` depth pins, and secondary
 //! ear/hair/tail follow-through (`https://github.com/storytold/effectcraft`).
 
 use std::fs;
@@ -229,43 +229,12 @@ fn word_viseme_shape(word: &str) -> (f64, f64, f64) {
     }
 }
 
-fn load_timed_words_for_lipsync(project_dir: &Path, start: f64, end: Option<f64>) -> Vec<(String, f64, f64)> {
-    let mut out = Vec::new();
-    let tref_path = project_dir.join("timing-reference.json");
-    if let Ok(bytes) = fs::read(&tref_path)
-        && let Ok(doc) = serde_json::from_slice::<Value>(&bytes)
-        && let Some(words) = doc["words"].as_array()
-    {
-        for w in words {
-            let text = w["text"].as_str().unwrap_or_default().trim();
-            let ws = w["start_sec"].as_f64().or_else(|| w.get("start_tick").and_then(parse_tick).map(Tick::seconds)).unwrap_or(0.0);
-            let we = w["end_sec"].as_f64().or_else(|| w.get("end_tick").and_then(parse_tick).map(Tick::seconds)).unwrap_or(ws + 0.25);
-            if !text.is_empty() && we >= start && end.is_none_or(|max_e| ws <= max_e) {
-                out.push((text.to_string(), ws.max(0.0), we.max(ws + 0.08)));
-            }
-        }
-        return out;
-    }
-    if let Some(t_file) = crate::workshop::transcript_files(project_dir).into_iter().next()
-        && let Ok(bytes) = fs::read(t_file)
-        && let Ok(doc) = serde_json::from_slice::<Value>(&bytes)
-    {
-        let arr = doc.as_array().or_else(|| doc["words"].as_array());
-        for w in arr.into_iter().flatten() {
-            let text = w["text"].as_str().unwrap_or_default().trim();
-            let ws = w.get("start_tick").or_else(|| w.get("start")).and_then(parse_tick).unwrap_or(Tick::ZERO).seconds();
-            let we = w.get("end_tick").or_else(|| w.get("end")).and_then(parse_tick).unwrap_or(Tick(TICKS_PER_SECOND / 4)).seconds();
-            if !text.is_empty() && we >= start && end.is_none_or(|max_e| ws <= max_e) {
-                out.push((text.to_string(), ws.max(0.0), we.max(ws + 0.08)));
-            }
-        }
-    }
-    out
+fn load_timed_words_for_lipsync(_project_dir: &Path, _start: f64, _end: Option<f64>) -> Vec<(String, f64, f64)> {
+    Vec::new()
 }
 
 /// `character.puppet.lipsync`: animate `jaw_lower`, `lip_upper`, `mouth_L`, and `mouth_R` Puppet Pins
-/// across sung words from `timing-reference.json` so the character performs natural vowel/consonant
-/// mouth movements in `EffectCraft`.
+/// across sung words so the character performs natural vowel/consonant mouth movements in `EffectCraft`.
 pub fn cmd_puppet_lipsync(s: &mut Session, p: &Value) -> Result<Value> {
     let project_dir = crate::workshop::project_dir(s)?;
     let (view, project, parts) = ensure_face_rig(s, p)?;
@@ -287,7 +256,7 @@ pub fn cmd_puppet_lipsync(s: &mut Session, p: &Value) -> Result<Value> {
         load_timed_words_for_lipsync(&project_dir, start, end)
     };
     if words.is_empty() {
-        return Err(bad("No timed words in timing-reference.json for lip-sync; transcribe or import lyrics first"));
+        return Err(bad("No timed words in project transcript for lip-sync; transcribe or import lyrics first"));
     }
 
     let face = &parts["face_puppet"];

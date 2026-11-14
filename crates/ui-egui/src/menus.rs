@@ -236,7 +236,7 @@ pub fn translate_menu_command(cmd: &CommandRef, state: &mut UiShellState) -> Opt
             save: true,
         }),
         "project.import_file" => Some(UiAction::PickFile {
-            target: PickerTarget::ImportTrunkFile,
+            target: PickerTarget::ImportCraftFile,
             title: "Import Media or Asset".into(),
             extensions: Vec::new(),
             directory: false,

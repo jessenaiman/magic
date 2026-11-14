@@ -282,9 +282,6 @@ fn draw_film_scenes_rail(ui: &mut Ui, ctx: &mut ViewCtx<'_>, scenes: &[StudioSce
                 ctx.state.studio.proxies_enabled = !prox;
                 ctx.exec("video.finish", json!({"op": "toggle_proxies", "enabled": !prox}), Some("Toggled FilmCraft proxy mode"));
             }
-            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("studio-rail-csv", "CSV", "Export sequence markers CSV (T35)")).clicked() {
-                ctx.exec("video.markers", json!({"action": "export_csv"}), Some("Exported sequence markers CSV"));
-            }
         });
         ui.add_space(4.0);
         ScrollArea::vertical().id_salt("studio_film_scenes_scroll").auto_shrink([false, false]).show(ui, |ui| {
@@ -548,13 +545,6 @@ fn draw_filmcraft_transport_row(ui: &mut Ui, ctx: &mut ViewCtx<'_>, dur: f64) {
 
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("film-razor-split", "razor", "Split clip at playhead (⌘K)")).clicked() {
             ctx.exec("video.finish", json!({"op": "razor", "seconds": ctx.state.studio.seek_seconds}), Some("Split clip at playhead"));
-        }
-        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("film-add-marker", "pin", "Add timeline marker (M)")).clicked() {
-            ctx.exec(
-                "video.markers",
-                json!({"action": "add", "seconds": ctx.state.studio.seek_seconds, "name": "Studio Cue"}),
-                Some("Added sequence marker at playhead"),
-            );
         }
     });
 }

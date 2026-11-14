@@ -305,17 +305,9 @@ impl MagicDesktopApp {
             }
             "video.list_ec_comps" => self.ui_state.cache.ec_comps = result.clone(),
             "app.doctor" => self.ui_state.cache.doctor = result.clone(),
-            "ai.status" | "ai.configure" | "scribbles.connect" => {
+            "ai.status" | "ai.configure" => {
                 diagnostics::sync_ai_ui_from_status(&mut self.ui_state, result);
                 self.ui_state.cache.ai_status = result.clone();
-            }
-            "fidget.prepare" | "fidget.stage" => {
-                if let Some(p) = result.get("prompt").or_else(|| result.pointer("/fidget/prompt")).and_then(Value::as_str) {
-                    self.ui_state.ai.staged_prompt = p.to_owned();
-                }
-                if let Some(md) = result.get("markdown").or_else(|| result.pointer("/fidget/markdown")).and_then(Value::as_str) {
-                    self.ui_state.ai.staged_markdown = md.to_owned();
-                }
             }
             _ => {}
         }

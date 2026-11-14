@@ -20,7 +20,7 @@ struct FooterChipSpec<'a> {
     opens_history: bool,
 }
 
-/// Compact `#app-footer` chips for Magic Studio's `.history/` journal and live `--control` status.
+/// Compact `#app-footer` chips for Undo/Auto-Save and live `--control` status.
 pub fn draw_footer_session_pills(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     let has_proj = ctx.state.project_path.is_some();
     let dirty = !ctx.state.dirty_drafts.is_empty() || !ctx.state.dirty_tracks.is_empty();
@@ -32,7 +32,7 @@ pub fn draw_footer_session_pills(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             label: "History",
             ok: has_proj && !dirty,
             ready: has_proj,
-            tooltip: "Toggle Undo & AutoSave Journal panel (.history/)",
+            tooltip: "Toggle Undo & Auto-Save panel",
             opens_history: true,
         },
     );
@@ -82,11 +82,11 @@ fn draw_status_chip(ui: &mut Ui, ctx: &mut ViewCtx<'_>, spec: FooterChipSpec<'_>
 
 /// Options dialog `History & Control` tab.
 pub fn draw_options_history_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
-    ui.label(RichText::new("Undo History, Atomic AutoSave & Live --control (:9875)").size(15.0).strong().color(ctx.pal.accent_emerald));
+    ui.label(RichText::new("Undo History, Atomic Auto-Save & Live --control (:9875)").size(15.0).strong().color(ctx.pal.accent_emerald));
     ui.add_space(4.0);
     ui.label(
         RichText::new(concat!(
-            "Magic Studio journals project changes atomically inside `.history/` via `craft-atomic` ",
+            "Magic Studio saves unified `.magic` projects and rolling `Auto-Save/` + `Recovery/` snapshots via `craft-atomic` ",
             "and listens on `127.0.0.1:9875` (`--control 9875`) for `magic-cli` and `magic-cli mcp --connect 9875`."
         ))
         .size(11.0)
@@ -98,21 +98,11 @@ pub fn draw_options_history_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             ui,
             ctx.reg,
             ctx.pal,
-            BtnSpec::new("opt-open-history", "refresh", "Open Undo & AutoSave Panel", "Show Undo & AutoSave Journal in craft_ui::docking").primary(),
+            BtnSpec::new("opt-open-history", "refresh", "Open Undo & Auto-Save Panel", "Show Undo & Auto-Save panel in craft_ui::docking").primary(),
         )
         .clicked()
         {
             ctx.state.docking.set_panel_visible(PanelId::History, true);
-        }
-        if action_button(
-            ui,
-            ctx.reg,
-            ctx.pal,
-            BtnSpec::new("opt-write-autosave", "save", "Write .autosave Snapshot", "Write crash-recovery .autosave journal now"),
-        )
-        .clicked()
-        {
-            ctx.exec("project.autosave", json!({}), Some("Wrote .history/*.autosave snapshot"));
         }
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("opt-run-doctor", "wand", "Run Suite Doctor", "Inspect installed ArtCraft CLIs and project health"))
             .clicked()
@@ -122,7 +112,7 @@ pub fn draw_options_history_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     });
 }
 
-/// Dockable `Undo & AutoSave Journal` panel body (`PanelId::History`).
+/// Dockable `Undo & Auto-Save` panel body (`PanelId::History`).
 pub fn draw_history_panel_body(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     fill_card(ui, ctx.pal, true, |ui| {
         ui.horizontal_wrapped(|ui| {
@@ -132,22 +122,15 @@ pub fn draw_history_panel_body(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("history-redo", "redo", "Redo", "Redo last undone project command (Ctrl+Shift+Z)")).clicked() {
                 ctx.exec("edit.redo", json!({}), None);
             }
-            if action_button(
-                ui,
-                ctx.reg,
-                ctx.pal,
-                BtnSpec::new("history-autosave", "save", "Snapshot", "Write atomic crash-recovery .autosave journal").primary(),
-            )
-            .clicked()
+            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("history-save", "save", "Save Project", "Save unified .magic project atomically").primary())
+                .clicked()
             {
-                ctx.exec("project.autosave", json!({}), Some("Wrote .history/*.autosave snapshot"));
+                ctx.exec("file.save", json!({}), Some("Saved project"));
             }
         });
         ui.add_space(6.0);
         ui.label(
-            RichText::new("Project edits are journaled atomically inside `.history/` via `craft-atomic`, and converted source folders are archived under `magic/originals/<slug>.zip` via `craft-zip`.")
-                .size(11.0)
-                .color(ctx.pal.text_muted),
+            RichText::new("Project saves and Auto-Save / Recovery snapshots are written atomically via `craft-atomic`.").size(11.0).color(ctx.pal.text_muted),
         );
     });
 }

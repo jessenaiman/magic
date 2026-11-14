@@ -1,7 +1,7 @@
-//! Characters as Craft app documents: Scribbles marks parts, `PhotoCraft` isolates subjects and cuts
-//! layers (`.pcraft` / `.psd`), `VectorCraft` traces silhouettes (`.vectorcraft` / `.svg`), headless
-//! `PhotoCraft` isolates layered cutouts, `VectorCraft` traces clean contours, and `EffectCraft` rigs, puppet-pins,
-//! renders, and publishes `V2` `"Character Animation"` tracks into `FilmCraft` via staged `.ecproj` specs and `storytold/craft-libs`.
+//! Characters as Craft app documents: `PhotoCraft` isolates subjects and cuts
+//! layers (`.pcraft` / `.psd`), `VectorCraft` traces silhouettes (`.vectorcraft` / `.svg`),
+//! and `EffectCraft` rigs, puppet-pins, renders, and publishes `V2` `"Character Animation"` tracks
+//! into `FilmCraft`.
 
 mod action;
 pub(crate) mod cut;
@@ -14,7 +14,6 @@ pub mod mesh_io;
 mod meta;
 pub mod path;
 pub mod puppet;
-pub mod review;
 mod rig;
 mod shot;
 mod sprite;
@@ -461,7 +460,19 @@ pub(crate) fn effectcraft_frame(project: &Path, comp: &str, seconds: f64, max_si
         let out_s = output.to_string_lossy().into_owned();
         let time_s = seconds.to_string();
         let side_s = side.to_string();
-        let mut args = vec!["--project", proj_s.as_str(), "render-frame", "--time", time_s.as_str(), "--max-side", side_s.as_str(), "--transparent", "--out", out_s.as_str(), "--json"];
+        let mut args = vec![
+            "--project",
+            proj_s.as_str(),
+            "render-frame",
+            "--time",
+            time_s.as_str(),
+            "--max-side",
+            side_s.as_str(),
+            "--transparent",
+            "--out",
+            out_s.as_str(),
+            "--json",
+        ];
         if !comp.trim().is_empty() {
             args.extend(["--comp", comp]);
         }
@@ -479,10 +490,7 @@ pub(crate) fn effectcraft_frame(project: &Path, comp: &str, seconds: f64, max_si
 }
 
 pub(crate) fn effectcraft_render(project: &Path, params: Value) -> Result<Value> {
-    let out_str = params["output"]
-        .as_str()
-        .or_else(|| params["path"].as_str())
-        .ok_or_else(|| bad("effectcraft_render requires output path"))?;
+    let out_str = params["output"].as_str().or_else(|| params["path"].as_str()).ok_or_else(|| bad("effectcraft_render requires output path"))?;
     let out_path = Path::new(out_str);
     if let Some(parent) = out_path.parent() {
         std::fs::create_dir_all(parent)?;

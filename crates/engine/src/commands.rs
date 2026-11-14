@@ -54,24 +54,18 @@ pub fn is_read_only_command(id: &str, params: &Value) -> bool {
         }
         "project.attach"
         | "file.list"
-        | "backstage.changes"
-        | "backstage.events"
-        | "app.errors"
-        | "app.extensions"
         | "project.identity"
         | "project.list_assets"
         | "project.snapshot"
         | "project.search"
         | "workshop.status"
         | "workshop.files"
-        | "project.trunk"
+        | "project.files"
         | "storyboard.status"
         | "storyboard.pages"
         | "storyboard.check"
         | "animation.hosts"
         | "animation.locate_from_studio"
-        | "animation.motion_options"
-        | "animation.review"
         | "character.list"
         | "character.actions"
         | "song.lyrics"
@@ -83,16 +77,11 @@ pub fn is_read_only_command(id: &str, params: &Value) -> bool {
         | "motion.read"
         | "motion.effects"
         | "mesh.inspect"
-        | "timeline.detect"
-        | "timeline.timecode"
-        | "timeline.inspect"
         | "ui.docking"
         | "video.film"
         | "video.timeline"
         | "video.list_ec_comps"
         | "ai.status"
-        | "fidget.prepare"
-        | "scribbles.templates"
         | "prefs.schema"
         | "prefs.get"
         | "command.list"
@@ -109,12 +98,6 @@ pub fn is_read_only_command(id: &str, params: &Value) -> bool {
         | "app.update" => true,
         "project.root" => params.get("root").is_none_or(Value::is_null),
         "words.workspace" => params.get("path").is_none_or(Value::is_null),
-        "video.markers" => {
-            let has_time_or_name =
-                params.get("time").is_some() || params.get("seconds").is_some() || params.get("tick").is_some() || params.get("name").is_some();
-            let action = params["action"].as_str().unwrap_or(if has_time_or_name { "add" } else { "list" });
-            action == "list" || action == "export_csv"
-        }
         _ => false,
     }
 }

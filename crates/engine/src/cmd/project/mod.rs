@@ -6,20 +6,20 @@
 
 pub mod assets;
 pub mod catalog;
+pub mod files;
 pub mod intake;
 pub mod new_project;
 pub mod settings;
 pub mod transcript;
-pub mod trunk;
 pub mod ui_state;
 pub mod workshop;
 
 pub use assets::{
     cmd_project_add_asset, cmd_project_list_assets, cmd_project_load_asset, cmd_project_remove_asset, cmd_project_save_asset, cmd_project_update_asset,
 };
+pub use files::{cmd_project_files, cmd_project_import_file};
 pub use new_project::cmd_project_new;
 pub(crate) use new_project::copy_audio_into_project;
-pub use trunk::{cmd_project_import_file, cmd_project_trunk};
 pub use ui_state::{cmd_project_snapshot, save_theatre_state, theatre_state};
 
 use std::path::{Path, PathBuf};
@@ -29,7 +29,6 @@ use serde_json::{Value, json};
 use crate::{EngineError, Result, Session};
 
 const PROJECT_FORMAT: &str = "magic.project";
-const MANAGED_KEYS: [&str; 7] = ["format", "version", "name", "assets", "workshop", "mode", "song"];
 
 fn saved_path(path: &Path, project: &Path) -> PathBuf {
     let parent = project.parent().unwrap_or(Path::new("."));
@@ -87,22 +86,6 @@ pub fn project_document(s: &Session) -> Value {
     doc
 }
 
-fn merged_document(s: &Session, path: &Path) -> Value {
-    let current = project_document(s);
-    let mut doc = read_project_document(path).ok().filter(Value::is_object).unwrap_or_else(|| json!({}));
-    for key in MANAGED_KEYS {
-        match current.get(key) {
-            Some(value) => doc[key] = value.clone(),
-            None => {
-                if let Some(map) = doc.as_object_mut() {
-                    map.remove(key);
-                }
-            }
-        }
-    }
-    doc
-}
-
 fn normalize_connections(doc: &mut Value, project: &Path) {
     for asset in doc["assets"].as_array_mut().into_iter().flatten() {
         if let Some(path) = asset["path"].as_str() {
@@ -116,58 +99,6 @@ fn normalize_connections(doc: &mut Value, project: &Path) {
     }
 }
 
-/// Read lightweight authoring metadata (`"lyrics"` or `"motion"`) from `<slug>.magic` in `dir`,
-/// falling back to legacy sidecars (`design/words.json` / `motion/actions.json`) only when importing older projects.
-pub(crate) fn read_magic_section_in_dir(dir: &Path, key: &str, legacy_rel: &str) -> Option<Value> {
-    if let Ok(entries) = std::fs::read_dir(dir) {
-        for entry in entries.flatten() {
-            let p = entry.path();
-            if p.is_file()
-                && p.extension().and_then(|e| e.to_str()) == Some("magic")
-                && let Ok(doc) = read_project_document(&p)
-                && let Some(val) = doc.get(key).filter(|v| v.is_object())
-            {
-                return Some(val.clone());
-            }
-        }
-    }
-    let legacy = dir.join(legacy_rel);
-    std::fs::read(&legacy).ok().and_then(|b| serde_json::from_slice::<Value>(&b).ok()).filter(Value::is_object)
-}
-
-pub(crate) fn read_session_section(s: &mut Session, dir: &Path, key: &'static str, legacy_rel: &str) -> Result<Option<Value>> {
-    if let Some(proj_path) = s.project_path.clone() {
-        if let Some(doc) = s.document("magic_project", &proj_path)?
-            && let Some(val) = doc.value.get(key).filter(|v| v.is_object())
-        {
-            return Ok(Some(val.clone()));
-        }
-        if let Ok(raw_doc) = read_project_document(&proj_path)
-            && let Some(val) = raw_doc.get(key).filter(|v| v.is_object())
-        {
-            return Ok(Some(val.clone()));
-        }
-    }
-    if let Some(in_mem) = s.docs.iter().find(|d| d.kind == key && d.path == dir).map(|d| d.value.clone())
-        && in_mem.is_object()
-    {
-        return Ok(Some(in_mem));
-    }
-    Ok(read_magic_section_in_dir(dir, key, legacy_rel))
-}
-
-pub(crate) fn write_session_section(s: &mut Session, dir: &Path, key: &'static str, value: &Value) -> Result<PathBuf> {
-    if let Some(proj_path) = s.project_path.clone() {
-        let mut full_doc = merged_document(s, &proj_path);
-        full_doc[key] = value.clone();
-        s.save_document("magic_project", &proj_path, full_doc)?;
-        s.project_stamp.set(crate::link_watch::FileStamp::of(&proj_path));
-        return Ok(proj_path);
-    }
-    let _ = s.edit_document(key, dir, value.clone())?;
-    Ok(dir.join("effects"))
-}
-
 pub fn project_is_dirty(s: &Session, saved: &Value) -> bool {
     let mut saved = saved.clone();
     if let Some(path) = &s.project_path {
@@ -177,45 +108,9 @@ pub fn project_is_dirty(s: &Session, saved: &Value) -> bool {
     ["assets", "workshop", "mode", "song"].iter().any(|key| saved[*key] != current[*key])
 }
 
-fn history_dir(project: &Path) -> PathBuf {
-    project.parent().unwrap_or(Path::new(".")).join(".history")
-}
-
-fn autosave_journal_path(project: &Path) -> PathBuf {
-    let fname = project.file_name().and_then(|n| n.to_str()).unwrap_or("project.magic");
-    history_dir(project).join(format!("{fname}.autosave"))
-}
-
-fn rotate_project_backups(project: &Path) {
-    let Ok(existing_bytes) = std::fs::read(project) else {
-        return;
-    };
-    let hdir = history_dir(project);
-    if std::fs::create_dir_all(&hdir).is_err() {
-        return;
-    }
-    let fname = project.file_name().and_then(|n| n.to_str()).unwrap_or("project.magic");
-    let bak = |n: u8| hdir.join(format!("{fname}.bak.{n}"));
-    if let Ok(b2) = std::fs::read(bak(2)) {
-        let _ = crate::doc_state::write_private_file(bak(3), &b2);
-    }
-    if let Ok(b1) = std::fs::read(bak(1)) {
-        let _ = crate::doc_state::write_private_file(bak(2), &b1);
-    }
-    let _ = crate::doc_state::write_private_file(bak(1), &existing_bytes);
-}
-
-fn finalize_project_write(s: &Session, path: &Path, stamp: Option<crate::doc_state::FileStamp>, written: usize) {
+fn finalize_project_write(s: &Session, stamp: Option<crate::link_watch::FileStamp>) {
     s.project_stamp.set(stamp);
-    let journal = autosave_journal_path(path);
-    if journal.is_file() {
-        let _ = std::fs::remove_file(&journal);
-    }
     s.project_saves.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    if s.record_user_state {
-        crate::change_marker::invalidate();
-        crate::activity::stored(path, written);
-    }
 }
 
 pub fn write_project_file(s: &Session) -> Result<()> {
@@ -228,10 +123,9 @@ pub fn write_project_file(s: &Session) -> Result<()> {
     if s.project_stamp.get().is_some() {
         crate::link_watch::save_guard(path, s.project_stamp.get())?;
     }
-    rotate_project_backups(path);
-    let doc = merged_document(s, path);
-    let (stamp, written) = crate::doc_state::write_json(path, &doc)?;
-    finalize_project_write(s, path, stamp, written);
+    let doc = project_document(s);
+    let (stamp, _written) = crate::doc_state::write_json(path, &doc)?;
+    finalize_project_write(s, stamp);
     Ok(())
 }
 
@@ -243,24 +137,15 @@ pub(crate) fn create_initial_project_file(s: &Session, overwrite: bool) -> Resul
         return Ok(());
     };
     let doc = project_document(s);
-    let (stamp, written) = match crate::doc_state::write_json_new(path, &doc) {
+    let (stamp, _written) = match crate::doc_state::write_json_new(path, &doc) {
         Ok(res) => res,
         Err(EngineError::Io(e)) if e.kind() == std::io::ErrorKind::AlreadyExists => {
             return Err(EngineError::InvalidParams(format!("project already exists: {} (pass \"overwrite\": true to replace it)", path.display())));
         }
         Err(e) => return Err(e),
     };
-    finalize_project_write(s, path, stamp, written);
+    finalize_project_write(s, stamp);
     Ok(())
-}
-
-pub fn cmd_project_autosave(s: &mut Session, _: &Value) -> Result<Value> {
-    let Some(path) = &s.project_path else {
-        return Ok(json!({"ok": false, "reason": "no_project"}));
-    };
-    let journal = autosave_journal_path(path);
-    let (_, bytes) = crate::doc_state::write_private_json(&journal, &merged_document(s, path))?;
-    Ok(json!({"ok": true, "journal": journal, "bytes": bytes}))
 }
 
 pub(crate) fn project_slug(name: &str) -> String {
@@ -374,28 +259,13 @@ pub fn cmd_project_open(s: &mut Session, params: &Value) -> Result<Value> {
     {
         let _ = magic_util::media::sweep_orphan_craft_tmp(project_dir);
     }
-    let journal = autosave_journal_path(&path);
-    let use_journal = params["recover_autosave"] == true && journal.is_file();
-    let doc = read_project_document(if use_journal { &journal } else { &path })?;
+    let doc = read_project_document(&path)?;
     if doc.get("format").and_then(Value::as_str) != Some(PROJECT_FORMAT) {
         return Err(EngineError::InvalidParams(format!("{} is not a Magic Studio project", path.display())));
     }
     apply_opened_state(s, &path, &doc)?;
     let missing: Vec<String> = s.project_assets.iter().filter(|a| a.path.as_ref().is_some_and(|p| !p.exists())).map(|a| a.id.clone()).collect();
-    if params["read_only"] != true
-        && let Ok(disk_doc) = read_project_document(&path)
-        && project_is_dirty(s, &disk_doc)
-    {
-        let _ = write_project_file(s);
-    }
-    let mut warnings = recent_warning(s, &path, params["record_recent"] != false);
-    if journal.is_file() && !use_journal {
-        warnings.push(json!({
-            "code": "autosave_journal_available",
-            "journal": journal,
-            "hint": "Pass recover_autosave=true to restore crash-recovery journal",
-        }));
-    }
+    let warnings = recent_warning(s, &path, params["record_recent"] != false);
     let workshop = crate::cmd::project::workshop::workshop_status(s)?;
     Ok(json!({
         "ok": true,
@@ -407,17 +277,6 @@ pub fn cmd_project_open(s: &mut Session, params: &Value) -> Result<Value> {
         "workshop": workshop,
         "next_steps": workshop["next_steps"],
     }))
-}
-
-fn flush_dirty_documents(s: &mut Session) -> Result<Vec<Value>> {
-    let mut saved = Vec::new();
-    for doc in &mut s.docs {
-        if doc.dirty {
-            doc.save()?;
-            saved.push(json!({"kind": doc.kind, "path": doc.path, "revision": doc.revision}));
-        }
-    }
-    Ok(saved)
 }
 
 pub fn cmd_project_save(s: &mut Session, params: &Value) -> Result<Value> {
@@ -436,15 +295,13 @@ pub fn cmd_project_save(s: &mut Session, params: &Value) -> Result<Value> {
     {
         return save_as(s, target);
     }
-    let documents = flush_dirty_documents(s)?;
     write_project_file(s)?;
-    s.edits_since_save = 0;
+    s.mark_saved();
     Ok(json!({
         "ok": true,
         "project": s.project_path,
         "saved": s.project_path,
         "saves": s.project_saves.load(std::sync::atomic::Ordering::Relaxed),
-        "documents": documents,
         "relinked": [],
         "warnings": [],
     }))
@@ -488,7 +345,6 @@ fn save_as(s: &mut Session, target: PathBuf) -> Result<Value> {
     std::fs::create_dir_all(target_parent)?;
     let target_dir = std::fs::canonicalize(target_parent).unwrap_or_else(|_| target_parent.to_path_buf());
     let target = target.file_name().map_or_else(|| target.clone(), |name| target_dir.join(name));
-    let documents = flush_dirty_documents(s)?;
     let relinked = match old_dir {
         Some(ref prev_dir) if *prev_dir != target_dir => copy_project_tree(prev_dir, &target_dir)?,
         _ => Vec::new(),
@@ -517,13 +373,12 @@ fn save_as(s: &mut Session, target: PathBuf) -> Result<Value> {
         s.project_path = Some(path);
     }
     let warnings = s.project_path.as_deref().map_or_else(Vec::new, |saved| recent_warning(s, saved, true));
-    s.edits_since_save = 0;
+    s.mark_saved();
     Ok(json!({
         "ok": true,
         "project": s.project_path,
         "saved": s.project_path,
         "saves": s.project_saves.load(std::sync::atomic::Ordering::Relaxed),
-        "documents": documents,
         "relinked": relinked,
         "warnings": warnings,
     }))
@@ -598,8 +453,6 @@ mod tests {
         session.active_asset = Some("hero_fox".into());
         session.assets.insert("hero_fox".into(), Asset { id: "hero_fox".into(), path: dir_a.join("fox.png"), width: 512, height: 512, has_alpha: true });
         session.record(json!({"preview": "stale_frame.png"}));
-        session.save_document("words", &dir_a.join("design/words.json"), json!({"animations": [{"animation_id": "stale"}]})).unwrap();
-        session.save_document("motion_actions", &dir_a.join("motion/actions.json"), json!({"cues": [{"id": "cue1"}]})).unwrap();
 
         let res_b = session.execute("project.new", json!({"root": sandbox, "name": "Song Beta", "mode": "animation"})).unwrap();
         let path_b = PathBuf::from(res_b["project"].as_str().unwrap());
@@ -611,7 +464,6 @@ mod tests {
         assert!(!session.draft_approved);
         assert!(session.active_asset.is_none());
         assert!(session.assets.is_empty());
-        assert!(session.documents().is_empty());
         assert!(session.history.undo.is_empty());
 
         // Attaching Project A metadata must NOT clobber the active Project B session.

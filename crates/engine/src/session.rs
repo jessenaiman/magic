@@ -1,9 +1,8 @@
 //! Session state for Magic Studio.
 //!
-//! Holds the current project, its registered asset files, and the in-memory `craft-settings` store
+//! Holds the current project in memory, its registered asset files, and the `craft-settings` store
 //! (`Location::Memory` for isolated/test sessions, `Location::Auto` for user sessions), providing
-//! [`Session::execute`] for command dispatch. Pixel, vector, layout, and motion work belongs to
-//! the installed ArtCraft apps; the session only records which files a project uses.
+//! [`Session::execute`] for single-point command dispatch.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -11,7 +10,6 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-mod documents;
 mod edit;
 mod execute;
 pub mod undo;
@@ -38,10 +36,9 @@ pub struct Session {
     pub active_asset: Option<String>,
     pub last_result: Option<Value>,
     pub project_saves: std::sync::atomic::AtomicU64,
-    pub edits_since_save: u64,
-    pub docs: Vec<crate::doc_state::DocState>,
+    pub project_revision: u64,
+    pub saved_revision: u64,
     pub history: crate::history::History,
-    pub step_base: Vec<crate::doc_state::DocState>,
 }
 
 impl Default for Session {
@@ -67,10 +64,9 @@ impl Default for Session {
             active_asset: None,
             last_result: None,
             project_saves: std::sync::atomic::AtomicU64::new(0),
-            edits_since_save: 0,
-            docs: Vec::new(),
+            project_revision: 0,
+            saved_revision: 0,
             history: crate::history::History::default(),
-            step_base: Vec::new(),
         }
     }
 }
@@ -97,10 +93,9 @@ impl Clone for Session {
             active_asset: self.active_asset.clone(),
             last_result: self.last_result.clone(),
             project_saves: std::sync::atomic::AtomicU64::new(self.project_saves.load(std::sync::atomic::Ordering::Relaxed)),
-            edits_since_save: self.edits_since_save,
-            docs: self.docs.clone(),
+            project_revision: self.project_revision,
+            saved_revision: self.saved_revision,
             history: self.history.clone(),
-            step_base: Vec::new(),
         }
     }
 }
@@ -115,8 +110,10 @@ impl Session {
         self
     }
 
-    /// Clear all project-local lyrics, song cues, composition metadata, cached previews/assets,
-    /// undo history, and active selections when switching or closing projects (`B10-P0`).
+    pub fn is_dirty(&self) -> bool {
+        self.project_path.is_some() && self.project_revision != self.saved_revision
+    }
+
     pub fn reset_for_project(&mut self, path: Option<PathBuf>, assets: Vec<ProjectAsset>) {
         let stamp = path.as_deref().and_then(crate::link_watch::FileStamp::of);
         self.assets.clear();
@@ -133,10 +130,9 @@ impl Session {
         self.active_asset = None;
         self.last_result = None;
         self.project_saves.store(0, std::sync::atomic::Ordering::Relaxed);
-        self.edits_since_save = 0;
-        self.docs.clear();
+        self.project_revision = 0;
+        self.saved_revision = 0;
         self.history.clear();
-        self.step_base.clear();
     }
 
     pub fn record(&mut self, value: Value) {

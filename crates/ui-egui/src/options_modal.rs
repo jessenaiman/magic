@@ -1,7 +1,6 @@
 //! MailCraft-inspired `Options` dialog (`General` Interface Style & Appearance + `AI & LLM`
-//! powered strictly by `storytold/craft-ai-integrations` + `Project & AutoSave`), `Fidget &
-//! Scribbles` prompt stager window, sanitized `Report a Problem` window, and live `Search commands`
-//! palette popup.
+//! powered by `craft-ai-core` + `Project & AutoSave`), sanitized `Report a Problem` window,
+//! and live `Search commands` palette popup.
 //!
 //! Uses custom themed popups — `Interface Style` (`Aurora`, `Modern`, `Classic`,
 //! `Minimal`, `Ocean`, `Forest`, `Plum`, `Sand`) renders as a custom themed dropdown list.
@@ -10,20 +9,10 @@ use egui::{Align, Align2, Color32, CornerRadius, FontId, Layout, Order, Pos2, Re
 use serde_json::{Value, json};
 
 use crate::controls::{ScalarSpec, pill_toggle, ring_slider_h};
-use crate::icons::companion_image;
 use crate::menus::translate_menu_command;
 use crate::state::{UiAction, ViewCtx};
 use crate::theme::{AccentChoice, INTERFACE_SIZE_PRESETS, InterfaceStyle, ThemeMode};
 use crate::widgets::{BtnSpec, action_button, status_pill, text_input};
-
-const SCRIBBLES_TEMPLATES: &[(&str, &str)] = &[
-    ("new", "New Character"),
-    ("parts_chroma", "Parts Sheet"),
-    ("poses_2x2", "2x2 Poses"),
-    ("actions", "Action Strip"),
-    ("image", "Scene / Prop"),
-    ("custom", "Custom Prompt"),
-];
 
 pub fn draw_options_window(egui_ctx: &egui::Context, ctx: &mut ViewCtx<'_>) -> bool {
     let mut keep_open = true;
@@ -206,27 +195,6 @@ fn draw_interface_style_popup(egui_ctx: &egui::Context, ctx: &mut ViewCtx<'_>, p
     });
 }
 
-fn role_status_summary(ctx: &ViewCtx<'_>, role_id: &str) -> (String, Color32) {
-    if !ctx.state.ai.enabled {
-        return ("Off (ai.enabled = false)".into(), ctx.pal.text_muted);
-    }
-    let Some(roles) = ctx.state.cache.ai_status.get("roles").and_then(Value::as_array) else {
-        return ("Unconfigured".into(), ctx.pal.accent_amber);
-    };
-    let Some(entry) = roles.iter().find(|r| r["id"].as_str() == Some(role_id)) else {
-        return ("Unconfigured".into(), ctx.pal.accent_amber);
-    };
-    let st = &entry["status"];
-    if st["state"].as_str() == Some("ready") {
-        let conn = st["connection_label"].as_str().or_else(|| st["connection_id"].as_str()).unwrap_or("conn");
-        let model = st["model_label"].as_str().or_else(|| st["model"].as_str()).unwrap_or("model");
-        (format!("Ready · {conn} / {model}"), ctx.pal.accent_emerald)
-    } else {
-        let why = st["reason"].as_str().unwrap_or("Bind connection & model");
-        (why.to_owned(), ctx.pal.accent_amber)
-    }
-}
-
 fn draw_ai_llm_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     ctx.pal.inset_frame().show(ui, |ui| {
         ui.vertical(|ui| {
@@ -236,7 +204,7 @@ fn draw_ai_llm_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                     ctx.reg,
                     ctx.pal,
                     "ai-master-enabled",
-                    "Enable AI Integrations (storytold/craft-ai-integrations)",
+                    "Enable AI Integrations (craft-ai-core)",
                     &mut ctx.state.ai.enabled,
                     ctx.pal.accent_emerald,
                 )
@@ -253,144 +221,17 @@ fn draw_ai_llm_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                 status_pill(ui, ctx.pal, lbl, col);
             });
             ui.label(
-                RichText::new(
-                    "Shared store & OS keychain secrets managed via craft-ai-client / craft-ai-native. Raw API keys are never written to project files.",
-                )
-                .size(10.5)
-                .color(ctx.pal.text_muted),
+                RichText::new("Shared store & secret references managed via `craft-ai-core`. Raw API keys are never written to project files.")
+                    .size(10.5)
+                    .color(ctx.pal.text_muted),
             );
         });
     });
 
     ui.add_space(8.0);
-    draw_fidget_role_box(ui, ctx);
-    ui.add_space(8.0);
-    draw_scribbles_role_box(ui, ctx);
-    ui.add_space(8.0);
     draw_register_connection_box(ui, ctx);
     ui.add_space(8.0);
     draw_consent_ledger_box(ui, ctx);
-}
-
-fn draw_fidget_role_box(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
-    let (status_txt, status_col) = role_status_summary(ctx, "fidget");
-    ctx.pal.inset_frame().show(ui, |ui| {
-        ui.vertical(|ui| {
-            ui.horizontal(|ui| {
-                ui.add(companion_image("fidget_work", 20.0));
-                ui.label(RichText::new("Fidget · Structured Prompt Stager (`text.complete`)").size(12.5).strong());
-                status_pill(ui, ctx.pal, &status_txt, status_col);
-            });
-            ui.horizontal_wrapped(|ui| {
-                if pill_toggle(ui, ctx.reg, ctx.pal, "ai-fidget-enabled", "Enable Fidget rephrasing", &mut ctx.state.ai.fidget_enabled, ctx.pal.accent_emerald)
-                    .changed()
-                {
-                    ctx.exec("ai.configure", json!({"fidget_enabled": ctx.state.ai.fidget_enabled}), None);
-                }
-                if pill_toggle(
-                    ui,
-                    ctx.reg,
-                    ctx.pal,
-                    "ai-fidget-seamless",
-                    "Seamless handoff straight to Scribbles",
-                    &mut ctx.state.ai.fidget_seamless,
-                    ctx.pal.accent_sky,
-                )
-                .changed()
-                {
-                    ctx.exec(
-                        "ai.configure",
-                        json!({"fidget_seamless": ctx.state.ai.fidget_seamless}),
-                        Some(if ctx.state.ai.fidget_seamless {
-                            "Fidget set to seamless Scribbles handoff"
-                        } else {
-                            "Fidget set to review-before-Scribbles staging"
-                        }),
-                    );
-                }
-            });
-            ui.horizontal(|ui| {
-                ui.label(RichText::new("Connection").size(11.0).color(ctx.pal.text_muted));
-                text_input(ui, ctx.reg, "ai-fidget-conn", "Fidget connection ID", &mut ctx.state.ai.fidget_connection, "local-sub", 150.0);
-                ui.label(RichText::new("Model").size(11.0).color(ctx.pal.text_muted));
-                text_input(ui, ctx.reg, "ai-fidget-model", "Fidget model ID", &mut ctx.state.ai.fidget_model, "my-text-model", 180.0);
-                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("ai-fidget-bind", "check", "Bind Fidget", "Bind Fidget in ToolDesk").primary()).clicked() {
-                    let fc = ctx.state.ai.fidget_connection.trim().to_owned();
-                    let fm = ctx.state.ai.fidget_model.trim().to_owned();
-                    ctx.exec("ai.configure", json!({"fidget_connection": fc, "fidget_model": fm}), Some("Bound Fidget model"));
-                }
-            });
-        });
-    });
-}
-
-fn draw_scribbles_role_box(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
-    let (status_txt, status_col) = role_status_summary(ctx, "scribbles");
-    ctx.pal.inset_frame().show(ui, |ui| {
-        ui.vertical(|ui| {
-            ui.horizontal(|ui| {
-                ui.add(companion_image("scribbles_work", 20.0));
-                ui.label(RichText::new("Scribbles · Character & Asset Studio (`image.generate`)").size(12.5).strong());
-                status_pill(ui, ctx.pal, &status_txt, status_col);
-            });
-            if pill_toggle(
-                ui,
-                ctx.reg,
-                ctx.pal,
-                "ai-scribbles-enabled",
-                "Enable Scribbles image generation",
-                &mut ctx.state.ai.scribbles_enabled,
-                ctx.pal.accent_emerald,
-            )
-            .changed()
-            {
-                ctx.exec("ai.configure", json!({"scribbles_enabled": ctx.state.ai.scribbles_enabled}), None);
-            }
-            ui.horizontal(|ui| {
-                ui.label(RichText::new("Connection").size(11.0).color(ctx.pal.text_muted));
-                text_input(ui, ctx.reg, "ai-scribbles-conn", "Scribbles connection ID", &mut ctx.state.ai.scribbles_connection, "local-sub", 150.0);
-                ui.label(RichText::new("Model").size(11.0).color(ctx.pal.text_muted));
-                text_input(ui, ctx.reg, "ai-scribbles-model", "Scribbles model ID", &mut ctx.state.ai.scribbles_model, "my-image-model", 180.0);
-                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("ai-scribbles-bind", "check", "Bind Scribbles", "Bind Scribbles in ToolDesk").primary())
-                    .clicked()
-                {
-                    let sc = ctx.state.ai.scribbles_connection.trim().to_owned();
-                    let sm = ctx.state.ai.scribbles_model.trim().to_owned();
-                    ctx.exec("ai.configure", json!({"scribbles_connection": sc, "scribbles_model": sm}), Some("Bound Scribbles model"));
-                }
-            });
-            draw_discovered_connections(ui, ctx);
-        });
-    });
-}
-
-fn draw_discovered_connections(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
-    let conns = ctx.state.cache.ai_status.get("connections").and_then(Value::as_array).cloned().unwrap_or_default();
-    if conns.is_empty() {
-        return;
-    }
-    ui.horizontal_wrapped(|ui| {
-        ui.label(RichText::new("SharedStore:").monospace().size(10.0).color(ctx.pal.text_muted));
-        for c in &conns {
-            let cid = c["id"].as_str().unwrap_or_default();
-            let prov = c["provider"].as_str().unwrap_or("openai");
-            let first_model = c.pointer("/models/0/id").and_then(Value::as_str).unwrap_or_default().to_owned();
-            let lbl = format!("{cid} ({prov})");
-            let btn_id = format!("ai-pick-conn-{cid}");
-            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&btn_id, &lbl, "Fill connection & first model")).clicked() {
-                ctx.state.ai.fidget_connection = cid.to_owned();
-                ctx.state.ai.scribbles_connection = cid.to_owned();
-                if !first_model.is_empty() {
-                    if ctx.state.ai.fidget_model.is_empty() {
-                        ctx.state.ai.fidget_model = first_model.clone();
-                    }
-                    if ctx.state.ai.scribbles_model.is_empty() {
-                        ctx.state.ai.scribbles_model = first_model;
-                    }
-                }
-            }
-        }
-    });
 }
 
 fn draw_register_connection_box(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
@@ -431,22 +272,22 @@ fn draw_register_connection_box(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                     250.0,
                 );
                 ui.label(RichText::new("Text Model").size(10.5).color(ctx.pal.text_muted));
-                text_input(ui, ctx.reg, "ai-new-text-model", "Fidget text model", &mut ctx.state.ai.new_conn_text_model, "local-chat", 110.0);
+                text_input(ui, ctx.reg, "ai-new-text-model", "Text model", &mut ctx.state.ai.new_conn_text_model, "local-chat", 110.0);
                 ui.label(RichText::new("Image Model").size(10.5).color(ctx.pal.text_muted));
-                text_input(ui, ctx.reg, "ai-new-img-model", "Scribbles image model", &mut ctx.state.ai.new_conn_image_model, "local-image-tool", 110.0);
+                text_input(ui, ctx.reg, "ai-new-img-model", "Image model", &mut ctx.state.ai.new_conn_image_model, "local-image-tool", 110.0);
             });
             if action_button(
                 ui,
                 ctx.reg,
                 ctx.pal,
-                BtnSpec::new("ai-save-conn", "save", "Register & Bind in SharedStore", "Write connection to craft-ai-native SharedStore").primary(),
+                BtnSpec::new("ai-save-conn", "save", "Register Connection in SharedStore", "Write connection to craft-ai-core SharedStore").primary(),
             )
             .clicked()
             {
                 let cid = ctx.state.ai.new_conn_id.trim().to_owned();
                 let tm = ctx.state.ai.new_conn_text_model.trim().to_owned();
                 let im = ctx.state.ai.new_conn_image_model.trim().to_owned();
-                let mut payload = json!({
+                let payload = json!({
                     "enabled": ctx.state.ai.enabled,
                     "register_connection": {
                         "id": cid,
@@ -458,18 +299,6 @@ fn draw_register_connection_box(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                         "image_model": im,
                     }
                 });
-                if !tm.is_empty() {
-                    payload["fidget_connection"] = json!(cid);
-                    payload["fidget_model"] = json!(tm);
-                    ctx.state.ai.fidget_connection = cid.clone();
-                    ctx.state.ai.fidget_model = tm;
-                }
-                if !im.is_empty() {
-                    payload["scribbles_connection"] = json!(cid);
-                    payload["scribbles_model"] = json!(im);
-                    ctx.state.ai.scribbles_connection = cid;
-                    ctx.state.ai.scribbles_model = im;
-                }
                 ctx.exec("ai.configure", payload, Some("Saved connection in craft-ai SharedStore"));
             }
         });
@@ -555,116 +384,6 @@ fn draw_autosave_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                 }
             });
         });
-    });
-}
-
-#[allow(clippy::cognitive_complexity)]
-/// Dockable `Fidget & Scribbles` prompt stager body (`PanelId::Fidget`) powered by `fidget.prepare`, `fidget.stage`, and `scribbles.generate`.
-pub fn draw_fidget_panel_body(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
-    crate::controls::fill_card(ui, ctx.pal, true, |ui| {
-        ui.horizontal(|ui| {
-            ui.add(companion_image("fidget_work", 26.0));
-            ui.add(companion_image("scribbles_work", 26.0));
-            let (st_lbl, st_col) = role_status_summary(ctx, "fidget");
-            status_pill(ui, ctx.pal, &st_lbl, st_col);
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("fidget-open-ai-prefs", "settings", "Configure Fidget & Scribbles AI models"))
-                    .clicked()
-                {
-                    ctx.state.ai.options_tab = "ai".into();
-                    ctx.push(UiAction::OpenPreferences);
-                }
-            });
-        });
-
-        ui.horizontal_wrapped(|ui| {
-            for &(tpl, lbl) in SCRIBBLES_TEMPLATES {
-                let id = format!("fidget-tpl-{tpl}");
-                let sel = ctx.state.ai.scribbles_template == tpl;
-                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, lbl, "Select Scribbles template").selected(sel)).clicked() {
-                    ctx.state.ai.scribbles_template = tpl.into();
-                }
-            }
-        });
-
-        text_input(
-            ui,
-            ctx.reg,
-            "fidget-prompt",
-            "Rough idea for Fidget",
-            &mut ctx.state.fidget_prompt,
-            "Describe character, puppet parts sheet, or scene…",
-            ui.available_width().max(220.0),
-        );
-
-        if pill_toggle(
-            ui,
-            ctx.reg,
-            ctx.pal,
-            "fidget-seamless-inline",
-            "Seamless handoff straight to Scribbles",
-            &mut ctx.state.ai.fidget_seamless,
-            ctx.pal.accent_sky,
-        )
-        .changed()
-        {
-            ctx.exec("ai.configure", json!({"fidget_seamless": ctx.state.ai.fidget_seamless}), None);
-        }
-
-        ui.horizontal_wrapped(|ui| {
-            let has_text = !ctx.state.fidget_prompt.trim().is_empty();
-            if action_button(
-                ui,
-                ctx.reg,
-                ctx.pal,
-                BtnSpec::new("fidget-prepare", "eye", "Preview", "Compose deterministic template prompt offline").enabled(has_text),
-            )
-            .clicked()
-            {
-                let tpl = ctx.state.ai.scribbles_template.clone();
-                let prompt = ctx.state.fidget_prompt.trim().to_owned();
-                let cid = ctx.state.selected_character_id.clone();
-                ctx.exec("fidget.prepare", json!({"kind": tpl, "prompt": prompt, "character": cid}), Some("Prepared template brief"));
-            }
-            if action_button(
-                ui,
-                ctx.reg,
-                ctx.pal,
-                BtnSpec::new("fidget-stage-btn", "sparkles", "Stage", "Rephrase into structured prompt via Fidget (text.complete)").primary().enabled(has_text),
-            )
-            .clicked()
-            {
-                let tpl = ctx.state.ai.scribbles_template.clone();
-                let prompt = ctx.state.fidget_prompt.trim().to_owned();
-                let seamless = ctx.state.ai.fidget_seamless;
-                let cid = ctx.state.selected_character_id.clone();
-                ctx.exec(
-                    "fidget.stage",
-                    json!({"kind": tpl, "prompt": prompt, "seamless": seamless, "character": cid}),
-                    Some(if seamless { "Fidget staged & handed off to Scribbles" } else { "Staged structured prompt via Fidget" }),
-                );
-            }
-        });
-
-        if !ctx.state.ai.staged_prompt.is_empty() {
-            ui.separator();
-            ui.label(RichText::new("Staged Scribbles Prompt:").size(11.0).color(ctx.pal.accent_amber));
-            let edit_resp = ui.add_sized([ui.available_width().max(220.0), 82.0], egui::TextEdit::multiline(&mut ctx.state.ai.staged_prompt));
-            ctx.reg.record("fidget-staged-prompt", "Staged Prompt", &edit_resp, Some(ctx.state.ai.staged_prompt.clone()));
-            if action_button(
-                ui,
-                ctx.reg,
-                ctx.pal,
-                BtnSpec::new("scribbles-run-staged", "wand", "Generate with Scribbles", "Run image.generate via configured Scribbles model").primary(),
-            )
-            .clicked()
-            {
-                let tpl = ctx.state.ai.scribbles_template.clone();
-                let final_p = ctx.state.ai.staged_prompt.trim().to_owned();
-                let cid = ctx.state.selected_character_id.clone();
-                ctx.exec("scribbles.generate", json!({"kind": tpl, "prompt": final_p, "character": cid}), Some("Generated asset via Scribbles"));
-            }
-        }
     });
 }
 

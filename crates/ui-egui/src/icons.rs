@@ -140,39 +140,12 @@ static MONO_ICONS: &[(&str, &[u8])] = &[
     ("soloHeadphones", include_bytes!("../../../assets/icons/solo-headphones.svg")),
 ];
 
-static COMPANION_ICONS: &[(&str, &[u8])] = &[
-    (
-        "fidget_work",
-        br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160"><g stroke="#503329" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><g transform="rotate(-12 106 119)"><path d="M105 119 Q147 126 132 91" fill="none" stroke="#eab25b" stroke-width="15"/></g><g><path d="M46 95 Q73 80 102 98 L110 137 Q78 151 40 137Z" fill="#eab25b"/><ellipse cx="74" cy="122" rx="20" ry="23" fill="#fff0ce" stroke="none"/></g><g fill="#eab25b"><path d="M45 126 Q27 132 33 143 L59 143 L59 133 M91 133 L91 143 L118 143 Q124 130 105 127"/></g><g transform="rotate(-10 76 94)"><path d="M43 47 Q16 43 21 78 Q27 98 40 79Z M101 47 Q129 40 124 78 Q115 97 104 77Z" fill="#754225"/><path d="M36 62 Q35 34 74 34 Q113 33 114 62 L111 83 Q105 103 76 103 Q42 103 37 83Z" fill="#eab25b"/><ellipse cx="75" cy="81" rx="25" ry="17" fill="#fff0ce" stroke="none"/><ellipse cx="57" cy="64" rx="7" ry="9" fill="#352c37"/><ellipse cx="90" cy="64" rx="7" ry="9" fill="#352c37"/><circle cx="59" cy="61" r="2.5" fill="#fff5dd"/><circle cx="92" cy="61" r="2.5" fill="#fff5dd"/><path d="M68 76 Q75 70 82 76 L75 83Z" fill="#503329"/><path d="M64 84 Q74 102 84 84" fill="#67343d"/><path d="M69 91 Q74 102 79 91" fill="#f38691"/><path d="M43 80 L31 77 M104 80 L117 77" stroke="#754225"/></g><g><path d="M45 98 Q74 111 104 98 L102 109 Q73 121 47 108Z" fill="#53bfa9"/><path d="M91 109 L109 125 L108 106Z" fill="#53bfa9"/></g></g></svg>"##,
-    ),
-    (
-        "scribbles_work",
-        br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160"><g stroke="#503329" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><g transform="rotate(-12 106 119)"><path d="M105 119 Q147 126 132 91" fill="none" stroke="#ee8241" stroke-width="15"/></g><g><path d="M46 95 Q73 80 102 98 L110 137 Q78 151 40 137Z" fill="#ee8241"/><ellipse cx="74" cy="122" rx="20" ry="23" fill="#fff0ce" stroke="none"/></g><g fill="#ee8241"><path d="M45 126 Q27 132 33 143 L59 143 L59 133 M91 133 L91 143 L118 143 Q124 130 105 127"/></g><g transform="rotate(-10 76 94)"><path d="M38 59 L35 19 Q58 25 62 41 M83 41 Q99 22 113 20 L110 64" fill="#ee8241"/><path d="M43 45 L42 30 L56 43 M91 43 L106 30 L105 48" fill="#f9b7a0"/><path d="M36 62 Q35 34 74 34 Q113 33 114 62 L111 83 Q105 103 76 103 Q42 103 37 83Z" fill="#ee8241"/><path d="M62 38 L65 47 M75 35 L75 46 M88 38 L85 47" stroke="#a7472c" stroke-width="5"/><ellipse cx="75" cy="81" rx="25" ry="17" fill="#fff0ce" stroke="none"/><ellipse cx="57" cy="64" rx="7" ry="9" fill="#352c37"/><ellipse cx="90" cy="64" rx="7" ry="9" fill="#352c37"/><circle cx="59" cy="61" r="2.5" fill="#fff5dd"/><circle cx="92" cy="61" r="2.5" fill="#fff5dd"/><path d="M68 76 Q75 70 82 76 L75 83Z" fill="#503329"/><path d="M64 84 Q74 102 84 84" fill="#67343d"/><path d="M69 91 Q74 102 79 91" fill="#f38691"/><path d="M43 80 L31 77 M104 80 L117 77" stroke="#a7472c"/></g><g><path d="M45 98 Q74 111 104 98 L102 109 Q73 121 47 108Z" fill="#9c83d9"/><path d="M91 109 L109 125 L108 106Z" fill="#9c83d9"/></g></g></svg>"##,
-    ),
-    (
-        "scribbles_rest",
-        br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160"><g stroke="#503329" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><g><path d="M105 119 Q147 126 132 91" fill="none" stroke="#ee8241" stroke-width="15"/></g><g><path d="M46 95 Q73 80 102 98 L110 137 Q78 151 40 137Z" fill="#ee8241"/><ellipse cx="74" cy="122" rx="20" ry="23" fill="#fff0ce" stroke="none"/></g><g fill="#ee8241"><path d="M45 126 Q27 132 33 143 L59 143 L59 133 M91 133 L91 143 L118 143 Q124 130 105 127"/></g><g><path d="M38 59 L35 19 Q58 25 62 41 M83 41 Q99 22 113 20 L110 64" fill="#ee8241"/><path d="M43 45 L42 30 L56 43 M91 43 L106 30 L105 48" fill="#f9b7a0"/><path d="M36 62 Q35 34 74 34 Q113 33 114 62 L111 83 Q105 103 76 103 Q42 103 37 83Z" fill="#ee8241"/><path d="M62 38 L65 47 M75 35 L75 46 M88 38 L85 47" stroke="#a7472c" stroke-width="5"/><ellipse cx="75" cy="81" rx="25" ry="17" fill="#fff0ce" stroke="none"/><ellipse cx="57" cy="64" rx="7" ry="9" fill="#352c37"/><ellipse cx="90" cy="64" rx="7" ry="9" fill="#352c37"/><circle cx="59" cy="61" r="2.5" fill="#fff5dd"/><circle cx="92" cy="61" r="2.5" fill="#fff5dd"/><path d="M68 76 Q75 70 82 76 L75 83Z" fill="#503329"/><path d="M62 83 Q74 92 86 83" fill="none"/><path d="M43 80 L31 77 M104 80 L117 77" stroke="#a7472c"/></g><g><path d="M45 98 Q74 111 104 98 L102 109 Q73 121 47 108Z" fill="#9c83d9"/><path d="M91 109 L109 125 L108 106Z" fill="#9c83d9"/></g></g></svg>"##,
-    ),
-];
-
 pub fn catalog() -> &'static SvgIconSet {
     static SET: OnceLock<SvgIconSet> = OnceLock::new();
     SET.get_or_init(|| SvgIconSet::new(MONO_ICONS, SvgStyle { current_color: "#ffffff", stroke_width: Some("1.85") }, "bytes://magic/icons/", "square"))
 }
 
-pub fn companion_catalog() -> &'static SvgIconSet {
-    static SET: OnceLock<SvgIconSet> = OnceLock::new();
-    SET.get_or_init(|| {
-        SvgIconSet::new(COMPANION_ICONS, SvgStyle { current_color: "#ffffff", stroke_width: None }, "bytes://magic/companions/", "scribbles_work")
-    })
-}
-
 pub fn icon_image(name: &str, size: f32, tint: Color32) -> Image<'static> {
     let resolved = if catalog().contains(name) { name } else { "square" };
     Image::new(catalog().source(resolved)).fit_to_exact_size(Vec2::splat(size)).tint(tint)
-}
-
-pub fn companion_image(name: &str, size: f32) -> Image<'static> {
-    let resolved = if companion_catalog().contains(name) { name } else { "scribbles_work" };
-    Image::new(companion_catalog().source(resolved)).fit_to_exact_size(Vec2::splat(size))
 }

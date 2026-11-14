@@ -68,9 +68,6 @@ fn update_session(s: &crate::Session, path: &str, forget: bool) -> Result<(), St
             flush_now,
         )
         .map_err(|e| e.to_string())?;
-    if s.record_user_state {
-        crate::change_marker::invalidate();
-    }
     Ok(())
 }
 
@@ -102,9 +99,6 @@ pub fn clear_for(s: &crate::Session) -> Result<(), String> {
             flush_now,
         )
         .map_err(|e| e.to_string())?;
-    if s.record_user_state {
-        crate::change_marker::invalidate();
-    }
     Ok(())
 }
 

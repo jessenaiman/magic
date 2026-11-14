@@ -9,7 +9,7 @@ use craft_ui::tabs::Tab;
 use egui::{Align2, Color32, CornerRadius, FontId, Pos2, Rect, Response, Sense, Stroke, StrokeKind, Ui, Vec2};
 use serde_json::{Value, json};
 
-use crate::icons::{companion_image, icon_image};
+use crate::icons::icon_image;
 use crate::theme::MagicPalette;
 
 #[derive(Clone, Debug)]
@@ -207,21 +207,6 @@ pub fn project_pill_button(ui: &mut Ui, reg: &mut AutomationRegistry, pal: &Magi
     ui.painter().text(Pos2::new(icon_rect.max.x + 6.0, rect.center().y), Align2::LEFT_CENTER, label, font, pal.text_primary);
     let resp = resp.on_hover_text(tooltip);
     reg.record(id, label, &resp, None);
-    resp
-}
-
-pub fn companion_button(ui: &mut Ui, reg: &mut AutomationRegistry, pal: &MagicPalette, id: &str, pose: &str, tooltip: &str, selected: bool) -> Response {
-    let style = pal.icon_button_style();
-    let resp = ui
-        .push_id(id, |ui| {
-            IconButton::new(tooltip, Vec2::splat(28.0), &style).selected(selected).show(ui, |ui, rect, _tint| {
-                let img_rect = Rect::from_center_size(rect.center(), Vec2::splat(20.0));
-                companion_image(pose, 20.0).paint_at(ui, img_rect);
-            })
-        })
-        .inner
-        .on_hover_text(tooltip);
-    reg.record(id, tooltip, &resp, None);
     resp
 }
 

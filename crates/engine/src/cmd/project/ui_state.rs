@@ -165,7 +165,7 @@ pub fn cmd_project_snapshot(s: &mut Session, _: &Value) -> Result<Value> {
     let storyboard = crate::cmd::storyboard::cmd_storyboard_status(s, &json!({}))
         .unwrap_or_else(|_| json!({"exists": false, "light": "optional", "production_ready": true}));
     let assets = cmd_project_list_assets(s, &json!({}))?;
-    let trunk = s.execute("project.trunk", json!({})).unwrap_or_else(|error| json!({"files": [], "error": error.to_string()}));
+    let files = s.execute("project.files", json!({})).unwrap_or_else(|error| json!({"files": [], "error": error.to_string()}));
     let characters_arr =
         s.execute("character.list", json!({})).ok().and_then(|res| res.get("characters").and_then(Value::as_array).cloned()).unwrap_or_default();
     let assets_arr = assets.get("assets").and_then(Value::as_array).cloned().unwrap_or_default();
@@ -178,7 +178,7 @@ pub fn cmd_project_snapshot(s: &mut Session, _: &Value) -> Result<Value> {
             "status": status,
             "storyboard": storyboard,
             "assets": assets,
-            "trunk": trunk,
+            "files": files,
             "characters": characters_arr,
             "drawer": drawer,
             "footer": footer,

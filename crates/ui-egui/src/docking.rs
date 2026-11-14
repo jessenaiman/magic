@@ -27,16 +27,14 @@ pub enum PanelId {
     Timeline,
     Assets,
     Scopes,
-    Fidget,
     History,
     Fonts,
 }
 
 impl PanelId {
-    pub const ALL: [Self; 9] =
-        [Self::Canvas, Self::Navigator, Self::Inspector, Self::Timeline, Self::Assets, Self::Scopes, Self::Fidget, Self::History, Self::Fonts];
+    pub const ALL: [Self; 8] = [Self::Canvas, Self::Navigator, Self::Inspector, Self::Timeline, Self::Assets, Self::Scopes, Self::History, Self::Fonts];
 
-    pub const TOGGLEABLE: [Self; 8] = [Self::Navigator, Self::Inspector, Self::Timeline, Self::Assets, Self::Scopes, Self::Fidget, Self::History, Self::Fonts];
+    pub const TOGGLEABLE: [Self; 7] = [Self::Navigator, Self::Inspector, Self::Timeline, Self::Assets, Self::Scopes, Self::History, Self::Fonts];
 
     pub const fn as_id(self) -> &'static str {
         match self {
@@ -46,7 +44,6 @@ impl PanelId {
             Self::Timeline => "timeline",
             Self::Assets => "assets",
             Self::Scopes => "scopes",
-            Self::Fidget => "fidget",
             Self::History => "history",
             Self::Fonts => "fonts",
         }
@@ -55,14 +52,13 @@ impl PanelId {
     pub fn parse(raw: &str) -> Option<Self> {
         let norm = raw.trim().to_ascii_lowercase();
         match norm.as_str() {
-            "canvas" | "stage" | "program" | "program monitor" | "files & trunk" => Some(Self::Canvas),
+            "canvas" | "stage" | "program" | "program monitor" | "files" => Some(Self::Canvas),
             "navigator" | "scenes" | "rail" | "sidebar" | "song & stages" | "book hierarchy" | "actions & path" | "lyric moments" | "motion cues"
             | "storyboard scenes" => Some(Self::Navigator),
             "inspector" | "properties" | "finishing" | "studio finishing" | "field checklist" | "typography & fx" | "spline & lottie" => Some(Self::Inspector),
             "timeline" | "sequence" | "filmcraft sequence" | "theatre" | "theatre & curves" | "lyrics timeline" | "motion timeline" => Some(Self::Timeline),
             "assets" | "stage assets" | "shelf" => Some(Self::Assets),
             "scopes" | "scopes & meters" | "lumetri scopes" => Some(Self::Scopes),
-            "fidget" | "scribbles" | "fidget & scribbles" => Some(Self::Fidget),
             "history" | "undo" | "undo & autosave" => Some(Self::History),
             "fonts" | "font manager" | "font store" => Some(Self::Fonts),
             _ => None,
@@ -77,7 +73,6 @@ impl PanelId {
             Self::Timeline => "Sequence & Stage Timeline",
             Self::Assets => "Stage Assets",
             Self::Scopes => "Scopes & Meters",
-            Self::Fidget => "Fidget & Scribbles",
             Self::History => "Undo & AutoSave Journal",
             Self::Fonts => "Font Manager",
         }
@@ -86,7 +81,7 @@ impl PanelId {
     pub const fn title(self, view: ViewMode) -> &'static str {
         match self {
             Self::Canvas => match view {
-                ViewMode::Project => "Craft Files & Trunk",
+                ViewMode::Project => "Project Craft Files",
                 ViewMode::Storyboard => "Storyboard Pages",
                 ViewMode::Animation => "Character Artboard",
                 ViewMode::Design => "Kinetic Lyrics Stage",
@@ -104,7 +99,7 @@ impl PanelId {
                 ViewMode::Home => "Navigator",
             },
             Self::Inspector => match view {
-                ViewMode::Project => "Interchange & Bridges",
+                ViewMode::Project => "Project Overview",
                 ViewMode::Storyboard => "Field Checklist",
                 ViewMode::Animation => "Puppet · 3D · Roto",
                 ViewMode::Design => "Typography & FX",
@@ -122,7 +117,6 @@ impl PanelId {
             },
             Self::Assets => "Stage Assets",
             Self::Scopes => "Scopes & Meters",
-            Self::Fidget => "Fidget & Scribbles",
             Self::History => "Undo & AutoSave",
             Self::Fonts => "Font Manager",
         }
@@ -136,7 +130,6 @@ impl PanelId {
             Self::Timeline => "dockBottom",
             Self::Assets => "folder",
             Self::Scopes => "scopesWave",
-            Self::Fidget => "sparkles",
             Self::History => "refresh",
             Self::Fonts => "type",
         }
@@ -164,7 +157,6 @@ impl PanelId {
             Self::Timeline => Vec2::new(840.0, 250.0),
             Self::Assets => Vec2::new(540.0, 230.0),
             Self::Scopes => Vec2::new(430.0, 240.0),
-            Self::Fidget => Vec2::new(460.0, 390.0),
             Self::History => Vec2::new(400.0, 220.0),
             Self::Fonts => Vec2::new(690.0, 480.0),
         }
@@ -230,7 +222,7 @@ pub fn preset_layout(name: &str) -> Layout<PanelId> {
                                     "second": {"Tabs": {"panels": ["timeline", "assets"], "active": 0}}
                                 }
                             },
-                            "second": {"Dock": {"side": "End", "columns": [{"groups": [{"panels": ["inspector", "fidget"], "active": 0}], "width": 320.0, "iconic": false}]}}
+                            "second": {"Dock": {"side": "End", "columns": [{"groups": [{"panels": ["inspector"], "active": 0}], "width": 320.0, "iconic": false}]}}
                         }
                     }
                 }
@@ -501,7 +493,6 @@ impl DockContent<PanelId> for MagicDockContent<'_, '_> {
 
             (PanelId::Assets, _) => crate::shell::draw_stage_assets_panel(ui, self.ctx),
             (PanelId::Scopes, _) => views::studio_finishing::draw_scopes_panel(ui, self.ctx),
-            (PanelId::Fidget, _) => crate::options_modal::draw_fidget_panel_body(ui, self.ctx),
             (PanelId::History, _) => crate::modals::draw_history_panel_body(ui, self.ctx),
             (PanelId::Fonts, _) => crate::fonts_ui::draw_font_manager_body(ui, self.ctx),
         }

@@ -186,13 +186,15 @@ fn draw_property_reveal_dock(ui: &mut Ui, ctx: &mut ViewCtx<'_>, _cid: &str) {
             }
         }
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-sep-xyz", "Separate XY", "prop.separateDimensions")).clicked() {
-            ctx.exec("project.autosave", json!({}), Some("Separated X / Y / Z position dimensions"));
+            let now = ui.input(|i| i.time);
+            ctx.state.set_toast(now, "Separated X / Y / Z position dimensions");
         }
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-prev-key", "◀ Prev", "time.previousKey")).clicked() {
             ctx.state.animation.scrub_seconds = (ctx.state.animation.scrub_seconds - 0.5).max(0.0);
         }
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-add-key", "◆ Key", "prop.addKey").primary()).clicked() {
-            ctx.exec("project.autosave", json!({}), Some("Inserted keyframe"));
+            let now = ui.input(|i| i.time);
+            ctx.state.set_toast(now, "Inserted keyframe");
         }
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-next-key", "Next ▶", "time.nextKey")).clicked() {
             let max_d = active_timeline_span(ctx);
@@ -259,14 +261,16 @@ fn draw_bezier_graph_editor_dock(ui: &mut Ui, ctx: &mut ViewCtx<'_>, _cid: &str)
                     ctx.state.animation.curve_handle_out = [0.25, 0.25];
                     ctx.state.animation.curve_handle_in = [0.75, 0.75];
                 }
-                ctx.exec("project.autosave", json!({}), Some("Set keyframe interpolation"));
+                let now = ui.input(|i| i.time);
+                ctx.state.set_toast(now, "Set keyframe interpolation");
             }
         }
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-easy-ease-f9", "Easy Ease F9", "keys.easyEase").primary()).clicked() {
             ctx.state.animation.key_interp = "bezier".into();
             ctx.state.animation.curve_handle_out = [0.36, 0.04];
             ctx.state.animation.curve_handle_in = [0.64, 0.96];
-            ctx.exec("project.autosave", json!({}), Some("Applied Easy Ease (F9)"));
+            let now = ui.input(|i| i.time);
+            ctx.state.set_toast(now, "Applied Easy Ease (F9)");
         }
 
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-graph-prev", "◀", "Previous keyframe")).clicked() {

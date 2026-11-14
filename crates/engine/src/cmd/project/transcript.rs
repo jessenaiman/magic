@@ -1,15 +1,12 @@
-//! Workshop Stage 2 — Transcript validation, SRT caption export, canonical `timing-reference.json`
-//! generation, and `FilmCraft` audio/speech transcription + synced lyric track assembly in [`Tick`]s.
-//!
-//! // TODO: Verify headless `filmcraft-cli` `audio.transcribe` / `captions.fromTranscript` model names
-//! // on fresh Linux/macOS installs when Whisper weights have not been downloaded in FilmCraft yet.
+//! Workshop Stage 2 — Transcript validation, SRT caption export, and `FilmCraft` audio/speech
+//! transcription + synced lyric track assembly in [`Tick`]s.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use serde_json::{Value, json};
 
-use crate::cmd::project::workshop::{project_dir, transcript_files, workshop_status};
-use crate::time::{TICKS_PER_SECOND, Tick, parse_tick};
+use crate::cmd::project::workshop::{project_dir, workshop_status};
+use crate::time::{Tick, parse_tick};
 use crate::workspace::resolve_workspace_path;
 use crate::{EngineError, Result, Session};
 
@@ -179,81 +176,8 @@ fn probed_duration(s: &Session) -> Option<Tick> {
     crate::cmd::film::media_duration_ticks(s.song_audio.as_deref()?, false).ok()
 }
 
-fn transcript_stem(s: &Session) -> String {
-    crate::workspace::sanitize_asset_id(s.project_path.as_ref().and_then(|p| p.file_stem()).and_then(|n| n.to_str()).unwrap_or("song"))
-}
-
-pub(crate) fn write_timing_reference(dir: &Path, audio: Option<&Path>, duration: Option<Tick>, doc: &Value) -> Result<PathBuf> {
-    let words: Vec<Value> = doc["words"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .enumerate()
-        .filter_map(|(i, w)| {
-            let (st, en) = timed_span(w)?;
-            Some(json!({
-                "index": i,
-                "word_id": w.get("word_id").cloned().unwrap_or_else(|| json!(format!("w-{:04}", i + 1))),
-                "text": w["text"],
-                "start_tick": st.0,
-                "end_tick": en.0,
-                "start_sec": st.seconds(),
-                "end_sec": en.seconds(),
-            }))
-        })
-        .collect();
-
-    let lines: Vec<Value> = doc["paragraphs"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .enumerate()
-        .filter_map(|(i, p)| {
-            let (st, en) = timed_span(p)?;
-            Some(json!({
-                "line_index": i,
-                "line_id": format!("line-{:03}", i + 1),
-                "text": p["text"],
-                "start_tick": st.0,
-                "end_tick": en.0,
-                "start_sec": st.seconds(),
-                "end_sec": en.seconds(),
-            }))
-        })
-        .collect();
-
-    let map_doc = json!({
-        "format": "magic.timing-reference.v1",
-        "role": "authoritative song timing map for Lyrics, Motion, Animation, and FilmCraft",
-        "ticks_per_second": TICKS_PER_SECOND,
-        "audio": audio,
-        "duration_tick": duration.map(|t| t.0),
-        "duration_sec": duration.map(Tick::seconds),
-        "word_count": words.len(),
-        "line_count": lines.len(),
-        "lines": lines,
-        "words": words,
-    });
-    let out = dir.join("timing-reference.json");
-    let bytes = serde_json::to_vec_pretty(&map_doc).map_err(|e| EngineError::InvalidParams(e.to_string()))?;
-    craft_atomic::atomic_write(&out, &bytes)?;
-    Ok(out)
-}
-
-/// Sync both the structured transcript (`transcript.set`) and the SRT caption/lyric track (`captions.import`)
-/// directly onto the linked `FilmCraft` `.fcproj` timeline.
-pub(crate) fn sync_lyric_track_to_filmcraft(s: &mut Session, srt_path: &Path, _doc: Option<&Value>) {
-    if let Ok(fcproj) = crate::cmd::film::film_path(s)
-        && fcproj.is_file()
-        && let Some(project_dir) = srt_path.parent()
-    {
-        let mut fc_doc = crate::cmd::film::fcproj_doc::load_fcproj(&fcproj);
-        let srt_cues = crate::cmd::film::fcproj_doc::parse_srt_captions(project_dir);
-        if let Some(c1) = fc_doc["sequence"]["captions"].get_mut(0) {
-            c1["captions"] = json!(srt_cues);
-        }
-        let _ = crate::cmd::film::fcproj_doc::save_fcproj(&fcproj, &mut fc_doc);
-    }
+/// Sync the SRT caption/lyric track onto the linked `FilmCraft` timeline.
+pub(crate) fn sync_lyric_track_to_filmcraft(s: &mut Session, _srt_path: &Path, _doc: Option<&Value>) {
     let _ = crate::cmd::words::cmd_words_captions(s, &json!({"to": "video"}));
 }
 
@@ -311,56 +235,24 @@ pub fn cmd_workshop_import_transcript(s: &mut Session, params: &Value) -> Result
         return Err(EngineError::InvalidParams(format!("transcript does not match: {}", problems.join("; "))));
     }
 
-    let stem = transcript_stem(s);
-    for old in transcript_files(&dir) {
-        if old != dir.join(format!("{stem}.transcript.json")) && old != dir.join("transcript.json") && !params["replace"].as_bool().unwrap_or(false) {
-            return Err(EngineError::InvalidParams(format!("project already has a transcript: {} (remove it first)", old.display())));
-        }
-    }
-
-    let serialized_words = serde_json::to_vec_pretty(&doc["words"]).map_err(|e| EngineError::InvalidParams(e.to_string()))?;
-    let serialized_full = serde_json::to_vec_pretty(&doc).map_err(|e| EngineError::InvalidParams(e.to_string()))?;
-    let dest_main = dir.join("transcript.json");
-    let dest_stem = dir.join(format!("{stem}.transcript.json"));
-    craft_atomic::atomic_write(&dest_main, &serialized_words)?;
-    craft_atomic::atomic_write(&dest_stem, &serialized_full)?;
-
-    let mut copied = vec![dest_main, dest_stem];
     let srt_path = dir.join("transcript.srt");
+    let mut copied = Vec::new();
     if let Some(text) = srt_text {
         craft_atomic::atomic_write(&srt_path, text.as_bytes())?;
         copied.push(srt_path.clone());
     }
-    let timing_ref = write_timing_reference(&dir, s.song_audio.as_deref(), probed, &doc)?;
-    copied.push(timing_ref.clone());
-
-    let provenance = json!({
-        "mode": "imported transcript + canonical timing-reference.json",
-        "duration_tick": probed.map(|t| t.0),
-        "recording_duration_tick": probed.map(|t| t.0),
-        "recording_duration_sec": probed.map(|t| t.0 as f64 / TICKS_PER_SECOND as f64),
-        "grouping": grouping,
-        "timing_reference": timing_ref,
-    });
-    craft_atomic::atomic_write(
-        &dir.join("transcript-provenance.json"),
-        &serde_json::to_vec_pretty(&provenance).map_err(|e| EngineError::InvalidParams(e.to_string()))?,
-    )?;
 
     sync_lyric_track_to_filmcraft(s, &srt_path, Some(&doc));
 
     let mut status = workshop_status(s)?;
     status["imported"] = json!(copied);
-    status["timing_reference"] = json!(timing_ref);
     status["recording_duration_tick"] = json!(probed.map(|t| t.0));
     Ok(status)
 }
 
-/// Transcribe the song audio via `FilmCraft` (`transcript.generate` when built with `--features whisper`,
-/// or surface `transcript.set` / `--transcript` cleanly when `whisper` is disabled in release binaries),
-/// write `timing-reference.json` + `transcript.srt`, and sync the lyric track on `film/<song>.fcproj`.
+/// Transcribe the song audio via `FilmCraft` and sync the lyric track.
 pub fn cmd_audio_analyze(s: &mut Session, params: &Value) -> Result<Value> {
-    let dir = project_dir(s)?;
+    let _dir = project_dir(s)?;
     let audio = params["audio"]
         .as_str()
         .map(|p| resolve_workspace_path(s, p))
@@ -372,22 +264,10 @@ pub fn cmd_audio_analyze(s: &mut Session, params: &Value) -> Result<Value> {
     }
     crate::cmd::film::assembly::ensure_song_film(s, &audio)?;
 
-    let model = params["model"].as_str().unwrap_or("whisper-base").to_string();
     let probe = crate::native_media::probe_media_in_process(&audio)?;
-    let timing_path = dir.join("timing-reference.json");
-    let payload = json!({
-        "audio": audio,
-        "model": model,
-        "probe": probe,
-        "words": [],
-        "paragraphs": [],
-        "note": "Populate word timestamps via Whisper or FilmCraft's own `transcript.generate` MCP tool."
-    });
-    crate::doc_state::write_json(&timing_path, &payload)?;
     Ok(json!({
         "ok": true,
         "audio": audio,
-        "timing_reference": timing_path,
         "probe": probe,
     }))
 }

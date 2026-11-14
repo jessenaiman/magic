@@ -1,18 +1,17 @@
 //! Creative Craft-producer command registrations:
-//! - Kinetic Teaching Lyrics (`words.*` -> `effects/lyrics.ecproj` -> FilmCraft `V3` `"Kinetic Lyrics"`).
-//! - Song-Action Motion (`motion.*` -> `effects/motion.ecproj` -> FilmCraft `V4` `"Action Motion"`).
-//! - Character Animation (`character.*` -> `.ecproj` -> FilmCraft `V2` `"Character Animation"`).
-//! - Subject Isolation & Vector Tracing (`native_media::isolate_subject_rgba`, `native_media::trace_silhouette_svg`, `scribbles.*`).
-//! - FilmCraft × EffectCraft Bridge & Studio Finishing (`bridge.*`, `effect.*`, `video.*`).
+//! - Kinetic Lyrics (`words.*` -> `effects/lyrics.ecproj` -> FilmCraft `V3` + `C1`).
+//! - Song-Action Motion (`motion.*` -> `effects/motion.ecproj` -> FilmCraft `V4`).
+//! - Character Animation (`character.*` -> `.ecproj` -> FilmCraft `V2`).
+//! - `FilmCraft` × `EffectCraft` Bridge & Studio Finishing (`video.*`).
 
 use super::{cmd_spec, query_spec};
 use crate::commands::{CommandSpec, always};
 
 pub fn specs() -> Vec<CommandSpec> {
-    let mut out = Vec::with_capacity(98);
+    let mut out = Vec::with_capacity(80);
     out.extend(specs_words());
     out.extend(specs_motion());
-    out.extend(specs_photo_vector_and_scribbles());
+    out.extend(specs_image());
     out.extend(specs_character());
     out.extend(super::film::specs_film());
     out
@@ -215,178 +214,16 @@ fn specs_motion() -> Vec<CommandSpec> {
     ]
 }
 
-fn specs_photo_vector_and_scribbles() -> Vec<CommandSpec> {
-    vec![
-        cmd_spec!(
-            "image.generate",
-            "Generate Image via Configured Provider Shell (craft-ai-core)",
-            ["Project Assets"],
-            None,
-            "{\"prompt\":\"description\",\"references\":[],\"remove_background\":false,\"vectorize\":false,\"name\":\"optional\"}",
-            always,
-            crate::craft_ai::cmd_image_generate
-        ),
-        cmd_spec!(
-            "scribbles.connect",
-            "Bind Scribbles Connection & Model (craft-ai-core)",
-            ["Scribbles"],
-            None,
-            "{\"connection\":\"connection id\",\"model\":\"model id\"}",
-            always,
-            crate::craft_ai::cmd_ai_configure
-        ),
-        cmd_spec!(
-            "scribbles.consent",
-            "Grant or Revoke Outbound Craft AI Consent",
-            ["Scribbles"],
-            None,
-            "{\"agree\":true,\"term\":\"one_hour|one_day|until_revoked\"}",
-            always,
-            crate::craft_ai::cmd_ai_consent
-        ),
-        cmd_spec!(
-            "scribbles.ingest",
-            "Ingest Staged Character Bundle Folder into PhotoCraft & EffectCraft",
-            ["Scribbles"],
-            None,
-            "{\"dir\":\"bundle directory\",\"character\":\"optional\"}",
-            always,
-            crate::scribbles::cmd_scribbles_ingest
-        ),
-        query_spec!(
-            "fidget.prepare",
-            "Preview Deterministic Template Brief",
-            "{\"slide\":\"storyboard/slides/slide-01.png\",\"kind\":\"new|image|sheet|poses|actions|custom\",\"prompt\":\"description\"}",
-            crate::scribbles::cmd_fidget_prepare
-        ),
-        cmd_spec!(
-            "fidget.stage",
-            "Rephrase & Stage Structured Prompt via Fidget (With Optional Seamless Scribbles Handoff)",
-            ["Scribbles"],
-            None,
-            "{\"slide\":\"storyboard/slides/slide-01.png\",\"kind\":\"new|image|sheet|poses|actions|custom\",\"prompt\":\"description\",\"seamless\":false}",
-            always,
-            crate::scribbles::cmd_fidget_stage
-        ),
-        cmd_spec!(
-            "scribbles.generate",
-            "Generate Drawing From Template via Scribbles",
-            ["Scribbles"],
-            None,
-            "{\"slide\":\"storyboard/slides/slide-01.png\",\"prompt\":\"instructions\"}",
-            always,
-            crate::scribbles::cmd_scribbles_generate
-        ),
-        query_spec!("scribbles.templates", "Scribbles Templates & Craft AI Status", "{}", crate::scribbles::cmd_scribbles_templates),
-        cmd_spec!(
-            "scribbles.new",
-            "New Character Drawing",
-            ["Scribbles"],
-            None,
-            "{\"slide\":\"storyboard/slides/slide-01.png\",\"prompt\":\"character\"}",
-            always,
-            crate::scribbles::cmd_scribbles_new
-        ),
-        cmd_spec!(
-            "scribbles.image",
-            "Redraw Character for Animation",
-            ["Scribbles"],
-            None,
-            "{\"slide\":\"storyboard/slides/slide-01.png\",\"prompt\":\"character\"}",
-            always,
-            crate::scribbles::cmd_scribbles_image
-        ),
-        cmd_spec!(
-            "scribbles.sheet",
-            "Turnaround Sheet",
-            ["Scribbles"],
-            None,
-            "{\"slide\":\"storyboard/slides/slide-01.png\",\"prompt\":\"character\"}",
-            always,
-            crate::scribbles::cmd_scribbles_sheet
-        ),
-        cmd_spec!(
-            "scribbles.poses",
-            "Pose Sheet (3x2)",
-            ["Scribbles"],
-            None,
-            "{\"slide\":\"storyboard/slides/slide-01.png\",\"prompt\":\"character\"}",
-            always,
-            crate::scribbles::cmd_scribbles_poses
-        ),
-        cmd_spec!(
-            "scribbles.poses_2x2",
-            "Pose Sheet (2x2)",
-            ["Scribbles"],
-            None,
-            "{\"slide\":\"storyboard/slides/slide-01.png\",\"prompt\":\"character\"}",
-            always,
-            crate::scribbles::cmd_scribbles_poses_2x2
-        ),
-        cmd_spec!(
-            "scribbles.parts_chroma",
-            "Cutout Parts Sheet",
-            ["Scribbles"],
-            None,
-            "{\"slide\":\"storyboard/slides/slide-01.png\",\"prompt\":\"character\"}",
-            always,
-            crate::scribbles::cmd_scribbles_parts_chroma
-        ),
-        cmd_spec!(
-            "scribbles.moppet",
-            "3-Part Character Cutout & Rig Bundle",
-            [],
-            None,
-            "{\"slide\":\"storyboard/slides/slide-01.png\",\"character\":\"id\",\"prompt\":\"description\",\"rig\":true}",
-            always,
-            crate::scribbles::cmd_scribbles_moppet
-        ),
-        cmd_spec!(
-            "scribbles.actions",
-            "8-Frame Action Sheet",
-            ["Scribbles"],
-            None,
-            "{\"slide\":\"storyboard/slides/slide-01.png\",\"action\":\"walk\",\"direction\":\"side\"}",
-            always,
-            crate::scribbles::cmd_scribbles_actions
-        ),
-        cmd_spec!(
-            "scribbles.layers",
-            "Layered Character Sheet",
-            ["Scribbles"],
-            None,
-            "{\"slide\":\"storyboard/slides/slide-01.png\"}",
-            always,
-            crate::scribbles::cmd_scribbles_layers
-        ),
-        cmd_spec!(
-            "scribbles.custom",
-            "Custom Drawing",
-            ["Scribbles"],
-            None,
-            "{\"slide\":\"storyboard/slides/slide-01.png\",\"prompt\":\"drawing\"}",
-            always,
-            crate::scribbles::cmd_scribbles_custom
-        ),
-        cmd_spec!(
-            "scribbles.svg",
-            "Trace Vector Pose Sheet via VectorCraft",
-            ["Scribbles"],
-            None,
-            "{\"sheet\":\"pose-sheet.png\"}",
-            always,
-            crate::scribbles::cmd_scribbles_svg
-        ),
-        cmd_spec!(
-            "scribbles.reassemble",
-            "Split Parts Sheet via PhotoCraft (layer.maskAllObjects) & Rig in EffectCraft",
-            ["Scribbles"],
-            None,
-            "{\"character\":\"id\",\"view\":\"front\",\"sheet\":\"parts-sheet.png\",\"rig\":true}",
-            always,
-            crate::scribbles::cmd_scribbles_reassemble
-        ),
-    ]
+fn specs_image() -> Vec<CommandSpec> {
+    vec![cmd_spec!(
+        "image.generate",
+        "Generate Image via Configured Provider Shell (craft-ai-core)",
+        ["Project Assets"],
+        None,
+        "{\"prompt\":\"description\",\"references\":[],\"remove_background\":false,\"vectorize\":false,\"name\":\"optional\"}",
+        always,
+        crate::craft_ai::cmd_image_generate
+    )]
 }
 
 fn specs_character() -> Vec<CommandSpec> {
@@ -536,26 +373,6 @@ fn specs_character() -> Vec<CommandSpec> {
             "{\"character\":\"optional\",\"view\":\"optional\",\"time\":0}",
             crate::cmd::character::cmd_animation_view
         ),
-        query_spec!("animation.motion_options", "Single-Subject EffectCraft Motion Options", "{}", crate::cmd::character::review::cmd_motion_options),
-        cmd_spec!(
-            "animation.prepare_motion",
-            "Prepare Character Motion in EffectCraft",
-            ["Animation"],
-            None,
-            "{\"character\":\"id\",\"clip\":\"clip\",\"option\":\"baseline\"}",
-            always,
-            crate::cmd::character::review::cmd_prepare_motion
-        ),
-        query_spec!("animation.review", "Animation Review Models and Revisions", "{}", crate::cmd::character::review::cmd_review),
-        cmd_spec!(
-            "animation.save_revision",
-            "Save Animation Revision",
-            ["Animation"],
-            None,
-            "{\"expected_project\":\"path\",\"expected_revision\":0,\"character\":\"id\"}",
-            always,
-            crate::cmd::character::review::cmd_save_revision
-        ),
         cmd_spec!(
             "character.puppet.rig_face",
             "Rig 11-Pin Facial & Mouth Puppet Mesh (EffectCraft)",
@@ -576,7 +393,7 @@ fn specs_character() -> Vec<CommandSpec> {
         ),
         cmd_spec!(
             "character.puppet.lipsync",
-            "Animate Mouth Viseme Puppet Pins From timing-reference.json",
+            "Animate Mouth Viseme Puppet Pins From Project Transcript",
             ["Animation"],
             None,
             "{\"character\":\"id\",\"view\":\"front\",\"start\":0,\"intensity\":1.0}",

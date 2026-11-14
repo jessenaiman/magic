@@ -1,6 +1,5 @@
-//! App-wide typography picker (`egui::ComboBox`) & embedded [`craft_font_manager::FontsPanel`]
-//! powered by [`craft_font_catalog::Catalog`], [`craft_font_store::FontStore`] (`SuiteStore`), and
-//! [`storytold/font-preview-service`](https://github.com/storytold/font-preview-service) on-demand WOFF2 subsets.
+//! App-wide typography picker & embedded [`craft_font_manager::FontsPanel`]
+//! powered by [`craft_font_catalog::Catalog`] and [`craft_font_manager`].
 
 use std::sync::{Arc, Mutex, OnceLock};
 
@@ -9,7 +8,7 @@ use craft_font_manager::store::{Installer, NoStore, SuiteStore};
 use craft_font_manager::{FontsPanel, Options, Runner, Settings};
 use egui::{Align2, ComboBox, RichText, ScrollArea, Ui, Vec2};
 
-use crate::state::{ActiveModal, PickerTarget, UiAction, UiShellState, ViewCtx};
+use crate::state::{ActiveModal, UiAction, UiShellState, ViewCtx};
 use crate::theme::MagicPalette;
 use crate::widgets::{AutomationRegistry, BtnSpec, action_button, status_pill, text_input};
 
@@ -106,7 +105,7 @@ fn draw_filtered_font_rows(ui: &mut Ui, pal: &MagicPalette, current_family: &mut
     picked
 }
 
-/// Embedded Craft Font Manager body (`craft_font_manager::FontsPanel` + `font-preview-service` subset endpoint).
+/// Embedded Craft Font Manager body (`craft_font_manager::FontsPanel`).
 pub fn draw_font_manager_body(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     if ctx.state.available_fonts.is_empty() {
         refresh_available_fonts(ctx.state);
@@ -120,64 +119,6 @@ pub fn draw_font_manager_body(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             let now = ui.input(|i| i.time);
             ctx.state.set_toast(now, format!("Rescanned {} font families", ctx.state.available_fonts.len()));
         }
-        if action_button(
-            ui,
-            ctx.reg,
-            ctx.pal,
-            BtnSpec::new("font-mgr-add-dir", "folder", "+ Font Folder", "Register custom font directory in Catalog::set_app_dirs"),
-        )
-        .clicked()
-        {
-            ctx.push(UiAction::PickFile {
-                target: PickerTarget::ImportFontDir,
-                title: "Select Custom Font Folder".into(),
-                extensions: Vec::new(),
-                directory: true,
-                save: false,
-            });
-        }
-    });
-
-    ui.add_space(4.0);
-    ctx.pal.inset_frame().show(ui, |ui| {
-        ui.vertical(|ui| {
-            ui.label(RichText::new("Font Preview Service (`ghcr.io/storytold/font-preview-service`)").size(11.2).strong().color(ctx.pal.accent_sky));
-            ui.horizontal_wrapped(|ui| {
-                text_input(
-                    ui,
-                    ctx.reg,
-                    "font-preview-svc-url",
-                    "font-preview-service base URL",
-                    &mut ctx.state.font_preview_url,
-                    "http://127.0.0.1:8000",
-                    210.0,
-                );
-                text_input(
-                    ui,
-                    ctx.reg,
-                    "font-preview-sample-txt",
-                    "Sample lyric text (<= 256 codepoints)",
-                    &mut ctx.state.font_preview_sample,
-                    "Sample lyric text…",
-                    230.0,
-                );
-                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("font-preview-save-url", "save", "Save Endpoint", "Persist fonts.preview_service_url"))
-                    .clicked()
-                {
-                    let url = ctx.state.font_preview_url.trim().to_owned();
-                    ctx.exec("prefs.set", serde_json::json!({"key": "fonts.preview_service_url", "value": url}), Some("Saved font-preview-service endpoint"));
-                }
-            });
-            if let Some(cp_spec) = magic_util::text::canonical_codepoint_spec(&ctx.state.font_preview_sample) {
-                let base = ctx.state.font_preview_url.trim().trim_end_matches('/');
-                ui.label(
-                    RichText::new(format!("On-demand WOFF2 subset: {base}/v1/faces/{{sha256}}/list/u/{cp_spec}.woff2  (ready: {base}/readyz)"))
-                        .monospace()
-                        .size(9.2)
-                        .color(ctx.pal.text_muted),
-                );
-            }
-        });
     });
 
     ui.add_space(6.0);

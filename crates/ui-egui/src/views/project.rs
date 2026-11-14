@@ -1,6 +1,4 @@
-//! `Project` overview & Craft file trunk (`#view-project`): precision match for
-//! `02-project-craft-files.jpg` (`166374e1.jpeg`) plus `Sheet 08` Zone A `FilmCraft` × `EffectCraft`
-//! interchange drawers (`project_interchange.rs`: `T01`–`T05`, `T08`, `T10`).
+//! `Project` overview & Craft file browser (`#view-project`).
 
 use egui::{Align, Align2, Color32, CornerRadius, FontId, Layout, Pos2, Rect, RichText, ScrollArea, Sense, Stroke, StrokeKind, Ui, Vec2};
 use serde_json::{Value, json};
@@ -8,7 +6,6 @@ use serde_json::{Value, json};
 use crate::controls::{fill_card, paint_craft_badge, paint_local_image, paint_readiness_light};
 use crate::icons::icon_image;
 use crate::state::{PickerTarget, UiAction, ViewCtx, ViewMode};
-use crate::views::project_interchange::{draw_offline_and_source_guard_card, draw_trunk_bridge_buttons, draw_trunk_bridge_drawers};
 use crate::widgets::{BtnSpec, action_button, status_pill, text_input};
 
 pub fn draw_navigator_panel(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
@@ -16,11 +13,11 @@ pub fn draw_navigator_panel(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
 }
 
 pub fn draw_canvas_panel(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
-    draw_files_trunk(ui, ctx);
+    draw_project_files(ui, ctx);
 }
 
-pub fn draw_inspector_panel(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
-    crate::views::project_interchange::draw_inspector_panel(ui, ctx);
+pub fn draw_inspector_panel(ui: &mut Ui, _ctx: &mut ViewCtx<'_>) {
+    ui.label(RichText::new("Project Overview").size(12.0).color(Color32::GRAY));
 }
 
 pub fn draw_timeline_panel(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
@@ -192,7 +189,7 @@ fn draw_song_and_lyrics_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                         ui,
                         ctx.reg,
                         ctx.pal,
-                        BtnSpec::new("song-transcribe", "sparkles", "Align", "Run FilmCraft speech alignment & write timing-reference.json").enabled(has_song),
+                        BtnSpec::new("song-transcribe", "sparkles", "Align", "Run speech alignment and update timed lyrics in project").enabled(has_song),
                     )
                     .clicked()
                     {
@@ -337,19 +334,16 @@ fn mint_outline_button(ui: &mut Ui, ctx: &mut ViewCtx<'_>, id: &str, label: &str
     resp.clicked()
 }
 
-fn draw_files_trunk(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
-    let trunk = &ctx.state.cache.snapshot["data"]["trunk"];
-    let trunk_files = trunk["files"].as_array().cloned().unwrap_or_default();
-    let total_count = trunk["count"].as_u64().map_or(trunk_files.len(), |n| n as usize);
-    let reg_count = trunk["registered_asset_count"].as_u64().unwrap_or(0);
+fn draw_project_files(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
+    let files_doc = &ctx.state.cache.snapshot["data"]["files"];
+    let files_list = files_doc["files"].as_array().cloned().unwrap_or_default();
+    let total_count = files_doc["count"].as_u64().map_or(files_list.len(), |n| n as usize);
+    let reg_count = files_doc["registered_asset_count"].as_u64().unwrap_or(0);
 
     let panel = fill_card(ui, ctx.pal, true, |ui| {
         ui.horizontal_wrapped(|ui| {
             ui.label(RichText::new("Project Craft Files & Rendered Assets").size(15.0).strong().color(ctx.pal.text_primary));
             ui.label(RichText::new(format!("{total_count} Files · {reg_count} registered assets")).size(11.5).color(ctx.pal.text_muted));
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                draw_trunk_bridge_buttons(ui, ctx);
-            });
         });
         ui.add_space(4.0);
 
@@ -377,7 +371,7 @@ fn draw_files_trunk(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                     "Import .fcproj, .designcraft, .ecproj, .pcraft, .vectorcraft, or .svg into project",
                 ) {
                     ctx.push(UiAction::PickFile {
-                        target: PickerTarget::ImportTrunkFile,
+                        target: PickerTarget::ImportCraftFile,
                         title: "Import Craft Project or Media File".into(),
                         extensions: vec![
                             "pcraft".into(),
@@ -417,10 +411,9 @@ fn draw_files_trunk(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             });
         });
 
-        draw_trunk_bridge_drawers(ui, ctx);
         ui.add_space(3.0);
         ui.separator();
-        draw_trunk_file_list(ui, ctx, &trunk_files);
+        draw_project_file_list(ui, ctx, &files_list);
     });
     ctx.reg.record("project-files-panel", "Project Craft Files", &panel.response, None);
 }
@@ -439,12 +432,12 @@ fn normalize_domain_heading(raw: &str) -> &str {
     }
 }
 
-fn draw_trunk_file_list(ui: &mut Ui, ctx: &mut ViewCtx<'_>, trunk_files: &[Value]) {
+fn draw_project_file_list(ui: &mut Ui, ctx: &mut ViewCtx<'_>, files_list: &[Value]) {
     let query = ctx.state.project.search.trim().to_ascii_lowercase();
     let tfilter = ctx.state.project.type_filter.clone();
     let grouped = ctx.state.project.group_by_folder;
 
-    let filtered: Vec<&Value> = trunk_files
+    let filtered: Vec<&Value> = files_list
         .iter()
         .filter(|f| {
             let name = f["name"].as_str().unwrap_or_default().to_ascii_lowercase();
@@ -465,9 +458,7 @@ fn draw_trunk_file_list(ui: &mut Ui, ctx: &mut ViewCtx<'_>, trunk_files: &[Value
         ui.spacing_mut().item_spacing.y = 2.5;
         ui.vertical(|ui| {
             if filtered.is_empty() {
-                ui.label(
-                    RichText::new("No matching Craft or asset files in project trunk — click + Add Asset or + Import Craft File.").color(ctx.pal.text_muted),
-                );
+                ui.label(RichText::new("No matching Craft or asset files in project — click + Add Asset or + Import Craft File.").color(ctx.pal.text_muted));
                 return;
             }
             let mut last_group = String::new();

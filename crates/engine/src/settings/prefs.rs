@@ -30,37 +30,6 @@ pub struct AiPrefs {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
-pub struct FidgetPrefs {
-    pub enabled: bool,
-    pub seamless: bool,
-    pub connection: Option<String>,
-    pub model: Option<String>,
-}
-
-impl Default for FidgetPrefs {
-    fn default() -> Self {
-        Self { enabled: true, seamless: false, connection: None, model: None }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct ScribblesPrefs {
-    pub enabled: bool,
-    pub connection: Option<String>,
-    pub model: Option<String>,
-    pub endpoint: Option<String>,
-    pub template: Option<String>,
-}
-
-impl Default for ScribblesPrefs {
-    fn default() -> Self {
-        Self { enabled: true, connection: None, model: None, endpoint: None, template: Some("new".into()) }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
 pub struct ProjectPrefs {
     pub root: Option<String>,
     pub storyboard_template: String,
@@ -78,12 +47,11 @@ impl Default for ProjectPrefs {
 pub struct LyricsPrefs {
     pub default_size: i64,
     pub outline: bool,
-    pub font_dirs: Option<String>,
 }
 
 impl Default for LyricsPrefs {
     fn default() -> Self {
-        Self { default_size: 72, outline: true, font_dirs: None }
+        Self { default_size: 72, outline: true }
     }
 }
 
@@ -155,8 +123,6 @@ impl Default for AutosavePrefs {
 #[serde(default)]
 pub struct MagicPrefs {
     pub ai: AiPrefs,
-    pub fidget: FidgetPrefs,
-    pub scribbles: ScribblesPrefs,
     pub project: ProjectPrefs,
     pub lyrics: LyricsPrefs,
     pub animation: AnimationPrefs,
@@ -225,15 +191,6 @@ impl MagicPrefs {
     pub fn get_value(&self, key: &str) -> Value {
         match key {
             "ai.enabled" => json!(self.ai.enabled),
-            "fidget.enabled" => json!(self.fidget.enabled),
-            "fidget.seamless" => json!(self.fidget.seamless),
-            "fidget.connection" => opt_str_json(&self.fidget.connection),
-            "fidget.model" => opt_str_json(&self.fidget.model),
-            "scribbles.enabled" => json!(self.scribbles.enabled),
-            "scribbles.connection" => opt_str_json(&self.scribbles.connection),
-            "scribbles.model" => opt_str_json(&self.scribbles.model),
-            "scribbles.endpoint" => opt_str_json(&self.scribbles.endpoint),
-            "scribbles.template" => opt_str_json(&self.scribbles.template),
             "appearance.interface_style" => json!(self.appearance.interface_style),
             "appearance.theme" => json!(self.appearance.theme),
             "appearance.accessible_contrast" => json!(self.appearance.accessible_contrast),
@@ -244,7 +201,6 @@ impl MagicPrefs {
             "project.storyboard_format" => json!(self.project.storyboard_format),
             "lyrics.default_size" => json!(self.lyrics.default_size),
             "lyrics.outline" => json!(self.lyrics.outline),
-            "lyrics.font_dirs" => opt_str_json(&self.lyrics.font_dirs),
             "animation.loop_preview" => json!(self.animation.loop_preview),
             "animation.duration" => json!(self.animation.duration),
             "general.at_startup" => json!(self.general.at_startup),
@@ -262,15 +218,6 @@ impl MagicPrefs {
         validate_schema_value(key, value)?;
         match key {
             "ai.enabled" => self.ai.enabled = value.as_bool().unwrap_or(false),
-            "fidget.enabled" => self.fidget.enabled = value.as_bool().unwrap_or(true),
-            "fidget.seamless" => self.fidget.seamless = value.as_bool().unwrap_or(false),
-            "fidget.connection" => self.fidget.connection = opt_str_from_value(value),
-            "fidget.model" => self.fidget.model = opt_str_from_value(value),
-            "scribbles.enabled" => self.scribbles.enabled = value.as_bool().unwrap_or(true),
-            "scribbles.connection" => self.scribbles.connection = opt_str_from_value(value),
-            "scribbles.model" => self.scribbles.model = opt_str_from_value(value),
-            "scribbles.endpoint" => self.scribbles.endpoint = opt_str_from_value(value),
-            "scribbles.template" => self.scribbles.template = opt_str_from_value(value),
             "appearance.interface_style" => self.appearance.interface_style = value.as_str().unwrap_or("aurora").to_owned(),
             "appearance.theme" => self.appearance.theme = value.as_str().unwrap_or("dark").to_owned(),
             "appearance.accessible_contrast" => self.appearance.accessible_contrast = value.as_bool().unwrap_or(false),
@@ -284,7 +231,6 @@ impl MagicPrefs {
             "project.storyboard_format" => self.project.storyboard_format = value.as_str().unwrap_or("designcraft").to_owned(),
             "lyrics.default_size" => self.lyrics.default_size = value.as_i64().unwrap_or(72),
             "lyrics.outline" => self.lyrics.outline = value.as_bool().unwrap_or(true),
-            "lyrics.font_dirs" => self.lyrics.font_dirs = opt_str_from_value(value),
             "animation.loop_preview" => self.animation.loop_preview = value.as_bool().unwrap_or(true),
             "animation.duration" => self.animation.duration = value.as_f64().unwrap_or(4.0),
             "general.at_startup" => self.general.at_startup = value.as_str().unwrap_or("showHome").to_owned(),

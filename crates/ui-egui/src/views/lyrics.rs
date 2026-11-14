@@ -255,7 +255,6 @@ fn draw_stage_header_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>, active: Option<&Val
                     let payload = json!({
                         "animation_id": anim_id,
                         "expected_source_revision": rev,
-                        "teaching_mode": ctx.state.lyrics.teaching_mode,
                         "style": {
                             "size": ctx.state.lyrics.font_size.clamp(40.0, 320.0),
                             "color": ctx.state.lyrics.color_hex,
@@ -265,7 +264,9 @@ fn draw_stage_header_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>, active: Option<&Val
                     ctx.state.dirty_drafts.remove("lyrics");
                     ctx.exec("words.save", payload, Some("Saved lyric section"));
                 } else {
-                    ctx.exec("project.autosave", json!({}), Some("Saved lyric draft"));
+                    ctx.state.dirty_drafts.remove("lyrics");
+                    let now = ui.input(|i| i.time);
+                    ctx.state.set_toast(now, "Saved lyric draft in memory");
                 }
             }
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("words-reload", "refresh", "Reload words.read & words.effects")).clicked() {

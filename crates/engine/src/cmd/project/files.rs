@@ -1,4 +1,4 @@
-//! Self-contained project file trunk (`project.trunk`) and owned file import (`project.import_file`).
+//! Self-contained project file inventory (`project.files`) and owned file import (`project.import_file`).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -91,7 +91,9 @@ fn visual_kind(class: &FileClass) -> &'static str {
 fn classify_craft_or_video(ext: &str) -> Option<FileClass> {
     match ext {
         "magic" => Some(FileClass::new("project_files", "Project & Supporting Files", 6, 0, "MAGIC", "Open", true)),
-        "designcraft" | "idml" | "indt" => Some(FileClass::new("designcraft", "DesignCraft Storyboard (.designcraft / .idml)", 1, 1, "DC", "Open in DesignCraft", true)),
+        "designcraft" | "idml" | "indt" => {
+            Some(FileClass::new("designcraft", "DesignCraft Storyboard (.designcraft / .idml)", 1, 1, "DC", "Open in DesignCraft", true))
+        }
         "fcproj" => Some(FileClass::new("filmcraft", "FilmCraft (.fcproj)", 0, 1, "FC", "Open in FilmCraft", true)),
         "ecproj" => Some(FileClass::new("effect_film", "EffectCraft (.ecproj)", 2, 1, "EC", "Open in EffectCraft", true)),
         "mp4" | "mov" | "webm" | "mkv" => {
@@ -170,9 +172,6 @@ fn classify_file(path: &Path) -> FileClass {
             let b = if matches!(ext.as_str(), "srt" | "lrc") { "SRT" } else { "TXT" };
             FileClass::new("audio_words", "Audio & Timed Lyrics", 5, 2, b, "Open", false)
         }
-        "json" if matches!(name.as_str(), "words.json" | "transcript.json" | "official_lyrics.json" | "timing-reference.json") => {
-            FileClass::new("audio_words", "Audio & Timed Lyrics", 5, 3, "JSON", "Open", false)
-        }
         "zip" if name == "original-project.zip" => FileClass::new("project_files", "Project & Supporting Files", 6, 1, "ZIP", "Open", false),
         _ => {
             let b = if matches!(ext.as_str(), "json" | "jsonl") { "JSON" } else { "FILE" };
@@ -205,7 +204,7 @@ fn resolve_craft_preview(project_dir: &Path, path: &Path, badge: &str, modified_
     }
     if matches!(ext.as_str(), "pcraft" | "vectorcraft" | "vcraft" | "drawcraft" | "designcraft") {
         let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("craft");
-        let cache_png = project_dir.join(".preview/trunk").join(format!("{stem}-{modified_ms}.png"));
+        let cache_png = project_dir.join(".preview/files").join(format!("{stem}-{modified_ms}.png"));
         if cache_png.is_file() || (magic_util::media::extract_craft_preview(path, &cache_png).unwrap_or(false) && cache_png.is_file()) {
             return Some(cache_png);
         }
@@ -277,7 +276,7 @@ fn walk_project_files(root: &Path, current: &Path, visited: &mut BTreeSet<PathBu
     let mut entries: Vec<PathBuf> = std::fs::read_dir(current).into_iter().flatten().flatten().map(|e| e.path()).collect();
     entries.sort();
     for entry in entries {
-        if entry.file_name().and_then(|n| n.to_str()).is_some_and(|n| n == ".git" || n == ".history" || (n == ".preview" && current == root)) {
+        if entry.file_name().and_then(|n| n.to_str()).is_some_and(|n| n == ".git" || (n == ".preview" && current == root)) {
             continue;
         }
         let Ok(canon_entry) = entry.canonicalize() else { continue };
@@ -318,7 +317,7 @@ fn file_can_animate(cls: &FileClass, assets: &[ProjectAsset]) -> bool {
         || assets.first().is_some_and(|a| matches!(a.kind.as_str(), "image" | "model_3d" | "character" | "cutout_rig" | "poses" | "turnaround" | "anim_3d"))
 }
 
-pub fn cmd_project_trunk(s: &mut Session, _params: &Value) -> Result<Value> {
+pub fn cmd_project_files(s: &mut Session, _params: &Value) -> Result<Value> {
     let dir = project_dir(s)?;
     let canon_dir = dir.canonicalize().unwrap_or_else(|_| dir.clone());
     let duration_sec = song_seconds(&dir);
@@ -456,5 +455,5 @@ pub fn cmd_project_import_file(s: &mut Session, params: &Value) -> Result<Value>
         imported.push(json!(dest));
     }
 
-    Ok(json!({"ok": true, "imported": imported, "trunk": cmd_project_trunk(s, &json!({}))?}))
+    Ok(json!({"ok": true, "imported": imported, "files": cmd_project_files(s, &json!({}))?}))
 }

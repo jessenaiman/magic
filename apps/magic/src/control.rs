@@ -569,7 +569,6 @@ impl MagicDesktopApp {
                 "motionTab": self.ui_state.motion.inspector_tab,
                 "ribbonCollapsed": self.ui_state.ribbon_collapsed,
                 "assetsOpen": self.ui_state.docking.is_panel_visible(magic_ui_egui::PanelId::Assets),
-                "fidgetOpen": self.ui_state.docking.is_panel_visible(magic_ui_egui::PanelId::Fidget),
                 "historyOpen": self.ui_state.docking.is_panel_visible(magic_ui_egui::PanelId::History),
                 "fontsOpen": self.ui_state.docking.is_panel_visible(magic_ui_egui::PanelId::Fonts),
             },
@@ -635,7 +634,6 @@ impl MagicDesktopApp {
                 "ribbonCollapsed",
                 "workspace",
                 "assetsOpen",
-                "fidgetOpen",
                 "historyOpen",
                 "fontsOpen",
             ],
@@ -714,9 +712,6 @@ impl MagicDesktopApp {
         }
         if let Some(ao) = params.get("assetsOpen").and_then(Value::as_bool) {
             self.ui_state.docking.set_panel_visible(magic_ui_egui::PanelId::Assets, ao);
-        }
-        if let Some(fo) = params.get("fidgetOpen").and_then(Value::as_bool) {
-            self.ui_state.docking.set_panel_visible(magic_ui_egui::PanelId::Fidget, fo);
         }
         if let Some(ho) = params.get("historyOpen").and_then(Value::as_bool) {
             self.ui_state.docking.set_panel_visible(magic_ui_egui::PanelId::History, ho);

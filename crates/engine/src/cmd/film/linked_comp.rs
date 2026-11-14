@@ -167,14 +167,15 @@ fn find_fcproj_item_for_media(project_dir: &Path, media_path: &Path, track_code:
     let Some(fcproj) = rd.flatten().map(|e| e.path()).find(|p| p.extension().and_then(|e| e.to_str()) == Some("fcproj")) else {
         return (None, None);
     };
-    let doc = super::fcproj_doc::load_fcproj(&fcproj);
     let canon_media = canonical_or_self(media_path);
-    let item_id = doc["media"].as_array().into_iter().flatten().find_map(|m| {
+    let media = super::execute(&fcproj, "media.status", json!({})).unwrap_or_else(|_| json!([]));
+    let item_id = media.as_array().into_iter().flatten().find_map(|m| {
         let p = PathBuf::from(m["path"].as_str()?);
         (canonical_or_self(&p) == canon_media).then(|| m["item"].as_u64()).flatten()
     });
+    let seq = super::execute(&fcproj, "sequence.inspect", json!({})).unwrap_or(Value::Null);
     let t_name = track_display_name(track_code);
-    let clip_id = doc["sequence"]["video"]
+    let clip_id = seq["video"]
         .as_array()
         .into_iter()
         .flatten()

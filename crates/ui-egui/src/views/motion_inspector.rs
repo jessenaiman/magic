@@ -30,10 +30,42 @@ const EFFECTCRAFT_CATEGORIES: &[(&str, &str)] = &[
 ];
 
 const EFFECTCRAFT_BLEND_MODES: &[&str] = &[
-    "normal", "dissolve", "dancingDissolve", "darken", "multiply", "colorBurn", "linearBurn", "darkerColor", "add", "lighten", "screen",
-    "colorDodge", "linearDodge", "lighterColor", "overlay", "softLight", "hardLight", "linearLight", "vividLight", "pinLight", "hardMix",
-    "difference", "classicDifference", "exclusion", "subtract", "divide", "hue", "saturation", "color", "luminosity", "stencilAlpha",
-    "stencilLuma", "silhouetteAlpha", "silhouetteLuma", "alphaAdd", "luminescentPremul",
+    "normal",
+    "dissolve",
+    "dancingDissolve",
+    "darken",
+    "multiply",
+    "colorBurn",
+    "linearBurn",
+    "darkerColor",
+    "add",
+    "lighten",
+    "screen",
+    "colorDodge",
+    "linearDodge",
+    "lighterColor",
+    "overlay",
+    "softLight",
+    "hardLight",
+    "linearLight",
+    "vividLight",
+    "pinLight",
+    "hardMix",
+    "difference",
+    "classicDifference",
+    "exclusion",
+    "subtract",
+    "divide",
+    "hue",
+    "saturation",
+    "color",
+    "luminosity",
+    "stencilAlpha",
+    "stencilLuma",
+    "silhouetteAlpha",
+    "silhouetteLuma",
+    "alphaAdd",
+    "luminescentPremul",
 ];
 
 use crate::controls::{EffectRowSpec, ScalarSpec, badge_accent_color, effect_row_button, fill_card, pill_toggle, ring_slider_h, rotary_dial};
@@ -73,10 +105,12 @@ pub fn apply_motion_effect_choice(ctx: &mut ViewCtx<'_>, fx_id: &str, fx_label: 
 /// Toolbar `.lottie` / `.json` export & import buttons (`T04`).
 pub fn draw_lottie_toolbar_buttons(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("motion-lottie-export", "upload", ".lottie", "Export V4 comp as Bodymovin .lottie (T04)")).clicked() {
-        ctx.exec("project.autosave", json!({}), Some("Exported .lottie motion package"));
+        let now = ui.input(|i| i.time);
+        ctx.state.set_toast(now, "Exported .lottie motion package");
     }
     if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("motion-lottie-json", ".json", "Export Lottie .json")).clicked() {
-        ctx.exec("project.autosave", json!({}), Some("Exported Lottie .json"));
+        let now = ui.input(|i| i.time);
+        ctx.state.set_toast(now, "Exported Lottie .json");
     }
     if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("motion-lottie-import", "+ Lottie", "Import .lottie / .json into effects/motion.ecproj (T04)"))
         .clicked()
@@ -156,19 +190,11 @@ pub fn draw_craft_motion_effects_browser(ui: &mut Ui, ctx: &mut ViewCtx<'_>, id_
             ui,
             ctx.reg,
             ctx.pal,
-            BtnSpec::label_only(
-                &format!("{id_prefix}-live-save"),
-                "Open in EffectCraft",
-                "Open effects/motion.ecproj in EffectCraft",
-            ),
+            BtnSpec::label_only(&format!("{id_prefix}-live-save"), "Open in EffectCraft", "Open effects/motion.ecproj in EffectCraft"),
         )
         .clicked()
         {
-            ctx.exec(
-                "workspace.open",
-                json!({"app": "effectcraft", "domain": "motion"}),
-                Some("Opened effects/motion.ecproj in EffectCraft"),
-            );
+            ctx.exec("workspace.open", json!({"app": "effectcraft", "domain": "motion"}), Some("Opened effects/motion.ecproj in EffectCraft"));
         }
     });
 
@@ -222,7 +248,8 @@ pub fn draw_layer_compositing_switches(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                 let sel = ctx.state.motion.blend_mode == *mode;
                 if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, mode, "Set EffectCraft layer blend mode").selected(sel)).clicked() {
                     ctx.state.motion.blend_mode = (*mode).to_owned();
-                    ctx.exec("project.autosave", json!({}), Some("Updated blend mode"));
+                    let now = ui.input(|i| i.time);
+                    ctx.state.set_toast(now, "Updated blend mode");
                 }
             }
         });
@@ -256,7 +283,8 @@ pub fn draw_layer_compositing_switches(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             let sel = ctx.state.motion.alpha_queue_preset == preset;
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, preset, "Queue EffectCraft alpha render preset").selected(sel)).clicked() {
                 ctx.state.motion.alpha_queue_preset = preset.into();
-                ctx.exec("project.autosave", json!({}), Some("Added composition to Render Queue"));
+                let now = ui.input(|i| i.time);
+                ctx.state.set_toast(now, "Added composition to Render Queue");
             }
         }
     });
@@ -307,7 +335,8 @@ fn draw_shapes_and_masks_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) -> Option<Pos2>
         &mut ctx.state.font_picker_filter,
         ctx.actions,
     ) {
-        ctx.exec("project.autosave", json!({}), Some("Updated Motion callout font"));
+        let now = ui.input(|i| i.time);
+        ctx.state.set_toast(now, "Updated Motion callout font");
     }
     ui.separator();
     ui.horizontal_wrapped(|ui| {
@@ -360,7 +389,8 @@ fn draw_shapes_and_masks_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) -> Option<Pos2>
             let sel = ctx.state.motion.shape_op == op;
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, lbl, "Add shape operator via layer.addShapeItem").selected(sel)).clicked() {
                 ctx.state.motion.shape_op = op.into();
-                ctx.exec("project.autosave", json!({}), Some("Added Shape Layer operator"));
+                let now = ui.input(|i| i.time);
+                ctx.state.set_toast(now, "Added Shape Layer operator");
             }
         }
     });
@@ -396,15 +426,18 @@ fn draw_shapes_and_masks_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) -> Option<Pos2>
         ui.spacing_mut().item_spacing.x = 4.0;
         ui.spacing_mut().item_spacing.y = 4.0;
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("motion-add-mask", "+ Pen Mask", "layer.addMask").primary()).clicked() {
-            ctx.exec("project.autosave", json!({}), Some("Added Bezier mask to motion layer"));
+            let now = ui.input(|i| i.time);
+            ctx.state.set_toast(now, "Added Bezier mask to motion layer");
         }
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("motion-mask-interp", "Smart Interp", "mask.interpolate")).clicked() {
-            ctx.exec("project.autosave", json!({}), Some("Interpolated Bezier mask vertices"));
+            let now = ui.input(|i| i.time);
+            ctx.state.set_toast(now, "Interpolated Bezier mask vertices");
         }
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("motion-face-track", "Face Track AI", "MediaPipe faceDetailed + extractFaceMeasurements"))
             .clicked()
         {
-            ctx.exec("project.autosave", json!({}), Some("Ran MediaPipe Face Tracker & extracted measurements"));
+            let now = ui.input(|i| i.time);
+            ctx.state.set_toast(now, "Ran MediaPipe Face Tracker & extracted measurements");
         }
     });
     fx_anchor
@@ -527,13 +560,16 @@ fn draw_tracking_and_exr_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         ui.spacing_mut().item_spacing.y = 4.0;
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("motion-trk-solve", "Track & Solve", "track.point / track.cameraSolve").primary()).clicked()
         {
-            ctx.exec("project.autosave", json!({}), Some("Solved motion track"));
+            let now = ui.input(|i| i.time);
+            ctx.state.set_toast(now, "Solved motion track");
         }
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("motion-warp-stab", "Warp Stabilizer", "track.warpStabilizer")).clicked() {
-            ctx.exec("project.autosave", json!({}), Some("Applied Warp Stabilizer"));
+            let now = ui.input(|i| i.time);
+            ctx.state.set_toast(now, "Applied Warp Stabilizer");
         }
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("motion-blender-py", "Export Blender .py", "track.exportBlenderScript (T30)")).clicked() {
-            ctx.exec("project.autosave", json!({}), Some("Exported 3D camera solve to Blender .py"));
+            let now = ui.input(|i| i.time);
+            ctx.state.set_toast(now, "Exported 3D camera solve to Blender .py");
         }
     });
 
@@ -567,7 +603,8 @@ fn draw_tracking_and_exr_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             let sel = ctx.state.motion.ocio_view == view;
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, view, "OCIO Display Transform").selected(sel)).clicked() {
                 ctx.state.motion.ocio_view = view.into();
-                ctx.exec("project.autosave", json!({}), Some("Updated OCIO display transform"));
+                let now = ui.input(|i| i.time);
+                ctx.state.set_toast(now, "Updated OCIO display transform");
             }
         }
     });

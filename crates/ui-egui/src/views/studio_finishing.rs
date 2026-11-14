@@ -5,9 +5,33 @@ use egui::{Align2, Color32, CornerRadius, FontId, Pos2, Rect, RichText, ScrollAr
 use serde_json::{Value, json};
 
 const FILMCRAFT_BLEND_MODES: &[&str] = &[
-    "normal", "dissolve", "darken", "multiply", "colorBurn", "linearBurn", "darkerColor", "lighten", "screen", "colorDodge", "linearDodge",
-    "lighterColor", "overlay", "softLight", "hardLight", "vividLight", "linearLight", "pinLight", "hardMix", "difference", "exclusion", "subtract",
-    "divide", "hue", "saturation", "color", "luminosity",
+    "normal",
+    "dissolve",
+    "darken",
+    "multiply",
+    "colorBurn",
+    "linearBurn",
+    "darkerColor",
+    "lighten",
+    "screen",
+    "colorDodge",
+    "linearDodge",
+    "lighterColor",
+    "overlay",
+    "softLight",
+    "hardLight",
+    "vividLight",
+    "linearLight",
+    "pinLight",
+    "hardMix",
+    "difference",
+    "exclusion",
+    "subtract",
+    "divide",
+    "hue",
+    "saturation",
+    "color",
+    "luminosity",
 ];
 
 use crate::controls::{ScalarSpec, fill_card, paint_cubic_bezier, pill_toggle, ring_slider_h};
@@ -311,9 +335,6 @@ pub fn draw_edit_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, lbl, "sequence.settings exact tick FPS")).clicked() {
                 ctx.exec("video.finish", json!({"op": "sequence_rate", "fps": fps, "drop_frame": df}), Some("Updated sequence rational frame rate"));
             }
-        }
-        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("fc-markers-csv", "Export Markers CSV", "Markers > Export Markers as CSV (T35)")).clicked() {
-            ctx.exec("video.markers", json!({"action": "export_csv"}), Some("Exported FilmCraft markers CSV"));
         }
     });
 }

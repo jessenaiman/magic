@@ -9,10 +9,7 @@ use std::io::{BufRead, Write};
 
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use serde_json::{Value, json};
-use subcommands::{
-    AnimationArgs, CaptionsArgs, ControlsArgs, ExportArgs, FinishArgs, InterchangeArgs, MarkersArgs, MeshCliArgs, StoryboardArgs, StudioArgs,
-    TimelineCliArgs,
-};
+use subcommands::{AnimationArgs, CaptionsArgs, ControlsArgs, ExportArgs, FinishArgs, MeshCliArgs, StoryboardArgs, StudioArgs};
 
 const AFTER_HELP: &str = "\
 CREATE:     magic-cli new [existing_project] --audio song.wav --name \"My Song\"
@@ -20,7 +17,6 @@ STORYBOARD: magic-cli storyboard status | open | new | add-section <name> | add-
 STUDIO:     magic-cli studio map-tracks --map lyrics:V3,V5:chorus --map motion:V4:beats
 CONTROLS:   magic-cli controls [filter] [--stage studio] [--live]
 FINISH:     magic-cli finish <op> [key=val ...] | magic-cli export [out.mp4] --codec prores
-INTEROP:    magic-cli interchange export --format otio | magic-cli lottie export | magic-cli import-aep in.aep
 MCP:        magic-cli mcp [--connect 127.0.0.1:9875 | --headless]
 LIVE:       magic --control 9875, then magic-cli app --port 9875 ui.inspect";
 
@@ -43,9 +39,6 @@ pub struct Cli {
     /// Connect to a running `magic --control <PORT>` window (`127.0.0.1:9875` or `9875`)
     #[arg(long, visible_aliases = ["bridge", "control"], global = true)]
     pub connect: Option<String>,
-    /// Extra font directories forwarded as `EFFECTCRAFT_FONT_DIRS`
-    #[arg(long, global = true)]
-    pub font_dirs: Option<String>,
     /// Preview mutations without applying them
     #[arg(long, global = true)]
     pub dry_run: bool,
@@ -109,10 +102,6 @@ enum Cmd {
     Inspect { target: Option<String> },
     /// Show live Magic Studio window or headless workspace status
     Status,
-    /// Bidirectional `OTIO` / `FCPXML` / `XML` / `EDL` / `AAF` / `OMF` / `ALE` sequence interchange (`T03`)
-    Interchange(InterchangeArgs),
-    /// Full `craft-timeline` operations (`inspect`, `detect`, `export`, `import`, `timecode`, `ale`, `edl`)
-    Timeline(TimelineCliArgs),
     /// Pure-Rust `craft-mesh` 3D scene inspection & conversion (`inspect`, `convert` across `.glb`, `.gltf`, `.obj`, `.fbx`, `.stl`, `.ply`, `.3mf`)
     Mesh(MeshCliArgs),
     /// Execute a FilmCraft Studio finishing operation (`T32`–`T42`: edit, trim, color, FX, audio, mixer, titles)
@@ -121,8 +110,6 @@ enum Cmd {
     Export(ExportArgs),
     /// Bidirectional `V3` Lyrics ↔ `C1` FilmCraft broadcast captions (`Subtitle`, `CEA-608`, `CEA-708`, `Teletext`) (`T26`)
     Captions(CaptionsArgs),
-    /// Manage timeline markers, 64-swatch custom colors, and 15-column review CSV export (`T35`)
-    Markers(MarkersArgs),
     /// Run one command (`exec <id> [key=value ...]` or `--params '<json>'`)
     Exec {
         command: String,
@@ -487,12 +474,6 @@ fn describe(id: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn apply_font_overrides(cli: &Cli, session: &mut Option<magic_engine::Session>) {
-    if let (Some(s), Some(dirs)) = (session.as_mut(), cli.font_dirs.as_ref()) {
-        let _ = s.execute("prefs.set", json!({"key": "lyrics.font_dirs", "value": dirs}));
-    }
-}
-
 fn run(cli: Cli) -> Result<(), String> {
     if let (None, Some(Cmd::Mcp { headless })) = (&cli.command_id, &cli.command) {
         return magic_mcp::run_mcp_server(
@@ -519,7 +500,6 @@ fn run(cli: Cli) -> Result<(), String> {
     };
     let live = effective_connect.is_some();
     let mut session = (!live).then(|| magic_engine::Session::user_session().with_automation_roots(roots));
-    apply_font_overrides(&cli, &mut session);
     if let (Some(path), Some(session)) = (cli.project.as_deref(), session.as_mut()) {
         session.execute("file.open", json!({ "path": path })).map_err(|e| e.to_string())?;
     }
@@ -540,13 +520,10 @@ fn run(cli: Cli) -> Result<(), String> {
             Cmd::Describe { id } => describe(&id),
             Cmd::Inspect { target: what } => inspect(&mut target, what),
             Cmd::Status => inspect(&mut target, None),
-            Cmd::Interchange(args) => subcommands::run_interchange(&mut target, args),
-            Cmd::Timeline(args) => subcommands::run_timeline_cli(&mut target, args),
             Cmd::Mesh(args) => subcommands::run_mesh_cli(&mut target, args),
             Cmd::Finish(args) => subcommands::run_finish(&mut target, args),
             Cmd::Export(args) => subcommands::run_export(&mut target, args),
             Cmd::Captions(args) => subcommands::run_captions(&mut target, args),
-            Cmd::Markers(args) => subcommands::run_markers(&mut target, args),
             Cmd::Exec { command, params, arguments } => {
                 let params = parse_params(&arguments, params.as_deref())?;
                 target.run(&command, params)

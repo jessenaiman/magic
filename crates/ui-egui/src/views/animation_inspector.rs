@@ -21,7 +21,8 @@ pub fn draw_time_and_stagger_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>, _cid: &str
         ui.horizontal_wrapped(|ui| {
             ui.label(RichText::new("⏱ Time & Stagger (T18)").size(11.5).strong().color(sky));
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-precomp", "Precomp", "Precompose character layers (layer.precompose)")).clicked() {
-                ctx.exec("project.autosave", json!({}), Some("Precomposed character layers"));
+                let now = ui.input(|i| i.time);
+                ctx.state.set_toast(now, "Precomposed character layers");
             }
         });
         ring_slider_h(
@@ -54,16 +55,19 @@ pub fn draw_time_and_stagger_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>, _cid: &str
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-apply-timing", "Apply Remap", "Apply layer.timing & comp.workArea").primary())
                 .clicked()
             {
-                ctx.exec("project.autosave", json!({}), Some("Applied time remapping"));
+                let now = ui.input(|i| i.time);
+                ctx.state.set_toast(now, "Applied time remapping");
             }
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-stagger-layers", "Stagger Layers", "Sequence layers via layer.quickOffset"))
                 .clicked()
             {
-                ctx.exec("project.autosave", json!({}), Some("Staggered character layers"));
+                let now = ui.input(|i| i.time);
+                ctx.state.set_toast(now, "Staggered character layers");
             }
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-stagger-keys", "Stagger Keys", "Offset keyframes via keys.quickOffset")).clicked()
             {
-                ctx.exec("project.autosave", json!({}), Some("Staggered selected keyframes"));
+                let now = ui.input(|i| i.time);
+                ctx.state.set_toast(now, "Staggered selected keyframes");
             }
         });
     });
@@ -280,7 +284,8 @@ fn draw_3d_camera_and_lights_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str, 
             let sel = ctx.state.animation.renderer_mode == rmode;
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, lbl, "Switch EffectCraft 3D renderer").selected(sel)).clicked() {
                 ctx.state.animation.renderer_mode = rmode.into();
-                ctx.exec("project.autosave", json!({}), Some("Updated 3D renderer"));
+                let now = ui.input(|i| i.time);
+                ctx.state.set_toast(now, "Updated 3D renderer");
             }
         }
     });
@@ -307,7 +312,8 @@ fn draw_3d_camera_and_lights_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str, 
             let sel = ctx.state.animation.primitive_kind == prim;
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, prim, "Insert 3D primitive (layer.new3dPrimitive)").selected(sel)).clicked() {
                 ctx.state.animation.primitive_kind = prim.into();
-                ctx.exec("project.autosave", json!({}), Some("Added 3D primitive layer"));
+                let now = ui.input(|i| i.time);
+                ctx.state.set_toast(now, "Added 3D primitive layer");
             }
         }
     });
@@ -376,7 +382,8 @@ fn draw_3d_camera_and_lights_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str, 
             .clicked()
         {
             let _kind = if ctx.state.animation.cam_two_node { "twoNode" } else { "oneNode" };
-            ctx.exec("project.autosave", json!({}), Some("Added 3D Camera"));
+            let now = ui.input(|i| i.time);
+            ctx.state.set_toast(now, "Added 3D Camera");
         }
         for tool in ["orbit", "pan", "dolly"] {
             let id = format!("anim-cam-tool-{tool}");
@@ -407,7 +414,8 @@ fn draw_3d_camera_and_lights_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str, 
             let sel = ctx.state.animation.light_kind.eq_ignore_ascii_case(lkind);
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, lkind, "Add 3D/IBL light via layer.newLight").selected(sel)).clicked() {
                 ctx.state.animation.light_kind = lkind.to_ascii_lowercase();
-                ctx.exec("project.autosave", json!({}), Some("Added 3D Light"));
+                let now = ui.input(|i| i.time);
+                ctx.state.set_toast(now, "Added 3D Light");
             }
         }
     });
@@ -422,7 +430,8 @@ fn draw_roto_and_expr_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>, _cid: &str) {
             let sel = ctx.state.animation.sam_model == mid;
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, lbl, "Select roto.model.select AI model").selected(sel)).clicked() {
                 ctx.state.animation.sam_model = mid.into();
-                ctx.exec("project.autosave", json!({}), Some("Selected Roto Brush AI model"));
+                let now = ui.input(|i| i.time);
+                ctx.state.set_toast(now, "Selected Roto Brush AI model");
             }
         }
     });
@@ -433,7 +442,8 @@ fn draw_roto_and_expr_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>, _cid: &str) {
             let sel = ctx.state.animation.roto_stroke_kind == sk;
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, lbl, "Apply roto.stroke").selected(sel)).clicked() {
                 ctx.state.animation.roto_stroke_kind = sk.into();
-                ctx.exec("project.autosave", json!({}), Some("Applied Roto Brush stroke"));
+                let now = ui.input(|i| i.time);
+                ctx.state.set_toast(now, "Applied Roto Brush stroke");
             }
         }
     });
@@ -448,13 +458,16 @@ fn draw_roto_and_expr_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>, _cid: &str) {
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-obj-matte", "Object Matte", "Run one-click objectMatte.apply").primary()).clicked() {
-            ctx.exec("project.autosave", json!({}), Some("Applied SAM 2.1 Object Matte"));
+            let now = ui.input(|i| i.time);
+            ctx.state.set_toast(now, "Applied SAM 2.1 Object Matte");
         }
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-roto-prop", "Propagate", "Run roto.propagate wait=true")).clicked() {
-            ctx.exec("project.autosave", json!({}), Some("Propagated Roto Brush matte across span"));
+            let now = ui.input(|i| i.time);
+            ctx.state.set_toast(now, "Propagated Roto Brush matte across span");
         }
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-roto-freeze", "Freeze", "Cache roto.freeze wait=true")).clicked() {
-            ctx.exec("project.autosave", json!({}), Some("Froze Roto Brush segmentation cache"));
+            let now = ui.input(|i| i.time);
+            ctx.state.set_toast(now, "Froze Roto Brush segmentation cache");
         }
     });
 
@@ -482,10 +495,12 @@ fn draw_roto_and_expr_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>, _cid: &str) {
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-expr-apply", "Apply Cycle", "Write procedural rig cycle into .ecproj").primary())
             .clicked()
         {
-            ctx.exec("project.autosave", json!({}), Some("Applied procedural rig cycle to character rig"));
+            let now = ui.input(|i| i.time);
+            ctx.state.set_toast(now, "Applied procedural rig cycle to character rig");
         }
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-expr-whip", "@ Pick-Whip", "Bind rig property via EffectCraft Pick-Whip")).clicked() {
-            ctx.exec("project.autosave", json!({}), Some("Linked property via Pick-Whip"));
+            let now = ui.input(|i| i.time);
+            ctx.state.set_toast(now, "Linked property via Pick-Whip");
         }
     });
 }

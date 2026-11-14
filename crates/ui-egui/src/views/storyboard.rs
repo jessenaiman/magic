@@ -177,7 +177,8 @@ fn draw_toolbar(ui: &mut Ui, ctx: &mut ViewCtx<'_>, pages: &[PageSummary]) {
         }
 
         let single_sel = !ctx.state.storyboard.double_page_mode;
-        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("sb-mode-single", "pageSingle", "Single-page DesignCraft view").selected(single_sel)).clicked()
+        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("sb-mode-single", "pageSingle", "Single-page DesignCraft view").selected(single_sel))
+            .clicked()
         {
             ctx.state.storyboard.double_page_mode = false;
         }

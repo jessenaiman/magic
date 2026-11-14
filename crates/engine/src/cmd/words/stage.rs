@@ -15,8 +15,6 @@ use crate::cmd::words::{
 use crate::time::Tick;
 use crate::{Result, Session};
 
-const TEACHING_MODES: &[&str] = &["sing_along", "call_response", "echo_teach", "word_spotlight"];
-
 fn is_image_file(p: &Path) -> bool {
     p.is_file() && p.extension().and_then(|e| e.to_str()).is_some_and(|e| matches!(e.to_ascii_lowercase().as_str(), "png" | "jpg" | "jpeg" | "webp"))
 }
@@ -218,17 +216,10 @@ pub(crate) fn runtime_words_tools() -> Value {
         {"id": "stack", "preview": "stack", "name": "Stack", "does": "Vertical stepped column"},
         {"id": "plain", "preview": "karaoke", "name": "Sing-Along", "does": "Clean syllable/word follow row"}
     ]);
-    let teaching_modes = json!([
-        {"id": "sing_along", "name": "Sing-Along", "does": "Full line visible with timed word bounce for group singing"},
-        {"id": "call_response", "name": "Call & Response", "does": "Lead vocal line followed by highlighted audience echo prompt"},
-        {"id": "echo_teach", "name": "Echo Teach", "does": "Reveals key vocabulary words ahead of the beat with phonetic emphasis"},
-        {"id": "word_spotlight", "name": "Spotlight", "does": "Isolates each hero noun/verb center-stage as it is sung"}
-    ]);
     json!({
         "moves": moves,
         "letterings": letterings,
         "choreographies": choreographies,
-        "teaching_modes": teaching_modes,
         "easings": crate::animation_model::easing_catalog(),
         "properties": crate::animation_model::property_catalog(),
         "symbol_loop_modes": ["loop", "play_once", "single_frame"],
@@ -281,9 +272,6 @@ fn hydrate_animation_times(anim: &mut Value, times: &std::collections::HashMap<S
     }
     fill_untimed(anim);
     timing(anim);
-    if anim["teaching_mode"].as_str().is_none() {
-        anim["teaching_mode"] = json!("sing_along");
-    }
 }
 
 fn load_or_default_doc(s: &mut Session, dir: &Path) -> Result<(Value, bool)> {
@@ -508,9 +496,6 @@ fn apply_save_payload(s: &Session, dir: &Path, anim: &mut Value, id: &str, p: &V
     if let Some(background) = p.get("background_asset") {
         apply_background_edit(s, dir, anim, background)?;
     }
-    if let Some(mode) = p.get("teaching_mode").filter(|v| !v.is_null()) {
-        anim["teaching_mode"] = one_of(mode, TEACHING_MODES, "teaching_mode")?;
-    }
     if let Some(style) = p.get("style").filter(|v| !v.is_null()) {
         apply_style_edits(anim, style)?;
     }
@@ -551,8 +536,7 @@ pub fn cmd_words_save(s: &mut Session, p: &Value) -> Result<Value> {
     save(s, &dir, &doc)?;
     let ecproj = crate::cmd::words::lyrics_ecproj_path(&dir);
     let save_params = if ecproj.is_file() { json!({"path": ecproj}) } else { json!({}) };
-    let live_saved =
-        crate::workspace::control_probe("effectcraft") && crate::workspace::control_exec("effectcraft", "file.save", save_params).is_ok();
+    let live_saved = crate::workspace::control_probe("effectcraft") && crate::workspace::control_exec("effectcraft", "file.save", save_params).is_ok();
     Ok(json!({"ok": true, "conflict": false, "path": document_path(&dir), "live_app_saved": live_saved, "animation": saved}))
 }
 

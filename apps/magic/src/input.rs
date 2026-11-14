@@ -153,11 +153,9 @@ pub fn build_drag(reg: &AutomationRegistry, params: &Value) -> Result<(Vec<Event
     let (from, to) = resolve_drag_endpoints(reg, params)?;
     let steps = match params.get("steps") {
         None | Some(Value::Null) => 8u32,
-        Some(v) => v
-            .as_u64()
-            .and_then(|n| u32::try_from(n).ok())
-            .filter(|&n| (1..=10_000).contains(&n))
-            .ok_or("ui.drag: steps must be an integer from 1 to 10000")?,
+        Some(v) => {
+            v.as_u64().and_then(|n| u32::try_from(n).ok()).filter(|&n| (1..=10_000).contains(&n)).ok_or("ui.drag: steps must be an integer from 1 to 10000")?
+        }
     };
     let count = parse_click_count(params.get("count"), "ui.drag")?;
     let total_events = 1 + (steps as usize) + 2 * (count as usize);

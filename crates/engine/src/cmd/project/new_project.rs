@@ -62,16 +62,7 @@ fn zip_non_magic_folder(source_dir: &Path, dest_zip: &Path) -> Result<Option<usi
 }
 
 fn clear_stale_project_artifacts(project_dir: &Path) {
-    for rel_file in [
-        "design/words.json",
-        "design/words-track.json",
-        "motion/actions.json",
-        "timing-reference.json",
-        "transcript.json",
-        "transcript.srt",
-        "transcript-provenance.json",
-        "lyrics.captions.srt",
-    ] {
+    for rel_file in ["transcript.srt"] {
         let _ = std::fs::remove_file(project_dir.join(rel_file));
     }
     for rel_dir in [".preview", "lettering/.preview", "motion/.preview", "storyboard/.preview", "film/frames"] {
@@ -255,7 +246,7 @@ fn bootstrap_song_workshop(s: &mut Session, path: &Path, project_dir: &Path, par
             import_req["captions"] = params["captions"].clone();
         }
         match crate::cmd::project::workshop::cmd_workshop_import_transcript(s, &import_req) {
-            Ok(_) => steps.push(json!({"command": "workshop.import_transcript", "status": "timing-reference.json + FilmCraft C1 ready"})),
+            Ok(_) => steps.push(json!({"command": "workshop.import_transcript", "status": "transcript + FilmCraft C1 ready"})),
             Err(e) => steps.push(json!({"command": "workshop.import_transcript", "status": "failed", "error": e.to_string()})),
         }
     } else if params.get("process_audio").and_then(Value::as_bool).unwrap_or(true) && params["prepare_only"] != true {
@@ -462,11 +453,7 @@ mod tests {
         assert_eq!(saved_doc["workshop"]["audio"].as_str().unwrap(), "audio/song-demo.wav");
         assert_eq!(saved_doc["workshop"]["storyboard"].as_str().unwrap(), "storyboard.designcraft");
 
-        let auto = cmd_project_autosave(&mut session, &json!({})).unwrap();
-        let journal = PathBuf::from(auto["journal"].as_str().unwrap());
-        assert!(journal.is_file());
         write_project_file(&session).unwrap();
-        assert!(created_dir.join(".history/Hey Ho.magic.bak.1").is_file());
 
         let _ = std::fs::remove_dir_all(&sandbox);
     }

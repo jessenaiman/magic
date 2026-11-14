@@ -304,7 +304,9 @@ pub fn draw_titles_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             }
         }
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("fc-export-fcgt", "Save .fcgt", "Save title configuration")).clicked() {
-            ctx.exec("project.autosave", json!({}), Some("Saved title configuration"));
+            ctx.state.dirty_drafts.insert("studio".into());
+            let now = ui.input(|i| i.time);
+            ctx.state.set_toast(now, "Saved title configuration");
         }
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("fc-import-fcgt", "+ .fcgt/.ectpl", "Import .fcgt or .ectemplate")).clicked() {
             ctx.push(UiAction::PickFile {

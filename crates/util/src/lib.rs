@@ -4,10 +4,11 @@
 //! Modules:
 //! - [`time`]: Exact rational `Tick` and SMPTE `FrameRate` / `Timecode` math (`craft-timeline`).
 //! - [`anim`]: Cubic-Bézier `Easing`, transform `Property`, and symbol `LoopMode` evaluation.
-//! - [`media`]: Document preview/outline inspection (`craft-doc`), font discovery (`craft-font-catalog`),
-//!   container probing (`craft-media`), and lossless audio I/O & peaks (`craft-audio`).
-//! - [`text`]: UAX #14 + kinsoku line segmentation, grapheme-cluster emergency breaks, BiDi, and
-//!   hyphenation helpers (`craft-text`).
+//! - [`media`]: Document preview/outline inspection (`craft-doc`, `craft-pcraft-bundle`,
+//!   `craft-ecproj-format`), font discovery (`craft-font-catalog`), container probing
+//!   (`craft-media`), and lossless audio I/O & peaks (`craft-audio`).
+//! - [`text`]: UAX #14 + kinsoku line segmentation, grapheme-cluster emergency breaks, BiDi
+//!   (`craft-text`), and glyph advance measurement (`craft-font-catalog` + `skrifa`).
 
 #![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable))]
 
@@ -35,6 +36,11 @@ pub static I18N: LazyLock<craft_i18n::I18n> = LazyLock::new(|| {
     }
     i18n
 });
+
+/// Active UI BCP-47 language tag resolved through [`I18N`].
+pub fn active_language_code() -> &'static str {
+    I18N.code(I18N.system_lang())
+}
 
 /// Errors returned by `magic-util` media and timing helpers.
 #[derive(Debug, thiserror::Error)]

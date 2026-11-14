@@ -28,18 +28,7 @@ fn collect_view_frames(dir: &Path) -> Vec<PathBuf> {
     out
 }
 
-fn read_animation_map(project_dir: &Path) -> Value {
-    if let Some(sec) = crate::cmd::project::read_magic_section_in_dir(project_dir, "animation_map", "assets/animations/animation-map.json") {
-        return sec;
-    }
-    for rel in ["animations/animation-map.json", "animation-map.json"] {
-        let p = project_dir.join(rel);
-        if let Ok(raw) = std::fs::read_to_string(&p)
-            && let Ok(parsed) = serde_json::from_str::<Value>(&raw)
-        {
-            return parsed;
-        }
-    }
+fn read_animation_map(_project_dir: &Path) -> Value {
     Value::Null
 }
 

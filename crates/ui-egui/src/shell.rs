@@ -14,7 +14,7 @@ use crate::options_modal::draw_command_palette_popup;
 use crate::state::{ActiveModal, PickerTarget, UiAction, ViewCtx, ViewMode};
 use crate::theme::paint_aurora_wave;
 use crate::views;
-use crate::widgets::{BtnSpec, ModeTabSpec, action_button, companion_button, mode_tab, project_pill_button, status_pill, text_input};
+use crate::widgets::{BtnSpec, ModeTabSpec, action_button, mode_tab, project_pill_button, status_pill, text_input};
 
 const CAPSULE_TABS: [ViewMode; 5] = [ViewMode::Storyboard, ViewMode::Animation, ViewMode::Design, ViewMode::Motion, ViewMode::Studio];
 
@@ -353,26 +353,6 @@ fn draw_app_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     .clicked()
     {
         ctx.push(UiAction::OpenPreferences);
-    }
-
-    let fidget_docked = ctx.state.docking.is_panel_visible(PanelId::Fidget);
-    if companion_button(&mut right_ui, ctx.reg, ctx.pal, "scribbles-toggle", "scribbles_work", "Open Scribbles character & asset studio", fidget_docked)
-        .clicked()
-    {
-        if has_proj {
-            ctx.state.docking.set_panel_visible(PanelId::Fidget, true);
-        } else {
-            ctx.state.ai.options_tab = "ai".into();
-            ctx.push(UiAction::OpenPreferences);
-        }
-    }
-    if companion_button(&mut right_ui, ctx.reg, ctx.pal, "fidget-toggle", "fidget_work", "Toggle Fidget & Scribbles prompt stager", fidget_docked).clicked() {
-        if has_proj {
-            ctx.state.docking.toggle_panel(PanelId::Fidget);
-        } else {
-            ctx.state.ai.options_tab = "ai".into();
-            ctx.push(UiAction::OpenPreferences);
-        }
     }
 
     for (id, code, fill, app, tip) in [

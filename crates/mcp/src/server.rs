@@ -115,13 +115,18 @@ struct PointParams {
     y: Option<f64>,
 }
 
-#[derive(Debug, Deserialize, JsonSchema)]
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 struct DragParams {
-    from: PointParams,
-    to: PointParams,
+    from: Option<PointParams>,
+    to: Option<PointParams>,
+    x1: Option<f64>,
+    y1: Option<f64>,
+    x2: Option<f64>,
+    y2: Option<f64>,
     button: Option<String>,
     steps: Option<u32>,
+    count: Option<u32>,
     modifiers: Option<ModifiersParams>,
 }
 

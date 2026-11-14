@@ -1,10 +1,9 @@
-//! Live Craft file synchronization (`craft-shared` Phases 3, 4 & 5):
+//! Live Craft file synchronization:
 //! - Polls `(size, mtime_ms)` of project `.ecproj` tracks (`V2` Character Animation, `V3` Kinetic
-//!   Lyrics, `V4` Action Motion, plus `film/linked-compositions.json`) on focus regain and stage
+//!   Lyrics, `V4` Action Motion, plus FilmCraft linked compositions) on focus regain and stage
 //!   saves, populating `ui_state.dirty_tracks`.
 //! - Routes dropped media onto the active stage's `.ecproj` via `project.import_file` when
 //!   on `Animations`, `Lyrics`, or `Motion`.
-//! - Runs ~1-second debounced crash-recovery journal auto-save (`project.autosave`).
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -14,13 +13,13 @@ use magic_engine::Session;
 use magic_ui_egui::{UiShellState, ViewMode};
 use serde_json::{Value, json};
 
-const AUTOSAVE_DEBOUNCE: Duration = Duration::from_millis(1000);
+const RECOVERY_DEBOUNCE: Duration = Duration::from_millis(1000);
 
 #[derive(Default)]
 pub(crate) struct FileSyncMonitor {
     stamps: BTreeMap<PathBuf, (u64, u64)>,
     was_focused: bool,
-    pending_autosave_since: Option<Instant>,
+    pending_recovery_since: Option<Instant>,
 }
 
 fn stamp_of(path: &Path) -> Option<(u64, u64)> {
@@ -70,10 +69,10 @@ impl FileSyncMonitor {
     }
 
     pub fn note_mutation(&mut self, cmd_id: &str, ui_state: &mut UiShellState) {
-        if ui_state.project_path.is_some() && !matches!(cmd_id, "project.save" | "file.save" | "file.saveAs" | "project.autosave") {
-            self.pending_autosave_since = Some(Instant::now());
+        if ui_state.project_path.is_some() && !matches!(cmd_id, "project.save" | "file.save" | "file.saveAs") {
+            self.pending_recovery_since = Some(Instant::now());
         } else if matches!(cmd_id, "project.save" | "file.save" | "file.saveAs") {
-            self.pending_autosave_since = None;
+            self.pending_recovery_since = None;
         }
         if matches!(cmd_id, "words.save" | "words.motion.set" | "words.design") {
             ui_state.dirty_tracks.insert("V3".into());
@@ -100,10 +99,9 @@ impl FileSyncMonitor {
             craft_font_catalog::Catalog::global().rescan_if_changed();
         }
 
-        if let Some(since) = self.pending_autosave_since {
-            if since.elapsed() >= AUTOSAVE_DEBOUNCE {
-                self.pending_autosave_since = None;
-                let _ = session.execute("project.autosave", json!({}));
+        if let Some(since) = self.pending_recovery_since {
+            if since.elapsed() >= RECOVERY_DEBOUNCE {
+                self.pending_recovery_since = None;
             } else {
                 ctx.request_repaint_after(Duration::from_millis(250));
             }

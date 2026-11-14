@@ -182,24 +182,6 @@ pub enum StoryboardCmd {
 }
 
 #[derive(Args)]
-pub struct InterchangeArgs {
-    /// `export` or `import`
-    pub direction: String,
-    /// `otio`, `fcpxml`, `xml`, `edl`, `aaf`, `omf`, or `ale`
-    #[arg(long, default_value = "otio")]
-    pub format: String,
-    /// `film_to_effect` or `effect_to_film`
-    #[arg(long, default_value = "film_to_effect")]
-    pub target: String,
-    /// File path to write or read
-    #[arg(long)]
-    pub path: Option<String>,
-    /// Pre-render incompatible graphic clips during export
-    #[arg(long, default_value_t = true)]
-    pub prerender: bool,
-}
-
-#[derive(Args)]
 pub struct FinishArgs {
     /// `video.finish` op (`workspace`, `mark_in`, `mark_out`, `insert`, `overwrite`, `lift`, `extract`, `trim_mode`, `lumetri_*`, `audio_*`, `jobs_list`)
     pub op: String,
@@ -251,30 +233,6 @@ pub struct CaptionsArgs {
     pub format: String,
     #[arg(long, default_value = "en")]
     pub language: String,
-}
-
-#[derive(Args)]
-pub struct MarkersArgs {
-    /// `list`, `add`, `edit`, `export-csv`, `palette`, `seed`, `delete`, or `clear`
-    #[arg(default_value = "list")]
-    pub action: String,
-    #[arg(long)]
-    pub params: Option<String>,
-    pub arguments: Vec<String>,
-}
-
-#[derive(Args)]
-pub struct TimelineCliArgs {
-    /// `inspect`, `detect`, `export`, `import`, `timecode`, `ale`, or `edl`
-    #[arg(default_value = "inspect")]
-    pub action: String,
-    #[arg(long)]
-    pub format: Option<String>,
-    #[arg(long)]
-    pub path: Option<String>,
-    #[arg(long)]
-    pub params: Option<String>,
-    pub arguments: Vec<String>,
 }
 
 #[derive(Args)]
@@ -479,20 +437,6 @@ pub fn run_controls(target: &mut Target, args: ControlsArgs) -> Result<(), Strin
     Ok(())
 }
 
-pub fn run_interchange(target: &mut Target, args: InterchangeArgs) -> Result<(), String> {
-    let direction = if args.direction == "import" || args.target == "effect_to_film" { "effect_to_film" } else { "film_to_effect" };
-    target.run(
-        "video.markers",
-        json!({
-            "action": "interchange",
-            "direction": direction,
-            "format": args.format,
-            "path": args.path,
-            "pre_render_incompatible": args.prerender,
-        }),
-    )
-}
-
 pub fn run_finish(target: &mut Target, args: FinishArgs) -> Result<(), String> {
     let mut p = parse_params(&args.arguments, args.params.as_deref())?;
     p["op"] = json!(args.op);
@@ -538,32 +482,6 @@ pub fn run_captions(target: &mut Target, args: CaptionsArgs) -> Result<(), Strin
             "export_sidecar": sidecar,
         }),
     )
-}
-
-pub fn run_markers(target: &mut Target, args: MarkersArgs) -> Result<(), String> {
-    let mut p = parse_params(&args.arguments, args.params.as_deref())?;
-    p["action"] = json!(args.action.replace('-', "_"));
-    target.run("video.markers", p)
-}
-
-pub fn run_timeline_cli(target: &mut Target, args: TimelineCliArgs) -> Result<(), String> {
-    let mut p = parse_params(&args.arguments, args.params.as_deref())?;
-    if let Some(fmt) = args.format {
-        p["format"] = json!(fmt);
-    }
-    if let Some(path) = args.path {
-        p["path"] = json!(path);
-    }
-    let cmd = match args.action.as_str() {
-        "detect" => "timeline.detect",
-        "export" | "write" => "timeline.export",
-        "import" | "read" | "parse" => "timeline.import",
-        "timecode" | "tc" => "timeline.timecode",
-        "ale" => "timeline.ale",
-        "edl" => "timeline.edl",
-        _ => "timeline.inspect",
-    };
-    target.run(cmd, p)
 }
 
 pub fn run_mesh_cli(target: &mut Target, args: MeshCliArgs) -> Result<(), String> {

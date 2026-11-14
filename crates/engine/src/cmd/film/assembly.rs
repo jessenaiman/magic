@@ -90,18 +90,8 @@ fn backgrounds_from_words(words_doc: &Value, dir: &Path, assets: &[crate::Projec
 }
 
 fn auto_backgrounds(s: &Session, dir: &Path, duration: Tick) -> Option<Vec<(Tick, PathBuf)>> {
-    let mut imgs: Vec<PathBuf> =
+    let imgs: Vec<PathBuf> =
         s.project_assets.iter().filter(|a| a.kind == "image").filter_map(|a| a.path.as_ref().map(|p| dir.join(p))).filter(|p| p.is_file()).collect();
-    if imgs.is_empty() {
-        imgs = super::fcproj_stage::explicit_v1_slide_media(dir);
-    }
-    if let Some(doc) = crate::project::read_magic_section_in_dir(dir, "lyrics", "design/words.json") {
-        let bgs = backgrounds_from_words(&doc, dir, &s.project_assets);
-        let custom = doc["animations"].as_array().is_some_and(|a| a.iter().any(|x| x["background_custom"] == true));
-        if bgs.len() > 1 || (!bgs.is_empty() && (custom || imgs.len() <= 1)) {
-            return Some(bgs);
-        }
-    }
     if imgs.is_empty() {
         return None;
     }
@@ -340,13 +330,6 @@ fn build_film(s: &Session, dir: &Path, project: &Path, film: &Inputs, fps: Frame
     if !post_steps.is_empty() {
         run(dir, project, false, &post_steps)?;
     }
-
-    // Hydrate any remaining authored stage tracks (`storyboard/slides`, `assets/`, `words.json`, `actions.json`, `captions.srt`)
-    if super::is_local_shim_fcproj(project) {
-        let mut doc = super::fcproj_doc::load_fcproj(project);
-        super::fcproj_doc::hydrate_live_stage_tracks(s, dir, &mut doc);
-        super::fcproj_doc::save_fcproj(project, &mut doc)?;
-    }
     Ok(())
 }
 
@@ -387,11 +370,6 @@ pub(crate) fn ensure_song_film(s: &mut Session, audio: &Path) -> Result<PathBuf>
             false,
             &[json!({"id": "timeline.place", "params": {"item": item, "track": SONG_TRACK, "frame": 0, "insert": false, "video": false}})],
         )?;
-    }
-    if super::is_local_shim_fcproj(&wanted) {
-        let mut doc = super::fcproj_doc::load_fcproj(&wanted);
-        super::fcproj_doc::hydrate_live_stage_tracks(s, &dir, &mut doc);
-        super::fcproj_doc::save_fcproj(&wanted, &mut doc)?;
     }
     crate::cmd::film::link(s, &wanted)?;
     Ok(wanted)

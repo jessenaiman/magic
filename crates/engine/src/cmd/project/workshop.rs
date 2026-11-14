@@ -7,13 +7,13 @@ use serde_json::{Value, json};
 use crate::workspace::has_extension;
 use crate::{EngineError, Result, Session};
 
+pub use crate::cmd::project::files::{cmd_project_files, cmd_project_import_file};
 pub use crate::cmd::project::intake::{
     cmd_workshop_add, cmd_workshop_approve_draft, cmd_workshop_files, cmd_workshop_remove, cmd_workshop_set_audio, cmd_workshop_set_target,
     cmd_workshop_split_panels,
 };
+pub(crate) use crate::cmd::project::transcript::transcript_problems;
 pub use crate::cmd::project::transcript::{cmd_audio_analyze, cmd_workshop_import_transcript};
-pub(crate) use crate::cmd::project::transcript::{transcript_document, transcript_problems};
-pub use crate::cmd::project::trunk::{cmd_project_import_file, cmd_project_trunk};
 
 pub(crate) const ASSETS_DIR: &str = "assets";
 pub(crate) const IMAGE_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "webp"];
@@ -21,14 +21,6 @@ pub(crate) const STORYBOARD_DIR: &str = "storyboard";
 pub const VIDEO_TARGETS: &[&str] = &["filmcraft"];
 
 pub(crate) fn song_seconds(dir: &Path) -> Option<f64> {
-    if let Some(duration) = std::fs::read(dir.join("transcript-provenance.json"))
-        .ok()
-        .and_then(|b| serde_json::from_slice::<Value>(&b).ok())
-        .and_then(|v| v["recording_duration_sec"].as_f64())
-        .filter(|v| v.is_finite() && *v > 0.0)
-    {
-        return Some(duration);
-    }
     let fcproj = video_project_path(dir)?;
     let seq = crate::cmd::film::execute(&fcproj, "sequence.inspect", json!({})).ok()?;
     seq.get("duration").and_then(Value::as_f64).map(|t| t / (crate::time::TICKS_PER_SECOND as f64))
@@ -82,9 +74,7 @@ pub(crate) fn stage_body(s: &Session, stage: &str) -> String {
     let target = s.video_target.as_str();
     match stage {
         "song" => "Stage 1 — Song. Link the song audio (`magic-cli new --audio <song>`).".to_string(),
-        "transcript" => format!(
-            "Stage 2 — Transcription & Timing Reference (`timing-reference.json` + `transcript.srt`).\n  magic-cli exec audio.analyze\nVideo target: {target}."
-        ),
+        "transcript" => format!("Stage 2 — Transcription & Timing (`transcript.srt`).\n  magic-cli exec audio.analyze\nVideo target: {target}."),
         "storyboard" => {
             "Stage 3 — Creative DesignCraft Storyboard (`storyboard.designcraft` / `storyboard.idml`) & exported slides (`storyboard/slides/`).".to_string()
         }
@@ -105,13 +95,8 @@ pub(crate) fn files_in(dir: &Path, only: Option<&[&str]>) -> Vec<PathBuf> {
     files
 }
 
-pub(crate) fn transcript_files(dir: &Path) -> Vec<PathBuf> {
-    let mut list: Vec<PathBuf> = files_in(dir, Some(&["json"]))
-        .into_iter()
-        .filter(|p| p.file_name().and_then(|n| n.to_str()).is_some_and(|n| n == "transcript.json" || n.ends_with(".transcript.json")))
-        .collect();
-    list.sort();
-    list
+pub(crate) fn transcript_files(_dir: &Path) -> Vec<PathBuf> {
+    Vec::new()
 }
 
 pub(crate) fn panel_files(dir: &Path) -> Vec<PathBuf> {
@@ -167,34 +152,15 @@ pub(crate) fn project_dir(s: &Session) -> Result<PathBuf> {
         .ok_or_else(|| EngineError::InvalidParams("no project is open; use project.new or project.open".into()))
 }
 
-fn workshop_transcript_summary(dir: &Path, video_target: &str, transcripts: &[PathBuf]) -> (Value, Vec<String>, bool, String, Vec<Value>) {
-    let source = transcripts
-        .iter()
-        .find(|p| p.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.ends_with(".transcript.json")))
-        .or_else(|| transcripts.first())
-        .cloned();
-    let doc = source.as_ref().and_then(|p| transcript_document(p).ok()).unwrap_or(Value::Null);
+fn workshop_transcript_summary(dir: &Path, _video_target: &str, _transcripts: &[PathBuf]) -> (Value, Vec<String>, bool, String, Vec<Value>) {
+    let doc = Value::Null;
     let errors = transcript_problems(&doc);
-    let valid = source.is_some() && errors.is_empty();
-    let why = if source.is_none() {
-        "Transcribe the linked song or import timed lyrics to produce timing-reference.json.".to_string()
-    } else if !valid {
-        format!("Transcript needs repair: {}.", errors.join("; "))
-    } else {
-        "Transcript and timing-reference.json ready.".to_string()
-    };
-    let mut outputs: Vec<Value> = transcripts.iter().map(|p| file_chip(p)).collect();
-    for name in ["timing-reference.json", "transcript.srt"] {
-        let f = dir.join(name);
-        if f.is_file() {
-            outputs.push(file_chip(&f));
-        }
-    }
-    for name in ["transcript.json", "transcript.srt", "audio-analysis.json"] {
-        let file = dir.join(video_target).join(name);
-        if file.is_file() {
-            outputs.push(file_chip(&file));
-        }
+    let srt = dir.join("transcript.srt");
+    let valid = srt.is_file();
+    let why = if valid { "Transcript ready.".to_string() } else { "Transcribe the linked song or import timed lyrics.".to_string() };
+    let mut outputs: Vec<Value> = Vec::new();
+    if srt.is_file() {
+        outputs.push(file_chip(&srt));
     }
     (doc, errors, valid, why, outputs)
 }
@@ -210,8 +176,6 @@ pub(crate) fn workshop_status(s: &mut Session) -> Result<Value> {
     let liner = files_in(&dir.join("liner-notes"), None);
     let transcripts = transcript_files(&dir);
     let assets = workshop_asset_files(&dir);
-    let timing_ref_path = dir.join("timing-reference.json");
-    let timing_ref_exists = timing_ref_path.is_file();
     let sb_status = crate::cmd::storyboard::cmd_storyboard_status(s, &json!({}))
         .unwrap_or_else(|_| json!({"exists": false, "production_ready": true, "light": "optional"}));
     let sb_exists = sb_status["exists"] == true;
@@ -249,12 +213,8 @@ pub(crate) fn workshop_status(s: &mut Session) -> Result<Value> {
     let setup_ready = audio_ok && transcript_valid;
     let studio_info = studio(&dir);
     let effective_video_project = s.video_project_path.clone().or_else(|| video_project_path(&dir));
-    let lyrics_ready = dir.join("effects/lyrics.ecproj").is_file()
-        || dir.join("lettering/lyrics.ecproj").is_file()
-        || crate::project::read_magic_section_in_dir(&dir, "lyrics", "design/words.json").is_some();
-    let motion_ready = dir.join("effects/motion.ecproj").is_file()
-        || dir.join("motion/actions.ecproj").is_file()
-        || crate::project::read_magic_section_in_dir(&dir, "motion", "motion/actions.json").is_some();
+    let lyrics_ready = dir.join("effects/lyrics.ecproj").is_file() || dir.join("lettering/lyrics.ecproj").is_file();
+    let motion_ready = dir.join("effects/motion.ecproj").is_file() || dir.join("motion/actions.ecproj").is_file();
 
     let next_steps = if !audio_ok || !transcript_valid {
         json!(["magic-cli exec audio.analyze"])
@@ -267,8 +227,6 @@ pub(crate) fn workshop_status(s: &mut Session) -> Result<Value> {
         "project_dir": dir,
         "complete": setup_ready,
         "setup_ready": setup_ready,
-        "timing_reference": timing_ref_path,
-        "timing_reference_exists": timing_ref_exists,
         "storyboard_exists": sb_exists,
         "storyboard_production_ready": true,
         "lyrics_ready": lyrics_ready,

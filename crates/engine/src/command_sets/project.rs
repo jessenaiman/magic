@@ -1,11 +1,11 @@
 //! Project lifecycle (`project.*` and ArtCraft `file.*` suite commands), assets,
-//! workshop/transcription (`timing-reference.json`), and `DeckCraft` Storyboard (`storyboard.*`).
+//! workshop/transcription, and `DesignCraft` Storyboard (`storyboard.*`).
 
 use super::{cmd_spec, query_spec};
 use crate::commands::{CommandSpec, always};
 use crate::project::{
-    cmd_file_save_as, cmd_project_add_asset, cmd_project_autosave, cmd_project_close, cmd_project_import_file, cmd_project_list_assets, cmd_project_load_asset,
-    cmd_project_new, cmd_project_open, cmd_project_remove_asset, cmd_project_save, cmd_project_save_asset, cmd_project_trunk, cmd_project_update_asset,
+    cmd_file_save_as, cmd_project_add_asset, cmd_project_close, cmd_project_files, cmd_project_import_file, cmd_project_list_assets, cmd_project_load_asset,
+    cmd_project_new, cmd_project_open, cmd_project_remove_asset, cmd_project_save, cmd_project_save_asset, cmd_project_update_asset,
 };
 use crate::workshop::{
     cmd_audio_analyze, cmd_project_search, cmd_workshop_add, cmd_workshop_approve_draft, cmd_workshop_files, cmd_workshop_import_transcript,
@@ -53,7 +53,6 @@ fn specs_project() -> Vec<CommandSpec> {
         ),
         cmd_spec!("project.open", "Open Project", ["File"], Some("Cmd+O"), "{\"path\":\"folder/name.magic\"}", always, cmd_project_open),
         cmd_spec!("project.save", "Save Project", ["File"], Some("Cmd+S"), "{\"path\":\"optional_save_as.magic\"}", always, cmd_project_save),
-        cmd_spec!("project.autosave", "Write Crash-Recovery Journal (.history/*.autosave)", [], None, "{}", always, cmd_project_autosave),
         cmd_spec!("film.save", "Save Film (FilmCraft)", ["File"], None, "{}", always, crate::cmd::film::cmd_film_save),
         cmd_spec!("effect.save", "Save Lettering (EffectCraft)", ["File"], None, "{}", always, crate::cmd::words::native_motion::cmd_effect_save),
         cmd_spec!("shot.commit", "Save the Animation's Three Documents", ["Animation"], None, "{}", always, crate::cmd::commit::cmd_shot_commit),
@@ -139,7 +138,7 @@ fn specs_workshop() -> Vec<CommandSpec> {
     vec![
         query_spec!("workshop.status", "Workshop Stages", "{}", cmd_workshop_status),
         query_spec!("workshop.files", "Workshop Files", "{\"filter\":\"optional substring\",\"group\":\"optional\"}", cmd_workshop_files),
-        query_spec!("project.trunk", "ArtCraft Project File Trunk", "{}", cmd_project_trunk),
+        query_spec!("project.files", "Project Files", "{}", cmd_project_files),
         query_spec!("project.search", "Search Project, Files, Storyboard & Commands", "{\"query\":\"search text\"}", cmd_project_search),
         query_spec!("song.lyrics", "Song Lyrics (Artist Sheet or Transcript)", "{}", crate::cmd::words::lyrics::cmd_song_lyrics),
         query_spec!("song.waveform", "Song Audio Waveform", "{\"start\":0,\"end\":\"optional seconds\",\"bins\":800}", crate::cmd::song::waveform::read),
@@ -174,10 +173,10 @@ fn specs_workshop() -> Vec<CommandSpec> {
         ),
         cmd_spec!(
             "workshop.import_transcript",
-            "Import Transcript & Build timing-reference.json + Synced FilmCraft Lyric Track",
+            "Import Timed Transcript & Sync FilmCraft Lyric Track",
             ["Workshop"],
             None,
-            "{\"path\":\"transcript.json\",\"captions\":\"optional SRT\",\"replace\":false}",
+            "{\"path\":\"timed-lyrics.srt\",\"captions\":\"optional SRT\",\"replace\":false}",
             always,
             cmd_workshop_import_transcript
         ),
@@ -185,7 +184,7 @@ fn specs_workshop() -> Vec<CommandSpec> {
         cmd_spec!("workshop.remove", "Remove Workshop File", ["Workshop"], None, "{\"path\":\"file in project folder\"}", always, cmd_workshop_remove),
         cmd_spec!(
             "audio.analyze",
-            "Transcribe Song Audio via FilmCraft & Write timing-reference.json",
+            "Transcribe Song Audio via FilmCraft & Store Transcript in Project",
             ["File"],
             None,
             "{\"audio\":\"optional song path\",\"model\":\"whisper-base\"}",

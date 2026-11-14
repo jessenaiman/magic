@@ -100,57 +100,18 @@ pub fn cmd_words_design(s: &mut Session, p: &Value) -> Result<Value> {
     }))
 }
 
-/// `words.track`: write the song's lyric timing track (`effects/words-track.json`), one clip per printed word in `Tick`s.
+/// `words.track`: compute the song's lyric timing clips in `Tick`s.
 pub fn cmd_words_track(s: &mut Session, _: &Value) -> Result<Value> {
-    let dir = crate::cmd::words::workspace_dir(s)?;
+    let _dir = crate::cmd::words::workspace_dir(s)?;
     let (words, _) = printed_caption_words(&aligned(s)?);
     if words.is_empty() {
         return Err(invalid("No printed words with timing; check words.align"));
     }
-    let mut line_end: HashMap<String, Tick> = HashMap::new();
-    for w in &words {
-        let end = word_tick(w, "end_tick", "end").unwrap_or(Tick::ZERO);
-        let e = line_end.entry(word_time_key(w, w["line"].as_str().unwrap_or_default())).or_insert(Tick::ZERO);
-        if end > *e {
-            *e = end;
-        }
-    }
-    let min_dur = Tick(TICKS_PER_SECOND / 10);
-    let mut clips = Vec::with_capacity(words.len());
-    for (i, w) in words.iter().enumerate() {
-        let id = w["word_id"].as_str().unwrap_or_default();
-        let text = w["text"].as_str().unwrap_or_default();
-        let start = word_tick(w, "start_tick", "start").unwrap_or(Tick::ZERO);
-        let end = line_end.get(&word_time_key(w, w["line"].as_str().unwrap_or_default())).copied().unwrap_or(start) + HOLD_TICK;
-        let dur = Tick((end.0 - start.0).max(min_dur.0));
-        clips.push(json!({
-            "clip_id": format!("kinetic-r{}-{}", w["occurrence"].as_u64().unwrap_or(1), id.replace("/w", "-")),
-            "word_id": id,
-            "line": w["line"],
-            "section": w["section"],
-            "occurrence": w["occurrence"],
-            "text": text,
-            "track_index": 200 + i,
-            "start_tick": start.0,
-            "end_tick": (start + dur).0,
-            "duration_tick": dur.0,
-            "start": start.seconds(),
-            "end": (start + dur).seconds(),
-            "duration": dur.seconds()
-        }));
-    }
-    let path: PathBuf = dir.join("effects/words-track.json");
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    let payload = serde_json::to_vec_pretty(&json!({"format": "magic.words.track", "version": 1, "clips": clips})).map_err(|e| invalid(e.to_string()))?;
-    crate::doc_state::write_file(&path, payload)?;
     Ok(json!({
         "ok": true,
         "clips": words.len(),
         "first": words.first(),
         "last": words.last(),
-        "path": path,
         "next": "words.design builds the lyric visuals on these anchors"
     }))
 }

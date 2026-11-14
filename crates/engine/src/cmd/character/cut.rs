@@ -10,9 +10,7 @@ use super::{View, bad, part_list, root_part};
 use crate::{EngineError, Result, Session};
 
 fn try_photocraft_live(src: &Path, steps: &[(&str, Value)], out_pcraft: Option<&Path>) -> bool {
-    if !crate::workspace::control_probe("photocraft")
-        || crate::workspace::control_exec("photocraft", "file.open", json!({"path": src})).is_err()
-    {
+    if !crate::workspace::control_probe("photocraft") || crate::workspace::control_exec("photocraft", "file.open", json!({"path": src})).is_err() {
         return false;
     }
     for (op, params) in steps {
@@ -46,63 +44,15 @@ fn try_photocraft_steps(src: &Path, steps: &[(&str, Value)], out_pcraft: Option<
         return false;
     }
     out_pcraft.is_none_or(Path::is_file)
-        && steps
-            .iter()
-            .filter(|(op, _)| *op == "file.saveACopy")
-            .all(|(_, p)| p["path"].as_str().is_none_or(|dst| Path::new(dst).is_file()))
+        && steps.iter().filter(|(op, _)| *op == "file.saveACopy").all(|(_, p)| p["path"].as_str().is_none_or(|dst| Path::new(dst).is_file()))
 }
 
-/// Execute PhotoCraft layer/image steps via host `PhotoCraft` (`--control` / `photocraft-cli`),
-/// never overwriting `.pcraft` / `.psd` paths with raw PNG bytes.
+/// Execute PhotoCraft layer/image steps via host `PhotoCraft` (`--control` / `photocraft-cli`).
 pub(crate) fn photocraft_run(src: &Path, steps: &[(&str, Value)], out_pcraft: Option<&Path>) -> Result<()> {
-    let host_ran = try_photocraft_steps(src, steps, out_pcraft);
-    if host_ran {
+    if try_photocraft_steps(src, steps, out_pcraft) {
         return Ok(());
     }
-
-    let mut current = crate::native_media::load_rgba(src)?;
-    for (op, params) in steps {
-        match *op {
-            "layer.removeBackground" => {
-                crate::native_media::isolate_rgba_in_memory(&mut current, None, 1.2);
-            }
-            "image.imageSize" => {
-                let w = params["width"].as_u64().and_then(|n| u32::try_from(n).ok()).unwrap_or_else(|| current.width()).max(1);
-                let h = params["height"].as_u64().and_then(|n| u32::try_from(n).ok()).unwrap_or_else(|| current.height()).max(1);
-                if (w, h) != current.dimensions() {
-                    current = image::imageops::resize(&current, w, h, image::imageops::FilterType::Lanczos3);
-                }
-            }
-            "file.export.layersToFiles" => {
-                if let Some(dir_str) = params["dir"].as_str() {
-                    let dir = Path::new(dir_str);
-                    std::fs::create_dir_all(dir)?;
-                    let prefix = params["prefix"].as_str().unwrap_or("layer");
-                    let layer_png = dir.join(format!("{prefix}-00.png"));
-                    let (w, h) = current.dimensions();
-                    crate::native_media::crop_and_anchor_cell(&current, [0, 0, w, h], false, &layer_png)?;
-                }
-            }
-            "file.saveACopy" => {
-                if let Some(dst_str) = params["path"].as_str() {
-                    crate::native_media::encode_png_atomic(&current, Path::new(dst_str))?;
-                }
-            }
-            _ => {}
-        }
-    }
-    if let Some(target) = out_pcraft
-        && !host_ran
-    {
-        let is_layered_doc = crate::workspace::has_extension(target, &["pcraft", "psd", "psb", "ora", "xcf", "kra", "afphoto"]);
-        if is_layered_doc {
-            let preview_png = target.with_extension("preview.png");
-            crate::native_media::encode_png_atomic(&current, &preview_png)?;
-        } else {
-            crate::native_media::encode_png_atomic(&current, target)?;
-        }
-    }
-    Ok(())
+    Err(EngineError::ExternalTool("photocraft".into(), "PhotoCraft command unavailable or failed".into()))
 }
 
 pub(crate) fn photocraft_dimensions(path: &Path) -> Result<(u32, u32)> {

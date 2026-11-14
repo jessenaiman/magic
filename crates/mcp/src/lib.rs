@@ -300,7 +300,7 @@ mod tests {
             count
         });
         let mut remote = Remote::new(addr.to_string(), None);
-        let err = remote.execute("project.autosave", json!({})).unwrap_err();
+        let err = remote.execute("project.status", json!({})).unwrap_err();
         assert!(err.contains("outcome unknown"));
         assert_eq!(handle.join().unwrap(), 1);
     }

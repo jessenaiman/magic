@@ -9,9 +9,7 @@
 #![forbid(unsafe_code)]
 #![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable))]
 
-pub mod activity;
 pub mod animation_model;
-pub mod change_marker;
 pub mod cmd;
 pub mod command_sets;
 pub mod commands;
@@ -20,14 +18,12 @@ pub mod craft_ai;
 pub mod doc_state;
 pub mod doctor;
 pub mod error;
-pub mod extensions;
 pub mod guard;
 pub mod history;
 pub mod link_watch;
 pub mod native_media;
 pub mod project_lock;
 pub(crate) mod read_only_file;
-pub mod scribbles;
 pub mod session;
 pub mod settings;
 pub mod time;

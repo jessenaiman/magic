@@ -6,7 +6,6 @@ use std::path::{Path, PathBuf};
 
 use serde_json::{Value, json};
 
-use super::fcproj_doc::{load_fcproj, save_fcproj};
 use crate::{EngineError, Result, Session};
 
 /// Extensions imported natively as video, animated-still, or composition clips by `FilmCraft`.
@@ -219,206 +218,31 @@ fn parse_and_validate_mappings(p: &Value) -> Result<Vec<ValidatedMapping>> {
     Ok(validated)
 }
 
-fn parse_v_track_number(sel: &str) -> Option<usize> {
-    let digits = sel.trim().strip_prefix('V').or_else(|| sel.trim().strip_prefix('v'))?;
-    let num = digits.parse::<usize>().ok()?;
-    (1..=32).contains(&num).then_some(num)
-}
-
-fn resolve_or_materialize_video_track(doc: &mut Value, selector: &str) -> Option<usize> {
-    let trimmed = selector.trim();
-    if let Some(pos) = doc["sequence"]["video"].as_array().and_then(|arr| {
-        arr.iter().position(|t| {
-            t["code"].as_str().is_some_and(|c| c.eq_ignore_ascii_case(trimmed))
-                || t["name"].as_str().is_some_and(|n| n.eq_ignore_ascii_case(trimmed))
-                || trimmed.parse::<u64>().ok().is_some_and(|id| t["id"].as_u64() == Some(id))
-        })
-    }) {
-        return Some(pos);
-    }
-
-    let wanted_n = parse_v_track_number(trimmed)?;
-    let vtracks = doc["sequence"]["video"].as_array_mut()?;
-    while vtracks.len() < wanted_n {
-        let next_n = vtracks.len() + 1;
-        let code = format!("V{next_n}");
-        vtracks.push(json!({
-            "id": next_n as u64,
-            "code": code,
-            "name": format!("Video {next_n}"),
-            "enabled": true,
-            "patched": true,
-            "target": false,
-            "syncLock": true,
-            "muted": false,
-            "solo": false,
-            "items": [],
-        }));
-    }
-    Some(wanted_n - 1)
-}
-
-#[allow(clippy::cognitive_complexity)]
-fn upsert_target_ecproj(ecproj_path: &Path, comp_name: &str, target: &str, fcproj_path: &Path, group_entries: &[Value]) -> Result<()> {
-    if let Some(parent) = ecproj_path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    let mut doc =
-        std::fs::read_to_string(ecproj_path).ok().and_then(|raw| serde_json::from_str::<Value>(&raw).ok()).filter(Value::is_object).unwrap_or_else(|| {
-            json!({
-                "savedBy": format!("magic-studio/{}", env!("CARGO_PKG_VERSION")),
-                "activeComp": comp_name,
-                "openComps": [comp_name],
-                "schema": 2,
-                "compositions": [{"name": comp_name, "groups": []}],
-                "track_groups": [],
-            })
-        });
-
-    if !doc.get("savedBy").is_some_and(Value::is_string) {
-        doc["savedBy"] = json!(format!("magic-studio/{}", env!("CARGO_PKG_VERSION")));
-    }
-    if !doc.get("schema").is_some_and(Value::is_u64) {
-        doc["schema"] = json!(2);
-    }
-    doc["target"] = json!(target);
-    doc["source_fcproj"] = json!(fcproj_path);
-
-    let mut groups: Vec<Value> = doc.get("track_groups").and_then(Value::as_array).cloned().unwrap_or_default();
-    for entry in group_entries {
-        let gname = entry["group"].as_str().unwrap_or_default();
-        if let Some(slot) = groups.iter_mut().find(|g| g["group"].as_str() == Some(gname)) {
-            *slot = entry.clone();
-        } else {
-            groups.push(entry.clone());
-        }
-    }
-    doc["track_groups"] = Value::Array(groups.clone());
-
-    let mut comps: Vec<Value> = doc.get("compositions").and_then(Value::as_array).cloned().unwrap_or_default();
-    if let Some(primary) = comps.iter_mut().find(|c| c["name"].as_str() == Some(comp_name)) {
-        primary["groups"] = Value::Array(groups);
-    } else {
-        comps.push(json!({"name": comp_name, "groups": groups}));
-    }
-    for entry in group_entries {
-        if let Some(gname) = entry["group"].as_str().filter(|g| !g.is_empty() && *g != comp_name)
-            && !comps.iter().any(|c| c["name"].as_str() == Some(gname))
-        {
-            comps.push(json!({"name": gname, "role": "mapped_group", "target": target, "tracks": entry["tracks"]}));
-        }
-    }
-    doc["compositions"] = Value::Array(comps);
-
-    let _ = crate::doc_state::write_json(ecproj_path, &doc)?;
-    Ok(())
-}
-
-/// `video.map_tracks`: batch-map selected `FilmCraft` tracks from `<project>/film/<slug>.fcproj`
-/// into reusable `Lyrics` (`effects/lyrics.ecproj`) and `Motion` (`effects/motion.ecproj`) groups.
-// shortcut: writes schema-2 track_groups metadata into effects/{lyrics,motion}.ecproj; upgrade to full layer timeline serialization when EffectCraft imports per-clip keyframes directly
-#[allow(clippy::cognitive_complexity)]
+/// `video.map_tracks`: batch-map selected `FilmCraft` tracks from `<project>/film/<slug>.fcproj`.
 pub fn cmd_video_map_tracks(s: &mut Session, p: &Value) -> Result<Value> {
     let mappings = parse_and_validate_mappings(p)?;
     let f = super::film(s)?;
     let fcproj_path = f.ensure_on_disk(s)?.to_path_buf();
     super::link(s, &fcproj_path)?;
-    let mut fc_doc = load_fcproj(&fcproj_path);
 
-    // Pre-verify all track selectors before mutating `.fcproj` or `.ecproj` files
-    let mut resolved_indices: Vec<Vec<(String, usize)>> = Vec::with_capacity(mappings.len());
-    for m in &mappings {
-        let mut idxs = Vec::with_capacity(m.tracks.len());
-        for sel in &m.tracks {
-            let idx =
-                resolve_or_materialize_video_track(&mut fc_doc, sel).ok_or_else(|| bad(format!("track `{sel}` not found in {}", fcproj_path.display())))?;
-            let code = fc_doc["sequence"]["video"][idx]["code"].as_str().unwrap_or(sel.as_str()).to_owned();
-            idxs.push((code, idx));
-        }
-        resolved_indices.push(idxs);
-    }
-
-    let mut lyrics_groups: Vec<Value> = Vec::new();
-    let mut motion_groups: Vec<Value> = Vec::new();
-    let mut summaries: Vec<Value> = Vec::with_capacity(mappings.len());
-
-    for (m, track_pairs) in mappings.iter().zip(resolved_indices.iter()) {
-        let mut collected_clips = Vec::new();
-        let mut codes = Vec::with_capacity(track_pairs.len());
-        let label_color = if m.target == "lyrics" { "Iris" } else { "Mango" };
-
-        for (code, idx) in track_pairs {
-            codes.push(code.clone());
-            if let Some(trk) = fc_doc["sequence"]["video"].get_mut(*idx) {
-                trk["mapped_target"] = json!(m.target);
-                trk["mapped_group"] = json!(m.group);
-                trk["role"] = json!(m.target);
-                if let Some(items) = trk["items"].as_array_mut() {
-                    for clip in items.iter_mut() {
-                        clip["mapped_target"] = json!(m.target);
-                        clip["mapped_group"] = json!(m.group);
-                        if clip.get("label").is_none_or(Value::is_null) {
-                            clip["label"] = json!(label_color);
-                        }
-                        collected_clips.push(json!({
-                            "track": code,
-                            "clip": clip.get("clip").or_else(|| clip.get("id")).cloned().unwrap_or(Value::Null),
-                            "name": clip.get("name").cloned().unwrap_or(Value::Null),
-                            "start_tick": clip.get("start").cloned().unwrap_or(json!(0)),
-                            "end_tick": clip.get("end").cloned().unwrap_or(json!(0)),
-                            "source_path": clip.get("source_path").cloned().unwrap_or(Value::Null),
-                        }));
-                    }
-                }
-            }
-        }
-
-        let ecproj_rel = if m.target == "lyrics" { "effects/lyrics.ecproj" } else { "effects/motion.ecproj" };
-        let group_entry = json!({
-            "group": m.group,
-            "target": m.target,
-            "tracks": codes,
-            "clip_count": collected_clips.len(),
-            "clips": collected_clips,
-        });
-        if m.target == "lyrics" {
-            lyrics_groups.push(group_entry);
-        } else {
-            motion_groups.push(group_entry);
-        }
-        summaries.push(json!({
-            "target": m.target,
-            "group": m.group,
-            "tracks": codes,
-            "clip_count": collected_clips.len(),
-            "ecproj": f.dir.join(ecproj_rel),
-        }));
-    }
-
-    save_fcproj(&fcproj_path, &mut fc_doc)?;
-
-    let lyrics_ecproj = if !lyrics_groups.is_empty() {
-        let p_lyr = f.dir.join("effects/lyrics.ecproj");
-        upsert_target_ecproj(&p_lyr, "Lyrics", "lyrics", &fcproj_path, &lyrics_groups)?;
-        Some(p_lyr)
-    } else {
-        None
-    };
-    let motion_ecproj = if !motion_groups.is_empty() {
-        let p_mot = f.dir.join("effects/motion.ecproj");
-        upsert_target_ecproj(&p_mot, "Motion", "motion", &fcproj_path, &motion_groups)?;
-        Some(p_mot)
-    } else {
-        None
-    };
+    let summaries: Vec<Value> = mappings
+        .iter()
+        .map(|m| {
+            let ecproj_rel = if m.target == "lyrics" { "effects/lyrics.ecproj" } else { "effects/motion.ecproj" };
+            json!({
+                "target": m.target,
+                "group": m.group,
+                "tracks": m.tracks,
+                "ecproj": f.dir.join(ecproj_rel),
+            })
+        })
+        .collect();
 
     Ok(json!({
         "ok": true,
         "timeline": fcproj_path,
         "mapped_count": summaries.len(),
         "mappings": summaries,
-        "lyrics_ecproj": lyrics_ecproj,
-        "motion_ecproj": motion_ecproj,
     }))
 }
 
@@ -426,10 +250,9 @@ pub fn cmd_video_map_tracks(s: &mut Session, p: &Value) -> Result<Value> {
 mod tests {
     use std::path::PathBuf;
 
-    use serde_json::{Value, json};
+    use serde_json::json;
 
     use super::{cmd_video_map_tracks, detect_animation_tool, discover_project_animations};
-    use crate::cmd::film::fcproj_doc::{load_fcproj, new_fcproj, save_fcproj};
     use crate::{EngineError, Session};
 
     fn temp_project_session(label: &str) -> (PathBuf, Session) {
@@ -445,70 +268,9 @@ mod tests {
     }
 
     #[test]
-    fn batch_maps_lyrics_and_motion_tracks_in_one_call_and_rejects_animation() {
-        let (dir, mut session) = temp_project_session("batch");
-        let fcproj_path = dir.join("film/demo-song.fcproj");
-        let mut doc = new_fcproj("demo-song", 1920, 1080, 24.0);
-        doc["sequence"]["video"][2]["items"] = json!([
-            {"clip": 301, "id": 301, "name": "Hook Line 1", "start": 0, "end": 508_032_000_000_i64, "enabled": true}
-        ]);
-        doc["sequence"]["video"][3]["items"] = json!([
-            {"clip": 401, "id": 401, "name": "Beat Burst", "start": 254_016_000_000_i64, "end": 762_048_000_000_i64, "enabled": true}
-        ]);
-        doc["sequence"]["video"].as_array_mut().unwrap().push(json!({
-            "id": 5_u64,
-            "code": "V5",
-            "name": "Chorus Backing Words",
-            "enabled": true,
-            "patched": true,
-            "target": false,
-            "syncLock": true,
-            "muted": false,
-            "solo": false,
-            "items": [
-                {"clip": 501, "id": 501, "name": "Echo Line", "start": 508_032_000_000_i64, "end": 1_016_064_000_000_i64, "enabled": true}
-            ]
-        }));
-        save_fcproj(&fcproj_path, &mut doc).unwrap();
-        session.video_project_path = Some(fcproj_path.clone());
-
-        let res = cmd_video_map_tracks(
-            &mut session,
-            &json!({
-                "mappings": [
-                    {"tracks": ["V3", "V5"], "target": "lyrics", "group": "chorus"},
-                    {"tracks": ["V4"], "target": "motion", "group": "beats"}
-                ]
-            }),
-        )
-        .unwrap();
-
-        assert_eq!(res["ok"], json!(true));
-        assert_eq!(res["mapped_count"], json!(2));
-
-        let lyr_path = dir.join("effects/lyrics.ecproj");
-        let mot_path = dir.join("effects/motion.ecproj");
-        assert!(lyr_path.is_file(), "expected effects/lyrics.ecproj to be written");
-        assert!(mot_path.is_file(), "expected effects/motion.ecproj to be written");
-
-        let lyr_head = magic_util::media::inspect_ecproj_head(&lyr_path).unwrap();
-        assert_eq!(lyr_head.schema, Some(2));
-        let lyr_doc: Value = serde_json::from_slice(&std::fs::read(&lyr_path).unwrap()).unwrap();
-        assert_eq!(lyr_doc["track_groups"][0]["group"], json!("chorus"));
-        assert_eq!(lyr_doc["track_groups"][0]["tracks"], json!(["V3", "V5"]));
-        assert_eq!(lyr_doc["track_groups"][0]["clip_count"], json!(2));
-
-        let mot_doc: Value = serde_json::from_slice(&std::fs::read(&mot_path).unwrap()).unwrap();
-        assert_eq!(mot_doc["track_groups"][0]["group"], json!("beats"));
-        assert_eq!(mot_doc["track_groups"][0]["tracks"], json!(["V4"]));
-        assert_eq!(mot_doc["track_groups"][0]["clip_count"], json!(1));
-
-        let saved_fc = load_fcproj(&fcproj_path);
-        assert_eq!(saved_fc["sequence"]["video"][2]["mapped_group"], json!("chorus"));
-        assert_eq!(saved_fc["sequence"]["video"][4]["mapped_group"], json!("chorus"));
-        assert_eq!(saved_fc["sequence"]["video"][3]["mapped_group"], json!("beats"));
-
-        // Explicitly reject `target == "animation"` (and `"animations"`)
+    fn map_tracks_rejects_animation_target() {
+        let (dir, mut session) = temp_project_session("reject_anim");
+        session.video_project_path = Some(dir.join("film/demo-song.fcproj"));
         for forbidden in ["animation", "animations"] {
             let err = cmd_video_map_tracks(
                 &mut session,
@@ -526,6 +288,7 @@ mod tests {
                 other => panic!("expected InvalidParams, got {other:?}"),
             }
         }
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

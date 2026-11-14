@@ -16,14 +16,13 @@ pub fn cmd_words_effect_install(s: &mut Session, p: &Value) -> Result<Value> {
     let rel = format!("effects/presets/{safe_stem}.json");
     let name = raw_name;
     let target = dir.join(&rel);
-    let live_applied = if crate::workspace::control_probe("effectcraft")
-        && crate::workspace::control_exec("effectcraft", "effect.apply", json!({"effect": name})).is_ok()
-    {
-        let _ = crate::workspace::control_exec("effectcraft", "file.save", json!({}));
-        true
-    } else {
-        false
-    };
+    let live_applied =
+        if crate::workspace::control_probe("effectcraft") && crate::workspace::control_exec("effectcraft", "effect.apply", json!({"effect": name})).is_ok() {
+            let _ = crate::workspace::control_exec("effectcraft", "file.save", json!({}));
+            true
+        } else {
+            false
+        };
     if target.is_file() {
         return Ok(json!({"name":name,"src":rel,"installed":false,"already":true,"live_app_synced":live_applied}));
     }

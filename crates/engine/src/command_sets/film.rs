@@ -1,4 +1,4 @@
-//! FilmCraft × EffectCraft bridge, timeline interchange, markers, and Studio finishing command specs.
+//! FilmCraft × EffectCraft bridge and Studio finishing command specs.
 
 use super::{cmd_spec, query_spec};
 use crate::commands::{CommandSpec, always};
@@ -74,75 +74,12 @@ pub(super) fn specs_film() -> Vec<CommandSpec> {
             always,
             crate::cmd::film::cmd_video_finish
         ),
-        query_spec!(
-            "timeline.detect",
-            "Detect Timeline Format (OTIO, FCPXML, FCP7 XML, EDL, AAF, OMF)",
-            "{\"path\":\"optional edit.xml\"}",
-            crate::cmd::film::cmd_timeline_detect
-        ),
-        query_spec!(
-            "timeline.timecode",
-            "Convert Exact Ticks, Seconds, Frames & SMPTE Timecode (craft-timeline)",
-            "{\"seconds\":0,\"fps\":24}",
-            crate::cmd::film::cmd_timeline_timecode
-        ),
-        query_spec!(
-            "timeline.inspect",
-            "Inspect Active .fcproj or External Timeline via craft-timeline Model",
-            "{\"path\":\"optional edit.otio\"}",
-            crate::cmd::film::cmd_timeline_inspect
-        ),
-        cmd_spec!(
-            "timeline.export",
-            "Export Sequence to OTIO, FCPXML, FCP7 XML, CMX 3600 EDL, or ALE (craft-timeline)",
-            ["Studio"],
-            None,
-            "{\"format\":\"otio|fcpxml|xml|edl|ale\",\"path\":\"optional\"}",
-            always,
-            crate::cmd::film::cmd_timeline_export
-        ),
-        cmd_spec!(
-            "timeline.import",
-            "Import OTIO, FCPXML, FCP7 XML, CMX 3600 EDL, or ALE into Sequence (craft-timeline)",
-            ["Studio"],
-            None,
-            "{\"path\":\"edit.otio\"}",
-            always,
-            crate::cmd::film::cmd_timeline_import
-        ),
-        cmd_spec!(
-            "timeline.ale",
-            "Parse or Export Avid Log Exchange .ale (craft-timeline)",
-            ["Studio"],
-            None,
-            "{\"action\":\"parse|export\",\"path\":\"optional\"}",
-            always,
-            crate::cmd::film::cmd_timeline_ale
-        ),
-        cmd_spec!(
-            "timeline.edl",
-            "Parse or Export CMX 3600 .edl (craft-timeline)",
-            ["Studio"],
-            None,
-            "{\"action\":\"parse|export\",\"path\":\"optional\"}",
-            always,
-            crate::cmd::film::cmd_timeline_edl
-        ),
         query_spec!("video.film", "Film Timeline, Preview and Export Status", "{}", crate::cmd::film::cmd_video_film),
         cmd_spec!("video.preview", "Render Half-Scale Film Preview (FilmCraft)", ["Studio"], None, "{}", always, crate::cmd::film::cmd_video_preview),
         cmd_spec!("video.export", "Export Final Film (FilmCraft)", ["Studio"], None, "{}", always, crate::cmd::film::cmd_video_export),
         query_spec!("video.frame", "Render One Program Frame (FilmCraft)", "{\"seconds\":0}", crate::cmd::film::cmd_video_frame),
         query_spec!("video.open", "Open Timeline in FilmCraft", "{}", crate::cmd::film::cmd_video_open),
         query_spec!("video.timeline", "Film Tracks, Clips and Synced Markers", "{}", crate::cmd::film::cmd_video_timeline),
-        cmd_spec!(
-            "video.markers",
-            "Manage, Export CSV & Interchange Timeline Markers (FilmCraft <-> EffectCraft)",
-            ["Studio"],
-            Some("M"),
-            "{\"action\":\"list|add|edit|palette|export_csv|seed|delete|clear|interchange\"}",
-            always,
-            crate::cmd::film::cmd_video_markers
-        ),
         cmd_spec!(
             "video.place_clip",
             "Place Clip on FilmCraft Track",
