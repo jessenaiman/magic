@@ -1,11 +1,10 @@
-//! Privacy-scrubbed diagnostics copy (`Copy Diagnostics` & `Report a Problem`), preference +
-//! `storytold/craft-ai-integrations`, project
-//! cache refresh, and safe HTTPS opener.
+//! Privacy-scrubbed diagnostics copy (`Copy Diagnostics` & `Report a Problem`), preference
+//! hydration, project cache refresh, and safe HTTPS opener.
 
 use std::path::PathBuf;
 
-use magic::Session;
-use magic_ui_egui::{AccentChoice, InterfaceStyle, ThemeMode, UiShellState};
+use magic_engine::Session;
+use magic_ui_egui::{AccentChoice, InterfaceStyle, StageHost, ThemeMode, UiShellState};
 use serde_json::{Value, json};
 
 fn scrub_home(raw: &str) -> String {
@@ -23,16 +22,11 @@ pub fn build_sanitized_diagnostics(session: &mut Session, ui_state: &mut UiShell
     {
         ui_state.cache.doctor = doc;
     }
-    if ui_state.cache.ai_status.is_null()
-        && let Ok(ai) = session.execute("ai.status", json!({}))
-    {
-        ui_state.cache.ai_status = ai;
-    }
 
     let proj_display = ui_state.project_path.as_ref().map_or_else(|| "none".into(), |p| scrub_home(&p.to_string_lossy()));
 
-    let summary = ui_state.ai.problem_summary.trim();
-    let steps = ui_state.ai.problem_steps.trim();
+    let summary = ui_state.options.problem_summary.trim();
+    let steps = ui_state.options.problem_steps.trim();
     let mut out = String::new();
     out.push_str("# Magic Studio Sanitized Diagnostics\n\n");
     if !summary.is_empty() {
@@ -46,7 +40,7 @@ pub fn build_sanitized_diagnostics(session: &mut Session, ui_state: &mut UiShell
         "version": env!("CARGO_PKG_VERSION"),
         "os": std::env::consts::OS,
         "arch": std::env::consts::ARCH,
-        "renderer": "eframe-wgpu (storytold/egui 0.37)",
+        "renderer": "eframe-wgpu (storytold/egui)",
         "last_render_ms": last_render_ms,
         "view": ui_state.effective_view().as_id(),
         "interface_style": ui_state.interface_style.as_str(),
@@ -54,8 +48,6 @@ pub fn build_sanitized_diagnostics(session: &mut Session, ui_state: &mut UiShell
         "accent": ui_state.accent_choice.as_str(),
         "ui_scale_pct": ui_state.ui_scale_pct,
         "project": proj_display,
-        "ai_enabled": ui_state.ai.enabled,
-        "ai_roles": ui_state.cache.ai_status.get("roles").cloned().unwrap_or(Value::Null),
         "craft_apps": ui_state.cache.doctor.get("apps").cloned().unwrap_or(Value::Null),
     });
     let json_text = serde_json::to_string_pretty(&payload).unwrap_or_else(|_| "{}".into());
@@ -65,8 +57,8 @@ pub fn build_sanitized_diagnostics(session: &mut Session, ui_state: &mut UiShell
     out
 }
 
-/// Hydrate appearance preferences and `craft-ai-integrations` status.
-pub fn hydrate_prefs_and_ai(session: &mut Session, ui_state: &mut UiShellState) {
+/// Hydrate appearance and autosave preferences from `craft-settings`.
+pub fn hydrate_prefs(session: &mut Session, ui_state: &mut UiShellState) {
     if let Ok(prefs_res) = session.execute("prefs.get", json!({})) {
         let p = &prefs_res["prefs"];
         if let Some(st) = p.pointer("/appearance/interface_style").and_then(Value::as_str).and_then(InterfaceStyle::parse) {
@@ -91,44 +83,6 @@ pub fn hydrate_prefs_and_ai(session: &mut Session, ui_state: &mut UiShellState) 
         if let Some(as_min) = p.pointer("/autosave/interval_minutes").and_then(Value::as_f64) {
             ui_state.autosave_minutes = as_min.clamp(1.0, 60.0);
         }
-        if let Some(fdirs) = p.pointer("/lyrics/font_dirs").and_then(Value::as_str) {
-            ui_state.lyrics.font_dir_extra = fdirs.to_owned();
-            apply_app_font_dirs(fdirs);
-        }
-    }
-    if let Ok(ai) = session.execute("ai.status", json!({})) {
-        sync_ai_ui_from_status(ui_state, &ai);
-        ui_state.cache.ai_status = ai;
-    }
-}
-
-pub fn sync_ai_ui_from_status(ui_state: &mut UiShellState, ai: &Value) {
-    if let Some(en) = ai.get("enabled").and_then(Value::as_bool) {
-        ui_state.ai.enabled = en;
-    }
-    if let Some(fe) = ai.pointer("/fidget/enabled").and_then(Value::as_bool) {
-        ui_state.ai.fidget_enabled = fe;
-    }
-    if let Some(fs) = ai.pointer("/fidget/seamless").and_then(Value::as_bool) {
-        ui_state.ai.fidget_seamless = fs;
-    }
-    if let Some(fc) = ai.pointer("/fidget/connection").and_then(Value::as_str) {
-        ui_state.ai.fidget_connection = fc.to_owned();
-    }
-    if let Some(fm) = ai.pointer("/fidget/model").and_then(Value::as_str) {
-        ui_state.ai.fidget_model = fm.to_owned();
-    }
-    if let Some(se) = ai.pointer("/scribbles/enabled").and_then(Value::as_bool) {
-        ui_state.ai.scribbles_enabled = se;
-    }
-    if let Some(sc) = ai.pointer("/scribbles/connection").and_then(Value::as_str) {
-        ui_state.ai.scribbles_connection = sc.to_owned();
-    }
-    if let Some(sm) = ai.pointer("/scribbles/model").and_then(Value::as_str) {
-        ui_state.ai.scribbles_model = sm.to_owned();
-    }
-    if let Some(tpl) = ai.pointer("/scribbles/template").and_then(Value::as_str) {
-        ui_state.ai.scribbles_template = tpl.to_owned();
     }
 }
 
@@ -158,11 +112,11 @@ fn hydrate_open_project_caches(session: &mut Session, ui_state: &mut UiShellStat
     if let Ok(lyr) = session.execute("song.lyrics", json!({})) {
         ui_state.cache.song_lyrics = lyr;
     }
-    if let Ok(pages) = session.execute("storyboard.pages", json!({"full": true})) {
-        ui_state.cache.storyboard_pages = pages;
+    if let Ok(wf) = session.execute("song.waveform", json!({"bins": 240})) {
+        ui_state.cache.song_waveform = wf;
     }
-    if let Ok(chk) = session.execute("storyboard.check", json!({})) {
-        ui_state.cache.storyboard_check = chk;
+    if let Ok(pages) = session.execute("storyboard.pages", json!({})) {
+        ui_state.cache.storyboard_pages = pages;
     }
     if let Ok(chars) = session.execute("character.list", json!({})) {
         ui_state.cache.characters = chars;
@@ -188,25 +142,24 @@ fn hydrate_open_project_caches(session: &mut Session, ui_state: &mut UiShellStat
     }
 }
 
-pub fn refresh_cached_state(session: &mut Session, ui_state: &mut UiShellState, initial: bool) {
+pub fn refresh_cached_state(session: &mut Session, ui_state: &mut UiShellState, stage_host: &mut StageHost, initial: bool) {
     let prev_proj = ui_state.project_path.clone();
+    let current_proj = session.project_path.clone();
+    if prev_proj != current_proj {
+        ui_state.reset_for_project_switch();
+        stage_host.reset_for_project_switch();
+    }
     if let Ok(snap) = session.execute("project.snapshot", json!({})) {
         ui_state.project_path = snap["project"].as_str().map(PathBuf::from);
         ui_state.cache.snapshot = snap;
     } else {
-        ui_state.project_path = session.project_path.clone();
+        ui_state.project_path = current_proj;
     }
-    if ui_state.project_path.is_some() && (prev_proj != ui_state.project_path || ui_state.studio.title_text.is_empty()) {
-        ui_state.studio.title_text = ui_state.project_name();
+    if ui_state.project_path.is_some() && (prev_proj != ui_state.project_path || ui_state.timeline.title_text.is_empty()) {
+        ui_state.timeline.title_text = ui_state.project_name();
     }
-    if initial {
-        if let Ok(cat) = session.execute("project.catalog", json!({})) {
-            ui_state.cache.catalog = cat;
-        }
-        if let Ok(ai) = session.execute("ai.status", json!({})) {
-            sync_ai_ui_from_status(ui_state, &ai);
-            ui_state.cache.ai_status = ai;
-        }
+    if initial && let Ok(cat) = session.execute("project.catalog", json!({})) {
+        ui_state.cache.catalog = cat;
     }
     if ui_state.project_path.is_some() {
         hydrate_open_project_caches(session, ui_state);
@@ -229,13 +182,8 @@ pub fn refresh_cached_state(session: &mut Session, ui_state: &mut UiShellState, 
 }
 
 pub fn open_https_url(ctx: &egui::Context, url: &str) {
-    if url.starts_with("https://") {
-        ctx.open_url(egui::OpenUrl::new_tab(url));
+    let trimmed = url.trim();
+    if (trimmed.starts_with("https://") || trimmed.starts_with("http://")) && !trimmed.chars().any(char::is_control) {
+        ctx.open_url(egui::OpenUrl::new_tab(trimmed));
     }
-}
-
-pub fn apply_app_font_dirs(raw: &str) {
-    let dirs: Vec<PathBuf> = std::env::split_paths(raw).filter(|p| !p.as_os_str().is_empty()).collect();
-    craft_font_catalog::Catalog::global().set_app_dirs(dirs);
-    craft_font_catalog::Catalog::global().rescan_if_changed();
 }

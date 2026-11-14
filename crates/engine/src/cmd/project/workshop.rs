@@ -4,36 +4,26 @@ use std::path::{Path, PathBuf};
 
 use serde_json::{Value, json};
 
-use crate::workspace::{has_extension, workspace_root};
+use crate::workspace::has_extension;
 use crate::{EngineError, Result, Session};
 
+pub use crate::cmd::project::files::{cmd_project_files, cmd_project_import_file};
 pub use crate::cmd::project::intake::{
     cmd_workshop_add, cmd_workshop_approve_draft, cmd_workshop_files, cmd_workshop_remove, cmd_workshop_set_audio, cmd_workshop_set_target,
     cmd_workshop_split_panels,
 };
+pub(crate) use crate::cmd::project::transcript::transcript_problems;
 pub use crate::cmd::project::transcript::{cmd_audio_analyze, cmd_workshop_import_transcript};
-pub(crate) use crate::cmd::project::transcript::{transcript_document, transcript_problems};
-pub use crate::cmd::project::trunk::{cmd_project_import_file, cmd_project_trunk};
 
+pub(crate) const ASSETS_DIR: &str = "assets";
 pub(crate) const IMAGE_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "webp"];
 pub(crate) const STORYBOARD_DIR: &str = "storyboard";
-pub(crate) const STORYBOARD_PDF: &str = "storyboard.pdf";
-pub(crate) const ASSETS_DIR: &str = "assets";
 pub const VIDEO_TARGETS: &[&str] = &["filmcraft"];
-pub(crate) const SEQUENCE_TICKS_PER_SECOND: f64 = 254_016_000_000.0;
 
 pub(crate) fn song_seconds(dir: &Path) -> Option<f64> {
-    if let Some(duration) = std::fs::read(dir.join("transcript-provenance.json"))
-        .ok()
-        .and_then(|b| serde_json::from_slice::<Value>(&b).ok())
-        .and_then(|v| v["recording_duration_sec"].as_f64())
-        .filter(|v| v.is_finite() && *v > 0.0)
-    {
-        return Some(duration);
-    }
     let fcproj = video_project_path(dir)?;
     let seq = crate::cmd::film::execute(&fcproj, "sequence.inspect", json!({})).ok()?;
-    seq.get("duration").and_then(Value::as_f64).map(|t| t / SEQUENCE_TICKS_PER_SECOND)
+    seq.get("duration").and_then(Value::as_f64).map(|t| t / (crate::time::TICKS_PER_SECOND as f64))
 }
 
 pub(crate) fn song_ticks(dir: &Path) -> Option<crate::time::Tick> {
@@ -66,18 +56,8 @@ pub fn studio(dir: &Path) -> Studio {
     Studio { name: None, intent: None, source: None }
 }
 
-fn skill_hints(s: &Session, dir: &Path, names: &[&str]) -> String {
-    let roots = [Some(workspace_root(s).join(".agents/skills")), dir.parent().and_then(Path::parent).map(|p| p.join(".agents/skills"))];
-    let found: Vec<String> = names
-        .iter()
-        .filter_map(|n| roots.iter().flatten().map(|r| r.join(n).join("SKILL.md")).find(|p| p.is_file()))
-        .map(|p| p.display().to_string())
-        .collect();
-    if found.is_empty() { String::new() } else { format!("\nSkills: {}", found.join(", ")) }
-}
-
 fn stage_brief(s: &Session, dir: &Path, stage: &str) -> String {
-    format!("{}\n{}", brief_header(dir), stage_body(s, dir, stage))
+    format!("{}\n{}", brief_header(dir), stage_body(s, stage))
 }
 
 pub(crate) fn brief_header(dir: &Path) -> String {
@@ -90,21 +70,13 @@ pub(crate) fn brief_header(dir: &Path) -> String {
     format!("{intent}Project folder: {project}\nWorkshop state: magic-cli exec workshop.status (run project.open path=<the .magic> first)\n")
 }
 
-pub(crate) fn stage_body(s: &Session, dir: &Path, stage: &str) -> String {
-    let target = s.video_target.as_str();
+pub(crate) fn stage_body(s: &Session, stage: &str) -> String {
+    let target = s.video_target();
     match stage {
         "song" => "Stage 1 — Song. Link the song audio (`magic-cli new --audio <song>`).".to_string(),
-        "transcript" => format!(
-            "Stage 2 — Transcription & Timing Reference. Generates `timing-reference.json` + `transcript.srt` and syncs the FilmCraft lyric track.\n  magic-cli exec audio.analyze\nVideo target: {target}.{}",
-            skill_hints(s, dir, &["timing-skill"])
-        ),
-        "storyboard" => {
-            "Stage 3 & 4 — Storyboard Title Sections (`A-Cover`, `B-World`, `C-Character`, `D-Motion`), then `magic-cli storyboard bulk_generate`.".to_string()
-        }
-        _ => format!(
-            "Stage 5 — Video Production: Kinetic Lyrics (`words.*`), Song-Action Motion (`motion.*`), Character Animation (`character.*`), and FilmCraft (`video.*`).{}",
-            skill_hints(s, dir, &["author-motion"])
-        ),
+        "transcript" => format!("Stage 2 — Transcription & Timing (`transcript.srt`).\n  magic-cli exec audio.analyze\nVideo target: {target}."),
+        "storyboard" => "Stage 3 — Standalone DesignCraft Storyboard (`storyboard.designcraft`) & page renders (`storyboard/renders/`).".to_string(),
+        _ => "Stage 4 — Video Production: Kinetic Lyrics (`words.*`), Motion (`motion.*`), Animation (`character.*`), and FilmCraft (`video.*`).".to_string(),
     }
 }
 
@@ -121,13 +93,8 @@ pub(crate) fn files_in(dir: &Path, only: Option<&[&str]>) -> Vec<PathBuf> {
     files
 }
 
-pub(crate) fn transcript_files(dir: &Path) -> Vec<PathBuf> {
-    let mut list: Vec<PathBuf> = files_in(dir, Some(&["json"]))
-        .into_iter()
-        .filter(|p| p.file_name().and_then(|n| n.to_str()).is_some_and(|n| n == "transcript.json" || n.ends_with(".transcript.json")))
-        .collect();
-    list.sort();
-    list
+pub(crate) fn transcript_files(_dir: &Path) -> Vec<PathBuf> {
+    Vec::new()
 }
 
 pub(crate) fn panel_files(dir: &Path) -> Vec<PathBuf> {
@@ -183,55 +150,34 @@ pub(crate) fn project_dir(s: &Session) -> Result<PathBuf> {
         .ok_or_else(|| EngineError::InvalidParams("no project is open; use project.new or project.open".into()))
 }
 
-fn workshop_transcript_summary(dir: &Path, video_target: &str, transcripts: &[PathBuf]) -> (Value, Vec<String>, bool, String, Vec<Value>) {
-    let source = transcripts
-        .iter()
-        .find(|p| p.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.ends_with(".transcript.json")))
-        .or_else(|| transcripts.first())
-        .cloned();
-    let doc = source.as_ref().and_then(|p| transcript_document(p).ok()).unwrap_or(Value::Null);
+fn workshop_transcript_summary(dir: &Path, _video_target: &str, _transcripts: &[PathBuf]) -> (Value, Vec<String>, bool, String, Vec<Value>) {
+    let doc = Value::Null;
     let errors = transcript_problems(&doc);
-    let valid = source.is_some() && errors.is_empty();
-    let why = if source.is_none() {
-        "Transcribe the linked song or import timed lyrics to produce timing-reference.json.".to_string()
-    } else if !valid {
-        format!("Transcript needs repair: {}.", errors.join("; "))
-    } else {
-        "Transcript and timing-reference.json ready.".to_string()
-    };
-    let mut outputs: Vec<Value> = transcripts.iter().map(|p| file_chip(p)).collect();
-    for name in ["timing-reference.json", "transcript.srt"] {
-        let f = dir.join(name);
-        if f.is_file() {
-            outputs.push(file_chip(&f));
-        }
-    }
-    for name in ["transcript.json", "transcript.srt", "audio-analysis.json"] {
-        let file = dir.join(video_target).join(name);
-        if file.is_file() {
-            outputs.push(file_chip(&file));
-        }
+    let srt = dir.join("transcript.srt");
+    let valid = srt.is_file();
+    let why = if valid { "Transcript ready.".to_string() } else { "Transcribe the linked song or import timed lyrics.".to_string() };
+    let mut outputs: Vec<Value> = Vec::new();
+    if srt.is_file() {
+        outputs.push(file_chip(&srt));
     }
     (doc, errors, valid, why, outputs)
 }
 
 fn workshop_animated_assets(s: &Session) -> Vec<Value> {
-    s.project_assets.iter().map(|a| json!({"id": a.id, "name": a.name, "kind": a.kind, "path": a.path})).collect()
+    s.project_assets().iter().map(|a| json!({"id": a.id, "name": a.name, "kind": a.kind, "path": a.path})).collect()
 }
 
 pub(crate) fn workshop_status(s: &mut Session) -> Result<Value> {
     let dir = project_dir(s)?;
-    let target = s.video_target.clone();
-    let audio_ok = s.song_audio.as_ref().is_some_and(|p| p.is_file());
+    let target = s.video_target().to_owned();
+    let audio_ok = s.song_audio().is_some_and(|p| p.is_file());
     let liner = files_in(&dir.join("liner-notes"), None);
     let transcripts = transcript_files(&dir);
     let assets = workshop_asset_files(&dir);
-    let timing_ref_path = dir.join("timing-reference.json");
-    let timing_ref_exists = timing_ref_path.is_file();
-    let sb_check = crate::cmd::storyboard::cmd_storyboard_check(s, &json!({}))
-        .unwrap_or_else(|_| json!({"production_ready": false, "title_sections_complete": false, "light": "red"}));
-    let sb_titles_done = sb_check["title_sections_complete"] == true;
-    let sb_ready = sb_check["production_ready"] == true;
+    let sb_status = crate::cmd::storyboard::cmd_storyboard_status(s, &json!({}))
+        .unwrap_or_else(|_| json!({"exists": false, "production_ready": true, "light": "optional"}));
+    let sb_exists = sb_status["exists"] == true;
+    let sb_path = sb_status["path"].as_str().map(PathBuf::from).unwrap_or_else(|| dir.join(crate::cmd::storyboard::DEFAULT_STORYBOARD_FILE));
 
     let song_why = match (audio_ok, liner.is_empty()) {
         (false, _) => "Choose the song's audio.",
@@ -244,18 +190,19 @@ pub(crate) fn workshop_status(s: &mut Session) -> Result<Value> {
     let animated = workshop_animated_assets(s);
     let mut stages = vec![
         json!({"id": "song", "title": "Song", "done": audio_ok, "why": song_why,
-            "inputs": s.song_audio.iter().map(|p| file_chip(p)).chain(liner.iter().map(|p| file_chip(p))).collect::<Vec<_>>(),
+            "inputs": s.song_audio().into_iter().map(file_chip).chain(liner.iter().map(|p| file_chip(p))).collect::<Vec<_>>(),
             "outputs": Vec::<Value>::new(), "brief": stage_brief(s, &dir, "song")}),
         json!({"id": "transcript", "title": "Transcript & Timing Ref", "done": transcript_valid, "why": transcript_why,
-            "inputs": s.song_audio.iter().map(|p| file_chip(p)).collect::<Vec<_>>(), "outputs": transcript_outputs,
+            "inputs": s.song_audio().into_iter().map(file_chip).collect::<Vec<_>>(), "outputs": transcript_outputs,
             "document": supplied_transcript, "problems": transcript_errors, "brief": stage_brief(s, &dir, "transcript")}),
-        json!({"id": "storyboard", "title": "Storyboard Sections", "done": sb_ready, "why": sb_check["next_step"].as_str().unwrap_or("Complete storyboard sections."),
-            "title_sections_complete": sb_titles_done, "light": sb_check["light"],
-            "inputs": [file_chip(&dir.join("storyboard.pdf"))],
+        json!({"id": "storyboard", "title": "DesignCraft Storyboard", "done": sb_exists, "optional": true,
+            "why": if sb_exists { "DesignCraft storyboard document ready." } else { "Optional creative DesignCraft storyboard (`storyboard.new`)." },
+            "light": sb_status["light"],
+            "inputs": [file_chip(&sb_path)],
             "outputs": assets.iter().map(|p| file_chip(p)).collect::<Vec<_>>(),
             "brief": stage_brief(s, &dir, "storyboard")}),
         json!({"id": "animate", "title": "Video Production", "done": !animated.is_empty(), "optional": true,
-            "why": if !sb_ready { "Complete Storyboard sections first before starting full video production." } else if animated.is_empty() { "Ready for video production." } else { "Production assets ready." },
+            "why": if animated.is_empty() { "Ready for video production." } else { "Production assets ready." },
             "inputs": assets.iter().map(|p| file_chip(p)).collect::<Vec<_>>(), "assets": animated, "brief": stage_brief(s, &dir, "animate")}),
     ];
     for stage in &mut stages {
@@ -263,16 +210,12 @@ pub(crate) fn workshop_status(s: &mut Session) -> Result<Value> {
     }
     let setup_ready = audio_ok && transcript_valid;
     let studio_info = studio(&dir);
-    let effective_video_project = s.video_project_path.clone().or_else(|| video_project_path(&dir));
-    let lyrics_ready = dir.join("lettering/lyrics.ecproj").is_file() || dir.join("design/words.json").is_file();
-    let motion_ready = dir.join("motion/actions.ecproj").is_file() || dir.join("motion/actions.json").is_file();
+    let effective_video_project = s.video_project_path().map(Path::to_path_buf).or_else(|| video_project_path(&dir));
+    let lyrics_ready = dir.join("effects/lyrics.ecproj").is_file() || dir.join("lettering/lyrics.ecproj").is_file();
+    let motion_ready = dir.join("effects/motion.ecproj").is_file() || dir.join("motion/actions.ecproj").is_file();
 
     let next_steps = if !audio_ok || !transcript_valid {
         json!(["magic-cli exec audio.analyze"])
-    } else if !sb_titles_done {
-        json!(["magic-cli storyboard check", "magic-cli storyboard wizard"])
-    } else if !sb_ready {
-        json!(["magic-cli storyboard bulk_generate", "magic-cli storyboard check"])
     } else {
         json!(["magic-cli words letter", "magic-cli motion save", "magic-cli video assemble"])
     };
@@ -280,15 +223,13 @@ pub(crate) fn workshop_status(s: &mut Session) -> Result<Value> {
     let mut status = json!({
         "ok": true,
         "project_dir": dir,
-        "complete": setup_ready && sb_ready,
+        "complete": setup_ready,
         "setup_ready": setup_ready,
-        "timing_reference": timing_ref_path,
-        "timing_reference_exists": timing_ref_exists,
-        "storyboard_titles_ready": sb_titles_done,
-        "storyboard_production_ready": sb_ready,
+        "storyboard_exists": sb_exists,
+        "storyboard_production_ready": true,
         "lyrics_ready": lyrics_ready,
         "motion_ready": motion_ready,
-        "completion_scope": "audio timing + storyboard sections -> video production",
+        "completion_scope": "audio timing -> video production (storyboard optional)",
         "video_target": target,
         "targets": targets,
         "film_timeline": crate::cmd::film::timeline_file(s)?,
@@ -324,7 +265,7 @@ pub fn cmd_query_list(s: &mut Session, params: &Value) -> Result<Value> {
 }
 
 pub fn cmd_project_search(s: &mut Session, params: &Value) -> Result<Value> {
-    let q = params.get("query").or_else(|| params.get("query")).or_else(|| params.get("filter")).and_then(Value::as_str).map(str::trim).unwrap_or_default();
+    let q = params.get("query").or_else(|| params.get("filter")).and_then(Value::as_str).map(str::trim).unwrap_or_default();
     let q_lower = q.to_ascii_lowercase();
     let commands: Vec<Value> = crate::commands::command_specs()
         .iter()
@@ -337,7 +278,7 @@ pub fn cmd_project_search(s: &mut Session, params: &Value) -> Result<Value> {
         .map(|c| json!({"id": c.id, "label": c.label, "params": c.params}))
         .collect();
     let subjects: Vec<Value> = s
-        .project_assets
+        .project_assets()
         .iter()
         .filter(|a| {
             q_lower.is_empty()
@@ -393,6 +334,8 @@ fn stage_state(s: &Value) -> &'static str {
         "ready"
     } else if s["problems"].as_array().is_some_and(|problems| !problems.is_empty()) {
         "failed"
+    } else if s["optional"] == json!(true) {
+        "optional"
     } else {
         "needs-work"
     }

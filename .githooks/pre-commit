@@ -1,6 +1,6 @@
 #!/bin/sh
 # Pre-commit hook: fast local formatter check only.
-# Full gates (fmt, layers, clippy, ui) run in CI via `cargo xtask ci`, not on commit.
+# Full gates (`fmt`, `clippy`, optional `MAGIC_RUN_TESTS=1`) run via `cargo xtask ci`, not on commit.
 #
 # To bypass: git commit --no-verify
 

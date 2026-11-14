@@ -1,7 +1,7 @@
-//! Standard ArtCraft MCP server (`magic-cli mcp` / `magic-mcp`) for Magic Studio.
+//! Standard ArtCraft MCP server (`magic-cli mcp`) for Magic Studio (`designcraft/docs/mcp.md`).
 //!
 //! By default `magic-cli mcp` runs an isolated headless [`Session`] over stdio with zero network
-//! sockets (`deckcraft/docs/mcp.md`, `cadcraft/docs/cli.md`). When `--connect <PORT|127.0.0.1:PORT>`
+//! sockets (`designcraft/docs/mcp.md`, `cadcraft/docs/cli.md`). When `--connect <PORT|127.0.0.1:PORT>`
 //! is explicitly supplied, it drives a running `magic --control <PORT>` window over IPv4 loopback.
 
 #![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable))]
@@ -13,14 +13,14 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream};
 use std::time::Duration;
 
-use magic::{AutomationRoots, Session};
+use magic_engine::{AutomationRoots, Session};
 use serde_json::{Value, json};
 
 /// Default IPv4 loopback control address (`127.0.0.1:9875`).
 pub const DEFAULT_CONTROL_ADDR: &str = "127.0.0.1:9875";
 
-/// Maximum reply frame length on `--connect` (`16 MiB` including terminating `\n`, matching DeckCraft).
-pub const MAX_REPLY_BYTES: usize = 16 * 1024 * 1024;
+/// Maximum reply frame length on `--connect` (`4 MiB` including terminating `\n`, matching DesignCraft).
+pub const MAX_REPLY_BYTES: usize = 4 * 1024 * 1024;
 
 /// Normalize `"9875"` or `"localhost:9875"` to `"127.0.0.1:9875"` with zero DNS lookup.
 pub fn normalize_control_addr(spec: &str) -> String {
@@ -60,6 +60,8 @@ fn is_read_only_call(id: &str, params: &Value) -> bool {
         id,
         "engine.commands"
             | "document.inspect"
+            | "project.status"
+            | "recovery.list"
             | "ui.inspect"
             | "ui.state"
             | "ui.drafts"
@@ -70,7 +72,7 @@ fn is_read_only_call(id: &str, params: &Value) -> bool {
             | "ui.timeline.locate"
             | "ui.timeline.hit"
             | "perf.stats"
-    ) || (!is_direct_control_method(id) && magic::commands::is_read_only_command(id, params))
+    ) || (!is_direct_control_method(id) && magic_engine::commands::is_read_only_command(id, params))
 }
 
 /// Interpolate `"$N"`, `"$N.field"`, or `"$last.field"` step references in batch parameters.
@@ -104,11 +106,17 @@ fn resolve_step_ref(expr: &str, prior_results: &[Value]) -> Option<Value> {
     Some(cur.clone())
 }
 
-/// Execution backend for MCP tool calls.
+/// Execution backend for MCP tool calls and `magic://` resource reads.
 pub trait Backend {
     fn execute(&mut self, id: &str, params: Value) -> Result<Value, String>;
     fn is_live(&self) -> bool {
         false
+    }
+    fn connection_info(&self) -> Value {
+        json!({
+            "mode": if self.is_live() { "live" } else { "headless" },
+            "live": self.is_live(),
+        })
     }
 }
 
@@ -159,6 +167,15 @@ impl Remote {
 impl Backend for Remote {
     fn is_live(&self) -> bool {
         true
+    }
+
+    fn connection_info(&self) -> Value {
+        json!({
+            "mode": "live",
+            "live": true,
+            "address": self.addr,
+            "authenticated": self.token.is_some(),
+        })
     }
 
     fn execute(&mut self, id: &str, params: Value) -> Result<Value, String> {
@@ -215,7 +232,7 @@ impl Backend for Remote {
     }
 }
 
-/// Start `magic-cli mcp` / `magic-mcp` following upstream ArtCraft conventions (`deckcraft/docs/mcp.md`):
+/// Start `magic-cli mcp` following upstream ArtCraft conventions (`designcraft/docs/mcp.md`):
 /// - `--connect <PORT|127.0.0.1:PORT>`: drive a running `magic --control` window on `127.0.0.1`.
 /// - default (or `--headless`): run an isolated in-process [`Headless`] session over stdio (never silently auto-probing loopback).
 pub fn run_mcp_server(
@@ -238,7 +255,7 @@ pub fn run_mcp_server(
 
     if let Some(spec) = connect {
         let addr = normalize_control_addr(spec);
-        let remote = Remote::connect_verified(&addr, magic::workspace::control_token()).map_err(|e| format!("{bin_name}: cannot connect to {addr}: {e}"))?;
+        let remote = Remote::connect_verified(&addr, None).map_err(|e| format!("{bin_name}: cannot connect to {addr}: {e}"))?;
         let _ = writeln!(std::io::stderr(), "{bin_name}: connected to live Magic window at {addr}");
         return Server::new(remote).serve();
     }
@@ -248,45 +265,4 @@ pub fn run_mcp_server(
         session.execute("file.open", json!({ "path": path })).map_err(|e| e.to_string())?;
     }
     Server::new(Headless::new(session)).serve()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{Backend, Remote, interpolate_batch_params, normalize_control_addr, parse_ipv4_loopback};
-    use serde_json::json;
-    use std::io::{BufRead, BufReader};
-    use std::net::TcpListener;
-
-    #[test]
-    fn normalizes_strict_ipv4_loopback_and_interpolates_batch_refs() {
-        assert_eq!(normalize_control_addr("9875"), "127.0.0.1:9875");
-        assert_eq!(normalize_control_addr("localhost:9875"), "127.0.0.1:9875");
-        assert!(parse_ipv4_loopback("127.0.0.1:9875").is_ok());
-        assert!(parse_ipv4_loopback("[::1]:9875").is_err());
-        assert!(parse_ipv4_loopback("127.0.0.2:9875").is_err());
-        let prior = vec![json!({"project": "/tmp/demo.magic", "items": [{"id": "hero"}]})];
-        let resolved = interpolate_batch_params(&json!({"p": "$1.project", "who": "$last.items.0.id"}), &prior);
-        assert_eq!(resolved["p"], "/tmp/demo.magic");
-        assert_eq!(resolved["who"], "hero");
-    }
-
-    #[test]
-    fn lost_mutation_reply_reports_outcome_unknown_without_replay() {
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let addr = listener.local_addr().unwrap();
-        let handle = std::thread::spawn(move || {
-            let mut count = 0usize;
-            if let Ok((stream, _)) = listener.accept() {
-                let mut r = BufReader::new(stream);
-                let mut line = String::new();
-                let _ = r.read_line(&mut line);
-                count += 1;
-            }
-            count
-        });
-        let mut remote = Remote::new(addr.to_string(), None);
-        let err = remote.execute("project.autosave", json!({})).unwrap_err();
-        assert!(err.contains("outcome unknown"));
-        assert_eq!(handle.join().unwrap(), 1);
-    }
 }

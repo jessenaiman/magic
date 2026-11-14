@@ -1,8 +1,10 @@
-//! `app.doctor` (`magic-cli app doctor`): verify Magic's own `--control` listener,
-//! `storytold/craft-ai-integrations` SharedStore health, and `craft-settings` configuration.
+//! `app.doctor` (`magic-cli app doctor`): verify headless sibling Craft CLIs (`designcraft-cli`,
+//! `photocraft-cli`, `vectorcraft-cli`, `effectcraft-cli`, `anicraft-cli`, `filmcraft-cli`, `deckcraft-cli`)
+//! and `craft-settings` health.
 
 use serde_json::{Value, json};
 
+use crate::workspace::{CRAFT_APPS, resolve_executable_path};
 use crate::{Result, Session};
 
 struct Check {
@@ -33,13 +35,29 @@ impl Check {
 fn checks(s: &Session) -> Vec<Check> {
     let mut out = Vec::new();
 
-    let ai = crate::craft_ai::craft_ai_status();
-    let ai_enabled = ai["enabled"].as_bool().unwrap_or(false);
-    let conn_count = ai["connections"].as_array().map_or(0, Vec::len);
+    for (app, cli) in CRAFT_APPS {
+        let cli_ok = resolve_executable_path(cli).is_some();
+        if cli_ok {
+            out.push(Check::ok(format!("host:{app}"), format!("{app} ready (`{cli}` installed)")));
+        } else {
+            out.push(Check::problem(
+                "warn",
+                format!("host:{app}"),
+                format!("`{cli}` is not installed on PATH"),
+                format!("Install {app} so `{cli}` is available on PATH"),
+            ));
+        }
+    }
+
+    let craft_clis = ["designcraft-cli", "photocraft-cli", "vectorcraft-cli", "effectcraft-cli", "anicraft-cli", "filmcraft-cli"];
+    let installed_clis: Vec<&str> = craft_clis.iter().copied().filter(|cli| resolve_executable_path(cli).is_some()).collect();
     out.push(Check::ok(
-        "ai:craft-ai-integrations",
-        format!("ai.enabled={ai_enabled}, {conn_count} SharedStore connection(s) configured via storytold/craft-ai-integrations"),
+        "cli:discovery",
+        format!("{}/{} Craft CLIs installed on PATH: [{}]", installed_clis.len(), craft_clis.len(), installed_clis.join(", ")),
     ));
+
+    let font_count = craft_font_catalog::Catalog::global().families().len();
+    out.push(Check::ok("fonts:craft-font-catalog", format!("{font_count} font families indexed in craft-font-catalog")));
 
     let settings_report = s.settings.report_json();
     if settings_report["has_problems"].as_bool() == Some(true) || settings_report["read_only"].as_bool() == Some(true) {
@@ -56,30 +74,18 @@ fn checks(s: &Session) -> Vec<Check> {
         ));
     }
 
-    out.push(match s.control_address {
-        Some(addr) => Check::ok("control", format!("live control listening on {addr}")),
-        None => Check::ok("control", "headless session (launch `magic --control 9875` for live UI control)"),
-    });
-
-    if let Some(proj) = &s.project_path {
-        if proj.is_file() {
-            out.push(Check::ok("project", format!("open project {}", proj.display())));
-        } else {
-            out.push(Check::problem(
-                "warn",
-                "project",
-                format!("project path missing on disk: {}", proj.display()),
-                "Run `file.save` or re-open an existing `.magic` project",
-            ));
-        }
-    }
-
     out
 }
 
-pub fn cmd_app_doctor(s: &mut Session, _p: &Value) -> Result<Value> {
-    let found = checks(s);
-    let list: Vec<Value> = found.iter().map(Check::to_json).collect();
-    let ok = found.iter().all(|c| c.status == "ok");
-    Ok(json!({ "ok": ok, "checks": list }))
+pub fn cmd_app_doctor(s: &mut Session, p: &Value) -> Result<Value> {
+    let items: Vec<Value> = checks(s).into_iter().map(|c| c.to_json()).collect();
+    let ok = items.iter().all(|c| c["status"] != "error");
+    let mut res = json!({
+        "ok": ok,
+        "checks": items,
+    });
+    if p.get("updates").and_then(Value::as_bool).unwrap_or(false) {
+        res["update"] = crate::update::cmd_app_update(s, &json!({}))?;
+    }
+    Ok(res)
 }

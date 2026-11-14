@@ -1,10 +1,9 @@
 //! Rust-computed UI view-models (`project.snapshot` with `drawer`, `footer`, and `storyboard`
-//! traffic-light state) and theatre timeline persistence, keeping domain logic out of `.tsx` views.
+//! status) and theatre timeline persistence, keeping domain logic out of views.
 
 use serde_json::{Value, json};
 
 use super::assets::cmd_project_list_assets;
-use super::read_project_document;
 use crate::{EngineError, Result, Session};
 
 fn style_badge(style: &str) -> &'static str {
@@ -102,8 +101,8 @@ fn build_drawer_model(assets_list: &[Value], characters: &[Value]) -> Value {
                 "role": "background",
                 "badge": "Plate",
                 "thumb": a.get("project_image").unwrap_or(&a["path"]),
-            "linked_file": a["linked_file"],
-            "craft_app": a["craft_app"],
+                "linked_file": a["linked_file"],
+                "craft_app": a["craft_app"],
                 "ready": true,
             }))
         })
@@ -121,8 +120,8 @@ fn build_footer_model(status: &Value, storyboard: &Value, characters_len: usize)
     let stage_done = |id: &str| status["stages"].as_array().into_iter().flatten().any(|st| st["id"] == id && st["done"] == true);
     let song_done = stage_done("song");
     let transcript_done = stage_done("transcript");
-    let sb_light = storyboard["light"].as_str().unwrap_or("red");
-    let sb_done = storyboard["production_ready"] == true;
+    let sb_exists = storyboard["exists"] == true;
+    let sb_light = if sb_exists { "green" } else { storyboard["light"].as_str().unwrap_or("optional") };
     let lyrics_done = status["lyrics_ready"] == true;
     let motion_done = status["motion_ready"] == true;
     let animate_done = characters_len > 0;
@@ -132,8 +131,8 @@ fn build_footer_model(status: &Value, storyboard: &Value, characters_len: usize)
     if status["timing_reference_exists"] == true {
         summary.push("Timing Ref ✓".to_string());
     }
-    if storyboard["title_sections_complete"] == true {
-        summary.push("Titles Green".to_string());
+    if sb_exists {
+        summary.push("Board ✓".to_string());
     }
     if characters_len > 0 {
         summary.push(format!("{characters_len} Cast"));
@@ -141,14 +140,17 @@ fn build_footer_model(status: &Value, storyboard: &Value, characters_len: usize)
 
     json!({
         "stages": [
-            {"id": "song", "label": "Song", "view": "project", "done": song_done, "light": if song_done && transcript_done { "green" } else if song_done { "amber" } else { "red" }},
-            {"id": "storyboard", "label": "Board", "view": "storyboard", "done": sb_done, "light": sb_light},
+            {
+                "id": "song", "label": "Song", "view": "project", "done": song_done,
+                "light": if song_done && transcript_done { "green" } else if song_done { "amber" } else { "red" },
+            },
+            {"id": "storyboard", "label": "Board", "view": "storyboard", "done": sb_exists, "light": sb_light},
             {"id": "lyrics", "label": "Lyrics", "view": "design", "done": lyrics_done, "light": if lyrics_done { "green" } else { "red" }},
             {"id": "motion", "label": "Motion", "view": "motion", "done": motion_done, "light": if motion_done { "green" } else { "red" }},
             {"id": "animation", "label": "Animate", "view": "animation", "done": animate_done, "light": if animate_done { "green" } else { "red" }},
             {"id": "studio", "label": "Studio", "view": "studio", "done": studio_done, "light": if studio_done { "green" } else { "red" }},
         ],
-        "production_ready": sb_done,
+        "production_ready": song_done && transcript_done,
         "summary": summary.join(" · "),
     })
 }
@@ -159,9 +161,10 @@ pub fn cmd_project_snapshot(s: &mut Session, _: &Value) -> Result<Value> {
         return Ok(json!({"project": null, "data": null}));
     };
     let status = crate::cmd::project::workshop::workshop_status(s)?;
-    let storyboard = crate::cmd::storyboard::cmd_storyboard_check(s, &json!({})).unwrap_or_else(|_| json!({"light": "red", "production_ready": false}));
+    let storyboard = crate::cmd::storyboard::cmd_storyboard_status(s, &json!({}))
+        .unwrap_or_else(|_| json!({"exists": false, "light": "optional", "production_ready": true}));
     let assets = cmd_project_list_assets(s, &json!({}))?;
-    let trunk = s.execute("project.trunk", json!({})).unwrap_or_else(|error| json!({"files": [], "error": error.to_string()}));
+    let files = s.execute("project.files", json!({})).unwrap_or_else(|error| json!({"files": [], "error": error.to_string()}));
     let characters_arr =
         s.execute("character.list", json!({})).ok().and_then(|res| res.get("characters").and_then(Value::as_array).cloned()).unwrap_or_default();
     let assets_arr = assets.get("assets").and_then(Value::as_array).cloned().unwrap_or_default();
@@ -169,12 +172,18 @@ pub fn cmd_project_snapshot(s: &mut Session, _: &Value) -> Result<Value> {
     let footer = build_footer_model(&status, &storyboard, characters_arr.len());
     Ok(json!({
         "project": project,
+        "dirty": s.is_dirty(),
+        "revision": s.project_revision,
         "data": {
             "project": project,
+            "dirty": s.is_dirty(),
+            "revision": s.project_revision,
+            "can_undo": !s.history.undo.is_empty(),
+            "can_redo": !s.history.redo.is_empty(),
             "status": status,
             "storyboard": storyboard,
             "assets": assets,
-            "trunk": trunk,
+            "files": files,
             "characters": characters_arr,
             "drawer": drawer,
             "footer": footer,
@@ -187,8 +196,8 @@ pub fn theatre_state(s: &mut Session, params: &Value) -> Result<Value> {
     if params["expected_project"].as_str() != path.to_str() {
         return Err(EngineError::InvalidParams("Project changed".into()));
     }
-    let doc = read_project_document(path)?;
-    Ok(json!({"state": doc["theatre"], "status": if doc["theatre"].is_object() { "saved" } else { "empty" }}))
+    let theatre = s.require_project()?.theatre.clone().unwrap_or(Value::Null);
+    Ok(json!({"state": theatre, "status": if theatre.is_object() { "saved" } else { "empty" }}))
 }
 
 pub fn save_theatre_state(s: &mut Session, params: &Value) -> Result<Value> {
@@ -196,14 +205,7 @@ pub fn save_theatre_state(s: &mut Session, params: &Value) -> Result<Value> {
     if !params["state"]["sheetsById"].is_object() {
         return Err(EngineError::InvalidParams("Invalid Theatre snapshot".into()));
     }
-    let path = s.project_path.as_ref().ok_or_else(|| EngineError::InvalidParams("Open a project".into()))?;
-    if s.project_stamp.get().is_some() {
-        crate::link_watch::save_guard(path, s.project_stamp.get())?;
-    }
-    let mut doc = read_project_document(path)?;
-    doc["theatre"] = params["state"].clone();
-    let bytes = serde_json::to_vec_pretty(&doc).map_err(|e| EngineError::InvalidParams(e.to_string()))?;
-    craft_atomic::atomic_write(path, &bytes)?;
-    s.project_stamp.set(crate::link_watch::FileStamp::of(path));
-    Ok(json!({"saved": true, "project": path}))
+    let path = s.project_path.clone().ok_or_else(|| EngineError::InvalidParams("Open a project".into()))?;
+    s.require_project_mut()?.theatre = Some(params["state"].clone());
+    Ok(json!({"saved": true, "project": path, "dirty": s.is_dirty()}))
 }

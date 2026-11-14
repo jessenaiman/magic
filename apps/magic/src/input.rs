@@ -1,9 +1,13 @@
-//! Synthetic `egui` 0.37 pointer, scroll, keyboard, text, and focus event injection for `--control`
+//! Synthetic `egui` pointer, scroll, keyboard, text, and focus event injection for `--control`
 //! (`ui.click`, `ui.move`, `ui.drag`, `ui.scroll`, `ui.key`, `ui.type`, `ui.focus`).
 
 use egui::{Event, Key, Modifiers, MouseWheelSource, MouseWheelUnit, PointerButton, Pos2, TouchPhase, Vec2};
 use magic_ui_egui::AutomationRegistry;
 use serde_json::{Value, json};
+
+/// Maximum queued synthetic events permitted before rejecting new input gestures
+/// (`1 + 10_000 steps + 2 button transitions` on `ui.drag`, matching DesignCraft).
+pub const MAX_PENDING_SYNTHETIC_EVENTS: usize = 10_003;
 
 pub fn parse_modifiers(raw: Option<&Value>) -> Result<Modifiers, String> {
     let Some(val) = raw else {
@@ -98,14 +102,12 @@ pub fn build_move(reg: &AutomationRegistry, params: &Value) -> Result<(Vec<Event
 
 pub fn build_click(reg: &AutomationRegistry, params: &Value) -> Result<(Vec<Event>, Value), String> {
     super::only_keys(params, "ui.click", &["id", "fx", "fy", "x", "y", "button", "count", "modifiers"])?;
-    let count = match params.get("count") {
-        None | Some(Value::Null) => 1u32,
-        Some(v) => v.as_u64().and_then(|n| u32::try_from(n).ok()).filter(|&n| n <= 10).ok_or("ui.click: count must be an integer from 0 to 10")?,
-    };
+    let count = parse_click_count(params.get("count"), "ui.click")?;
     let button = parse_button(params.get("button"))?;
     let modifiers = parse_modifiers(params.get("modifiers"))?;
     let pos = resolve_point(reg, params, "ui.click")?;
-    let mut events = vec![Event::PointerMoved(pos)];
+    let mut events = Vec::with_capacity(1 + 2 * (count as usize));
+    events.push(Event::PointerMoved(pos));
     for _ in 0..count {
         events.push(Event::PointerButton { pos, button, pressed: true, modifiers });
         events.push(Event::PointerButton { pos, button, pressed: false, modifiers });
@@ -113,21 +115,61 @@ pub fn build_click(reg: &AutomationRegistry, params: &Value) -> Result<(Vec<Even
     Ok((events, json!({"ok": true, "x": pos.x, "y": pos.y, "count": count})))
 }
 
-pub fn build_drag(reg: &AutomationRegistry, params: &Value) -> Result<(Vec<Event>, Value), String> {
-    super::only_keys(params, "ui.drag", &["from", "to", "button", "steps", "modifiers"])?;
-    let from_obj = params.get("from").ok_or("ui.drag requires `from`")?;
-    let to_obj = params.get("to").ok_or("ui.drag requires `to`")?;
-    let from = resolve_point(reg, from_obj, "ui.drag.from")?;
-    let to = resolve_point(reg, to_obj, "ui.drag.to")?;
-    let raw_steps = match params.get("steps") {
-        None | Some(Value::Null) => 12u32,
-        Some(v) => v.as_u64().and_then(|n| u32::try_from(n).ok()).filter(|&n| n <= 1024).ok_or("ui.drag: steps must be an integer from 0 to 1024")?,
+fn parse_click_count(raw: Option<&Value>, method: &str) -> Result<u32, String> {
+    match raw {
+        None | Some(Value::Null) => Ok(1),
+        Some(v) => v
+            .as_u64()
+            .and_then(|n| u32::try_from(n).ok())
+            .filter(|&n| (1..=255).contains(&n))
+            .ok_or_else(|| format!("{method}: count must be an integer from 1 to 255")),
+    }
+}
+
+fn resolve_drag_endpoints(reg: &AutomationRegistry, params: &Value) -> Result<(Pos2, Pos2), String> {
+    let has_endpoints = params.get("from").is_some_and(|v| !v.is_null()) || params.get("to").is_some_and(|v| !v.is_null());
+    let has_flat = ["x1", "y1", "x2", "y2"].iter().any(|k| params.get(*k).is_some_and(|v| !v.is_null()));
+    if has_endpoints {
+        if has_flat {
+            return Err("ui.drag: pass either `from`/`to` or `x1`/`y1`/`x2`/`y2`, not both".into());
+        }
+        let from_obj = params.get("from").filter(|v| !v.is_null()).ok_or("ui.drag requires `from`")?;
+        let to_obj = params.get("to").filter(|v| !v.is_null()).ok_or("ui.drag requires `to`")?;
+        return Ok((resolve_point(reg, from_obj, "ui.drag.from")?, resolve_point(reg, to_obj, "ui.drag.to")?));
+    }
+    let coord = |key: &str| -> Result<f32, String> {
+        params
+            .get(key)
+            .and_then(Value::as_f64)
+            .filter(|v| v.is_finite())
+            .map(|v| v as f32)
+            .ok_or_else(|| format!("ui.drag requires `from`/`to` or finite `{key}`"))
     };
-    let steps = raw_steps.max(2);
+    Ok((Pos2::new(coord("x1")?, coord("y1")?), Pos2::new(coord("x2")?, coord("y2")?)))
+}
+
+pub fn build_drag(reg: &AutomationRegistry, params: &Value) -> Result<(Vec<Event>, Value), String> {
+    super::only_keys(params, "ui.drag", &["from", "to", "x1", "y1", "x2", "y2", "button", "steps", "count", "modifiers"])?;
+    let (from, to) = resolve_drag_endpoints(reg, params)?;
+    let steps = match params.get("steps") {
+        None | Some(Value::Null) => 8u32,
+        Some(v) => {
+            v.as_u64().and_then(|n| u32::try_from(n).ok()).filter(|&n| (1..=10_000).contains(&n)).ok_or("ui.drag: steps must be an integer from 1 to 10000")?
+        }
+    };
+    let count = parse_click_count(params.get("count"), "ui.drag")?;
+    let total_events = 1 + (steps as usize) + 2 * (count as usize);
+    if total_events > MAX_PENDING_SYNTHETIC_EVENTS {
+        return Err(format!("ui.drag: gesture generates {total_events} events, exceeding max {MAX_PENDING_SYNTHETIC_EVENTS}"));
+    }
     let button = parse_button(params.get("button"))?;
     let modifiers = parse_modifiers(params.get("modifiers"))?;
-    let mut events = Vec::with_capacity((steps as usize) + 4);
+    let mut events = Vec::with_capacity(total_events);
     events.push(Event::PointerMoved(from));
+    for _ in 1..count {
+        events.push(Event::PointerButton { pos: from, button, pressed: true, modifiers });
+        events.push(Event::PointerButton { pos: from, button, pressed: false, modifiers });
+    }
     events.push(Event::PointerButton { pos: from, button, pressed: true, modifiers });
     for i in 1..=steps {
         let t = (i as f32) / (steps as f32);
@@ -135,7 +177,7 @@ pub fn build_drag(reg: &AutomationRegistry, params: &Value) -> Result<(Vec<Event
         events.push(Event::PointerMoved(p));
     }
     events.push(Event::PointerButton { pos: to, button, pressed: false, modifiers });
-    Ok((events, json!({"ok": true, "from": [from.x, from.y], "to": [to.x, to.y], "steps": steps})))
+    Ok((events, json!({"ok": true, "from": [from.x, from.y], "to": [to.x, to.y], "steps": steps, "count": count})))
 }
 
 pub fn build_scroll(reg: &AutomationRegistry, params: &Value) -> Result<(Vec<Event>, Value), String> {

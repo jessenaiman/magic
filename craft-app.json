@@ -4,14 +4,12 @@
   "name": "Magic Studio",
   "slug": "magic",
   "status": "pre-alpha",
-  "description": "Song-driven storyboard, puppet rig, and lyric timing studio built in pure Rust on storytold/craft-libs",
+  "description": "Song-to-video coordinator across DesignCraft, DeckCraft, AniCraft, EffectCraft, and FilmCraft built in pure Rust on storytold/craft-libs",
   "license": "LicenseRef-Magic-Studio-NonResale",
   "repository": "https://github.com/jessenaiman/magic",
   "binaries": {
     "desktop": "magic",
-    "cli": "magic-cli",
-    "mcp": "magic-mcp",
-    "tui": "magic-tui"
+    "cli": "magic-cli"
   },
   "control": {
     "flag": "--control",
@@ -25,12 +23,7 @@
       "magic-cli",
       "mcp",
       "--connect",
-      "127.0.0.1:9875"
-    ],
-    "mcp_headless_command": [
-      "magic-cli",
-      "mcp",
-      "--headless"
+      "9875"
     ]
   },
   "mime_types": [

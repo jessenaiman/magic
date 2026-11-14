@@ -7,8 +7,7 @@ use serde_json::{Value, json};
 
 use super::{
     View, bad, character_folder, check_ecproj_head, discover_character_folders, ecproj_first_comp_name, effectcraft, effectcraft_frame, effectcraft_render,
-    find_dir_anicraft_doc, find_dir_ecproj, find_dir_pcraft, find_dir_photo_doc, find_dir_psd, find_dir_vector_doc, find_initial_cutout, model3d, point,
-    sprite, step,
+    find_dir_ecproj, find_dir_pcraft, find_dir_photo_doc, find_dir_psd, find_dir_vector_doc, find_initial_cutout, mesh_io, sprite, step,
 };
 use crate::{Result, Session};
 
@@ -29,15 +28,7 @@ fn collect_view_frames(dir: &Path) -> Vec<PathBuf> {
     out
 }
 
-fn read_animation_map(project_dir: &Path) -> Value {
-    for rel in ["assets/animations/animation-map.json", "animations/animation-map.json", "animation-map.json"] {
-        let p = project_dir.join(rel);
-        if let Ok(raw) = std::fs::read_to_string(&p)
-            && let Ok(parsed) = serde_json::from_str::<Value>(&raw)
-        {
-            return parsed;
-        }
-    }
+fn read_animation_map(_project_dir: &Path) -> Value {
     Value::Null
 }
 
@@ -104,62 +95,15 @@ fn discover_character_action_ecprojs(project_dir: &Path, folder: &Path, raw_id: 
         .collect()
 }
 
-fn extract_parts_rig_meta(parts_path: &Path) -> (Vec<Value>, Vec<Value>, Option<(f64, f64)>) {
-    let Ok(text) = std::fs::read_to_string(parts_path) else {
-        return (Vec::new(), Vec::new(), None);
-    };
-    let Ok(doc) = serde_json::from_str::<Value>(&text) else {
-        return (Vec::new(), Vec::new(), None);
-    };
-    let canvas = doc["size"]
-        .as_array()
-        .filter(|a| a.len() == 2)
-        .and_then(|a| Some((a[0].as_f64()?, a[1].as_f64()?)))
-        .or_else(|| Some((doc["width"].as_f64()?, doc["height"].as_f64()?)));
-    let mut joints = Vec::new();
-    let mut pins = Vec::new();
-    for part in doc["parts"].as_array().into_iter().flatten() {
-        let id = part["id"].as_str().unwrap_or_default();
-        if let Some(j) = point(&part["joint"]) {
-            joints.push(json!({
-                "id": id,
-                "parent": part["parent"],
-                "joint": j,
-                "bounds": part["bounds"],
-            }));
-        }
-        for pin_pt in part["pins"].as_array().into_iter().flatten() {
-            if let Some(pt) = point(pin_pt) {
-                pins.push(json!({ "part": id, "pin": pt }));
-            }
-        }
-    }
-    (joints, pins, canvas)
-}
-
 fn build_view_summary(dir: &Path, canonical_id: &str, raw_id: &str, view_name: &str, is_flat: bool) -> Option<Value> {
     let ecproj_path = find_dir_ecproj(dir, canonical_id, raw_id, view_name, is_flat);
     let pcraft_path = find_dir_pcraft(dir, canonical_id, raw_id, view_name, is_flat);
     let psd_path = find_dir_psd(dir, canonical_id, raw_id, view_name, is_flat);
     let photo_doc = find_dir_photo_doc(dir, canonical_id, raw_id, view_name, is_flat);
     let vector_doc = find_dir_vector_doc(dir, canonical_id, raw_id, view_name, is_flat);
-    let anicraft_path = find_dir_anicraft_doc(dir);
-    let parts_path = dir.join("parts.json");
-    let has_parts = parts_path.is_file();
-    let (joints, pins, canvas) = extract_parts_rig_meta(&parts_path);
-    let drawing = std::fs::read_to_string(&parts_path)
-        .ok()
-        .and_then(|t| serde_json::from_str::<Value>(&t).ok())
-        .and_then(|p| p["image"].as_str().or_else(|| p["source"].as_str()).map(|i| dir.join(i)))
-        .filter(|p| p.is_file())
-        .or_else(|| {
-            let staged = dir.join(format!("{canonical_id}-{view_name}-drawing.png"));
-            staged.is_file().then_some(staged)
-        })
-        .or_else(|| {
-            let staged = dir.join(format!("{raw_id}-{view_name}-drawing.png"));
-            staged.is_file().then_some(staged)
-        })
+    let drawing = [dir.join(format!("{canonical_id}-{view_name}-drawing.png")), dir.join(format!("{raw_id}-{view_name}-drawing.png"))]
+        .into_iter()
+        .find(|p| p.is_file())
         .or_else(|| is_flat.then(|| find_initial_cutout(dir)).flatten());
     let rendered_frames = collect_view_frames(dir);
     let extracted_craft_png = if rendered_frames.is_empty() && drawing.is_none() {
@@ -171,14 +115,13 @@ fn build_view_summary(dir: &Path, canonical_id: &str, raw_id: &str, view_name: &
         None
     };
     let latest_frame = rendered_frames.first().cloned().or_else(|| drawing.clone()).or(extracted_craft_png);
-    let any_craft = ecproj_path.is_some() || photo_doc.is_some() || vector_doc.is_some() || anicraft_path.is_some() || has_parts || drawing.is_some();
+    let any_craft = ecproj_path.is_some() || photo_doc.is_some() || vector_doc.is_some() || drawing.is_some();
     if is_flat && !any_craft {
         return None;
     }
     Some(json!({
         "view": view_name,
-        "parts": has_parts,
-        "parts_path": has_parts.then_some(parts_path),
+        "parts": false,
         "drawing": drawing,
         "latest_frame": latest_frame,
         "rendered_frames": rendered_frames,
@@ -188,12 +131,10 @@ fn build_view_summary(dir: &Path, canonical_id: &str, raw_id: &str, view_name: &
         "psd_path": psd_path,
         "photo_doc": photo_doc,
         "vector_doc": vector_doc,
-        "anicraft_path": anicraft_path,
         "ecproj": ecproj_path.is_some(),
         "ecproj_path": ecproj_path,
-        "joints": joints,
-        "pins": pins,
-        "canvas_size": canvas.map(|(w, h)| json!([w, h])),
+        "joints": [],
+        "pins": [],
     }))
 }
 
@@ -201,19 +142,10 @@ fn build_view_summary(dir: &Path, canonical_id: &str, raw_id: &str, view_name: &
 pub fn cmd_character_list(s: &mut Session, _: &Value) -> Result<Value> {
     let project_dir = crate::workshop::project_dir(s)?;
     let animation_map = read_animation_map(&project_dir);
-    let cast: Vec<String> = s
-        .project_path
-        .as_ref()
-        .and_then(|p| std::fs::read_to_string(p).ok())
-        .and_then(|t| serde_json::from_str::<Value>(&t).ok())
-        .and_then(|d| d["animation_cast"].as_array().cloned())
-        .unwrap_or_default()
-        .iter()
-        .filter_map(|v| v.as_str().map(str::to_owned))
-        .collect();
+    let cast: Vec<String> = s.project().map(|p| p.animation_cast.clone()).unwrap_or_default();
 
     let mut discovered = discover_character_folders(&project_dir);
-    for asset in s.project_assets.iter().filter(|a| a.kind == "model_3d") {
+    for asset in s.project_assets().iter().filter(|a| a.kind == "model_3d") {
         let id = asset.id.replace('_', "-");
         if !discovered.iter().any(|(raw, _, _)| crate::workspace::sanitize_asset_id(raw) == crate::workspace::sanitize_asset_id(&id)) {
             discovered.push((id.clone(), None, project_dir.join("assets/characters").join(&id)));
@@ -254,8 +186,15 @@ pub fn cmd_character_list(s: &mut Session, _: &Value) -> Result<Value> {
                 "pins": [],
             }));
         }
-        let char_magic = folder.join("character.magic");
-        let info_3d = model3d::inspect_character_3d(s, &project_dir, &canonical_id);
+        let info_3d = mesh_io::inspect_character_3d(s, &project_dir, &canonical_id);
+        let m3d_view = mesh_io::view_model3d_summary(&info_3d);
+        if !m3d_view.is_null() {
+            if views.is_empty() {
+                views.push(json!({"view": "front", "parts": false, "ecproj": false, "joints": [], "pins": [], "model3d": m3d_view}));
+            } else if let Some(first) = views.first_mut() {
+                first["model3d"] = m3d_view;
+            }
+        }
         let mut sprites = sprite_summaries(&folder);
         for act in &action_ecprojs {
             let act_name = act["action"].as_str().unwrap_or("rig");
@@ -278,7 +217,6 @@ pub fn cmd_character_list(s: &mut Session, _: &Value) -> Result<Value> {
                 "name": raw_name,
                 "group": group,
                 "folder": folder,
-                "character_magic": char_magic.is_file().then_some(char_magic),
                 "action_ecprojs": action_ecprojs,
                 "animation_style": animation_style,
                 "animation_styles": animation_styles,
@@ -448,17 +386,13 @@ pub fn sprite_summaries(folder: &Path) -> Vec<Value> {
         .iter()
         .filter_map(|dir| {
             let ecproj = newest(dir, "ecproj")?;
-            let anicraft = newest(dir, "anicraft");
             let frames = rendered_pngs(&dir.join("frames")).unwrap_or_default();
-            let meta: Value = std::fs::read_to_string(dir.join("sprite.json")).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or(Value::Null);
-            let fps = meta["fps"].as_u64().unwrap_or(24);
-            let duration = meta["cycle_seconds"].as_f64().unwrap_or_else(|| frames.len() as f64 / fps.max(1) as f64);
-            let style = meta["animation_style"].as_str().unwrap_or("sprite_2d");
+            let fps = 24_u64;
+            let duration = frames.len() as f64 / fps as f64;
             Some(json!({
                 "name": dir.file_name().map(|n| n.to_string_lossy().into_owned()),
-                "animation_style": style,
+                "animation_style": "sprite_2d",
                 "ecproj": ecproj,
-                "anicraft": anicraft,
                 "preview": newest(&dir.join("clips"), "gif"),
                 "frames": frames,
                 "fps": fps,
@@ -476,11 +410,6 @@ pub fn sprite_summaries(folder: &Path) -> Vec<Value> {
     }
     for (vdir, is_flat, vname) in view_dirs {
         let Some(ecproj) = find_dir_ecproj(&vdir, &id, folder_name, vname, is_flat) else { continue };
-        let actions_map = std::fs::read_to_string(vdir.join("parts.json"))
-            .ok()
-            .and_then(|t| serde_json::from_str::<Value>(&t).ok())
-            .and_then(|p| p.get("actions").and_then(Value::as_object).cloned())
-            .unwrap_or_default();
         let mut seq_dirs: Vec<PathBuf> =
             std::fs::read_dir(vdir.join("frames")).into_iter().flatten().flatten().map(|e| e.path()).filter(|p| p.is_dir()).collect();
         seq_dirs.sort();
@@ -489,19 +418,8 @@ pub fn sprite_summaries(folder: &Path) -> Vec<Value> {
             if frames.is_empty() {
                 continue;
             }
-            let raw_dir_name = seq_dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-            let mut cycle_name = raw_dir_name.clone();
-            let mut duration = frames.len() as f64 / 24.0;
-            for (act_name, spec) in &actions_map {
-                if let (Some(st), Some(en)) = (spec.get("start").and_then(Value::as_f64), spec.get("end").and_then(Value::as_f64)) {
-                    let suffix = format!("-{st:.2}-{en:.2}");
-                    if raw_dir_name.ends_with(&suffix) {
-                        cycle_name = act_name.clone();
-                        duration = (en - st).max(0.1);
-                        break;
-                    }
-                }
-            }
+            let cycle_name = seq_dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            let duration = frames.len() as f64 / 24.0;
             if out.iter().any(|existing| existing["name"].as_str() == Some(cycle_name.as_str())) {
                 continue;
             }
@@ -522,7 +440,7 @@ pub fn sprite_summaries(folder: &Path) -> Vec<Value> {
 fn animation_documents(s: &Session) -> Result<Vec<Value>> {
     let root = crate::workshop::project_dir(s)?;
     let mut paths = Vec::new();
-    for folder in ["motion", "lettering", "animations", "assets/animations"] {
+    for folder in ["effects", "motion", "lettering", "animations", "assets/animations"] {
         collect_ecprojs_in_dir(&root.join(folder), 3, &mut paths);
     }
     Ok(paths.iter().map(|path| json!({"name": path.file_stem().map(|n| n.to_string_lossy().into_owned()), "path": path})).collect())
@@ -611,15 +529,58 @@ pub fn cmd_animation_open(s: &mut Session, p: &Value) -> Result<Value> {
     }))
 }
 
+pub fn sync_character_registration(
+    s: &mut Session,
+    char_id: &str,
+    char_name: &str,
+    style: Option<&str>,
+    ecproj: Option<&Path>,
+    anicraft: Option<&Path>,
+    model_3d: Option<&Path>,
+) {
+    if let Some(proj) = s.project_mut() {
+        if let Some(record) = proj.characters.iter_mut().find(|c| c.id == char_id) {
+            if !char_name.is_empty() && record.name.is_empty() {
+                record.name = char_name.to_owned();
+            }
+            if let Some(st) = style.filter(|s| !s.is_empty()) {
+                record.animation_style = st.to_owned();
+            }
+            if let Some(p) = ecproj {
+                record.ecproj = Some(p.to_path_buf());
+            }
+            if let Some(p) = anicraft {
+                record.anicraft = Some(p.to_path_buf());
+            }
+            if let Some(p) = model_3d {
+                record.model_3d = Some(p.to_path_buf());
+            }
+        } else {
+            let record = crate::cmd::project::format::CharacterRecord {
+                id: char_id.to_owned(),
+                name: if char_name.is_empty() { char_id.to_owned() } else { char_name.to_owned() },
+                animation_style: style.unwrap_or_default().to_owned(),
+                ecproj: ecproj.map(|p| p.to_path_buf()),
+                anicraft: anicraft.map(|p| p.to_path_buf()),
+                model_3d: model_3d.map(|p| p.to_path_buf()),
+                views: Vec::new(),
+                sprites: Vec::new(),
+                scripts: Vec::new(),
+            };
+            proj.characters.push(record);
+        }
+    }
+}
+
 pub fn cmd_character_import(s: &mut Session, p: &Value) -> Result<Value> {
     let raw_path = p["path"].as_str().ok_or_else(|| bad("path=<file> is required"))?;
     let source = crate::workspace::resolve_workspace_path(s, raw_path);
     let ext = source.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase).unwrap_or_default();
     if matches!(
         ext.as_str(),
-        "ecproj" | "pcraft" | "psd" | "psb" | "ora" | "xcf" | "kra" | "pdn" | "vectorcraft" | "svg" | "ai" | "af" | "afdesign" | "afphoto" | "anicraft"
+        "ecproj" | "pcraft" | "psd" | "psb" | "ora" | "xcf" | "kra" | "pdn" | "vectorcraft" | "svg" | "ai" | "af" | "afdesign" | "afphoto"
     ) {
-        if !magic_util::media::is_craft_doc_path(&source) {
+        if !magic_util::media::is_file_or_pcraft_bundle(&source) {
             return Err(bad(format!("{} does not exist", source.display())));
         }
         let head = (ext == "ecproj").then(|| check_ecproj_head(&source)).transpose()?;
@@ -650,6 +611,16 @@ pub fn cmd_character_import(s: &mut Session, p: &Value) -> Result<Value> {
             }
             d
         };
+        let ecproj_opt = (ext == "ecproj").then_some(dest.as_path());
+        let anicraft_opt = (ext == "anicraft").then_some(dest.as_path());
+        let style = if ext == "ecproj" {
+            Some("rig_2_5d")
+        } else if ext == "anicraft" {
+            Some("artboard_2d")
+        } else {
+            None
+        };
+        sync_character_registration(s, &char_id, clean_stem, style, ecproj_opt, anicraft_opt, None);
         return Ok(json!({
             "ok": true,
             "character": char_id,
@@ -738,22 +709,31 @@ pub fn cmd_character_open(s: &mut Session, p: &Value) -> Result<Value> {
                 if let Some(first_ec) = action_ecs.first().and_then(|v| v["path"].as_str()).map(PathBuf::from).filter(|p| p.is_file()) {
                     first_ec
                 } else {
-                    let info_3d = model3d::inspect_character_3d(s, &project_dir, &view.id);
+                    let info_3d = mesh_io::inspect_character_3d(s, &project_dir, &view.id);
                     info_3d["clips"]
                         .as_array()
                         .and_then(|clips| clips.iter().find_map(|c| c["ecproj_3d"].as_str().map(PathBuf::from)))
                         .filter(|p| p.is_file())
-                        .ok_or_else(|| bad("no EffectCraft .ecproj found; run character.rig or character.model3d.animate first"))?
+                        .ok_or_else(|| bad("no EffectCraft .ecproj found; run character.rig or animation.promote first"))?
                 }
             };
             ("effectcraft", chosen)
         }
         "photocraft" => ("photocraft", view.require_photo_doc("character.cut")?),
         "vectorcraft" => ("vectorcraft", view.vector_doc().ok_or_else(|| bad("no .vectorcraft or .svg found for this character"))?),
-        "anicraft" => {
-            return Err(bad("AniCraft desktop UI is disabled while in early alpha"));
+        "texturecraft" => {
+            let project_dir = crate::workshop::project_dir(s)?;
+            let info_3d = mesh_io::inspect_character_3d(s, &project_dir, &view.id);
+            let tcraft = info_3d["tcraft_files"]
+                .as_array()
+                .and_then(|arr| arr.first())
+                .and_then(Value::as_str)
+                .map(PathBuf::from)
+                .filter(|p| p.is_file())
+                .ok_or_else(|| bad("no .tcraft document found for this character"))?;
+            ("texturecraft", tcraft)
         }
-        other => return Err(bad(format!("app must be effectcraft, photocraft, or vectorcraft, not {other}"))),
+        other => return Err(bad(format!("app must be effectcraft, photocraft, vectorcraft, or texturecraft, not {other}"))),
     };
     if app == "effectcraft" {
         let _ = check_ecproj_head(&file)?;

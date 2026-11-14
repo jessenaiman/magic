@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.jessenaiman.magic</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>LicenseRef-Magic-Studio-NonResale</project_license>
+  <name>Magic Studio</name>
+  <summary>Song-to-video storyboard, animation, kinetic lyrics, and FilmCraft studio</summary>
+  <description>
+    <p>
+      Magic Studio turns a recorded song or existing project into a finished music video, lyric video, or animated short across DeckCraft, EffectCraft, and FilmCraft.
+    </p>
+    <p>
+      Build creative storyboards as native DeckCraft or PowerPoint slide decks with PDF export, bring character and scene animations from Blender, Three.js, After Effects, AniCraft, or EffectCraft, synchronize kinetic lyrics and broadcast captions, and finish in a multi-track FilmCraft studio driven from the desktop UI, CLI, JSON control channel, or MCP.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.jessenaiman.magic.desktop</launchable>
+  <url type="homepage">https://github.com/jessenaiman/magic</url>
+  <url type="bugtracker">https://github.com/jessenaiman/magic/issues</url>
+  <developer id="io.github.jessenaiman">
+    <name>Jesse Naiman</name>
+  </developer>
+  <provides>
+    <binary>magic</binary>
+    <binary>magic-cli</binary>
+    <mediatype>application/vnd.artcraft.magic+json</mediatype>
+  </provides>
+  <categories>
+    <category>AudioVideo</category>
+    <category>Video</category>
+    <category>AudioVideoEditing</category>
+    <category>Graphics</category>
+  </categories>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.19.0" date="2026-11-13"/>
+  </releases>
+</component>

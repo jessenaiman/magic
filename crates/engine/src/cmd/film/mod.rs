@@ -1,16 +1,12 @@
-//! The film as `FilmCraft` holds it: `film/<song>.fcproj` (built by `video.assemble`), receiving
-//! independent `EffectCraft` track renders (`Character Animation` on V2, `Kinetic Lyrics` on V3,
-//! and `Action Motion` on V4), dynamic-linked `.ecproj` compositions (`linked_comp`), cross-app
-//! interchange/Lottie/template/caption bridges (`bridge`), Studio finishing (`finishing`),
-//! half-size Studio previews, program frames, exports, and live `--control`.
+//! The film as `FilmCraft` holds it: `film/<song>.fcproj`, receiving open animation outputs
+//! (`Blender`, `Three.js`, `After Effects`, `AniCraft`, `EffectCraft`) on `V2`, `Kinetic Lyrics`
+//! on `V3`, `Action Motion` on `V4`, and headless `filmcraft-cli` sync.
 
 pub mod assembly;
-pub mod finishing;
 pub mod linked_comp;
-pub mod markers;
-pub use finishing::cmd_video_finish;
+pub mod map_tracks;
 pub use linked_comp::{cmd_video_bake_link, cmd_video_link_effectcraft, cmd_video_list_ec_comps, cmd_video_sync_links};
-pub use markers::cmd_video_markers;
+pub use map_tracks::cmd_video_map_tracks;
 
 use std::path::{Path, PathBuf};
 
@@ -27,38 +23,101 @@ fn bad(message: impl Into<String>) -> EngineError {
     EngineError::InvalidParams(message.into())
 }
 
-struct Film {
-    dir: PathBuf,
-    name: String,
-    project: PathBuf,
+pub(crate) struct Film {
+    pub(crate) dir: PathBuf,
+    pub(crate) name: String,
+    pub(crate) project: PathBuf,
 }
 
 fn film(s: &Session) -> Result<Film> {
     let dir = crate::workshop::project_dir(s)?;
     let name = s.project_path.as_ref().and_then(|p| p.file_stem()).map_or("Film".into(), |n| n.to_string_lossy().into_owned());
     let project = s
-        .video_project_path
-        .clone()
+        .video_project_path()
+        .map(Path::to_path_buf)
         .filter(|p| p.extension().is_some_and(|e| e == "fcproj"))
         .unwrap_or_else(|| dir.join("film").join(format!("{name}.fcproj")));
     Ok(Film { dir, name, project })
 }
 
 pub(crate) fn link(s: &mut Session, project: &Path) -> Result<()> {
-    if s.video_project_path.as_deref() == Some(project) {
+    if s.video_project_path() == Some(project) {
         return Ok(());
     }
-    s.video_project_path = Some(project.to_path_buf());
-    crate::project::write_project_file(s)
+    s.require_project_mut()?.workshop.video_project = Some(project.to_path_buf());
+    Ok(())
+}
+
+fn filmcraft_cli_available() -> bool {
+    crate::workspace::resolve_executable_path("filmcraft-cli").is_some()
+}
+
+fn is_readonly_filmcraft_command(id: &str) -> bool {
+    id.ends_with(".inspect") || id.ends_with(".list") || id.ends_with(".get") || matches!(id, "sequence.renderBar" | "edit.find")
+}
+
+fn filmcraft_global_args(project: Option<&Path>, fresh: bool, save: bool) -> Vec<String> {
+    let mut args = Vec::new();
+    let Some(p) = project else {
+        return args;
+    };
+    let use_existing = !fresh && p.is_file();
+    if use_existing {
+        args.extend(["--project".to_owned(), p.to_string_lossy().into_owned()]);
+        if save {
+            args.push("--save".to_owned());
+        }
+    } else if save {
+        args.extend(["--save-as".to_owned(), p.to_string_lossy().into_owned()]);
+    }
+    args
+}
+
+fn filmcraft_run_steps_cli(project: Option<&Path>, fresh: bool, save: bool, steps: &[Value]) -> std::result::Result<Vec<Value>, String> {
+    let mut args = filmcraft_global_args(project, fresh, save);
+    args.extend(["run".to_owned(), "-".to_owned()]);
+    let mut script = String::new();
+    for st in steps {
+        let id = st["id"].as_str().or_else(|| st["command"].as_str()).unwrap_or_default();
+        let params = st.get("params").cloned().unwrap_or_else(|| json!({}));
+        script.push_str(&json!({"id": id, "params": params}).to_string());
+        script.push('\n');
+    }
+    let out = crate::workspace::run_cli("filmcraft-cli", &args, Some(&script))?;
+    let parsed = out.lines().map(str::trim).filter(|l| !l.is_empty()).map(|l| serde_json::from_str::<Value>(l).unwrap_or_else(|_| json!({"raw": l}))).collect();
+    Ok(parsed)
+}
+
+fn filmcraft_exec_cli(project: Option<&Path>, save: bool, id: &str, params: &Value) -> std::result::Result<Value, String> {
+    let mut args = filmcraft_global_args(project, false, save);
+    args.extend(["exec".to_owned(), id.to_owned(), params.to_string()]);
+    crate::workspace::run_cli_json("filmcraft-cli", &args, None)
 }
 
 impl Film {
-    fn require(&self) -> Result<&Path> {
+    pub(crate) fn ensure_on_disk(&self, _s: &Session) -> Result<&Path> {
+        if !self.project.is_file() {
+            if let Some(parent) = self.project.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            let seed_steps = [
+                json!({"id": "file.newProject", "params": {"name": self.name}}),
+                json!({"id": "file.newSequence", "params": {"name": self.name, "width": 1920, "height": 1080, "fps": 24, "audio": 1}}),
+            ];
+            run_steps(Some(&self.project), true, true, &seed_steps)?;
+        }
+        Ok(&self.project)
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn require(&self) -> Result<&Path> {
         if self.project.is_file() { Ok(&self.project) } else { Err(bad("No film timeline yet; run video.assemble first")) }
     }
+
     fn preview(&self) -> PathBuf {
         self.dir.join("film").join(format!("{}-preview.mp4", self.name))
     }
+
     fn export(&self) -> PathBuf {
         self.dir.join("exports").join(format!("{}.mp4", self.name))
     }
@@ -70,12 +129,64 @@ fn file_info(path: &Path) -> Value {
     json!({"path": path, "exists": path.is_file(), "modified": modified})
 }
 
-fn collect_pngs_sorted(dir: &Path, max_depth: usize) -> Vec<PathBuf> {
+fn resolve_fcproj_media_path(fcproj: &Path, raw: &str) -> PathBuf {
+    let pb = PathBuf::from(raw);
+    if pb.is_absolute() {
+        return pb;
+    }
+    let mut candidates = Vec::new();
+    if let Some(film_dir) = fcproj.parent() {
+        candidates.push(film_dir.join(&pb));
+        if let Some(project_dir) = film_dir.parent() {
+            candidates.push(project_dir.join(&pb));
+        }
+    }
+    candidates.into_iter().find(|cand| cand.is_file()).unwrap_or_else(|| fcproj.parent().map_or(pb.clone(), |dir| dir.join(&pb)))
+}
+
+/// Read the active `A1` (`audio_tracks[0]`) media item ID and resolved source file path from `<song>.fcproj`.
+pub(crate) fn read_fcproj_a1_slot(fcproj: &Path) -> Option<(u64, PathBuf)> {
+    let text = std::fs::read_to_string(fcproj).ok()?;
+    let root: Value = serde_json::from_str(&text).ok()?;
+    let items = root.pointer("/project/items")?.as_object()?;
+    let seq = items.values().find_map(|entry| entry.pointer("/kind/Sequence"))?;
+    let item_id = seq.get("audio_tracks")?.as_array()?.first()?.get("items")?.as_array()?.first()?.get("item")?.as_u64()?;
+    let media_entry = items.get(&item_id.to_string())?;
+    let raw_path = media_entry.pointer("/kind/Media/media/File/path").and_then(Value::as_str)?;
+    Some((item_id, resolve_fcproj_media_path(fcproj, raw_path)))
+}
+
+/// Read the active `A1` Song Master audio path directly from `film/<song>.fcproj`.
+pub fn read_fcproj_a1_audio_path(fcproj: &Path) -> Option<PathBuf> {
+    read_fcproj_a1_slot(fcproj).map(|(_, path)| path)
+}
+
+/// Resolve the active project song audio path, preferring `A1` of `film/<song>.fcproj` over session fallback.
+pub fn resolve_active_audio_path(s: &Session) -> Option<PathBuf> {
+    if let Ok(f) = film(s)
+        && let Some(path) = read_fcproj_a1_audio_path(&f.project)
+    {
+        return Some(path);
+    }
+    let dir = crate::workshop::project_dir(s).ok()?;
+    let rel = s.song_audio()?;
+    Some(if rel.is_absolute() { rel.to_path_buf() } else { dir.join(rel) })
+}
+
+fn png_frame_sort_key(path: &Path) -> (u8, u64) {
+    let tick = path.file_stem().and_then(|s| s.to_str()).and_then(|stem| stem.rsplit_once("-t")).and_then(|(_, raw)| raw.parse::<u64>().ok());
+    match tick {
+        Some(t) => (0, t),
+        None => (1, 0),
+    }
+}
+
+pub(crate) fn collect_pngs_sorted(dir: &Path, max_depth: usize) -> Vec<PathBuf> {
     if !dir.is_dir() {
         return Vec::new();
     }
     let mut entries: Vec<PathBuf> = std::fs::read_dir(dir).into_iter().flatten().flatten().map(|e| e.path()).collect();
-    entries.sort();
+    entries.sort_by(|a, b| png_frame_sort_key(a).cmp(&png_frame_sort_key(b)).then_with(|| a.cmp(b)));
     let mut out = Vec::new();
     for entry in entries {
         if entry.is_file() && crate::workspace::has_extension(&entry, &["png", "svg", "webp", "jpg", "jpeg"]) {
@@ -87,23 +198,32 @@ fn collect_pngs_sorted(dir: &Path, max_depth: usize) -> Vec<PathBuf> {
     out
 }
 
-fn discover_film_craft_outputs(dir: &Path, fcproj: &Path) -> Value {
+fn discover_film_craft_outputs(f: &Film, export_out: &Path) -> Value {
+    let dir = &f.dir;
+    let fcproj = &f.project;
     let program_frames = collect_pngs_sorted(&dir.join("film/frames"), 1);
     let v1_frames = collect_pngs_sorted(&dir.join("assets/backgrounds"), 1);
     let mut v2_frames = collect_pngs_sorted(&dir.join("film/.linked-cache"), 0);
     v2_frames.extend(collect_pngs_sorted(&dir.join("assets/characters"), 3));
     v2_frames.retain(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("png")));
-    let v3_frames = collect_pngs_sorted(&dir.join("lettering/.preview"), 0);
+    let v3_dir = if dir.join("effects/.preview").is_dir() { dir.join("effects/.preview") } else { dir.join("lettering/.preview") };
+    let v3_frames = collect_pngs_sorted(&v3_dir, 0);
     let mut v4_frames = collect_pngs_sorted(&dir.join("motion/.preview"), 0);
     v4_frames.extend(collect_pngs_sorted(&dir.join("motion/svg"), 0));
-    let lyrics_ecproj = dir.join("lettering/lyrics.ecproj");
-    let motion_ecproj = dir.join("motion/actions.ecproj");
+    let lyrics_ecproj = crate::cmd::words::lyrics_ecproj_path(dir);
+    let motion_ecproj = crate::cmd::motion::motion_ecproj_path(dir);
     let linked_comps = linked_comp::inspect_linked_comps(dir);
+    let saved_animations = map_tracks::discover_saved_animation_records(dir);
+    let a1_audio = read_fcproj_a1_audio_path(fcproj).map(|p| file_info(&p));
     json!({
         "fcproj": file_info(fcproj),
+        "a1_audio": a1_audio,
+        "preview_video": file_info(&f.preview()),
+        "export_video": file_info(export_out),
         "lyrics_ecproj": file_info(&lyrics_ecproj),
         "motion_ecproj": file_info(&motion_ecproj),
         "linked_compositions": linked_comps,
+        "saved_animations": saved_animations,
         "program_frames": program_frames,
         "v1_frames": v1_frames,
         "v2_frames": v2_frames,
@@ -122,15 +242,29 @@ pub(crate) fn timeline_file(s: &Session) -> Result<Value> {
 
 pub(crate) fn run_steps(project: Option<&Path>, fresh: bool, save: bool, steps: &[Value]) -> Result<Vec<Value>> {
     if let Some(proj) = project {
-        let sidecar = crate::native_media::write_staged_steps(proj, &json!({"fresh": fresh, "save": save, "steps": steps}))?;
-        return Ok(vec![json!({"ok": true, "staged": sidecar, "project": proj})]);
+        if filmcraft_cli_available() {
+            let mut cli_steps = Vec::with_capacity(steps.len() + 2);
+            let mut stripped_prefix = 0usize;
+            if fresh && steps.first().and_then(|s| s["id"].as_str()) != Some("file.newProject") {
+                let stem = proj.file_stem().and_then(|s| s.to_str()).unwrap_or("Film");
+                cli_steps.push(json!({"id": "file.newProject", "params": {"name": stem}}));
+                cli_steps.push(json!({"id": "file.newSequence", "params": {"name": stem, "width": 1920, "height": 1080, "fps": 24, "audio": 1}}));
+                stripped_prefix = 2;
+            }
+            cli_steps.extend_from_slice(steps);
+            let mut out = filmcraft_run_steps_cli(Some(proj), fresh, save, &cli_steps).map_err(|err| EngineError::ExternalTool("filmcraft-cli".into(), err))?;
+            if stripped_prefix > 0 && out.len() >= stripped_prefix {
+                out.drain(0..stripped_prefix);
+            }
+            return Ok(out);
+        }
+        return Err(EngineError::ExternalTool("filmcraft-cli".into(), "filmcraft-cli unavailable on PATH".into()));
     }
     Ok(vec![json!({"ok": true, "steps_count": steps.len()})])
 }
 
 pub(crate) fn replace_item_footage(project: &Path, item: u64, movie: &Path) -> Result<Value> {
     let params = json!({"item": item, "path": movie});
-    let _lock = crate::project_lock::for_project(project);
     run_steps(Some(project), false, true, &[json!({"id": "media.replaceFootage", "params": params})])?
         .into_iter()
         .next()
@@ -138,8 +272,8 @@ pub(crate) fn replace_item_footage(project: &Path, item: u64, movie: &Path) -> R
 }
 
 pub(crate) fn publish_effect_track(s: &Session, track_name: &str, movie: &Path) -> Result<Value> {
-    let project = film_path(s)?;
-    let _lock = crate::project_lock::for_project(&project);
+    let f = film(s)?;
+    let project = f.ensure_on_disk(s)?.to_path_buf();
     let mut run = |id: &str, params: Value| -> Result<Value> {
         let step = json!({"id": id, "params": params});
         let save = id != "sequence.inspect" && id != "media.status" && id != "file.save";
@@ -193,8 +327,7 @@ fn publish_track_sequence(
         run("file.save", json!({}))?;
         return Ok(json!({"timeline": project, "track": track, "track_name": track_name, "clip": clip, "item": item, "relinked": true}));
     }
-    let duration =
-        sequence["durationFrames"].as_u64().filter(|frames| *frames > 0).ok_or_else(|| bad("Open a FilmCraft sequence with picture or audio first"))?;
+    let duration = sequence["durationFrames"].as_u64().filter(|frames| *frames > 0).unwrap_or(720);
     let imported = run("file.import", json!({"paths": [movie]}))?;
     let item = imported["items"][0].as_u64().ok_or_else(|| bad(format!("FilmCraft did not import {track_name} render")))?;
     let old_track = sequence["video"].as_array().into_iter().flatten().find(|track| track["name"] == track_name);
@@ -212,15 +345,22 @@ fn publish_track_sequence(
         .flatten()
         .find(|track| track["items"].as_array().into_iter().flatten().any(|row| row["clip"] == clip))
         .and_then(|track| track["id"].as_u64())
-        .ok_or_else(|| bad(format!("FilmCraft did not return the {track_name} track")))?;
+        .unwrap_or(2);
     run("timeline.setTrack", json!({"track": track, "name": track_name, "enabled": true}))?;
     run("file.save", json!({}))?;
     Ok(json!({"timeline": project, "track": track, "track_name": track_name, "clip": clip, "item": item, "relinked": false}))
 }
 
 pub(crate) fn execute(project: &Path, id: &str, params: Value) -> Result<Value> {
-    let sidecar = crate::native_media::write_staged_steps(project, &json!({"command": id, "params": params}))?;
-    Ok(json!({"ok": true, "staged": sidecar, "command": id}))
+    let is_query = is_readonly_filmcraft_command(id);
+    if filmcraft_cli_available() {
+        let res = filmcraft_exec_cli(Some(project), !is_query, id, &params).map_err(|err| EngineError::ExternalTool("filmcraft-cli".into(), err))?;
+        if is_query {
+            return Ok(res);
+        }
+        return Ok(json!({"ok": true, "command": id, "transport": "cli", "result": res, "live_dispatched": false}));
+    }
+    Err(EngineError::ExternalTool("filmcraft-cli".into(), "filmcraft-cli unavailable on PATH".into()))
 }
 
 pub(crate) fn run(project: &Path, fresh: bool, steps: &[Value]) -> Result<Vec<Value>> {
@@ -283,23 +423,59 @@ fn export_params(output: &Path, draft: bool, options: &Value) -> Value {
     params
 }
 
-pub(crate) fn export_with_options(project: &Path, output: &Path, draft: bool, options: &Value) -> Result<()> {
-    let params = export_params(output, draft, options);
-    let queue = options.get("queue").and_then(Value::as_bool) == Some(true);
-    let cmd_id = if queue { "export.queue.add" } else { "file.exportMedia" };
-    let result = execute(project, cmd_id, params)?;
+fn check_offline_export_result(result: &Value, draft: bool, options: &Value) -> Result<()> {
+    let offline = result.get("offlineMedia").or_else(|| result.pointer("/result/offlineMedia")).and_then(Value::as_array).filter(|items| !items.is_empty());
     if !draft
         && options.get("allowOffline").and_then(Value::as_bool) != Some(true)
-        && let Some(offline) = result["offlineMedia"].as_array().filter(|items| !items.is_empty())
+        && let Some(items) = offline
     {
-        return Err(EngineError::ExternalTool("filmcraft".into(), format!("export blocked by offline media: {offline:?}")));
+        return Err(EngineError::ExternalTool("filmcraft".into(), format!("export blocked by offline media: {items:?}")));
     }
     Ok(())
 }
 
-pub(crate) fn frame_at_tick(project: &Path, _tick: Tick, output: &Path) -> Result<()> {
-    let _ = crate::native_media::extract_or_copy_preview(project, output, 960)?;
-    Ok(())
+fn filmcraft_export_cli(project: &Path, output: &Path, draft: bool, params: &Value, options: &Value) -> std::result::Result<Value, String> {
+    let proj_s = project.to_string_lossy().into_owned();
+    let out_s = output.to_string_lossy().into_owned();
+    let mut args = vec!["--project".to_owned(), proj_s, "export".to_owned(), out_s];
+    if let Some(preset) = params["preset"].as_str().map(str::trim).filter(|s| !s.is_empty()) {
+        args.extend(["--preset".to_owned(), preset.to_owned()]);
+    }
+    if let Some(fmt) = options["format"].as_str().map(str::trim).filter(|s| !s.is_empty()) {
+        args.extend(["--format".to_owned(), fmt.to_owned()]);
+    }
+    if draft || options.get("allowOffline").and_then(Value::as_bool) == Some(true) {
+        args.push("--allow-offline".to_owned());
+    }
+    crate::workspace::run_cli_json("filmcraft-cli", &args, None)
+}
+
+pub(crate) fn export_with_options(project: &Path, output: &Path, draft: bool, options: &Value) -> Result<()> {
+    let params = export_params(output, draft, options);
+    let queue = options.get("queue").and_then(Value::as_bool) == Some(true);
+    let cmd_id = if queue { "export.queue.add" } else { "file.exportMedia" };
+
+    if filmcraft_cli_available() && project.is_file() {
+        let res = filmcraft_export_cli(project, output, draft, &params, options).map_err(|err| EngineError::ExternalTool("filmcraft-cli".into(), err))?;
+        return check_offline_export_result(&res, draft, options);
+    }
+
+    let result = execute(project, cmd_id, params)?;
+    check_offline_export_result(&result, draft, options)
+}
+
+pub(crate) fn frame_at_tick(_project_dir: &Path, project: &Path, tick: Tick, output: &Path) -> Result<()> {
+    if filmcraft_cli_available() {
+        let proj_s = project.to_string_lossy().into_owned();
+        let sec_s = tick.seconds().to_string();
+        let out_s = output.to_string_lossy().into_owned();
+        if crate::workspace::run_cli("filmcraft-cli", &["--project", &proj_s, "render", "--seconds", &sec_s, "--out", &out_s, "--allow-offline"], None).is_ok()
+            && output.is_file()
+        {
+            return Ok(());
+        }
+    }
+    Err(EngineError::ExternalTool("filmcraft-cli".into(), "filmcraft-cli frame render unavailable or failed".into()))
 }
 
 pub(crate) fn probe_media(filename: &Path) -> Result<Value> {
@@ -323,11 +499,12 @@ pub(crate) fn media_duration_ticks(filename: &Path, require_video: bool) -> Resu
     Ok(duration)
 }
 
-fn export_with(f: &Film, out: &Path, draft: bool, options: &Value) -> Result<()> {
+fn export_with(s: &Session, f: &Film, out: &Path, draft: bool, options: &Value) -> Result<()> {
     if let Some(dir) = out.parent() {
         std::fs::create_dir_all(dir)?;
     }
-    export_with_options(f.require()?, out, draft, options)?;
+    let proj = f.ensure_on_disk(s)?;
+    export_with_options(proj, out, draft, options)?;
     Ok(())
 }
 
@@ -396,18 +573,20 @@ fn inspect_export_status(f: &Film, out: &Path) -> Value {
 
 pub fn cmd_video_film(s: &mut Session, p: &Value) -> Result<Value> {
     let f = film(s)?;
+    let _ = f.ensure_on_disk(s);
     let project = file_info(&f.project);
     let preview = file_info(&f.preview());
     let (out, options) = export_destination(&f, p);
     let export = file_info(&out);
     let validation = inspect_export_status(&f, &out);
-    let craft_outputs = discover_film_craft_outputs(&f.dir, &f.project);
+    let craft_outputs = discover_film_craft_outputs(&f, &out);
     let stale = |v: &Value| v["exists"] == true && v["modified"].as_u64() < project["modified"].as_u64();
     Ok(json!({
         "ok": true,
         "timeline": project,
         "preview": preview,
         "export": export,
+        "a1_audio": craft_outputs["a1_audio"],
         "craft_outputs": craft_outputs,
         "preview_stale": stale(&preview),
         "export_stale": !validation["valid"].as_bool().unwrap_or(false),
@@ -420,14 +599,14 @@ pub fn cmd_video_film(s: &mut Session, p: &Value) -> Result<Value> {
 pub fn cmd_video_preview(s: &mut Session, p: &Value) -> Result<Value> {
     let f = film(s)?;
     let out = f.preview();
-    export_with(&f, &out, true, p)?;
+    export_with(s, &f, &out, true, p)?;
     Ok(json!({"ok": true, "preview": out, "timeline": f.project}))
 }
 
 pub fn cmd_video_export(s: &mut Session, p: &Value) -> Result<Value> {
     let f = film(s)?;
     let (out, options) = export_destination(&f, p);
-    export_with(&f, &out, false, &options)?;
+    export_with(s, &f, &out, false, &options)?;
     let validation = inspect_export_status(&f, &out);
     Ok(
         json!({"ok": true, "export": out, "timeline": f.project, "export_ready": validation["valid"] == true, "validation": validation, "export_options": options}),
@@ -436,7 +615,7 @@ pub fn cmd_video_export(s: &mut Session, p: &Value) -> Result<Value> {
 
 pub fn cmd_video_frame(s: &mut Session, p: &Value) -> Result<Value> {
     let f = film(s)?;
-    let project = f.require()?.to_path_buf();
+    let project = f.ensure_on_disk(s)?.to_path_buf();
     let tick = p.get("tick").or_else(|| p.get("time")).or_else(|| p.get("seconds")).and_then(parse_tick).unwrap_or(Tick::ZERO).max(Tick::ZERO);
     let out = p["path"]
         .as_str()
@@ -445,21 +624,21 @@ pub fn cmd_video_frame(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(parent) = out.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    frame_at_tick(&project, tick, &out)?;
+    frame_at_tick(&f.dir, &project, tick, &out)?;
     Ok(json!({"ok": true, "frame": out, "tick": tick.0, "timeline": project}))
 }
 
 pub fn cmd_video_open(s: &mut Session, _: &Value) -> Result<Value> {
     let f = film(s)?;
-    let project = f.require()?.to_path_buf();
+    let project = f.ensure_on_disk(s)?.to_path_buf();
     crate::workspace::open_editor("filmcraft", &project)?;
     Ok(json!({"ok": true, "timeline": project, "document": {"app": "filmcraft", "file": project}}))
 }
 
 pub fn cmd_film_save(s: &mut Session, _: &Value) -> Result<Value> {
     let f = film(s)?;
-    let project = f.require()?.to_path_buf();
-    run_steps(Some(&project), false, false, &[json!({"id": "file.save", "params": {}})])?;
+    let project = f.ensure_on_disk(s)?.to_path_buf();
+    run_steps(Some(&project), false, true, &[json!({"id": "file.save", "params": {}})])?;
     Ok(json!({"ok": true, "project": project}))
 }
 
@@ -494,18 +673,25 @@ fn track_rows(tracks: &Value, kind: &str, media: &Value) -> Vec<Value> {
                         "end": raw_tick(&c["end"]),
                         "source_in_tick": raw_tick(&c["sourceIn"]),
                         "source_out_tick": raw_tick(&c["sourceOut"]),
-                        "source_path": source.and_then(|source| source["path"].as_str()),
+                        "source_path": c.get("source_path").and_then(Value::as_str).or_else(|| source.and_then(|source| source["path"].as_str())),
                         "source_status": source.and_then(|source| source["status"].as_str()),
                         "offline": offline,
+                        "graphic": c.get("graphic").cloned().unwrap_or(Value::Null),
                         "label": c.get("label").cloned().unwrap_or(Value::Null),
+                        "mapped_target": c.get("mapped_target").cloned().unwrap_or(Value::Null),
+                        "mapped_group": c.get("mapped_group").cloned().unwrap_or(Value::Null),
                         "enabled": c.get("enabled").cloned().unwrap_or(json!(true)),
                     })
                 })
                 .collect();
-            let label = format!("{prefix}{}", i + 1);
+            let label = t.get("code").and_then(Value::as_str).map(str::to_owned).unwrap_or_else(|| format!("{prefix}{}", i + 1));
             let name = t.get("name").and_then(Value::as_str).unwrap_or(&label);
             let lower = name.to_ascii_lowercase();
-            let role = if name.eq_ignore_ascii_case(TRACK_KINETIC_LYRICS) {
+            let role = if let Some(explicit_role) = t.get("role").and_then(Value::as_str) {
+                Some(explicit_role)
+            } else if kind == "caption" {
+                Some("caption")
+            } else if name.eq_ignore_ascii_case(TRACK_KINETIC_LYRICS) || lower.contains("lyric") {
                 Some("lyrics")
             } else if name.eq_ignore_ascii_case(TRACK_ACTION_MOTION) || lower.contains("motion") {
                 Some("motion")
@@ -520,7 +706,10 @@ fn track_rows(tracks: &Value, kind: &str, media: &Value) -> Vec<Value> {
                 "name": name,
                 "kind": kind,
                 "role": role,
-                "enabled": t["enabled"],
+                "mapped_target": t.get("mapped_target").cloned().unwrap_or(Value::Null),
+                "mapped_group": t.get("mapped_group").cloned().unwrap_or(Value::Null),
+                "enabled": t.get("enabled").cloned().unwrap_or(json!(true)),
+                "patched": t.get("patched").cloned().unwrap_or(json!(true)),
                 "muted": t.get("muted").cloned().unwrap_or(json!(false)),
                 "solo": t.get("solo").cloned().unwrap_or(json!(false)),
                 "syncLock": t.get("syncLock").cloned().unwrap_or(json!(true)),
@@ -530,51 +719,73 @@ fn track_rows(tracks: &Value, kind: &str, media: &Value) -> Vec<Value> {
         .collect()
 }
 
+fn normalize_markers(raw: &Value) -> Vec<Value> {
+    raw.as_array()
+        .into_iter()
+        .flatten()
+        .map(|m| {
+            let start_tick = m.get("time").or_else(|| m.get("start")).and_then(parse_raw_tick).map(|t| t.0);
+            let duration_tick = m.get("duration").and_then(parse_raw_tick).map(|t| t.0);
+            json!({
+                "name": m.get("name").cloned().unwrap_or(Value::Null),
+                "comment": m.get("comment").cloned().unwrap_or(Value::Null),
+                "color": m.get("color").cloned().unwrap_or(Value::Null),
+                "start_tick": start_tick,
+                "duration_tick": duration_tick,
+                "time_sec": start_tick.map(|t| Tick(t).seconds()),
+            })
+        })
+        .collect()
+}
+
 pub fn cmd_video_timeline(s: &mut Session, _: &Value) -> Result<Value> {
     let f = film(s)?;
-    let seq = execute(f.require()?, "sequence.inspect", json!({}))?;
-    let media = execute(f.require()?, "media.status", json!({}))?;
+    let proj = f.ensure_on_disk(s)?.to_path_buf();
+    let seq = execute(&proj, "sequence.inspect", json!({}))?;
+    let media = execute(&proj, "media.status", json!({})).unwrap_or_else(|_| json!([]));
     let mut tracks = track_rows(&seq["captions"], "caption", &media);
     let mut video = track_rows(&seq["video"], "video", &media);
     video.reverse();
     tracks.extend(video);
     tracks.extend(track_rows(&seq["audio"], "audio", &media));
+    let in_tick = seq.get("in").or_else(|| seq.get("in_tick")).and_then(parse_raw_tick).map(|t| t.0);
+    let out_tick = seq.get("out").or_else(|| seq.get("out_tick")).and_then(parse_raw_tick).map(|t| t.0);
     let duration_tick = parse_raw_tick(&seq["duration"]).map(|t| t.0);
-    let synced_markers = markers::extract_synced_markers(&f.dir, Some(&seq));
+    let color = seq.pointer("/settings/color").or_else(|| seq.get("color")).cloned().unwrap_or(Value::Null);
+    let markers = normalize_markers(&seq["markers"]);
     Ok(json!({
         "ok": true,
-        "timeline": f.project,
+        "timeline": proj,
         "name": seq["name"],
+        "in_tick": in_tick,
+        "out_tick": out_tick,
         "duration_tick": duration_tick,
         "duration": duration_tick,
+        "durationFrames": seq["durationFrames"],
+        "settings": seq["settings"],
+        "color": color,
         "tracks": tracks,
-        "markers": synced_markers,
+        "markers": markers,
     }))
 }
 
 pub fn cmd_video_place_clip(s: &mut Session, p: &Value) -> Result<Value> {
     let f = film(s)?;
-    let clip = p["clip"].as_str().map(PathBuf::from).filter(|c| c.is_file()).ok_or_else(|| bad("clip=<rendered .mov or .mp4> is required"))?;
+    let raw_clip = p["clip"].as_str().map(str::trim).filter(|c| !c.is_empty()).ok_or_else(|| bad("clip=<animation file or image sequence> is required"))?;
+    let candidate = {
+        let pb = PathBuf::from(raw_clip);
+        if pb.is_absolute() { pb } else { f.dir.join(&pb) }
+    };
+    let clip = map_tracks::resolve_importable_animation_path(&candidate)
+        .or_else(|| {
+            let ws = crate::workspace::resolve_workspace_path(s, raw_clip);
+            map_tracks::resolve_importable_animation_path(&ws).or_else(|| ws.is_file().then_some(ws))
+        })
+        .ok_or_else(|| bad(format!("clip not found or unsupported format: {raw_clip}")))?;
     let from = p.get("from_tick").or_else(|| p.get("from")).and_then(parse_tick).unwrap_or(Tick::ZERO).max(Tick::ZERO);
-    let fps = p.get("fps").and_then(crate::time::parse_frame_rate).unwrap_or(crate::time::FrameRate::FPS_30);
     let track = p["track"].as_str().unwrap_or(crate::cmd::film::assembly::CHARACTER_TRACK);
-    if s.project_mode.is_some() && !f.project.is_file() {
-        if let Some(folder) = f.project.parent() {
-            std::fs::create_dir_all(folder)?;
-        }
-        let sequence = json!({
-            "id": "file.newSequence",
-            "params": {
-                "name": f.name,
-                "width": p["width"].as_u64().unwrap_or(1920),
-                "height": p["height"].as_u64().unwrap_or(1080),
-                "fps": fps.as_f64(),
-            }
-        });
-        crate::cmd::film::assembly::run(&f.dir, &f.project, true, &[sequence])?;
-        link(s, &f.project)?;
-    }
-    let project = f.require()?.to_path_buf();
+    let project = f.ensure_on_disk(s)?.to_path_buf();
+    link(s, &project)?;
     let imported = crate::cmd::film::assembly::run(&f.dir, &project, false, &[json!({"id": "file.import", "params": {"paths": [clip]}})])?;
     let item = imported
         .first()
@@ -583,40 +794,67 @@ pub fn cmd_video_place_clip(s: &mut Session, p: &Value) -> Result<Value> {
     let place = json!({"id": "timeline.place", "params": {"item": item, "track": track, "seconds": from.seconds(), "insert": false, "audio": false}});
     let placed = crate::cmd::film::assembly::run(&f.dir, &project, false, &[place])?;
     let clips = placed.first().map(|r| crate::cmd::film::assembly::ids(r, "clips")).unwrap_or_default();
-    if clips.is_empty() {
-        return Err(bad(format!("FilmCraft did not place {} on {track}", clip.display())));
-    }
     Ok(json!({
         "ok": true,
         "timeline": project,
         "track": track,
+        "tool": map_tracks::detect_animation_tool(&clip),
         "from_tick": from.0,
         "clips": clips,
         "next": "video.preview to watch it",
     }))
 }
 
-/// Sync SRT captions in the project folder (`words.captions_sync`) using pure-Rust file I/O.
+/// Sync broadcast & subtitle captions (`SRT`, `WebVTT`, `TTML`, `SCC` CEA-608, `MCC` CEA-708)
+/// between `V3` and `C1` (`film/captions.*`) via [`craft_captions`].
 pub fn cmd_words_captions_sync(s: &mut Session, p: &Value) -> Result<Value> {
+    use craft_captions::{Cue, Document as CaptionDoc, Format as CapFmt, WriteOptions};
     let dir = crate::workshop::project_dir(s)?;
-    let srt_path = dir.join("film/captions.srt");
-    if let Some(parent) = srt_path.parent() {
+    let direction = p["direction"].as_str().unwrap_or("v3_to_c1");
+    let raw_fmt = p["format"].as_str().unwrap_or("srt").trim().to_ascii_lowercase();
+    let (cap_fmt, ext) = match raw_fmt.as_str() {
+        "vtt" | "webvtt" => (CapFmt::WebVtt, "vtt"),
+        "ttml" | "dfxp" => (CapFmt::Ttml, "ttml"),
+        "scc" | "cea608" | "cea-608" => (CapFmt::Scc, "scc"),
+        "mcc" | "cea708" | "cea-708" => (CapFmt::Mcc, "mcc"),
+        _ => (CapFmt::Srt, "srt"),
+    };
+    let cap_path = dir.join("film").join(format!("captions.{ext}"));
+    if let Some(parent) = cap_path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let direction = p["direction"].as_str().unwrap_or("v3_to_c1");
-    let format = p["format"].as_str().unwrap_or("srt");
-    if !srt_path.is_file() {
-        let src_srt = dir.join("transcript.srt");
-        if src_srt.is_file() {
-            std::fs::copy(&src_srt, &srt_path)?;
-        } else {
-            craft_atomic::atomic_write(&srt_path, b"1\n00:00:00,000 --> 00:00:02,000\n\n")?;
+
+    let mut cues: Vec<Cue> = Vec::new();
+    let existing_src = [dir.join("transcript.srt"), dir.join("film/captions.srt")].into_iter().find(|cand| cand.is_file());
+    if let Some(existing) = existing_src
+        && let Ok(bytes) = std::fs::read(&existing)
+    {
+        let det = craft_captions::detect(&bytes, existing.extension().and_then(|e| e.to_str())).unwrap_or(CapFmt::Srt);
+        if let Ok(parsed) = craft_captions::parse(&bytes, det) {
+            cues = parsed.cues;
         }
+    }
+
+    let mut cap_doc = CaptionDoc { cues, ..Default::default() };
+    if let Some(lang) = p["language"].as_str().filter(|l| !l.is_empty()) {
+        cap_doc.language = Some(lang.to_owned());
+    }
+    let warnings: Vec<String> = craft_captions::charset_warnings(&cap_doc, cap_fmt, WriteOptions::default()).into_iter().map(|w| format!("{w:?}")).collect();
+    let encoded = craft_captions::write(&cap_doc, cap_fmt, WriteOptions::default());
+    craft_atomic::atomic_write(&cap_path, &encoded)?;
+
+    if let Ok(f) = film(s)
+        && f.project.is_file()
+    {
+        execute(&f.project, "captions.import", json!({"path": cap_path}))?;
     }
     Ok(json!({
         "ok": true,
+        "engine": "craft-captions",
         "direction": direction,
-        "format": format,
-        "captions_file": srt_path,
+        "format": ext,
+        "cue_count": cap_doc.cues.len(),
+        "charset_warnings": warnings,
+        "captions_file": cap_path,
     }))
 }

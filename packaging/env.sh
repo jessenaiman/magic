@@ -4,11 +4,10 @@
 
 export APP_NAME="magic"
 export CLI_NAME="magic-cli"
-export MCP_NAME="magic-mcp"
 export DISPLAY_NAME="Magic Studio"
 export APP_ID="io.github.jessenaiman.magic"
 export VENDOR="Jesse Naiman"
-export SUMMARY="Song-driven storyboard, puppet animation, and kinetic lyric coordinator for the ArtCraft suite"
+export SUMMARY="Song-to-video storyboard, animation, kinetic lyrics, and FilmCraft studio"
 export HOMEPAGE="https://github.com/jessenaiman/magic"
 export LICENSE_ID="LicenseRef-Magic-Studio-NonResale"
 export MIME_TYPES="application/vnd.artcraft.magic+json;"

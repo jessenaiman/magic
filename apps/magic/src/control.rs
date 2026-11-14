@@ -1,13 +1,13 @@
 //! Bounded IPv4 loopback JSON-lines `--control` transport (`127.0.0.1:<port>`) and UI-thread
 //! control dispatch (`ui.*`, `engine.*`, `document.inspect`, `perf.stats`, `app.*`), aligned with
-//! upstream ArtCraft `--control` channels (`EffectCraft`, `FilmCraft`, `VectorCraft`, `DeckCraft`).
+//! upstream ArtCraft `--control` channels (`EffectCraft`, `FilmCraft`, `VectorCraft`, `DesignCraft`).
 //!
 //! Security & architecture properties:
 //! - Binds strictly to `127.0.0.1` (`Ipv4Addr::LOCALHOST`, never `::1` or `0.0.0.0`); port `0` picks a free OS port.
-//! - Enforces constant-time bearer check when `MAGIC_CONTROL_TOKEN` is set, bounds each request line
-//!   to `16 MiB` (`take(MAX_LINE + 1).read_until`), and closes immediately on non-JSON or oversized lines.
-//! - Keeps zero duplicate Craft render shims (`rpc.rs` removed): Magic controls its own coordinator UI
-//!   here while querying/saving open sibling Craft apps via `magic::craft_api` over their own `--control` ports.
+//! - Unauthenticated on `127.0.0.1` (`designcraft/docs/control-protocol.md`), bounds each request line
+//!   to `4 MiB` (`take(MAX_LINE + 1).read_until`), and closes immediately on non-JSON or oversized lines.
+//! - Direct single-binary control listener: Magic controls its own coordinator UI
+//!   here while querying/opening sibling Craft apps over their own documented `--control` / CLI interfaces.
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener};
@@ -20,14 +20,13 @@ use std::time::{Duration, Instant};
 
 use craft_keymap::CommandRef;
 use egui::{Event, ViewportCommand};
-use magic::time::TICKS_PER_SECOND;
+use magic_engine::time::TICKS_PER_SECOND;
 use magic_ui_egui::{AccentChoice, InterfaceStyle, ThemeMode, UiAction, ViewMode};
 use serde_json::{Value, json};
-use subtle::ConstantTimeEq;
 
 use crate::{MagicDesktopApp, capture, input, keymap, lifecycle, only_keys};
 
-const MAX_LINE: usize = 16 * 1024 * 1024;
+const MAX_LINE: usize = 4 * 1024 * 1024;
 const MAX_CONNECTIONS: usize = 16;
 pub type Dispatch = Arc<dyn Fn(&str, Value) -> Result<Value, String> + Send + Sync>;
 
@@ -61,8 +60,7 @@ pub fn parse_control_addr(spec: &str) -> Result<SocketAddr, String> {
     Ok(addr)
 }
 
-pub fn start(spec: &str, token: Option<&str>, dispatch: Dispatch) -> Result<SocketAddr, String> {
-    let expected_token = token.map(str::trim).filter(|t| !t.is_empty()).map(str::to_owned);
+pub fn start(spec: &str, dispatch: Dispatch) -> Result<SocketAddr, String> {
     let addr = parse_control_addr(spec)?;
     let listener = TcpListener::bind(addr).map_err(|e| format!("control bind {addr}: {e}"))?;
     let bound = listener.local_addr().map_err(|e| e.to_string())?;
@@ -81,13 +79,12 @@ pub fn start(spec: &str, token: Option<&str>, dispatch: Dispatch) -> Result<Sock
                     continue;
                 }
                 let active_worker = active.clone();
-                let expected = expected_token.clone();
                 let dispatch = dispatch.clone();
                 if std::thread::Builder::new()
                     .name("magic-control-client".into())
                     .spawn(move || {
                         if let Ok(reader) = stream.try_clone() {
-                            serve_lines(BufReader::new(reader), &mut stream, expected.as_deref(), |m, p| dispatch(m, p));
+                            serve_lines(BufReader::new(reader), &mut stream, |m, p| dispatch(m, p));
                         }
                         active_worker.fetch_sub(1, Ordering::SeqCst);
                     })
@@ -101,7 +98,8 @@ pub fn start(spec: &str, token: Option<&str>, dispatch: Dispatch) -> Result<Sock
     Ok(bound)
 }
 
-fn serve_lines<R: BufRead, W: Write>(mut reader: R, mut writer: W, expected_token: Option<&str>, dispatch: impl Fn(&str, Value) -> Result<Value, String>) {
+#[allow(clippy::cognitive_complexity)]
+fn serve_lines<R: BufRead, W: Write>(mut reader: R, mut writer: W, dispatch: impl Fn(&str, Value) -> Result<Value, String>) {
     loop {
         let mut line = Vec::new();
         let read = reader.by_ref().take((MAX_LINE + 1) as u64).read_until(b'\n', &mut line);
@@ -117,12 +115,6 @@ fn serve_lines<R: BufRead, W: Write>(mut reader: R, mut writer: W, expected_toke
             serde_json::from_slice::<Value>(&line).map_err(|_| "invalid JSON request; closing the connection").and_then(|v| {
                 if !v.is_object() || v["method"].as_str().is_none() {
                     return Err("request requires a string `method`; closing the connection");
-                }
-                if let Some(expected) = expected_token {
-                    let given = v["token"].as_str().unwrap_or_default();
-                    if !bool::from(given.as_bytes().ct_eq(expected.as_bytes())) {
-                        return Err("unauthorized control token; closing the connection");
-                    }
                 }
                 if v.get("params").is_some_and(|p| !p.is_object()) {
                     return Err("params must be an object; closing the connection");
@@ -249,31 +241,46 @@ impl MagicDesktopApp {
             }
             other => return Err(format!("unsupported synthetic input `{other}`")),
         };
+        if self.synthetic_events.len().saturating_add(events.len()) > input::MAX_PENDING_SYNTHETIC_EVENTS {
+            return Err(format!(
+                "{method}: pending synthetic event queue exceeds {} events ({} queued, {} requested)",
+                input::MAX_PENDING_SYNTHETIC_EVENTS,
+                self.synthetic_events.len(),
+                events.len()
+            ));
+        }
         self.synthetic_events.extend(events);
         Ok(summary)
     }
 
+    #[allow(clippy::cognitive_complexity)]
     fn dispatch_immediate_control(&mut self, ctx: &egui::Context, id: &str, params: Value) -> Result<Value, String> {
-        if self.control_input_only
-            && !id.starts_with("ui.")
-            && !matches!(id, "engine.commands" | "document.inspect" | "perf.stats" | "app.quit" | "app.restart" | "app.hide" | "window.snap")
-            && !magic::commands::is_read_only_command(id, &params)
-        {
-            return Err("session started with --control-input-only: mutating engine commands are disabled; drive controls via ui.*".into());
-        }
         match id {
-            "engine.execute" => {
-                let cmd = params["command"].as_str().or_else(|| params["id"].as_str()).ok_or("engine.execute requires `command`")?;
-                if matches!(cmd, "engine.execute" | "ui.menu.invoke") {
+            "engine.execute" | "command" => {
+                let cmd = params["command"].as_str().or_else(|| params["id"].as_str()).ok_or("engine.execute requires `command` or `id`")?;
+                if matches!(cmd, "engine.execute" | "command" | "ui.menu.invoke") {
                     return Err("nested dispatch is not supported".into());
                 }
                 let inner = params.get("params").cloned().unwrap_or_else(|| json!({}));
                 self.dispatch_immediate_control(ctx, cmd, inner)
             }
+            "app.open" => self.execute_engine(ctx, "file.open", params),
+            "app.save" => {
+                let has_path = params.get("path").and_then(Value::as_str).is_some_and(|s| !s.trim().is_empty());
+                self.execute_engine(ctx, if has_path { "file.saveAs" } else { "file.save" }, params)
+            }
+            "render.frame" => {
+                let sec = params.get("time").or_else(|| params.get("seconds")).and_then(Value::as_f64).unwrap_or(self.ui_state.audio_time_sec);
+                let raw = match params.get("stage").and_then(Value::as_str).unwrap_or("studio") {
+                    "storyboard" => self.execute_engine(ctx, "storyboard.render", json!({"page": params["page"].as_u64().unwrap_or(0)}))?,
+                    "lyrics" | "design" => self.execute_engine(ctx, "words.preview_frame", json!({"time": sec}))?,
+                    "motion" => self.execute_engine(ctx, "motion.preview_frame", json!({"time": sec}))?,
+                    "animation" | "animations" => self.execute_engine(ctx, "character.frame", json!({"time": sec}))?,
+                    _ => self.execute_engine(ctx, "video.frame", json!({"seconds": sec, "path": params.get("path")}))?,
+                };
+                capture::finalize_rendered_frame(raw, &params)
+            }
             "ui.menu.invoke" => {
-                if self.control_input_only {
-                    return Err("ui.menu.invoke is disabled under --control-input-only".into());
-                }
                 let cmd_id = params["id"].as_str().or_else(|| params["command"].as_str()).ok_or("ui.menu.invoke requires `id`")?;
                 let inner = params.get("params").cloned().unwrap_or_else(|| json!({}));
                 let cref = CommandRef::with_params(cmd_id, inner);
@@ -296,12 +303,21 @@ impl MagicDesktopApp {
                 only_keys(&params, id, &[])?;
                 let session_ref = &self.session;
                 Ok(magic_ui_egui::menus::serialize_menu_list(&self.ui_state, |cid| {
-                    magic::find_command(cid).is_some_and(|spec| (spec.enabled)(session_ref).is_ok())
+                    magic_engine::find_command(cid).is_some_and(|spec| (spec.enabled)(session_ref).is_ok())
                 }))
             }
             "ui.inspect" | "ui.state" => {
                 only_keys(&params, id, &[])?;
                 Ok(self.inspect_state(ctx))
+            }
+            "ui.docking" => {
+                only_keys(&params, id, &[])?;
+                Ok(magic_ui_egui::docking::inspect_docking(ctx, &self.ui_state))
+            }
+            dock_cmd if magic_ui_egui::docking::is_dock_command_id(dock_cmd) => {
+                let res = magic_ui_egui::docking::execute_dock_command(ctx, &mut self.ui_state, dock_cmd, &params)?;
+                ctx.request_repaint();
+                Ok(res)
             }
             "ui.drafts" => {
                 only_keys(&params, id, &[])?;
@@ -361,16 +377,16 @@ impl MagicDesktopApp {
                 let status = self.session.execute("workshop.status", json!({})).unwrap_or(Value::Null);
                 match target {
                     "project" => Ok(status),
-                    "storyboard" => self.session.execute("storyboard.check", json!({})).map_err(|e| e.to_string()),
-                    "timeline" => self.session.execute("video.status", json!({})).map_err(|e| e.to_string()),
+                    "storyboard" => self.session.execute("storyboard.status", json!({})).map_err(|e| e.to_string()),
+                    "timeline" => self.session.execute("video.timeline", json!({})).map_err(|e| e.to_string()),
                     _ => Ok(json!({
                         "ok": true,
                         "view": self.ui_state.effective_view().as_id(),
                         "project_path": self.session.project_path,
                         "dirty": crate::lifecycle::verify_clean(&self.session, &self.ui_state).is_err(),
                         "workshop": status,
-                        "storyboard": self.session.execute("storyboard.check", json!({})).ok(),
-                        "timeline": self.session.execute("video.status", json!({})).ok(),
+                        "storyboard": self.session.execute("storyboard.status", json!({})).ok(),
+                        "timeline": self.session.execute("video.timeline", json!({})).ok(),
                     })),
                 }
             }
@@ -407,10 +423,10 @@ impl MagicDesktopApp {
     fn active_stage_element_id(&self, override_stage: Option<&str>) -> &'static str {
         match override_stage.and_then(ViewMode::parse).unwrap_or_else(|| self.ui_state.effective_view()) {
             ViewMode::Storyboard => "storyboard-spread-canvas",
-            ViewMode::Animation => "animation-stage-canvas",
+            ViewMode::Animation => "motion-canvas",
             ViewMode::Design => "words-stage",
             ViewMode::Motion => "motion-canvas",
-            ViewMode::Studio => "film-preview",
+            ViewMode::Studio => "film-player",
             ViewMode::Project => "view-project",
             ViewMode::Home => "view-home",
         }
@@ -460,7 +476,7 @@ impl MagicDesktopApp {
         match self.ui_state.effective_view() {
             ViewMode::Design => "words-timeline",
             ViewMode::Motion => "motion-timeline",
-            ViewMode::Animation => "animation-theatre-dock",
+            ViewMode::Animation => "anim-theatre-timeline",
             _ => "studio-timeline",
         }
     }
@@ -532,26 +548,28 @@ impl MagicDesktopApp {
             "accent": self.ui_state.accent_choice.as_str(),
             "highContrast": self.ui_state.high_contrast,
             "uiScalePct": self.ui_state.ui_scale_pct,
-            "aiEnabled": self.ui_state.ai.enabled,
             "project": self.ui_state.project_path,
             "dirtyTracks": self.ui_state.dirty_tracks,
             "busy": self.ui_state.busy,
             "status": self.ui_state.toast_message,
             "input": {
-                "mode": if self.control_input_only { "controlInputOnly" } else { "normal" },
+                "mode": "normal",
                 "nativeWindowFocused": win_focused,
                 "effectiveWindowFocused": win_focused,
             },
+            "docking": magic_ui_egui::docking::inspect_docking(ctx, &self.ui_state),
             "panels": {
-                "studioWorkspace": self.ui_state.studio.inspector_tab,
-                "studioScopes": self.ui_state.studio.scopes_visible,
-                "animTab": self.ui_state.animation.inspector_tab,
-                "theatreTab": self.ui_state.animation.dock_tab,
-                "lyricsTab": self.ui_state.lyrics.inspector_tab,
-                "motionTab": self.ui_state.motion.inspector_tab,
+                "workspace": self.ui_state.docking.active_name,
+                "studioWorkspace": self.stage_host.stage(ViewMode::Studio).inspector_tab(),
+                "studioScopes": self.ui_state.docking.is_panel_visible(magic_ui_egui::PanelId::Scopes) || self.ui_state.timeline.scopes_visible,
+                "animTab": self.stage_host.stage(ViewMode::Animation).inspector_tab(),
+                "theatreTab": self.stage_host.stage(ViewMode::Animation).dock_tab(),
+                "lyricsTab": self.stage_host.stage(ViewMode::Design).inspector_tab(),
+                "motionTab": self.stage_host.stage(ViewMode::Motion).inspector_tab(),
                 "ribbonCollapsed": self.ui_state.ribbon_collapsed,
-                "assetsOpen": self.ui_state.assets_drawer_open,
-                "fidgetOpen": self.ui_state.fidget_open,
+                "assetsOpen": self.ui_state.docking.is_panel_visible(magic_ui_egui::PanelId::Assets),
+                "historyOpen": self.ui_state.docking.is_panel_visible(magic_ui_egui::PanelId::History),
+                "fontsOpen": self.ui_state.docking.is_panel_visible(magic_ui_egui::PanelId::Fonts),
             },
             "viewport": {
                 "width": screen.width(),
@@ -570,6 +588,8 @@ impl MagicDesktopApp {
                 "playing": self.ui_state.audio_playing,
                 "currentTime": self.ui_state.audio_time_sec,
                 "duration": self.ui_state.audio_duration_sec,
+                "rmsDbfs": self.ui_state.cache.song_waveform.get("rms_dbfs"),
+                "peakDbfs": self.ui_state.cache.song_waveform.get("peak_dbfs"),
             },
         })
     }
@@ -611,8 +631,10 @@ impl MagicDesktopApp {
                 "lyricsTab",
                 "motionTab",
                 "ribbonCollapsed",
+                "workspace",
                 "assetsOpen",
-                "fidgetOpen",
+                "historyOpen",
+                "fontsOpen",
             ],
         )?;
         self.apply_shell_ui_fields(params)?;
@@ -634,7 +656,7 @@ impl MagicDesktopApp {
         Ok(json!({
             "ok": true,
             "requestedView": self.ui_state.view.as_id(),
-            "studioWorkspace": self.ui_state.studio.inspector_tab,
+            "studioWorkspace": self.stage_host.stage(ViewMode::Studio).inspector_tab(),
             "theme": self.ui_state.theme_mode.as_str(),
             "interfaceStyle": self.ui_state.interface_style.as_str(),
             "accent": self.ui_state.accent_choice.as_str(),
@@ -661,34 +683,42 @@ impl MagicDesktopApp {
             self.ui_state.focused_panel = focused.to_owned();
         }
         if let Some(ws) = params.get("studioWorkspace").and_then(Value::as_str) {
-            if !matches!(ws, "matrix" | "edit" | "color" | "fx" | "audio" | "titles" | "export") {
-                return Err(format!("unknown studioWorkspace `{ws}`"));
-            }
-            self.ui_state.studio.inspector_tab = ws.to_owned();
+            let tab = match ws {
+                "matrix" => "matrix",
+                "export" | "finishing" => "export",
+                _ => return Err("studioWorkspace must be one of: matrix, export".to_owned()),
+            };
+            self.stage_host.stage_mut(ViewMode::Studio).set_inspector_tab(tab);
         }
         if let Some(sc) = params.get("studioScopes").and_then(Value::as_bool) {
-            self.ui_state.studio.scopes_visible = sc;
+            self.ui_state.timeline.scopes_visible = sc;
         }
         if let Some(at) = params.get("animTab").and_then(Value::as_str) {
-            self.ui_state.animation.inspector_tab = at.to_owned();
+            self.stage_host.stage_mut(ViewMode::Animation).set_inspector_tab(at);
         }
         if let Some(tt) = params.get("theatreTab").and_then(Value::as_str) {
-            self.ui_state.animation.dock_tab = tt.to_owned();
+            self.stage_host.stage_mut(ViewMode::Animation).set_dock_tab(tt);
         }
         if let Some(lt) = params.get("lyricsTab").and_then(Value::as_str) {
-            self.ui_state.lyrics.inspector_tab = lt.to_owned();
+            self.stage_host.stage_mut(ViewMode::Design).set_inspector_tab(lt);
         }
         if let Some(mt) = params.get("motionTab").and_then(Value::as_str) {
-            self.ui_state.motion.inspector_tab = mt.to_owned();
+            self.stage_host.stage_mut(ViewMode::Motion).set_inspector_tab(mt);
         }
         if let Some(rc) = params.get("ribbonCollapsed").and_then(Value::as_bool) {
             self.ui_state.ribbon_collapsed = rc;
         }
-        if let Some(ao) = params.get("assetsOpen").and_then(Value::as_bool) {
-            self.ui_state.assets_drawer_open = ao;
+        if let Some(ws_name) = params.get("workspace").and_then(Value::as_str) {
+            self.ui_state.docking.switch_workspace(ws_name)?;
         }
-        if let Some(fo) = params.get("fidgetOpen").and_then(Value::as_bool) {
-            self.ui_state.fidget_open = fo;
+        if let Some(ao) = params.get("assetsOpen").and_then(Value::as_bool) {
+            self.ui_state.docking.set_panel_visible(magic_ui_egui::PanelId::Assets, ao);
+        }
+        if let Some(ho) = params.get("historyOpen").and_then(Value::as_bool) {
+            self.ui_state.docking.set_panel_visible(magic_ui_egui::PanelId::History, ho);
+        }
+        if let Some(fmo) = params.get("fontsOpen").and_then(Value::as_bool) {
+            self.ui_state.docking.set_panel_visible(magic_ui_egui::PanelId::Fonts, fmo);
         }
         Ok(())
     }
@@ -704,15 +734,15 @@ impl MagicDesktopApp {
             return Err("No active song audio is linked in the current project".into());
         }
         if let Some(sec) = params.get("seconds").and_then(Value::as_f64) {
-            self.audio_player.seek(&mut self.ui_state, sec.max(0.0));
+            self.audio_player.seek(&mut self.ui_state, &mut self.stage_host, sec.max(0.0));
         }
         match action {
             "play" => {
                 let time = self.ui_state.audio_time_sec;
-                self.audio_player.start_at(&mut self.ui_state, time)
+                self.audio_player.start_at(&mut self.ui_state, &mut self.stage_host, time)
             }
             "stop" => self.audio_player.stop(&mut self.ui_state),
-            "toggle" => self.audio_player.toggle(&mut self.ui_state),
+            "toggle" => self.audio_player.toggle(&mut self.ui_state, &mut self.stage_host),
             _ => {}
         }
         Ok(json!({
@@ -721,6 +751,8 @@ impl MagicDesktopApp {
             "playing": self.ui_state.audio_playing,
             "currentTime": self.ui_state.audio_time_sec,
             "duration": self.ui_state.audio_duration_sec,
+            "rmsDbfs": self.ui_state.cache.song_waveform.get("rms_dbfs"),
+            "peakDbfs": self.ui_state.cache.song_waveform.get("peak_dbfs"),
         }))
     }
 
@@ -752,21 +784,5 @@ impl MagicDesktopApp {
         ctx.send_viewport_cmd(ViewportCommand::InnerSize(egui::vec2(width, height)));
         ctx.request_repaint();
         Ok(json!({"ok": true, "width": width, "height": height}))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::parse_control_addr;
-
-    #[test]
-    fn parses_strict_ipv4_loopback_and_ephemeral_zero() {
-        assert!(parse_control_addr("9875").is_ok());
-        assert!(parse_control_addr("0").is_ok());
-        assert!(parse_control_addr("localhost:9875").is_ok());
-        assert!(parse_control_addr("127.0.0.1:9875").is_ok());
-        assert!(parse_control_addr("[::1]:9875").is_err());
-        assert!(parse_control_addr("127.0.0.2:9875").is_err());
-        assert!(parse_control_addr("0.0.0.0:9875").is_err());
     }
 }

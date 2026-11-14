@@ -1,15 +1,13 @@
-//! Ergonomic `FilmCraft` × `EffectCraft` CLI subcommands (`T01`–`T42`) for `magic-cli`.
+//! Ergonomic `FilmCraft` × `EffectCraft` and `Studio` CLI subcommands for `magic-cli`.
 //!
-//! Covers `--control` discovery (`controls`), cross-app Dynamic Link & bridge management (`bridge`),
-//! bidirectional timeline interchange (`interchange`), two-way Lottie/dotLottie (`lottie`),
-//! clean-room After Effects `.aep` dry-run/commit (`import-aep`), FilmCraft Studio finishing
-//! (`finish`), pure-Rust codec export (`export`), V3 ↔ C1 broadcast captions (`captions`),
-//! and 15-column review markers (`markers`).
+//! Covers `--control` discovery (`controls`), Studio batch track mapping (`studio map-tracks`),
+//! `export`, V3 ↔ C1 broadcast captions (`captions`), `mesh`, `project`, and `recovery`.
+//! Storyboard commands (`storyboard.*`) dispatch directly through [`crate::resolve_shorthand`] with no wrapper.
 
-use clap::Args;
+use clap::{Args, Subcommand};
 use serde_json::{Value, json};
 
-use crate::{Target, emit, parse_params};
+use crate::{Target, emit};
 
 #[derive(Args)]
 pub struct ControlsArgs {
@@ -24,30 +22,96 @@ pub struct ControlsArgs {
 }
 
 #[derive(Args)]
-pub struct InterchangeArgs {
-    /// `export` or `import`
-    pub direction: String,
-    /// `otio`, `fcpxml`, `xml`, `edl`, `aaf`, `omf`, or `ale`
-    #[arg(long, default_value = "otio")]
-    pub format: String,
-    /// `film_to_effect` or `effect_to_film`
-    #[arg(long, default_value = "film_to_effect")]
-    pub target: String,
-    /// File path to write or read
-    #[arg(long)]
-    pub path: Option<String>,
-    /// Pre-render incompatible graphic clips during export
-    #[arg(long, default_value_t = true)]
-    pub prerender: bool,
+pub struct AnimationArgs {
+    #[command(subcommand)]
+    pub command: AnimationCmd,
+}
+
+#[derive(Subcommand)]
+pub enum AnimationCmd {
+    /// One-step render/reuse ProRes 4444 RGBA character clip and hot-swap onto FilmCraft V2 (`animation.promote`)
+    Promote {
+        /// Character ID (e.g. `fox`)
+        character: String,
+        /// Action / sprite / GLB clip name
+        #[arg(long, default_value = "idle")]
+        action: String,
+        /// Graphic Symbol loop mode (`loop`, `play_once`, or `single_frame`)
+        #[arg(long, default_value = "loop")]
+        loop_mode: String,
+        /// Starting frame index inside symbol clip
+        #[arg(long, default_value_t = 0)]
+        first_frame: u32,
+        /// Studio placement start timestamp in seconds
+        #[arg(long, default_value_t = 0.0)]
+        start_sec: f64,
+        /// Duration in seconds
+        #[arg(long, default_value_t = 3.0)]
+        duration: f64,
+        /// Optional explicit `.ecproj` path override
+        #[arg(long)]
+        ecproj: Option<String>,
+        /// Force fresh render even if cached `.mov` is newer than `.ecproj`
+        #[arg(long)]
+        force: bool,
+    },
+    /// List registered AssetHost & AnimationHost backends and validated extension plugins (`animation.hosts`)
+    Hosts,
+    /// Resolve a Studio playhead timestamp back to character clip, `.ecproj`, and local frame (`animation.locate_from_studio`)
+    Locate {
+        /// Studio playhead timestamp in seconds
+        seconds: f64,
+    },
+}
+
+pub fn build_animation_call(cmd: AnimationCmd) -> (&'static str, Value) {
+    match cmd {
+        AnimationCmd::Promote { character, action, loop_mode, first_frame, start_sec, duration, ecproj, force } => (
+            "animation.promote",
+            json!({
+                "character": character,
+                "action": action,
+                "loop_mode": loop_mode,
+                "first_frame": first_frame,
+                "start_sec": start_sec,
+                "duration": duration,
+                "ecproj": ecproj,
+                "force": force,
+            }),
+        ),
+        AnimationCmd::Hosts => ("animation.hosts", json!({})),
+        AnimationCmd::Locate { seconds } => ("animation.locate_from_studio", json!({"seconds": seconds})),
+    }
+}
+
+pub fn run_animation(target: &mut Target, args: AnimationArgs) -> Result<(), String> {
+    let (id, payload) = build_animation_call(args.command);
+    target.run(id, payload)
 }
 
 #[derive(Args)]
-pub struct FinishArgs {
-    /// `video.finish` op (`workspace`, `mark_in`, `mark_out`, `insert`, `overwrite`, `lift`, `extract`, `trim_mode`, `lumetri_*`, `audio_*`, `jobs_list`)
-    pub op: String,
+pub struct StudioArgs {
+    #[command(subcommand)]
+    pub command: StudioCmd,
+}
+
+#[derive(Subcommand)]
+pub enum StudioCmd {
+    /// Batch-map FilmCraft tracks into reusable Lyrics (`effects/lyrics.ecproj`) and Motion (`effects/motion.ecproj`) groups
+    MapTracks(StudioMapTracksArgs),
+}
+
+#[derive(Args)]
+pub struct StudioMapTracksArgs {
+    /// JSON array (or `{"mappings":[...]}` object) passed to `video.map_tracks`
     #[arg(long)]
-    pub params: Option<String>,
-    pub arguments: Vec<String>,
+    pub mappings: Option<String>,
+    /// Repeatable `<lyrics|motion>:<V3,V5>[:<group>]` shorthand (e.g. `--map lyrics:V3,V5 --map motion:V4`)
+    #[arg(long = "map", value_name = "TARGET:TRACKS[:GROUP]")]
+    pub map_specs: Vec<String>,
+    /// Default group name when `--map` omits `:<group>`
+    #[arg(long)]
+    pub group: Option<String>,
 }
 
 #[derive(Args)]
@@ -96,31 +160,15 @@ pub struct CaptionsArgs {
 }
 
 #[derive(Args)]
-pub struct ConvertArgs {
-    /// Converter mode: `hyperframes`, `remotion`, `custom`, or `auto`
-    #[arg(default_value = "auto")]
-    pub kind: String,
-    /// Path to legacy project folder to archive & convert
-    pub source: String,
-    /// Target `magic/` workspace root (`magic/projects`, `magic/assets`, `magic/animations`)
-    #[arg(long)]
-    pub magic_root: Option<String>,
-    /// Explicit `.magic` project title
-    #[arg(long)]
-    pub name: Option<String>,
-    /// Overwrite existing converted project if present
-    #[arg(long)]
-    pub overwrite: bool,
-}
-
-#[derive(Args)]
-pub struct MarkersArgs {
-    /// `list`, `add`, `edit`, `export-csv`, `palette`, `seed`, `delete`, or `clear`
-    #[arg(default_value = "list")]
+pub struct MeshCliArgs {
+    /// `inspect` or `convert`
+    #[arg(default_value = "inspect")]
     pub action: String,
+    /// Source `.glb`, `.gltf`, `.obj`, `.fbx`, `.stl`, `.ply`, or `.3mf` file
+    pub path: String,
+    /// Output `.glb`, `.obj`, or `.stl` path (for `convert`)
     #[arg(long)]
-    pub params: Option<String>,
-    pub arguments: Vec<String>,
+    pub output: Option<String>,
 }
 
 pub const CONTROL_METHODS: &[(&str, &str)] = &[
@@ -128,6 +176,8 @@ pub const CONTROL_METHODS: &[(&str, &str)] = &[
     ("engine.commands", "List coordinator commands with live enabled status"),
     ("document.inspect", "Inspect open .magic project snapshot"),
     ("ui.inspect", "Inspect active view, panels, focus, and playback state"),
+    ("ui.docking", "Inspect craft-ui panel docking Layout, focused panel, hidden panels, and hitRects"),
+    ("ui.dock", "Execute a craft-ui DockCommand operation (open, close, activate, float, move, resizeSplit)"),
     ("ui.elements", "List visible egui widget automation IDs, labels, and logical rects"),
     ("ui.set", "Switch view, studioWorkspace, animTab, theatreTab, lyricsTab, motionTab, theme, style, or widget value"),
     ("ui.viewer.locate", "Map stage coordinates (x, y) to logical window coordinates"),
@@ -157,16 +207,66 @@ pub const CONTROL_METHODS: &[(&str, &str)] = &[
     ("app.quit", "Guarded window close (or force=true)"),
 ];
 
+#[allow(clippy::cognitive_complexity)]
+pub fn parse_studio_mappings(args: &StudioMapTracksArgs) -> Result<Value, String> {
+    let mut list: Vec<Value> = Vec::new();
+    if let Some(raw) = args.mappings.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        let parsed: Value = serde_json::from_str(raw).map_err(|e| format!("--mappings: {e}"))?;
+        if let Some(arr) = parsed.as_array() {
+            list.extend(arr.iter().cloned());
+        } else if let Some(arr) = parsed.get("mappings").and_then(Value::as_array) {
+            list.extend(arr.iter().cloned());
+        } else if parsed.is_object() {
+            list.push(parsed);
+        } else {
+            return Err("--mappings must be a JSON array or `{\"mappings\":[...]}` object".into());
+        }
+    }
+    for spec in &args.map_specs {
+        let parts: Vec<&str> = spec.splitn(3, ':').collect();
+        if parts.len() < 2 {
+            return Err(format!("invalid --map `{spec}` (expected `<lyrics|motion>:<V3,V5>[:<group>]`)"));
+        }
+        let target = parts[0].trim();
+        let tracks: Vec<String> = parts[1].split(',').map(str::trim).filter(|s| !s.is_empty()).map(str::to_owned).collect();
+        if target.is_empty() || tracks.is_empty() {
+            return Err(format!("invalid --map `{spec}` (provide non-empty target and comma-separated tracks)"));
+        }
+        let mut entry = json!({
+            "target": target,
+            "tracks": tracks,
+        });
+        let grp = parts.get(2).map(|g| g.trim()).filter(|g| !g.is_empty()).map(str::to_owned).or_else(|| args.group.clone());
+        if let Some(g) = grp {
+            entry["group"] = json!(g);
+        }
+        list.push(entry);
+    }
+    if list.is_empty() {
+        return Err("provide `--mappings '<json>'` or repeatable `--map <lyrics|motion>:<V3,V5>[:<group>]`".into());
+    }
+    Ok(json!({ "mappings": list }))
+}
+
+pub fn run_studio(target: &mut Target, args: StudioArgs) -> Result<(), String> {
+    match args.command {
+        StudioCmd::MapTracks(map_args) => {
+            let payload = parse_studio_mappings(&map_args)?;
+            target.run("video.map_tracks", payload)
+        }
+    }
+}
+
 pub fn run_controls(target: &mut Target, args: ControlsArgs) -> Result<(), String> {
     let q = args.filter.unwrap_or_default().to_ascii_lowercase();
     let stage_q = args.stage.unwrap_or_default().to_ascii_lowercase();
-    let cmds: Vec<Value> = magic::command_specs()
+    let cmds: Vec<Value> = magic_engine::command_specs()
         .iter()
         .filter(|c| {
             (q.is_empty() || c.id.to_ascii_lowercase().contains(&q) || c.label.to_ascii_lowercase().contains(&q))
                 && (stage_q.is_empty() || c.id.to_ascii_lowercase().starts_with(&stage_q) || c.menu.iter().any(|m| m.to_ascii_lowercase().contains(&stage_q)))
         })
-        .map(magic::commands::CommandSpec::describe)
+        .map(magic_engine::commands::CommandSpec::describe)
         .collect();
     let methods: Vec<Value> = CONTROL_METHODS
         .iter()
@@ -183,26 +283,6 @@ pub fn run_controls(target: &mut Target, args: ControlsArgs) -> Result<(), Strin
         "live_elements": live_elements,
     }));
     Ok(())
-}
-
-pub fn run_interchange(target: &mut Target, args: InterchangeArgs) -> Result<(), String> {
-    let direction = if args.direction == "import" || args.target == "effect_to_film" { "effect_to_film" } else { "film_to_effect" };
-    target.run(
-        "video.markers",
-        json!({
-            "action": "interchange",
-            "direction": direction,
-            "format": args.format,
-            "path": args.path,
-            "pre_render_incompatible": args.prerender,
-        }),
-    )
-}
-
-pub fn run_finish(target: &mut Target, args: FinishArgs) -> Result<(), String> {
-    let mut p = parse_params(&args.arguments, args.params.as_deref())?;
-    p["op"] = json!(args.op);
-    target.run("video.finish", p)
 }
 
 pub fn run_export(target: &mut Target, args: ExportArgs) -> Result<(), String> {
@@ -246,24 +326,72 @@ pub fn run_captions(target: &mut Target, args: CaptionsArgs) -> Result<(), Strin
     )
 }
 
-pub fn run_markers(target: &mut Target, args: MarkersArgs) -> Result<(), String> {
-    let mut p = parse_params(&args.arguments, args.params.as_deref())?;
-    p["action"] = json!(args.action.replace('-', "_"));
-    target.run("video.markers", p)
+pub fn run_mesh_cli(target: &mut Target, args: MeshCliArgs) -> Result<(), String> {
+    match args.action.as_str() {
+        "convert" => target.run("mesh.convert", json!({"path": args.path, "output": args.output})),
+        _ => target.run("mesh.inspect", json!({"path": args.path})),
+    }
 }
 
-pub fn run_convert(target: &mut Target, args: ConvertArgs) -> Result<(), String> {
-    let res = target.call_unless_dry(
-        "project.convert",
-        json!({
-            "kind": args.kind,
-            "source": args.source,
-            "magic_root": args.magic_root,
-            "name": args.name,
-            "overwrite": args.overwrite,
-            "emit_terminal": true,
-        }),
-    )?;
-    emit(&res);
-    target.save_project()
+#[derive(Args)]
+pub struct ProjectArgs {
+    #[command(subcommand)]
+    pub command: Option<ProjectCmd>,
+}
+
+#[derive(Subcommand)]
+pub enum ProjectCmd {
+    /// Show open project dirty, revision, and undo state (`project.status`)
+    Status,
+}
+
+pub fn run_project(target: &mut Target, args: ProjectArgs) -> Result<(), String> {
+    match args.command.unwrap_or(ProjectCmd::Status) {
+        ProjectCmd::Status => target.run("project.status", json!({})),
+    }
+}
+
+#[derive(Args)]
+pub struct RecoveryArgs {
+    #[command(subcommand)]
+    pub command: Option<RecoveryCmd>,
+}
+
+#[derive(Subcommand)]
+pub enum RecoveryCmd {
+    /// List orphaned crash recovery snapshots (`recovery.list`)
+    List,
+    /// Restore a crash recovery snapshot (`recovery.restore`)
+    Restore {
+        /// Optional specific recovery run ID to restore (restores newest when omitted)
+        run_id: Option<String>,
+    },
+    /// Discard one or all crash recovery snapshots (`recovery.discard`)
+    Discard {
+        /// Optional specific recovery run ID to discard
+        run_id: Option<String>,
+        /// Discard all orphaned recovery snapshots
+        #[arg(long)]
+        all: bool,
+    },
+}
+
+pub fn run_recovery(target: &mut Target, args: RecoveryArgs) -> Result<(), String> {
+    match args.command.unwrap_or(RecoveryCmd::List) {
+        RecoveryCmd::List => target.run("recovery.list", json!({})),
+        RecoveryCmd::Restore { run_id } => {
+            let mut params = json!({});
+            if let Some(id) = run_id {
+                params["run_id"] = json!(id);
+            }
+            target.run("recovery.restore", params)
+        }
+        RecoveryCmd::Discard { run_id, all } => {
+            let mut params = json!({"all": all});
+            if let Some(id) = run_id {
+                params["run_id"] = json!(id);
+            }
+            target.run("recovery.discard", params)
+        }
+    }
 }

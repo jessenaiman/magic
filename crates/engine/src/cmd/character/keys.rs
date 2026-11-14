@@ -23,14 +23,9 @@ fn transform_paths(tree: &Value) -> Vec<String> {
     leaves.filter_map(|leaf| leaf["path"].as_str().map(str::to_string)).collect()
 }
 
-/// The comp-time window of `action`: `None` when the rig has no keys for it.
-fn action_window(view: &View, action: Option<&str>, duration: f64) -> Result<Option<(f64, f64)>> {
-    let Some(name) = action else {
-        return Ok(Some((0.0, duration)));
-    };
-    let parts = view.parts()?;
-    let range = &parts["actions"][name];
-    Ok(range["start"].as_f64().zip(range["end"].as_f64()).filter(|(start, end)| end > start))
+/// The comp-time window of `action`: whole comp duration in Step 1B (wired to `Project` in Step 2).
+fn action_window(_view: &View, _action: Option<&str>, duration: f64) -> Result<Option<(f64, f64)>> {
+    Ok(Some((0.0, duration)))
 }
 
 /// Run `steps` after opening `comp`, and return their results without the open's.

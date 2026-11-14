@@ -3,6 +3,7 @@ use super::invalid;
 use crate::Result;
 use serde_json::{Value, json};
 
+#[allow(clippy::cognitive_complexity)]
 pub(crate) fn curve(spec: &Value) -> Result<(Value, Value)> {
     let property = spec["property"].as_str().ok_or_else(|| invalid("Choose a native transform property"))?;
     let columns: &[usize] = match property {

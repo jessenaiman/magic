@@ -1,114 +1,67 @@
-//! The one execution path (`docs/architecture.md` › Engine shape): every command, from a view, the
-//! CLI, MCP or the control channel, runs here. A command runs inside the panic guard; a failed or
-//! panicking command leaves the open documents as they were, and a journaled success becomes one
-//! undo step (`session/undo.rs`).
+use std::path::PathBuf;
+use std::sync::atomic::Ordering;
 
 use serde_json::Value;
 
-use crate::{CommandSpec, EngineError, Result, Session, activity, check_param_types, commands, guard};
+use crate::cmd::project::format::Project;
+use crate::commands::{CommandSpec, find};
+use crate::history::Step;
+use crate::{EngineError, Result, Session, check_param_types};
 
-fn announce_dispatch(s: &Session, id: &str, params: &Value) {
-    activity::command(s.project_path.as_deref(), id, params, "dispatch_running", None);
+fn is_lifecycle_command(id: &str) -> bool {
+    matches!(id, "project.new" | "project.open" | "project.close" | "file.new" | "file.open" | "file.close" | "recovery.restore")
 }
 
-/// The stage a finished command is recorded under.
-fn outcome_stage(value: &Value) -> &'static str {
-    if value["ok"] == false {
-        "engine_error"
-    } else if value["intake_ready"] == false {
-        "engine_needs_work"
-    } else {
-        "engine_success"
-    }
-}
-
-fn announce_result(s: &Session, id: &str, params: &Value, result: &Result<Value>) {
-    match result {
-        Ok(v) => activity::command(s.project_path.as_deref(), id, params, outcome_stage(v), v["error"].as_str().or_else(|| v["reason"].as_str())),
-        Err(e) => activity::error(s.project_path.as_deref(), id, e),
-    }
-}
-
-/// An edit is a successful journaled command that left the project file unwritten.
-fn note_edit(s: &mut Session, project_edit: bool, result: &Result<Value>, saves_before: u64, project_before: Option<&std::path::PathBuf>) {
-    if !(project_edit && result.as_ref().is_ok_and(|v| v["ok"] != false)) {
-        return;
-    }
-    if s.project_saves.load(std::sync::atomic::Ordering::Relaxed) != saves_before || s.project_path.as_ref() != project_before {
-        s.edits_since_save = 0;
-    } else {
-        s.edits_since_save += 1;
-    }
-}
-
-/// Keep the open project file in step with its asset connections.
-fn sync_project_file(s: &mut Session, spec: &CommandSpec, id: &str, assets_before: Option<&Value>) -> Result<()> {
-    if !spec.journal || matches!(id, "project.open" | "project.new" | "project.close" | "file.open" | "file.new" | "file.close") || s.project_path.is_none() {
-        return Ok(());
-    }
-    if serde_json::to_value(&s.project_assets).ok().as_ref() != assets_before {
-        commands::write_project_file(s)?;
-    }
-    Ok(())
-}
-
-fn execute_command(s: &mut Session, id: &str, params: Value) -> Result<Value> {
-    let _context = activity::enter(id, &params);
-    let project_edit = commands::find(id).is_some_and(|c| c.journal);
-    let record = s.record_user_state && commands::find(id).is_none_or(|c| c.journal);
-    if record {
-        announce_dispatch(s, id, &params);
-    }
-    let started = std::time::Instant::now();
-    let (saves_before, project_before) = (s.project_saves.load(std::sync::atomic::Ordering::Relaxed), s.project_path.clone());
-    let result = execute_inner(s, id, params.clone());
-    note_edit(s, project_edit, &result, saves_before, project_before.as_ref());
-    if record && let Ok(value) = &result {
-        activity::result(s.project_path.as_deref(), id, value, started.elapsed().as_millis());
-    }
-    if record || (s.record_user_state && !result.as_ref().is_ok_and(|v| v["ok"] != false)) {
-        announce_result(s, id, &params, &result);
-    }
-    result
-}
-
-fn execute_inner(s: &mut Session, id: &str, params: Value) -> Result<Value> {
-    let spec = commands::find(id).ok_or_else(|| EngineError::UnknownCommand(id.to_string()))?;
-    check_param_types(spec.params, &params)?;
-    if let Some(roots) = &s.automation_roots {
-        roots.check_command(s, id, &params)?;
-    }
-    (spec.enabled)(s).map_err(|e| EngineError::CommandFailed(id.to_string(), e))?;
-    let assets_before = serde_json::to_value(&s.project_assets).ok();
-    let (docs_before, project_before) = (s.docs.clone(), s.project_path.clone());
-    s.step_base.clear();
-    let run = guard::catch_panic(|| (spec.run)(s, &params))
-        .map_err(|panic| EngineError::CommandFailed(id.to_string(), format!("panicked: {panic}")))
-        .and_then(|result| result);
-    let out = match run {
-        Ok(out) => out,
-        Err(error) => {
-            // A failed or panicking command leaves the open documents as they were.
-            s.docs = docs_before;
-            s.step_base.clear();
-            return Err(error);
+fn handle_post_execute(
+    s: &mut Session,
+    id: &str,
+    spec: &CommandSpec,
+    project_before: Option<PathBuf>,
+    snapshot_before: Option<(Project, u64)>,
+    saves_before: u64,
+    out: &Value,
+) {
+    if is_lifecycle_command(id) || s.project_path != project_before {
+        s.history.clear();
+        if matches!(id, "project.close" | "file.close") {
+            s.clear_active_recovery();
+        } else if id == "recovery.restore" {
+            crate::recovery::sync_dirty(s);
         }
-    };
-    if s.project_path != project_before {
-        s.close_documents();
-    } else if spec.journal && !matches!(id, "edit.undo" | "edit.redo") {
-        s.record_step(id);
+    } else if s.project_saves.load(Ordering::Relaxed) > saves_before {
+        s.mark_saved();
+        s.clear_active_recovery();
+    } else if let Some((prev_project, prev_rev)) = snapshot_before
+        && s.project.as_ref().is_some_and(|curr| *curr != prev_project)
+    {
+        s.mark_dirty();
+        s.history.push(Step { label: spec.label.into(), project: prev_project, revision: prev_rev });
+        crate::recovery::sync_dirty(s);
     }
-    sync_project_file(s, spec, id, assets_before.as_ref())?;
-    if spec.journal {
-        s.record(out.clone());
-    }
-    Ok(out)
+    s.record(out.clone());
 }
 
 impl Session {
-    /// Execute one command by id with JSON parameters, returning JSON.
     pub fn execute(&mut self, id: &str, params: Value) -> Result<Value> {
-        execute_command(self, id, params)
+        let Some(spec) = find(id) else {
+            return Err(EngineError::UnknownCommand(id.to_owned()));
+        };
+        if let Err(reason) = (spec.enabled)(self) {
+            return Err(EngineError::CommandFailed(id.to_owned(), reason));
+        }
+        check_param_types(spec.params, &params)?;
+        let project_before = self.project_path.clone();
+        let saves_before = self.project_saves.load(Ordering::Relaxed);
+        let snapshot_before = if spec.journal && !matches!(id, "edit.undo" | "edit.redo" | "prefs.set") && !is_lifecycle_command(id) {
+            self.project.clone().map(|p| (p, self.project_revision))
+        } else {
+            None
+        };
+        let mut out = (spec.run)(self, &params)?;
+        if out.is_object() {
+            out["ok"] = Value::Bool(true);
+        }
+        handle_post_execute(self, id, spec, project_before, snapshot_before, saves_before, &out);
+        Ok(out)
     }
 }

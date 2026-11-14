@@ -3,7 +3,7 @@ use crate::{EngineError, Result, Session};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct SongMetadata {
     #[serde(skip_serializing_if = "String::is_empty")]
@@ -20,10 +20,11 @@ pub struct SongMetadata {
     pub extra: serde_json::Map<String, Value>,
 }
 
-/// Update only supplied fields and persist through the ordinary project save/lease path.
+/// Update only supplied fields on the open project in memory; explicit `file.save` persists to `.magic`.
 pub fn save(s: &mut Session, p: &Value) -> Result<Value> {
     let project = s.project_path.clone().ok_or_else(|| EngineError::InvalidParams("Open a song project first".into()))?;
-    let mut next = serde_json::to_value(&s.song).map_err(|e| EngineError::InvalidParams(e.to_string()))?;
+    let current = &s.require_project()?.song;
+    let mut next = serde_json::to_value(current).map_err(|e| EngineError::InvalidParams(e.to_string()))?;
     for key in ["title", "album", "lyrics", "notes"] {
         if let Some(value) = p.get(key) {
             let text = value.as_str().ok_or_else(|| EngineError::InvalidParams(format!("{key} must be text")))?;
@@ -37,10 +38,6 @@ pub fn save(s: &mut Session, p: &Value) -> Result<Value> {
         next["track_number"] = value.clone();
     }
     let next: SongMetadata = serde_json::from_value(next).map_err(|e| EngineError::InvalidParams(e.to_string()))?;
-    let previous = std::mem::replace(&mut s.song, next);
-    if let Err(error) = crate::project::cmd_project_save(s, &json!({"expected_project":project})) {
-        s.song = previous;
-        return Err(error);
-    }
-    Ok(json!({"ok":true,"project":project,"metadata":s.song}))
+    s.require_project_mut()?.song = next.clone();
+    Ok(json!({"ok": true, "project": project, "metadata": next}))
 }

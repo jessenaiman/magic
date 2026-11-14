@@ -24,55 +24,9 @@ use crate::{EngineError, Result};
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
-pub struct AiPrefs {
-    pub enabled: bool,
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct FidgetPrefs {
-    pub enabled: bool,
-    pub seamless: bool,
-    pub connection: Option<String>,
-    pub model: Option<String>,
-}
-
-impl Default for FidgetPrefs {
-    fn default() -> Self {
-        Self { enabled: true, seamless: false, connection: None, model: None }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct ScribblesPrefs {
-    pub enabled: bool,
-    pub connection: Option<String>,
-    pub model: Option<String>,
-    pub endpoint: Option<String>,
-    pub template: Option<String>,
-}
-
-impl Default for ScribblesPrefs {
-    fn default() -> Self {
-        Self { enabled: true, connection: None, model: None, endpoint: None, template: Some("new".into()) }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
 pub struct ProjectPrefs {
     pub root: Option<String>,
-    pub characters_root: Option<String>,
     pub storyboard_template: String,
-    pub storyboard_format: String,
-    pub storyboard_locked: bool,
-}
-
-impl Default for ProjectPrefs {
-    fn default() -> Self {
-        Self { root: None, characters_root: None, storyboard_template: "magic".into(), storyboard_format: "pdfcraft".into(), storyboard_locked: true }
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -80,12 +34,11 @@ impl Default for ProjectPrefs {
 pub struct LyricsPrefs {
     pub default_size: i64,
     pub outline: bool,
-    pub font_dirs: Option<String>,
 }
 
 impl Default for LyricsPrefs {
     fn default() -> Self {
-        Self { default_size: 72, outline: true, font_dirs: None }
+        Self { default_size: 72, outline: true }
     }
 }
 
@@ -156,9 +109,6 @@ impl Default for AutosavePrefs {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct MagicPrefs {
-    pub ai: AiPrefs,
-    pub fidget: FidgetPrefs,
-    pub scribbles: ScribblesPrefs,
     pub project: ProjectPrefs,
     pub lyrics: LyricsPrefs,
     pub animation: AnimationPrefs,
@@ -226,29 +176,15 @@ fn opt_str_from_value(value: &Value) -> Option<String> {
 impl MagicPrefs {
     pub fn get_value(&self, key: &str) -> Value {
         match key {
-            "ai.enabled" => json!(self.ai.enabled),
-            "fidget.enabled" => json!(self.fidget.enabled),
-            "fidget.seamless" => json!(self.fidget.seamless),
-            "fidget.connection" => opt_str_json(&self.fidget.connection),
-            "fidget.model" => opt_str_json(&self.fidget.model),
-            "scribbles.enabled" => json!(self.scribbles.enabled),
-            "scribbles.connection" => opt_str_json(&self.scribbles.connection),
-            "scribbles.model" => opt_str_json(&self.scribbles.model),
-            "scribbles.endpoint" => opt_str_json(&self.scribbles.endpoint),
-            "scribbles.template" => opt_str_json(&self.scribbles.template),
             "appearance.interface_style" => json!(self.appearance.interface_style),
             "appearance.theme" => json!(self.appearance.theme),
             "appearance.accessible_contrast" => json!(self.appearance.accessible_contrast),
             "appearance.accent" => json!(self.appearance.accent),
             "appearance.ui_scale" => json!(self.appearance.ui_scale),
             "project.root" => opt_str_json(&self.project.root),
-            "project.characters_root" => opt_str_json(&self.project.characters_root),
             "project.storyboard_template" => json!(self.project.storyboard_template),
-            "project.storyboard_format" => json!(self.project.storyboard_format),
-            "project.storyboard_locked" => json!(self.project.storyboard_locked),
             "lyrics.default_size" => json!(self.lyrics.default_size),
             "lyrics.outline" => json!(self.lyrics.outline),
-            "lyrics.font_dirs" => opt_str_json(&self.lyrics.font_dirs),
             "animation.loop_preview" => json!(self.animation.loop_preview),
             "animation.duration" => json!(self.animation.duration),
             "general.at_startup" => json!(self.general.at_startup),
@@ -265,29 +201,18 @@ impl MagicPrefs {
     pub fn set_value(&mut self, key: &str, value: &Value) -> Result<()> {
         validate_schema_value(key, value)?;
         match key {
-            "ai.enabled" => self.ai.enabled = value.as_bool().unwrap_or(false),
-            "fidget.enabled" => self.fidget.enabled = value.as_bool().unwrap_or(true),
-            "fidget.seamless" => self.fidget.seamless = value.as_bool().unwrap_or(false),
-            "fidget.connection" => self.fidget.connection = opt_str_from_value(value),
-            "fidget.model" => self.fidget.model = opt_str_from_value(value),
-            "scribbles.enabled" => self.scribbles.enabled = value.as_bool().unwrap_or(true),
-            "scribbles.connection" => self.scribbles.connection = opt_str_from_value(value),
-            "scribbles.model" => self.scribbles.model = opt_str_from_value(value),
-            "scribbles.endpoint" => self.scribbles.endpoint = opt_str_from_value(value),
-            "scribbles.template" => self.scribbles.template = opt_str_from_value(value),
             "appearance.interface_style" => self.appearance.interface_style = value.as_str().unwrap_or("aurora").to_owned(),
             "appearance.theme" => self.appearance.theme = value.as_str().unwrap_or("dark").to_owned(),
             "appearance.accessible_contrast" => self.appearance.accessible_contrast = value.as_bool().unwrap_or(false),
             "appearance.accent" => self.appearance.accent = value.as_str().unwrap_or("teal").to_owned(),
             "appearance.ui_scale" => self.appearance.ui_scale = value.as_f64().unwrap_or(1.0),
             "project.root" => self.project.root = opt_str_from_value(value),
-            "project.characters_root" => self.project.characters_root = opt_str_from_value(value),
-            "project.storyboard_template" => self.project.storyboard_template = value.as_str().unwrap_or("magic").to_owned(),
-            "project.storyboard_format" => self.project.storyboard_format = value.as_str().unwrap_or("pdfcraft").to_owned(),
-            "project.storyboard_locked" => self.project.storyboard_locked = value.as_bool().unwrap_or(true),
+            "project.storyboard_template" => {
+                let raw = value.as_str().map(str::trim).unwrap_or_default();
+                self.project.storyboard_template = if raw == "magic" { String::new() } else { raw.to_owned() };
+            }
             "lyrics.default_size" => self.lyrics.default_size = value.as_i64().unwrap_or(72),
             "lyrics.outline" => self.lyrics.outline = value.as_bool().unwrap_or(true),
-            "lyrics.font_dirs" => self.lyrics.font_dirs = opt_str_from_value(value),
             "animation.loop_preview" => self.animation.loop_preview = value.as_bool().unwrap_or(true),
             "animation.duration" => self.animation.duration = value.as_f64().unwrap_or(4.0),
             "general.at_startup" => self.general.at_startup = value.as_str().unwrap_or("showHome").to_owned(),
@@ -349,8 +274,9 @@ impl SessionSettings {
     }
 
     /// Platform/portable persistent store (`Location::Auto`) opened once per user session.
+    /// Uses `Location::Memory` when `MAGIC_NO_PREFS` is truthy or `MAGIC_CONFIG_DIR=""`.
     pub fn auto() -> Self {
-        Self::open_at(Location::Auto)
+        if no_prefs_env() { Self::open_at(Location::Memory) } else { Self::open_at(Location::Auto) }
     }
 
     pub fn prefs(&self) -> MagicPrefs {
@@ -464,7 +390,19 @@ impl SessionSettings {
     }
 }
 
+pub fn no_prefs_env() -> bool {
+    std::env::var("MAGIC_NO_PREFS").ok().is_some_and(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"))
+}
+
+pub fn resolved_config_dir() -> Option<PathBuf> {
+    if no_prefs_env() {
+        return None;
+    }
+    craft_settings::paths::resolve(MagicPrefs::APP_ID, &craft_settings::Portable::DEFAULT, &Location::Auto, &craft_settings::paths::Probe::default()).dir
+}
+
 /// Process-level compatibility accessor for stateless callers outside a [`crate::Session`].
 pub fn open_store() -> SettingsStore<MagicPrefs> {
-    SettingsStore::<MagicPrefs>::open(Location::Auto).0
+    let loc = if no_prefs_env() { Location::Memory } else { Location::Auto };
+    SettingsStore::<MagicPrefs>::open(loc).0
 }

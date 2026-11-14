@@ -1,9 +1,7 @@
 //! Outside-change watch: whether another writer changed a document's file on disk.
 //!
-//! Format follows VectorCraft's `crates/engine/src/link_watch.rs` (same shape, Magic variants).
-//! Same behaviour as the pre-move `DocState::changed_on_disk` / `session/documents.rs` logic:
-//! an unedited document reloads, an edited one refuses to save over the newer file — never a
-//! silent overwrite.
+//! An unedited file can be reloaded, while an edited one refuses to save over the newer file —
+//! never a silent overwrite.
 
 use std::path::Path;
 use std::time::SystemTime;
@@ -30,8 +28,8 @@ pub fn changed_on_disk(path: &Path, stamp: Option<FileStamp>) -> bool {
     FileStamp::of(path) != stamp
 }
 
-/// The reload/refuse decision for `session/documents.rs::document`: an unedited document that
-/// changed on disk reloads; an edited one errors.
+/// The reload/refuse decision for external changes: an unedited file that changed on disk
+/// reloads; an edited one errors.
 pub enum ReloadDecision {
     /// Current copy is in step with disk: keep it, no reload.
     Keep,
@@ -49,7 +47,7 @@ pub fn decide(dirty: bool, changed: bool) -> ReloadDecision {
     }
 }
 
-/// Helper used by `DocState::save`'s refuse check.
+/// Helper used to refuse overwriting external changes before saving.
 pub fn save_guard(path: &Path, stamp: Option<FileStamp>) -> Result<()> {
     if changed_on_disk(path, stamp) {
         return Err(EngineError::InvalidParams(format!("{} changed outside this session; reload it before saving", path.display())));
@@ -62,7 +60,7 @@ pub fn stamp_of(path: &Path) -> Option<FileStamp> {
     FileStamp::of(path)
 }
 
-/// Convenience for `DocState`-shaped callers: does this (path, stamp) pair have outside changes?
+/// Convenience helper: does this (path, stamp) pair have outside changes?
 pub fn is_changed(path: &Path, stamp: Option<FileStamp>) -> bool {
     changed_on_disk(path, stamp)
 }

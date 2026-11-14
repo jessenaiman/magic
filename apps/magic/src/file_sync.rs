@@ -1,26 +1,25 @@
-//! Live Craft file synchronization (`craft-shared` Phases 3, 4 & 5):
+//! Live Craft file synchronization:
 //! - Polls `(size, mtime_ms)` of project `.ecproj` tracks (`V2` Character Animation, `V3` Kinetic
-//!   Lyrics, `V4` Action Motion, plus `film/linked-compositions.json`) on focus regain and stage
+//!   Lyrics, `V4` Action Motion, plus FilmCraft linked compositions) on focus regain and stage
 //!   saves, populating `ui_state.dirty_tracks`.
 //! - Routes dropped media onto the active stage's `.ecproj` via `project.import_file` when
 //!   on `Animations`, `Lyrics`, or `Motion`.
-//! - Runs ~1-second debounced crash-recovery journal auto-save (`project.autosave`).
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, UNIX_EPOCH};
 
-use magic::Session;
+use magic_engine::Session;
 use magic_ui_egui::{UiShellState, ViewMode};
 use serde_json::{Value, json};
 
-const AUTOSAVE_DEBOUNCE: Duration = Duration::from_millis(1000);
+const RECOVERY_DEBOUNCE: Duration = Duration::from_millis(1000);
 
 #[derive(Default)]
 pub(crate) struct FileSyncMonitor {
     stamps: BTreeMap<PathBuf, (u64, u64)>,
     was_focused: bool,
-    pending_autosave_since: Option<Instant>,
+    pending_recovery_since: Option<Instant>,
 }
 
 fn stamp_of(path: &Path) -> Option<(u64, u64)> {
@@ -49,7 +48,7 @@ impl FileSyncMonitor {
         let Some(proj_dir) = ui_state.project_path.as_deref().and_then(Path::parent) else {
             return;
         };
-        for rel in ["lettering/lyrics.ecproj", "motion/actions.ecproj"] {
+        for rel in ["effects/lyrics.ecproj", "effects/motion.ecproj", "lettering/lyrics.ecproj", "motion/actions.ecproj"] {
             let p = proj_dir.join(rel);
             if let Some(st) = stamp_of(&p) {
                 self.stamps.insert(p, st);
@@ -70,10 +69,10 @@ impl FileSyncMonitor {
     }
 
     pub fn note_mutation(&mut self, cmd_id: &str, ui_state: &mut UiShellState) {
-        if ui_state.project_path.is_some() && !matches!(cmd_id, "project.save" | "file.save" | "file.saveAs" | "project.autosave") {
-            self.pending_autosave_since = Some(Instant::now());
+        if ui_state.project_path.is_some() && !matches!(cmd_id, "project.save" | "file.save" | "file.saveAs") {
+            self.pending_recovery_since = Some(Instant::now());
         } else if matches!(cmd_id, "project.save" | "file.save" | "file.saveAs") {
-            self.pending_autosave_since = None;
+            self.pending_recovery_since = None;
         }
         if matches!(cmd_id, "words.save" | "words.motion.set" | "words.design") {
             ui_state.dirty_tracks.insert("V3".into());
@@ -85,7 +84,7 @@ impl FileSyncMonitor {
             ui_state.dirty_tracks.remove("V3");
         } else if cmd_id == "motion.publish" {
             ui_state.dirty_tracks.remove("V4");
-        } else if matches!(cmd_id, "character.publish" | "video.assemble" | "video.sync_links") {
+        } else if matches!(cmd_id, "character.publish" | "animation.promote" | "video.assemble" | "video.sync_links") {
             ui_state.dirty_tracks.clear();
         }
     }
@@ -97,12 +96,12 @@ impl FileSyncMonitor {
 
         if regained_focus {
             self.check_disk_ecprojs(session, ui_state);
+            craft_font_catalog::Catalog::global().rescan_if_changed();
         }
 
-        if let Some(since) = self.pending_autosave_since {
-            if since.elapsed() >= AUTOSAVE_DEBOUNCE {
-                self.pending_autosave_since = None;
-                let _ = session.execute("project.autosave", json!({}));
+        if let Some(since) = self.pending_recovery_since {
+            if since.elapsed() >= RECOVERY_DEBOUNCE {
+                self.pending_recovery_since = None;
             } else {
                 ctx.request_repaint_after(Duration::from_millis(250));
             }
@@ -113,7 +112,11 @@ impl FileSyncMonitor {
         let Some(proj_dir) = ui_state.project_path.as_deref().and_then(Path::parent).map(Path::to_path_buf) else {
             return;
         };
-        let mut candidates = vec![("V3", proj_dir.join("lettering/lyrics.ecproj")), ("V4", proj_dir.join("motion/actions.ecproj"))];
+        let v3_fx = proj_dir.join("effects/lyrics.ecproj");
+        let v4_fx = proj_dir.join("effects/motion.ecproj");
+        let v3 = if v3_fx.is_file() { v3_fx } else { proj_dir.join("lettering/lyrics.ecproj") };
+        let v4 = if v4_fx.is_file() { v4_fx } else { proj_dir.join("motion/actions.ecproj") };
+        let mut candidates = vec![("V3", v3), ("V4", v4)];
         if let Some(ec) = active_character_ecproj(ui_state) {
             candidates.push(("V2", ec));
         }
@@ -144,12 +147,14 @@ pub(crate) fn stage_ecproj_for_drop(ui_state: &UiShellState) -> Option<PathBuf> 
     match ui_state.effective_view() {
         ViewMode::Animation => active_character_ecproj(ui_state).filter(|p| p.is_file()),
         ViewMode::Design => {
-            let p = proj_dir.join("lettering/lyrics.ecproj");
-            p.is_file().then_some(p)
+            let primary = proj_dir.join("effects/lyrics.ecproj");
+            let legacy = proj_dir.join("lettering/lyrics.ecproj");
+            if primary.is_file() { Some(primary) } else { legacy.is_file().then_some(legacy) }
         }
         ViewMode::Motion => {
-            let p = proj_dir.join("motion/actions.ecproj");
-            p.is_file().then_some(p)
+            let primary = proj_dir.join("effects/motion.ecproj");
+            let legacy = proj_dir.join("motion/actions.ecproj");
+            if primary.is_file() { Some(primary) } else { legacy.is_file().then_some(legacy) }
         }
         _ => None,
     }

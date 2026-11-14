@@ -1,79 +1,16 @@
-//! Words design validation and effect registration (`words.effect_install`, `kinetic_design`, `line_design`, `text_effect`).
-use crate::{Result, Session};
+//! Words design validation (`kinetic_design`, `line_design`, `text_effect`).
+use crate::Result;
 use serde_json::{Value, json};
 use std::{fs, path::Path};
 
-use super::{FONTS, KINETIC_LIBRARY, MOVES, invalid, one_of};
-
-/// `words.effect_install`: register an EffectCraft preset/overlay effect in `lettering/effects/<name>.json`.
-pub fn cmd_words_effect_install(s: &mut Session, p: &Value) -> Result<Value> {
-    let dir = crate::cmd::words::workspace_dir(s)?;
-    let raw_name = p["name"]
-        .as_str()
-        .filter(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.')))
-        .ok_or_else(|| invalid("name must be a valid Craft effect id (letters, digits, '.', '_' or '-')"))?;
-    let safe_stem: String = raw_name.chars().map(|c| if c == '.' { '-' } else { c }).collect();
-    let rel = format!("lettering/effects/{safe_stem}.json");
-    let name = raw_name;
-    let target = dir.join(&rel);
-    let live_applied = if let Some(mapped) = crate::craft_effects::find_lyrics_effect(name) {
-        let params = match mapped.craft_command {
-            "effect.apply" => json!({"effect": mapped.match_name}),
-            _ => (mapped.default_params)(),
-        };
-        let applied = crate::craft_api::execute_in_live_app(mapped.craft_app, mapped.craft_command, params).is_ok();
-        if applied {
-            let _ = crate::craft_api::save_in_live_app(mapped.craft_app, None);
-        }
-        applied
-    } else {
-        let applied = crate::craft_api::execute_in_live_app("effectcraft", "effect.apply", json!({"effect": name})).is_ok();
-        if applied {
-            let _ = crate::craft_api::save_in_live_app("effectcraft", None);
-        }
-        applied
-    };
-    if target.is_file() {
-        return Ok(json!({"name":name,"src":rel,"installed":false,"already":true,"live_app_synced":live_applied}));
-    }
-    if let Some(parent) = target.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    let spec = if let Some(mapped) = crate::craft_effects::find_lyrics_effect(name) {
-        json!({
-            "id": mapped.id,
-            "name": mapped.label,
-            "badge": mapped.badge,
-            "engine": mapped.craft_app,
-            "craft_command": mapped.craft_command,
-            "match_name": mapped.match_name,
-            "category": mapped.category,
-            "params": (mapped.default_params)(),
-        })
-    } else {
-        json!({
-            "name": name,
-            "engine": "effectcraft",
-            "text_variable": "text",
-            "cues": true,
-            "variables": {
-                "text": {"id": "text", "type": "string", "role": "content"},
-                "cues": {"id": "cues", "type": "string", "role": "timing"},
-                "color": {"id": "color", "type": "string"},
-                "speed": {"id": "speed", "type": "number"}
-            }
-        })
-    };
-    crate::doc_state::write_file(&target, serde_json::to_vec_pretty(&spec).map_err(|e| invalid(e.to_string()))?)?;
-    Ok(json!({"name":name,"src":rel,"installed":true,"already":false,"live_app_synced":live_applied}))
-}
+use super::{MOVES, invalid, one_of};
 
 fn hex_color(v: &Value) -> Option<Value> {
     v.as_str().filter(|c| c.len() == 7 && c.starts_with('#') && c[1..].bytes().all(|b| b.is_ascii_hexdigit())).map(|c| json!(c))
 }
 
 fn safe_font_name(v: &Value) -> Option<&str> {
-    v.as_str().filter(|f| f.len() <= 40 && f.bytes().all(|b| b.is_ascii_alphanumeric() || b == b' ' || b == b'-'))
+    v.as_str().map(str::trim).filter(|f| !f.is_empty() && f.len() <= 80 && !f.chars().any(char::is_control))
 }
 
 fn kinetic_style(st: &Value) -> Value {
@@ -116,7 +53,12 @@ fn apply_bounded_fields(target: &mut Value, src: &Value, prefix: &str, fields: &
     Ok(())
 }
 
-fn validate_kinetic_draw(d: &Value, ids: &[&Value], lib: &Value) -> Result<Value> {
+const LAYOUTS: &[&str] = &["karaoke", "cascade", "scatter", "giant", "stack", "plain"];
+const KINETIC_ENTRANCES: &[&str] = &["pop", "fade", "fade-up", "rise", "drop", "none"];
+const STROKES: &[&str] = &["underline", "swoop", "loop", "hill", "down", "circle", "star"];
+const OVERLAYS: &[&str] = &["none", "spotlight", "ribbon", "frame"];
+
+fn validate_kinetic_draw(d: &Value, ids: &[&Value]) -> Result<Value> {
     let place = d["place"].as_str().unwrap_or("under");
     if place != "beside" && place != "under" {
         return Err(invalid("kinetic.draws place must be under or beside"));
@@ -128,7 +70,7 @@ fn validate_kinetic_draw(d: &Value, ids: &[&Value], lib: &Value) -> Result<Value
         Some(shape) => validate_custom_drawing(shape)?,
         None => Value::Null,
     };
-    let stroke = if custom.is_null() { named_lib(lib, "strokes", &d["stroke"])? } else { Value::Null };
+    let stroke = if custom.is_null() { one_of(&d["stroke"], STROKES, "stroke")? } else { Value::Null };
     let mut draw = json!({
         "word_id": d["word_id"],
         "stroke": stroke,
@@ -150,38 +92,29 @@ fn validate_kinetic_draw(d: &Value, ids: &[&Value], lib: &Value) -> Result<Value
     Ok(draw)
 }
 
-fn named_lib(lib: &Value, kind: &str, v: &Value) -> Result<Value> {
-    v.as_str().filter(|n| lib[kind][*n].is_object()).map(|n| json!(n)).ok_or_else(|| invalid(format!("kinetic: {v} is not one of the library's {kind}")))
-}
-
 fn bounded_num(v: &Value, what: &str, lo: f64, hi: f64) -> Result<Value> {
     v.as_f64().filter(|n| n.is_finite() && (*n >= lo && *n <= hi)).map(|n| json!(n)).ok_or_else(|| invalid(format!("{what} must be between {lo} and {hi}")))
 }
 
-fn validate_kinetic_acts(k: &Value, ids: &[&Value], lib: &Value) -> Result<serde_json::Map<String, Value>> {
+pub(crate) fn kinetic_design(words: &Value, k: &Value) -> Result<Value> {
+    let ids: Vec<&Value> = words.as_array().into_iter().flatten().map(|w| &w["word_id"]).collect();
     let mut acts = serde_json::Map::new();
     for (word, act) in k["acts"].as_object().into_iter().flatten() {
         if !ids.contains(&&json!(word)) {
             return Err(invalid(format!("kinetic.acts: {word} is not a word of this section")));
         }
-        acts.insert(word.clone(), named_lib(lib, "acts", act)?);
+        acts.insert(word.clone(), one_of(act, MOVES, "act")?);
     }
-    Ok(acts)
-}
-
-/// A section's kinetic design, checked against the kinetic library.
-pub(crate) fn kinetic_design(words: &Value, k: &Value) -> Result<Value> {
-    let lib: Value = serde_json::from_str(KINETIC_LIBRARY).map_err(|e| invalid(e.to_string()))?;
-    let ids: Vec<&Value> = words.as_array().into_iter().flatten().map(|w| &w["word_id"]).collect();
-    let acts = validate_kinetic_acts(k, &ids, &lib)?;
     if !k["draws"].is_null() && !k["draws"].is_array() {
         return Err(invalid("kinetic.draws must be an array"));
     }
-    let draws: Vec<Value> = k["draws"].as_array().into_iter().flatten().map(|d| validate_kinetic_draw(d, &ids, &lib)).collect::<Result<_>>()?;
-    let overlay = if k["overlay"].is_null() { json!("none") } else { named_lib(&lib, "overlays", &k["overlay"])? };
+    let draws: Vec<Value> = k["draws"].as_array().into_iter().flatten().map(|d| validate_kinetic_draw(d, &ids)).collect::<Result<_>>()?;
+    let overlay = if k["overlay"].is_null() { json!("none") } else { one_of(&k["overlay"], OVERLAYS, "overlay")? };
+    let layout = one_of(k.get("layout").unwrap_or(&json!("karaoke")), LAYOUTS, "layout")?;
+    let entrance = one_of(k.get("entrance").unwrap_or(&json!("pop")), KINETIC_ENTRANCES, "entrance")?;
     let mut result = json!({
-        "layout": named_lib(&lib, "layouts", &k["layout"])?,
-        "entrance": named_lib(&lib, "entrances", &k["entrance"])?,
+        "layout": layout,
+        "entrance": entrance,
         "acts": acts,
         "draws": draws,
         "overlay": overlay,
@@ -215,10 +148,28 @@ fn collect_line_item_words<'a>(item: &'a Value, words: &[Value]) -> Result<(Vec<
     Ok((ids, text.join(" "), accent))
 }
 
+fn validate_motion_keys(raw: &Value) -> Result<()> {
+    let keys = raw.as_array().filter(|keys| (2..=24).contains(&keys.len())).ok_or_else(|| invalid("motion_keys needs 2–24 keyframes"))?;
+    let mut last = -1.0;
+    for key in keys {
+        let row =
+            key.as_array().filter(|row| row.len() == 7).ok_or_else(|| invalid("a motion key is [seconds, dx, dy, scale_x, scale_y, rotation, opacity]"))?;
+        for (value, (low, high)) in row.iter().zip([(0., 8.), (-1920., 1920.), (-1080., 1080.), (1., 400.), (1., 400.), (-14400., 14400.), (0., 100.)]) {
+            bounded_num(value, "motion key", low, high)?;
+        }
+        let time = row[0].as_f64().ok_or_else(|| invalid("a motion key needs a time"))?;
+        if (last < 0.0 && time != 0.0) || time <= last {
+            return Err(invalid("motion keys must start at zero and increase"));
+        }
+        last = time;
+    }
+    Ok(())
+}
+
 fn validate_line_item<'a>(item: &'a Value, words: &[Value], placed: &mut Vec<&'a str>) -> Result<Value> {
     let (ids, text, accent) = collect_line_item_words(item, words)?;
     placed.extend(&ids);
-    let weight = item["weight"].as_u64().filter(|w| [400, 700].contains(w)).ok_or_else(|| invalid("weight must be 400 or 700"))?;
+    let weight = item["weight"].as_u64().filter(|w| (100..=900).contains(w)).ok_or_else(|| invalid("weight must be 100..=900"))?;
     let italic = item["italic"].as_bool().ok_or_else(|| invalid("italic must be true or false"))?;
     let outline = if item["outline"].is_null() { Value::Null } else { short_colour(&item["outline"])? };
     let mut normalized = json!({
@@ -230,7 +181,7 @@ fn validate_line_item<'a>(item: &'a Value, words: &[Value], placed: &mut Vec<&'a
         "weight": weight,
         "italic": italic,
         "color": short_colour(&item["color"])?,
-        "font": one_of(item.get("font").unwrap_or(&json!("song")), FONTS, "font")?,
+        "font": safe_font_name(item.get("font").unwrap_or(&json!("sans"))).map(|f| json!(f)).ok_or_else(|| invalid("font must be a valid font family name"))?,
         "outline": outline,
         "rotate": bounded_num(&item["rotate"], "rotate", -3600.0, 3600.0)?,
         "motion": one_of(&item["motion"], MOVES, "motion")?,
@@ -241,6 +192,7 @@ fn validate_line_item<'a>(item: &'a Value, words: &[Value], placed: &mut Vec<&'a
         item,
         "item",
         &[
+            ("w", 1.0, 6000.0),
             ("skew", -85.0, 85.0),
             ("skew_axis", -360.0, 360.0),
             ("scale_x", 10.0, 400.0),
@@ -260,20 +212,7 @@ fn validate_line_item<'a>(item: &'a Value, words: &[Value], placed: &mut Vec<&'a
         normalized["per_char_3d"] = json!(pc3d);
     }
     if let Some(raw) = item.get("motion_keys").filter(|keys| !keys.is_null()) {
-        let keys = raw.as_array().filter(|keys| (2..=24).contains(&keys.len())).ok_or_else(|| invalid("motion_keys needs 2–24 keyframes"))?;
-        let mut last = -1.0;
-        for key in keys {
-            let row =
-                key.as_array().filter(|row| row.len() == 7).ok_or_else(|| invalid("a motion key is [seconds, dx, dy, scale_x, scale_y, rotation, opacity]"))?;
-            for (value, (low, high)) in row.iter().zip([(0., 8.), (-1920., 1920.), (-1080., 1080.), (1., 400.), (1., 400.), (-14400., 14400.), (0., 100.)]) {
-                bounded_num(value, "motion key", low, high)?;
-            }
-            let time = row[0].as_f64().ok_or_else(|| invalid("a motion key needs a time"))?;
-            if (last < 0.0 && time != 0.0) || time <= last {
-                return Err(invalid("motion keys must start at zero and increase"));
-            }
-            last = time;
-        }
+        validate_motion_keys(raw)?;
         normalized["motion_keys"] = raw.clone();
     }
     if let Some(spec) = item.get("native_motion").filter(|spec| !spec.is_null()) {
@@ -383,10 +322,10 @@ pub(crate) fn text_effect(dir: &Path, choice: &Value) -> Result<Value> {
         .as_str()
         .filter(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-'))
         .ok_or_else(|| invalid("effect name must be letters, digits or '-'"))?;
-    let rel = format!("lettering/effects/{name}.json");
+    let rel = format!("effects/presets/{name}.json");
     let path = dir.join(&rel);
     if !path.is_file() {
-        return Err(invalid(format!("{name} is not installed in this project; run words.effect_install first")));
+        return Err(invalid(format!("effects/presets/{name}.json is not present in this project")));
     }
     let spec: Value = serde_json::from_slice(&fs::read(&path)?).map_err(|e| invalid(e.to_string()))?;
     let text = spec["text_variable"].as_str().unwrap_or("text");

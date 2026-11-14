@@ -1,22 +1,33 @@
-//! Standard ArtCraft MCP tool router for Magic Studio (`crates/mcp/src/server.rs`).
+//! Standard ArtCraft MCP tool & read-only `magic://` resource router for Magic Studio (`crates/mcp/src/server.rs`).
 //!
-//! Exposes Magic Studio's own command registry and live `egui` UI inspection/input tools
-//! (`command_list`, `command_run`, `command_batch`, `doc_inspect`, `render_preview`, `open_file`,
-//! `save_file`, `inspect_ui`, `ui_elements`, `ui_click`, `ui_drag`, `ui_scroll`, `ui_key`,
-//! `ui_type`, `screenshot`, `ui_control`) without proxying sibling ArtCraft applications.
+//! Exposes Magic Studio's own command registry, live `egui` UI inspection/input tools, and
+//! read-only MCP resources (`magic://project`, `magic://storyboard`, `magic://timeline`, `magic://bridge`)
+//! without proxying sibling ArtCraft applications.
 
 use crate::{Backend, interpolate_batch_params, is_live_shell_method};
 use rmcp::handler::server::{router::tool::ToolRouter, wrapper::Parameters};
-use rmcp::model::{CallToolResult, ContentBlock as Content};
-use rmcp::{ServerHandler, ServiceExt, tool, tool_handler, tool_router};
+use rmcp::model::{
+    CallToolResult, ContentBlock as Content, ListResourcesResult, PaginatedRequestParams, ReadResourceRequestParams, ReadResourceResponse, ReadResourceResult,
+    Resource, ResourceContents,
+};
+use rmcp::service::RequestContext;
+use rmcp::{ErrorData as McpError, RoleServer, ServerHandler, ServiceExt, tool, tool_handler, tool_router};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::sync::{Arc, Mutex};
 
+pub const RESOURCE_PROJECT_URI: &str = "magic://project";
+pub const RESOURCE_PROJECT_STATUS_URI: &str = "magic://project/status";
+pub const RESOURCE_RECOVERY_URI: &str = "magic://recovery";
+pub const RESOURCE_STORYBOARD_URI: &str = "magic://storyboard";
+pub const RESOURCE_TIMELINE_URI: &str = "magic://timeline";
+pub const RESOURCE_BRIDGE_URI: &str = "magic://bridge";
+
 #[derive(Clone)]
 pub struct Server {
     backend: Arc<Mutex<Box<dyn Backend + Send>>>,
+    #[allow(dead_code)]
     tool_router: ToolRouter<Self>,
 }
 
@@ -49,6 +60,30 @@ struct BatchParams {
 struct DocInspectParams {
     /// `"all"` (default), `"project"`, `"storyboard"`, or `"timeline"`.
     target: Option<String>,
+}
+
+#[derive(Debug, Default, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct ProjectStatusParams {}
+
+#[derive(Debug, Default, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct RecoveryListParams {}
+
+#[derive(Debug, Default, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct RecoveryRestoreParams {
+    /// Optional specific recovery run ID to restore (restores newest when omitted).
+    run_id: Option<String>,
+}
+
+#[derive(Debug, Default, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct RecoveryDiscardParams {
+    /// Specific recovery run ID to discard.
+    run_id: Option<String>,
+    /// Discard all orphaned recovery runs.
+    all: Option<bool>,
 }
 
 #[derive(Debug, Default, Deserialize, JsonSchema)]
@@ -106,13 +141,18 @@ struct PointParams {
     y: Option<f64>,
 }
 
-#[derive(Debug, Deserialize, JsonSchema)]
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 struct DragParams {
-    from: PointParams,
-    to: PointParams,
+    from: Option<PointParams>,
+    to: Option<PointParams>,
+    x1: Option<f64>,
+    y1: Option<f64>,
+    x2: Option<f64>,
+    y2: Option<f64>,
     button: Option<String>,
     steps: Option<u32>,
+    count: Option<u32>,
     modifiers: Option<ModifiersParams>,
 }
 
@@ -188,6 +228,73 @@ impl Server {
         })
     }
 
+    /// Build the read-only `magic://` resource listing (`B10-04`).
+    pub fn list_magic_resources(&self) -> ListResourcesResult {
+        let resources = vec![
+            Resource::new(RESOURCE_PROJECT_URI, "project")
+                .with_description("Open Magic Studio project and workshop stage status (workshop.status)")
+                .with_mime_type("application/json"),
+            Resource::new(RESOURCE_PROJECT_STATUS_URI, "project_status")
+                .with_description("Open project dirty, revision, and undo state (project.status)")
+                .with_mime_type("application/json"),
+            Resource::new(RESOURCE_RECOVERY_URI, "recovery")
+                .with_description("Orphaned crash recovery snapshots and recovery runs (recovery.list)")
+                .with_mime_type("application/json"),
+            Resource::new(RESOURCE_STORYBOARD_URI, "storyboard")
+                .with_description("Standalone read-only Storyboard DesignCraft pages (storyboard.pages)")
+                .with_mime_type("application/json"),
+            Resource::new(RESOURCE_TIMELINE_URI, "timeline")
+                .with_description("FilmCraft sequence tracks, clips, and synced markers (video.timeline)")
+                .with_mime_type("application/json"),
+            Resource::new(RESOURCE_BRIDGE_URI, "bridge")
+                .with_description("Live control connection state and ArtCraft host doctor summary")
+                .with_mime_type("application/json"),
+        ];
+        ListResourcesResult::with_all_items(resources)
+    }
+
+    /// Read a `magic://` MCP resource as JSON text (`B10-04`).
+    pub async fn read_magic_resource(&self, uri: &str) -> Result<ReadResourceResult, McpError> {
+        let payload = match uri {
+            RESOURCE_PROJECT_URI => match self.run("workshop.status", json!({})).await {
+                Ok(val) => val,
+                Err(err) => json!({"ok": false, "uri": uri, "error": err}),
+            },
+            RESOURCE_PROJECT_STATUS_URI => match self.run("project.status", json!({})).await {
+                Ok(val) => val,
+                Err(err) => json!({"ok": false, "uri": uri, "error": err}),
+            },
+            RESOURCE_RECOVERY_URI => match self.run("recovery.list", json!({})).await {
+                Ok(val) => val,
+                Err(err) => json!({"ok": false, "uri": uri, "error": err}),
+            },
+            RESOURCE_STORYBOARD_URI => match self.run("storyboard.pages", json!({})).await {
+                Ok(val) => val,
+                Err(err) => json!({"ok": false, "uri": uri, "error": err}),
+            },
+            RESOURCE_TIMELINE_URI => match self.run("video.timeline", json!({})).await {
+                Ok(val) => val,
+                Err(err) => json!({"ok": false, "uri": uri, "error": err}),
+            },
+            RESOURCE_BRIDGE_URI => {
+                let conn = self.backend.lock().map(|b| b.connection_info()).unwrap_or_else(|_| json!({"mode": "unknown", "live": false}));
+                let is_live = conn["live"].as_bool().unwrap_or(false);
+                let doctor = self.run("app.doctor", json!({})).await.ok();
+                let ui = if is_live { self.run("ui.inspect", json!({})).await.ok() } else { None };
+                compact(json!({
+                    "ok": true,
+                    "connection": conn,
+                    "doctor": doctor,
+                    "ui": ui,
+                }))
+            }
+            _ => {
+                return Err(McpError::resource_not_found("resource_not_found", Some(json!({ "uri": uri }))));
+            }
+        };
+        Ok(ReadResourceResult::new(vec![ResourceContents::text(payload.to_string(), uri.to_owned())]))
+    }
+
     async fn run(&self, id: &str, params: Value) -> Result<Value, String> {
         if !params.is_object() {
             return Err("params must be an object".into());
@@ -257,12 +364,12 @@ impl Server {
     async fn exec_doc_inspect(&self, target: Option<&str>) -> CallToolResult {
         let res = match target.unwrap_or("all") {
             "project" => self.run("workshop.status", json!({})).await,
-            "storyboard" => self.run("storyboard.check", json!({})).await,
+            "storyboard" => self.run("storyboard.pages", json!({})).await,
             "timeline" | "sequence" => self.run("video.timeline", json!({})).await,
             "all" => match self.run("workshop.status", json!({})).await {
                 Ok(project) => Ok(json!({
                     "project": project,
-                    "storyboard": self.run("storyboard.check", json!({})).await.unwrap_or(Value::Null),
+                    "storyboard": self.run("storyboard.pages", json!({})).await.unwrap_or(Value::Null),
                     "timeline": self.run("video.timeline", json!({})).await.unwrap_or(Value::Null),
                 })),
                 Err(e) => Err(e),
@@ -313,6 +420,26 @@ impl Server {
         self.exec_batch(p).await
     }
 
+    #[tool(description = "Get open project status, dirty flag, revision, and undo/redo readiness (`project.status`).")]
+    async fn project_status(&self, Parameters(_): Parameters<ProjectStatusParams>) -> CallToolResult {
+        output(self.run("project.status", json!({})).await)
+    }
+
+    #[tool(description = "List recoverable crash snapshots and autosaves (`recovery.list`).")]
+    async fn recovery_list(&self, Parameters(_): Parameters<RecoveryListParams>) -> CallToolResult {
+        output(self.run("recovery.list", json!({})).await)
+    }
+
+    #[tool(description = "Restore an orphaned crash recovery snapshot (`recovery.restore`).")]
+    async fn recovery_restore(&self, Parameters(p): Parameters<RecoveryRestoreParams>) -> CallToolResult {
+        output(self.run("recovery.restore", compact(json!(p))).await)
+    }
+
+    #[tool(description = "Discard one or all orphaned recovery runs (`recovery.discard`).")]
+    async fn recovery_discard(&self, Parameters(p): Parameters<RecoveryDiscardParams>) -> CallToolResult {
+        output(self.run("recovery.discard", compact(json!(p))).await)
+    }
+
     #[tool(description = "Inspect the open `.magic` project, storyboard, or timeline (`all|project|storyboard|timeline`).")]
     async fn inspect_document(&self, Parameters(p): Parameters<DocInspectParams>) -> CallToolResult {
         self.exec_doc_inspect(p.target.as_deref()).await
@@ -327,7 +454,7 @@ impl Server {
     async fn render_preview(&self, Parameters(p): Parameters<PreviewParams>) -> CallToolResult {
         let sec = p.time.unwrap_or(0.0);
         let res = match p.stage.as_deref().unwrap_or("studio") {
-            "storyboard" => self.run("storyboard.thumbnail", json!({"page": p.page.unwrap_or(0), "scale": 1.0})).await,
+            "storyboard" => self.run("storyboard.render", json!({"page": p.page.unwrap_or(0), "scale": 1.0})).await,
             "lyrics" | "design" => self.run("words.preview_frame", json!({"time": sec})).await,
             "motion" => self.run("motion.preview_frame", json!({"time": sec})).await,
             "animation" | "animations" => self.run("character.frame", json!({"time": sec})).await,
@@ -364,25 +491,21 @@ impl Server {
 
     #[tool(description = "Click a visible enabled widget by automation ID (`{id, fx?, fy?}`) or logical window coordinates `{x, y}`. Requires `--connect`.")]
     async fn ui_click(&self, Parameters(p): Parameters<ClickParams>) -> CallToolResult {
-        if p.count.is_some_and(|c| c > 10) {
-            return output(Err("ui.click: count must be between 0 and 10".into()));
+        if p.count.is_some_and(|c| !(1..=255).contains(&c)) {
+            return output(Err("ui.click: count must be between 1 and 255".into()));
         }
         output(self.run("ui.click", compact(json!(p))).await)
     }
 
-    #[tool(description = "Drag between `from` and `to` (`{id, fx?, fy?}` or `{x, y}`). Requires `--connect`.")]
+    #[tool(description = "Drag between `from` and `to` (`{id, fx?, fy?}` or `{x, y}`) or `{x1, y1, x2, y2}`. Requires `--connect`.")]
     async fn ui_drag(&self, Parameters(p): Parameters<DragParams>) -> CallToolResult {
-        if p.steps.is_some_and(|s| s > 1024) {
-            return output(Err("ui.drag: steps must be between 0 and 1024".into()));
+        if p.steps.is_some_and(|s| !(1..=10_000).contains(&s)) {
+            return output(Err("ui.drag: steps must be between 1 and 10000".into()));
         }
-        let params = json!({
-            "from": compact(json!(p.from)),
-            "to": compact(json!(p.to)),
-            "button": p.button,
-            "steps": p.steps,
-            "modifiers": p.modifiers,
-        });
-        output(self.run("ui.drag", compact(params)).await)
+        if p.count.is_some_and(|c| !(1..=255).contains(&c)) {
+            return output(Err("ui.drag: count must be between 1 and 255".into()));
+        }
+        output(self.run("ui.drag", compact(json!(p))).await)
     }
 
     #[tool(description = "Scroll a widget or logical point by `dx`, `dy`. Requires `--connect`.")]
@@ -405,7 +528,7 @@ impl Server {
     )]
     async fn screenshot(&self, Parameters(p): Parameters<ShotParams>) -> CallToolResult {
         if p.window == Some(false) {
-            return output(self.run("storyboard.thumbnail", json!({"page": p.page.unwrap_or(0), "scale": 1.0})).await);
+            return output(self.run("storyboard.render", json!({"page": p.page.unwrap_or(0), "scale": 1.0})).await);
         }
         output(self.run("ui.screenshot", compact(json!({"path": p.path, "panel": p.panel, "id": p.id}))).await)
     }
@@ -424,11 +547,19 @@ impl Server {
 #[tool_handler(router = self.tool_router)]
 impl ServerHandler for Server {
     fn get_info(&self) -> rmcp::model::ServerConfig {
-        rmcp::model::ServerConfig::new(rmcp::model::ServerCapabilities::builder().enable_tools().build())
+        rmcp::model::ServerConfig::new(rmcp::model::ServerCapabilities::builder().enable_tools().enable_resources().build())
             .with_server_info(rmcp::model::Implementation::new("magic", env!("CARGO_PKG_VERSION")))
             .with_instructions(
-                "Magic Studio is a pure-Rust eframe/egui 0.37 project, storyboard, puppet-rig, and lyric-timing coordinator built on storytold/craft-libs. Start `magic --control 9875` and connect with `magic-cli mcp --connect 127.0.0.1:9875` to drive the live Magic window, or run `magic-cli mcp` headlessly. Connect directly to each sibling ArtCraft app's own `<app>-cli mcp` server when editing in FilmCraft, EffectCraft, DeckCraft, DesignCraft, PhotoCraft, or VectorCraft."
+                "Magic Studio is an eframe/egui project, storyboard, puppet-rig, and lyric-timing coordinator built on storytold/craft-libs. Start `magic --control 9875` and connect with `magic-cli mcp --connect 127.0.0.1:9875` to drive the live Magic window, or run `magic-cli mcp` headlessly. Connect directly to each sibling ArtCraft app's own `<app>-cli mcp` server when editing in DesignCraft, PhotoCraft, VectorCraft, EffectCraft, or FilmCraft."
                     .to_string(),
             )
+    }
+
+    async fn list_resources(&self, _request: Option<PaginatedRequestParams>, _context: RequestContext<RoleServer>) -> Result<ListResourcesResult, McpError> {
+        Ok(self.list_magic_resources())
+    }
+
+    async fn read_resource(&self, request: ReadResourceRequestParams, _context: RequestContext<RoleServer>) -> Result<ReadResourceResponse, McpError> {
+        self.read_magic_resource(&request.uri).await.map(Into::into)
     }
 }

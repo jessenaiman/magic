@@ -1,15 +1,46 @@
-//! `character.sprite`: pure-Rust action-sheet frame cropping (`native_media`) + staged `.ecproj`
-//! sprite-cycle specification on disk.
+//! `character.sprite`: sprite-sheet frame cropping (`PhotoCraft` CLI alignment with alpha-baseline
+//! fallback, `B10-02`) and explicit `front` / `side` / `back` directional `.ecproj` cycles (`B10-03`).
 
 use std::path::{Path, PathBuf};
 
 use serde_json::{Value, json};
 
 use super::{bad, effectcraft, step};
-use crate::{Result, Session};
+use crate::{EngineError, Result, Session};
+
+/// Rectangular crop cell `[x, y, width, height]` inside a `cols x rows` sprite sheet of `(width, height)`.
+pub fn sprite_cell_rect(width: u32, height: u32, grid: (u32, u32), index: u32) -> [u32; 4] {
+    let cols = grid.0.max(1);
+    let rows = grid.1.max(1);
+    let cw = (width / cols).max(1);
+    let ch = (height / rows).max(1);
+    let col = index % cols;
+    let row = index / cols;
+    [col * cw, row * ch, cw, ch]
+}
 
 pub(crate) fn sprite_dir(s: &Session, id: &str, name: &str) -> Result<PathBuf> {
     Ok(crate::workshop::project_dir(s)?.join("assets/characters").join(id).join("sprites").join(name))
+}
+
+fn try_photocraft_align_cell(sheet: &Path, rect: [u32; 4], lock_baseline: bool, out: &Path) -> bool {
+    let [x, y, w, h] = rect;
+    let crop_params = json!({"x": x, "y": y, "width": w, "height": h});
+    let align_cmd = if lock_baseline { "layer.align.bottomEdges" } else { "layer.align.horizontalCenters" };
+    let Some(sheet_s) = sheet.to_str() else {
+        return false;
+    };
+    let Some(out_s) = out.to_str() else {
+        return false;
+    };
+    let crop_s = crop_params.to_string();
+    crate::workspace::run_cli(
+        "photocraft-cli",
+        &["run", sheet_s, "--cmd", "image.crop", "--params", &crop_s, "--cmd", align_cmd, "--params", "{}", "--out", out_s],
+        None,
+    )
+    .is_ok()
+        && out.is_file()
 }
 
 fn crop_frames(dir: &Path, sheet: &Path, grid: (u32, u32), lock_baseline: bool, chroma_hex: Option<&str>) -> Result<Vec<PathBuf>> {
@@ -25,18 +56,35 @@ fn crop_frames(dir: &Path, sheet: &Path, grid: (u32, u32), lock_baseline: bool, 
     std::fs::create_dir_all(&frames_dir)?;
     let mut out = Vec::with_capacity((cols * rows) as usize);
     for i in 0..cols * rows {
-        let rect = magic_scribbles::sprite_cell_rect(w, h, (cols, rows), i);
+        let rect = sprite_cell_rect(w, h, (cols, rows), i);
         let file = frames_dir.join(format!("frame_{:04}.png", i + 1));
-        crate::native_media::crop_and_anchor_cell(&rgba, rect, lock_baseline, &file)?;
+        if !try_photocraft_align_cell(&clean_sheet, rect, lock_baseline, &file) {
+            return Err(EngineError::ExternalTool("photocraft".into(), "PhotoCraft sprite cell alignment unavailable or failed".into()));
+        }
         out.push(file);
     }
     Ok(out)
 }
 
+fn resolve_sprite_direction<'a>(p: &'a Value, action: &str) -> Result<&'a str> {
+    if p["mirror"] == true {
+        return Err(bad("horizontal scale mirroring (`mirror=true`) is disabled; pass an explicit `direction` (`front`, `side`, or `back`) sprite sheet"));
+    }
+    let default_dir = if matches!(action, "walk" | "run") { "side" } else { "front" };
+    let direction = p["direction"].as_str().or_else(|| p["view"].as_str()).map(str::trim).filter(|d| !d.is_empty()).unwrap_or(default_dir);
+    if !matches!(direction, "front" | "side" | "back") {
+        return Err(bad("direction must be front, side, or back"));
+    }
+    Ok(direction)
+}
+
 pub fn cmd_character_sprite(s: &mut Session, p: &Value) -> Result<Value> {
     let id = p["character"].as_str().map(crate::workspace::sanitize_asset_id).ok_or_else(|| bad("character=<id> is required"))?;
     let action = p["action"].as_str().or_else(|| p["name"].as_str()).ok_or_else(|| bad("action=<walk|jump|…> is required"))?;
-    let name = p["name"].as_str().unwrap_or(action).to_string();
+    let direction = resolve_sprite_direction(p, action)?;
+    let name = p["name"].as_str().map(str::to_owned).unwrap_or_else(|| {
+        if p.get("direction").is_some() && !action.ends_with(&format!("_{direction}")) { format!("{action}_{direction}") } else { action.to_owned() }
+    });
     let sheet = p["sheet"]
         .as_str()
         .map(|f| crate::workspace::resolve_workspace_path(s, f))
@@ -50,9 +98,6 @@ pub fn cmd_character_sprite(s: &mut Session, p: &Value) -> Result<Value> {
     std::fs::create_dir_all(&dir)?;
 
     let lock_baseline = !matches!(action, "jump" | "fly");
-    if sheet.extension().is_some_and(|e| e.eq_ignore_ascii_case("anicraft") || e.eq_ignore_ascii_case("ani")) {
-        return Err(bad("render `.anicraft` frame sequences directly with `anicraft-cli render-seq`, then pass the exported PNG sheet"));
-    }
     let target_sheet = dir.join("sheet.png");
     if sheet.canonicalize().ok() != target_sheet.canonicalize().ok() {
         std::fs::copy(&sheet, &target_sheet)?;
@@ -61,18 +106,15 @@ pub fn cmd_character_sprite(s: &mut Session, p: &Value) -> Result<Value> {
 
     let comp = format!("{id}-{name}");
     let project = dir.join(format!("{comp}.ecproj"));
-    let mut steps = vec![
+    let steps = vec![
         step("file.import", json!({"paths": [frames[0]], "sequence": true, "frameRate": fps, "newComp": true})),
         step("comp.settings", json!({"name": comp, "duration": duration, "frameRate": fps})),
-        step("layer.quickSetAnchor", json!({"layers": [1], "point": if lock_baseline { "bottomCenter" } else { "center" }})),
+        step("layer.quickSetAnchor", json!({"layers": [1], "point": if lock_baseline { "bottom" } else { "center" }})),
         step("layer.enableTimeRemap", json!({"layers": [1], "value": true})),
         step("layer.timing", json!({"layers": [1], "out": duration})),
         step("prop.setExpression", json!({"layer": 1, "path": "timeRemap", "expression": r#"loopOut("cycle")"#})),
+        step("file.saveAs", json!({"path": project})),
     ];
-    if p["mirror"] == true {
-        steps.push(step("layer.setTransform", json!({"layers": [1], "prop": "scale", "value": [-100, 100]})));
-    }
-    steps.push(step("file.saveAs", json!({"path": project})));
     effectcraft(&dir, Some(&project), &steps, true)?;
 
     let preview_png = project.with_file_name(format!("{comp}-preview.png"));
@@ -84,6 +126,7 @@ pub fn cmd_character_sprite(s: &mut Session, p: &Value) -> Result<Value> {
         "character": id,
         "sprite": name,
         "action": action,
+        "direction": direction,
         "animation_style": "sprite_2d",
         "sheet": target_sheet,
         "source_sheet": sheet,
@@ -92,12 +135,10 @@ pub fn cmd_character_sprite(s: &mut Session, p: &Value) -> Result<Value> {
         "fps": fps,
         "cycle_seconds": frames.len() as f64 / fps as f64,
         "duration": duration,
-        "mirror": p["mirror"] == true,
         "comp": comp,
         "ecproj": project,
         "preview": preview_png,
     });
-    crate::doc_state::write_json(&dir.join("sprite.json"), &meta)?;
     Ok(json!({
         "ok": true,
         "sprite": meta,

@@ -1,4 +1,4 @@
-//! Pure-Rust `eframe` 0.37 + `egui` 0.37 + `storytold/craft-libs` + `storytold/craft-ai-integrations`
+//! `eframe` + `egui` + `storytold/craft-libs`
 //! desktop coordinator for Magic Studio (`magic --control 9875`).
 
 #![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable))]
@@ -32,8 +32,8 @@ use control::{ControlEnvelope, DeferredReply};
 use craft_keymap::CommandRef;
 use craft_keymap::egui::Dispatcher;
 use egui::{Event, ViewportCommand};
-use magic::{AutomationRoots, Session};
-use magic_ui_egui::{ActiveModal, AutomationRegistry, MagicPalette, UiAction, UiShellState, ViewCtx, ViewMode};
+use magic_engine::{AutomationRoots, Session};
+use magic_ui_egui::{ActiveModal, AutomationRegistry, MagicPalette, StageHost, UiAction, UiShellState, ViewCtx, ViewMode};
 use serde_json::{Value, json};
 
 const CONTROL_REPLY_TIMEOUT: Duration = Duration::from_secs(60);
@@ -42,6 +42,9 @@ const APP_ICON_PNG: &[u8] = include_bytes!("../../../assets/app-icon/icon.png");
 #[derive(Parser, Debug)]
 #[command(name = "magic", about = "Magic Studio pure-Rust ArtCraft desktop coordinator (`--control 9875`)")]
 struct Cli {
+    /// Optional `.magic` project file path (`magic my-song.magic`)
+    #[arg(value_name = "FILE")]
+    file: Option<String>,
     #[arg(long)]
     project: Option<String>,
     #[arg(
@@ -50,7 +53,7 @@ struct Cli {
         value_parser = ["home", "project", "storyboard", "animations", "animation", "design", "lyrics", "motion", "studio"]
     )]
     view: String,
-    /// Open authenticated loopback `--control` JSON-lines socket (`9875` by default when flag is bare)
+    /// Open loopback `--control` JSON-lines socket on `127.0.0.1` (`9875` by default when flag is bare)
     #[arg(
         long,
         visible_alias = "controls",
@@ -59,9 +62,6 @@ struct Cli {
         env = "MAGIC_CONTROL_PORT"
     )]
     control: Option<String>,
-    /// Restrict `--control` to `ui.*` inspection/input methods and disable physical keyboard/pointer input
-    #[arg(long, env = "MAGIC_CONTROL_INPUT_ONLY", default_value_t = false)]
-    control_input_only: bool,
     /// Print full JSON catalog of coordinator commands & `--control` methods, then exit
     #[arg(long)]
     list_controls: bool,
@@ -95,8 +95,8 @@ fn install_macos_menu(ctx: &egui::Context, initial: &UiShellState) -> Option<Mac
     use craft_menu::{Gate, LayoutOptions, mac, mac_layout};
     use magic_ui_egui::menus::build_menu_bar;
 
-    let bar = build_menu_bar(initial, keymap::catalog_keymap(), |_| true);
-    let installed = mac::install(ctx, &mac_layout(&bar, &LayoutOptions::new("Magic Studio")).bar)?;
+    let menu_bar = build_menu_bar(initial, keymap::catalog_keymap(), |_| true);
+    let installed = mac::install(ctx, &mac_layout(&menu_bar, &LayoutOptions::new("Magic Studio")).bar)?;
     let shared = Rc::new(RefCell::new(installed));
     let raw_ref = Rc::clone(&shared);
     let frame_ref = Rc::clone(&shared);
@@ -123,6 +123,7 @@ fn install_macos_menu(ctx: &egui::Context, initial: &UiShellState) -> Option<Mac
 pub(crate) struct MagicDesktopApp {
     pub(crate) session: Session,
     pub(crate) ui_state: UiShellState,
+    pub(crate) stage_host: StageHost,
     pub(crate) registry: AutomationRegistry,
     pub(crate) dialogs: dialogs::DialogHost,
     pub(crate) file_sync: file_sync::FileSyncMonitor,
@@ -130,7 +131,6 @@ pub(crate) struct MagicDesktopApp {
     pub(crate) key_dispatcher: Dispatcher,
     pub(crate) lifecycle: lifecycle::Lifecycle,
     pub(crate) control_rx: Option<mpsc::Receiver<ControlEnvelope>>,
-    pub(crate) control_input_only: bool,
     pub(crate) synthetic_events: VecDeque<Event>,
     pub(crate) deferred_replies: Vec<DeferredReply>,
     pub(crate) pending_captures: Vec<capture::PendingCapture>,
@@ -138,6 +138,8 @@ pub(crate) struct MagicDesktopApp {
     pub(crate) last_applied_scale_pct: u16,
     pub(crate) frame_started: Instant,
     pub(crate) last_tick: Instant,
+    pub(crate) last_autosave_poll: Instant,
+    pub(crate) last_window_title: String,
     pub(crate) in_window_menus: bool,
     #[cfg(target_os = "macos")]
     native_menu: Option<MacMenuHooks>,
@@ -151,12 +153,19 @@ impl MagicDesktopApp {
         mut session: Session,
         initial_view: ViewMode,
         in_window_menus: bool,
-        control_input_only: bool,
         control_rx: Option<mpsc::Receiver<ControlEnvelope>>,
     ) -> Self {
         magic_ui_egui::install_loaders(&cc.egui_ctx);
-        let mut ui_state = UiShellState { view: initial_view, ..UiShellState::default() };
-        diagnostics::hydrate_prefs_and_ai(&mut session, &mut ui_state);
+        let mut ui_state = UiShellState { view: initial_view, control_port: session.control_address.map(|a| a.port()), ..UiShellState::default() };
+        magic_ui_egui::fonts_ui::refresh_available_fonts(&mut ui_state);
+        diagnostics::hydrate_prefs(&mut session, &mut ui_state);
+        if session.settings.is_persistent()
+            && let Ok(rec_val) = session.execute("recovery.list", json!({}))
+            && let Some(entries) = rec_val["entries"].as_array().filter(|a| !a.is_empty())
+        {
+            ui_state.recoverable_sessions = entries.clone();
+            ui_state.active_modal = Some(ActiveModal::Recovery);
+        }
         MagicPalette::resolve(ui_state.theme_mode, ui_state.interface_style, ui_state.accent_choice, ui_state.high_contrast, None).apply(&cc.egui_ctx);
 
         #[cfg(target_os = "macos")]
@@ -169,7 +178,8 @@ impl MagicDesktopApp {
             true
         };
 
-        diagnostics::refresh_cached_state(&mut session, &mut ui_state, true);
+        let mut stage_host = StageHost::new();
+        diagnostics::refresh_cached_state(&mut session, &mut ui_state, &mut stage_host, true);
         if ui_state.cache.words_effects.is_null()
             && let Ok(wfx) = session.execute("words.effects", json!({}))
         {
@@ -186,6 +196,7 @@ impl MagicDesktopApp {
         Self {
             session,
             ui_state,
+            stage_host,
             registry: AutomationRegistry::default(),
             dialogs: dialogs::DialogHost::new(&cc.egui_ctx),
             file_sync,
@@ -193,7 +204,6 @@ impl MagicDesktopApp {
             key_dispatcher: Dispatcher::new(),
             lifecycle: lifecycle::Lifecycle::default(),
             control_rx,
-            control_input_only,
             synthetic_events: VecDeque::new(),
             deferred_replies: Vec::new(),
             pending_captures: Vec::new(),
@@ -201,6 +211,8 @@ impl MagicDesktopApp {
             last_applied_scale_pct: 100,
             frame_started: now,
             last_tick: now,
+            last_autosave_poll: now,
+            last_window_title: String::new(),
             in_window_menus: use_in_window,
             #[cfg(target_os = "macos")]
             native_menu,
@@ -215,7 +227,7 @@ impl MagicDesktopApp {
         {
             return Err("The active project changed; the previous workspace command was not run".into());
         }
-        let changed = !magic::commands::is_read_only_command(id, &params);
+        let changed = !magic_engine::commands::is_read_only_command(id, &params);
         let is_project_switch = matches!(id, "project.open" | "project.new" | "project.close" | "file.open" | "file.new" | "file.close");
         if is_project_switch && self.session.project_path.is_some() {
             lifecycle::verify_clean(&self.session, &self.ui_state)?;
@@ -228,7 +240,7 @@ impl MagicDesktopApp {
         };
         self.capture_query_cache(id, &result);
         if changed {
-            diagnostics::refresh_cached_state(&mut self.session, &mut self.ui_state, false);
+            diagnostics::refresh_cached_state(&mut self.session, &mut self.ui_state, &mut self.stage_host, false);
             if is_project_switch {
                 self.file_sync.seed_project(&mut self.session, &mut self.ui_state);
             } else {
@@ -239,39 +251,28 @@ impl MagicDesktopApp {
         Ok(result)
     }
 
+    #[allow(clippy::cognitive_complexity)]
     fn capture_query_cache(&mut self, id: &str, result: &Value) {
         match id {
             "project.catalog" => self.ui_state.cache.catalog = result.clone(),
             "song.lyrics" => self.ui_state.cache.song_lyrics = result.clone(),
+            "song.waveform" => self.ui_state.cache.song_waveform = result.clone(),
             "storyboard.pages" => self.ui_state.cache.storyboard_pages = result.clone(),
-            "storyboard.check" => self.ui_state.cache.storyboard_check = result.clone(),
-            "storyboard.new" | "storyboard.set" | "storyboard.wizard" => {
-                if let Ok(pages) = self.session.execute("storyboard.pages", json!({"full": true})) {
+            "storyboard.new" | "storyboard.render" => {
+                if let Ok(pages) = self.session.execute("storyboard.pages", json!({})) {
                     self.ui_state.cache.storyboard_pages = pages;
                 }
-                if let Ok(chk) = self.session.execute("storyboard.check", json!({})) {
-                    self.ui_state.cache.storyboard_check = chk;
-                }
             }
-            "words.save" | "words.letter" | "motion.save" | "motion.publish" | "character.action" => {
-                let sec = match self.ui_state.effective_view() {
-                    magic_ui_egui::ViewMode::Animation => self.ui_state.animation.scrub_seconds,
-                    magic_ui_egui::ViewMode::Design => self.ui_state.lyrics.scrub_seconds,
-                    magic_ui_egui::ViewMode::Motion => self.ui_state.motion.start_sec,
-                    _ => self.ui_state.audio_time_sec,
+            "words.save" | "words.letter" | "motion.save" | "motion.publish" => {
+                let sec = {
+                    let view = self.ui_state.effective_view();
+                    let stage = self.stage_host.stage(view);
+                    if stage.has_timeline() { stage.playhead_seconds() } else { self.ui_state.audio_time_sec }
                 };
                 if let Ok(fr) = self.session.execute("video.frame", json!({"seconds": sec}))
                     && let Some(f) = fr["frame"].as_str()
                 {
                     self.ui_state.cache.last_video_frame = Some(f.to_owned());
-                }
-            }
-            "storyboard.thumbnail" => {
-                if let Some(out) = result["out"].as_str() {
-                    self.ui_state.cache.last_storyboard_thumb = Some(out.to_owned());
-                }
-                if let Ok(pages) = self.session.execute("storyboard.pages", json!({"full": true})) {
-                    self.ui_state.cache.storyboard_pages = pages;
                 }
             }
             "character.list" => self.ui_state.cache.characters = result.clone(),
@@ -305,22 +306,11 @@ impl MagicDesktopApp {
             }
             "video.list_ec_comps" => self.ui_state.cache.ec_comps = result.clone(),
             "app.doctor" => self.ui_state.cache.doctor = result.clone(),
-            "ai.status" | "ai.configure" | "scribbles.connect" => {
-                diagnostics::sync_ai_ui_from_status(&mut self.ui_state, result);
-                self.ui_state.cache.ai_status = result.clone();
-            }
-            "fidget.prepare" | "fidget.stage" => {
-                if let Some(p) = result.get("prompt").or_else(|| result.pointer("/fidget/prompt")).and_then(Value::as_str) {
-                    self.ui_state.ai.staged_prompt = p.to_owned();
-                }
-                if let Some(md) = result.get("markdown").or_else(|| result.pointer("/fidget/markdown")).and_then(Value::as_str) {
-                    self.ui_state.ai.staged_markdown = md.to_owned();
-                }
-            }
             _ => {}
         }
     }
 
+    #[allow(clippy::cognitive_complexity)]
     pub(crate) fn handle_ui_action(&mut self, ctx: &egui::Context, action: UiAction) {
         let now = ctx.input(|i| i.time);
         match action {
@@ -336,7 +326,21 @@ impl MagicDesktopApp {
                     self.audio_player.stop(&mut self.ui_state);
                 }
                 self.ui_state.view = view;
-                self.audio_player.seek(&mut self.ui_state, seconds);
+                self.audio_player.seek(&mut self.ui_state, &mut self.stage_host, seconds);
+                if view == ViewMode::Animation
+                    && let Ok(loc) = self.session.execute("animation.locate_from_studio", json!({"seconds": seconds}))
+                    && loc["matched"].as_bool() == Some(true)
+                {
+                    if let Some(cid) = loc["character"].as_str().filter(|c| !c.is_empty()) {
+                        self.ui_state.selected_character_id = Some(cid.to_owned());
+                    }
+                    if let Some(act) = loc["action"].as_str().filter(|a| !a.is_empty()) {
+                        let local_s = loc["local_seconds"].as_f64().unwrap_or(seconds);
+                        self.stage_host.stage_mut(ViewMode::Animation).select_action_at(act, local_s);
+                    } else if let Some(local_s) = loc["local_seconds"].as_f64() {
+                        self.stage_host.stage_mut(ViewMode::Animation).set_playhead_seconds(local_s);
+                    }
+                }
                 self.refresh_view_data(view);
             }
             UiAction::SelectCharacter { id, jump_animation } => {
@@ -344,6 +348,11 @@ impl MagicDesktopApp {
                 diagnostics::hydrate_selected_character(&mut self.session, &mut self.ui_state);
                 if jump_animation {
                     self.ui_state.view = ViewMode::Animation;
+                }
+            }
+            UiAction::DockCommand { id, params } => {
+                if let Err(err) = magic_ui_egui::docking::execute_dock_command(ctx, &mut self.ui_state, &id, &params) {
+                    self.ui_state.set_toast(now, err);
                 }
             }
             UiAction::Execute { id, params, toast } => match self.execute_engine(ctx, &id, params) {
@@ -358,10 +367,10 @@ impl MagicDesktopApp {
                 self.dialogs.open_picker(target, &title, &extensions, directory, save);
             }
             UiAction::ToggleAudio => {
-                self.audio_player.toggle(&mut self.ui_state);
+                self.audio_player.toggle(&mut self.ui_state, &mut self.stage_host);
             }
             UiAction::SeekAudio(sec) => {
-                self.audio_player.seek(&mut self.ui_state, sec);
+                self.audio_player.seek(&mut self.ui_state, &mut self.stage_host, sec);
             }
             UiAction::SnapWindow => {
                 self.ui_state.window_snapped_right = !self.ui_state.window_snapped_right;
@@ -369,9 +378,21 @@ impl MagicDesktopApp {
                 ctx.send_viewport_cmd(ViewportCommand::OuterPosition(egui::pos2(x, 0.0)));
                 self.ui_state.set_toast(now, if self.ui_state.window_snapped_right { "Snapped window right" } else { "Snapped window left" });
             }
-            UiAction::OpenPreferences => {
-                let _ = self.execute_engine(ctx, "ai.status", json!({}));
-                self.ui_state.active_modal = Some(ActiveModal::Preferences);
+            UiAction::OpenNewProjectForm => {
+                self.audio_player.stop(&mut self.ui_state);
+                self.ui_state.view = ViewMode::Home;
+                self.stage_host.home_mut().open_new_form();
+                self.refresh_view_data(ViewMode::Home);
+            }
+            UiAction::OpenPreferences => self.ui_state.active_modal = Some(ActiveModal::Preferences),
+            UiAction::OpenFontManager => {
+                craft_font_catalog::Catalog::global().rescan_if_changed();
+                magic_ui_egui::fonts_ui::refresh_available_fonts(&mut self.ui_state);
+                if self.ui_state.project_path.is_some() {
+                    self.ui_state.docking.set_panel_visible(magic_ui_egui::PanelId::Fonts, true);
+                } else {
+                    self.ui_state.active_modal = Some(ActiveModal::FontManager);
+                }
             }
             UiAction::OpenDoctor => {
                 let _ = self.execute_engine(ctx, "app.doctor", json!({}));
@@ -400,6 +421,7 @@ impl MagicDesktopApp {
         }
     }
 
+    #[allow(clippy::cognitive_complexity)]
     fn refresh_view_data(&mut self, view: ViewMode) {
         match view {
             ViewMode::Home => {
@@ -416,11 +438,8 @@ impl MagicDesktopApp {
                 }
             }
             ViewMode::Storyboard => {
-                if let Ok(pages) = self.session.execute("storyboard.pages", json!({"full": true})) {
+                if let Ok(pages) = self.session.execute("storyboard.pages", json!({})) {
                     self.ui_state.cache.storyboard_pages = pages;
-                }
-                if let Ok(chk) = self.session.execute("storyboard.check", json!({})) {
-                    self.ui_state.cache.storyboard_check = chk;
                 }
             }
             ViewMode::Animation => {
@@ -469,26 +488,54 @@ impl MagicDesktopApp {
     fn handle_dropped_files(&mut self, ctx: &egui::Context, dropped: Vec<PathBuf>) {
         let now = ctx.input(|i| i.time);
         if self.ui_state.project_path.is_none() {
-            self.ui_state.set_toast(now, "Open a project before dropping Craft files");
+            if let Some(first) = dropped.first() {
+                if first.is_dir() {
+                    if let Ok(rd) = std::fs::read_dir(first)
+                        && let Some(magic_file) = rd.flatten().map(|e| e.path()).find(|p| p.extension().and_then(|e| e.to_str()) == Some("magic"))
+                        && self.execute_engine(ctx, "file.open", json!({"path": magic_file})).is_ok()
+                    {
+                        self.ui_state.view = ViewMode::Project;
+                        self.ui_state.set_toast(now, "Opened .magic project");
+                    }
+                } else if self.execute_engine(ctx, "file.open", json!({"path": first})).is_ok() {
+                    self.ui_state.view = ViewMode::Project;
+                }
+            }
             return;
         }
-        let stage_ecproj = file_sync::stage_ecproj_for_drop(&self.ui_state);
+        if self.ui_state.effective_view() == ViewMode::Storyboard {
+            let system_dark = ctx.input(|i| i.raw.system_theme.map(|t| matches!(t, egui::Theme::Dark)));
+            let pal = MagicPalette::resolve(
+                self.ui_state.theme_mode,
+                self.ui_state.interface_style,
+                self.ui_state.accent_choice,
+                self.ui_state.high_contrast,
+                system_dark,
+            );
+            let mut emitted = Vec::new();
+            {
+                let mut view_ctx = ViewCtx { state: &mut self.ui_state, reg: &mut self.registry, pal: &pal, actions: &mut emitted };
+                self.stage_host.stage_mut(ViewMode::Storyboard).on_dropped_files(&dropped, &mut view_ctx);
+            }
+            for act in emitted {
+                self.handle_ui_action(ctx, act);
+            }
+            return;
+        }
+        let _ = file_sync::stage_ecproj_for_drop(&self.ui_state);
         let mut imported = 0usize;
         for path in dropped {
             let ext = path.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase).unwrap_or_default();
-            let res = if matches!(ext.as_str(), "ecproj" | "pcraft" | "psd" | "vectorcraft" | "anicraft") {
+            let res = if matches!(ext.as_str(), "ecproj" | "pcraft" | "psd" | "vectorcraft") {
                 self.execute_engine(ctx, "character.import", json!({"path": path}))
+            } else if matches!(ext.as_str(), "glb" | "gltf" | "obj" | "fbx" | "stl" | "ply" | "3mf") {
+                let cid = self.ui_state.selected_character_id.clone().unwrap_or_else(|| "lead".into());
+                self.execute_engine(ctx, "character.layer.new3dModel", json!({"character": cid, "path": path}))
             } else {
                 self.execute_engine(ctx, "project.add_asset", json!({"path": path, "kind": "image"}))
             };
-            if let Ok(val) = res {
+            if res.is_ok() {
                 imported += 1;
-                if let Some(ref ec_doc) = stage_ecproj
-                    && !matches!(ext.as_str(), "ecproj" | "pcraft" | "psd" | "vectorcraft" | "anicraft")
-                {
-                    let asset_path = val["path"].as_str().map(PathBuf::from).unwrap_or(path);
-                    let _ = magic::native_media::write_staged_steps(ec_doc, &json!({"id": "file.import", "params": {"paths": [asset_path]}}));
-                }
             }
         }
         if imported > 0 {
@@ -499,14 +546,8 @@ impl MagicDesktopApp {
 
 impl eframe::App for MagicDesktopApp {
     fn raw_input_hook(&mut self, _ctx: &egui::Context, raw_input: &mut egui::RawInput) {
-        if self.control_input_only {
-            raw_input.events.clear();
-            raw_input.dropped_files.clear();
-        }
         #[cfg(target_os = "macos")]
-        if !self.control_input_only
-            && let Some(menu) = &mut self.native_menu
-        {
+        if let Some(menu) = &mut self.native_menu {
             (menu.raw_input)(raw_input);
         }
         while let Some(ev) = self.synthetic_events.pop_front() {
@@ -546,20 +587,29 @@ impl eframe::App for MagicDesktopApp {
             ctx.request_repaint_after(deadline.saturating_duration_since(Instant::now()));
         }
 
-        if self.audio_player.tick_frame(&mut self.ui_state, dt) {
+        if self.audio_player.tick_frame(&mut self.ui_state, &mut self.stage_host, dt) {
             ctx.request_repaint_after(Duration::from_millis(42));
         }
 
-        if !self.control_input_only {
-            let dropped: Vec<PathBuf> = ctx.input(|i| i.raw.dropped_files.iter().map(|f| f.path().to_path_buf()).collect());
-            if !dropped.is_empty() {
-                self.handle_dropped_files(ctx, dropped);
-            }
+        let dropped: Vec<PathBuf> = ctx.input(|i| i.raw.dropped_files.iter().map(|f| f.path().to_path_buf()).collect());
+        if !dropped.is_empty() {
+            self.handle_dropped_files(ctx, dropped);
         }
 
         self.file_sync.poll_frame(ctx, &mut self.session, &mut self.ui_state);
-        if ctx.input(|i| i.focused) {
-            craft_font_catalog::Catalog::global().rescan_if_changed();
+
+        let is_dirty = self.session.is_dirty() || self.ui_state.is_dirty();
+        let proj_name = self.session.project_path.as_ref().and_then(|p| p.file_stem().and_then(|s| s.to_str())).unwrap_or("Untitled");
+        let prefix = if is_dirty { "* " } else { "" };
+        let title = format!("{prefix}{proj_name} — Magic Studio");
+        if title != self.last_window_title {
+            self.last_window_title = title.clone();
+            ctx.send_viewport_cmd(ViewportCommand::Title(title));
+        }
+
+        if self.ui_state.autosave_enabled && self.session.is_dirty() && self.frame_started.duration_since(self.last_autosave_poll) >= Duration::from_secs(3) {
+            self.last_autosave_poll = self.frame_started;
+            let _ = self.session.execute("project.autosave_tick", json!({}));
         }
 
         if ctx.input(|i| i.viewport().close_requested()) && !self.lifecycle.is_approved() {
@@ -588,12 +638,10 @@ impl eframe::App for MagicDesktopApp {
         let modal_open = self.ui_state.active_modal.is_some() || self.dialogs.is_open();
 
         #[cfg(target_os = "macos")]
-        if !self.control_input_only
-            && let Some(menu) = &mut self.native_menu
-        {
+        if let Some(menu) = &mut self.native_menu {
             let session_ref = &self.session;
             let clicks = (menu.sync_frame)(&egui_ctx, &self.ui_state, modal_open, &|cid| {
-                magic::find_command(cid).is_some_and(|spec| (spec.enabled)(session_ref).is_ok())
+                magic_engine::find_command(cid).is_some_and(|spec| (spec.enabled)(session_ref).is_ok())
             });
             for cmd in clicks {
                 if let Some(act) = magic_ui_egui::menus::translate_menu_command(&cmd, &mut self.ui_state) {
@@ -614,12 +662,18 @@ impl eframe::App for MagicDesktopApp {
 
         self.registry.begin_frame();
         let mut emitted = Vec::new();
-        {
+        let dock_outcome = {
             let session_ref = &self.session;
             let mut view_ctx = ViewCtx { state: &mut self.ui_state, reg: &mut self.registry, pal: &palette, actions: &mut emitted };
-            magic_ui_egui::shell::draw_workstation(ui, &mut view_ctx, keymap::catalog_keymap(), self.in_window_menus, |cid| {
-                magic::find_command(cid).is_some_and(|spec| (spec.enabled)(session_ref).is_ok())
-            });
+            magic_ui_egui::shell::draw_workstation(ui, &mut view_ctx, &mut self.stage_host, keymap::catalog_keymap(), self.in_window_menus, modal_open, |cid| {
+                magic_engine::find_command(cid).is_some_and(|spec| (spec.enabled)(session_ref).is_ok())
+            })
+        };
+        for ev in dock_outcome.forwarded_events {
+            self.synthetic_events.push_back(ev);
+        }
+        if !dock_outcome.dropped_files.is_empty() {
+            self.handle_dropped_files(&egui_ctx, dock_outcome.dropped_files);
         }
         for action in emitted {
             self.handle_ui_action(&egui_ctx, action);
@@ -654,15 +708,10 @@ fn diag(message: std::fmt::Arguments) {
     let _ = writeln!(std::io::stderr(), "{message}");
 }
 
-fn start_control_bridge(
-    spec: &str,
-    token: Option<&str>,
-    wake_slot: Arc<std::sync::Mutex<Option<egui::Context>>>,
-) -> Result<(SocketAddr, mpsc::Receiver<ControlEnvelope>), String> {
+fn start_control_bridge(spec: &str, wake_slot: Arc<std::sync::Mutex<Option<egui::Context>>>) -> Result<(SocketAddr, mpsc::Receiver<ControlEnvelope>), String> {
     let (tx, rx) = mpsc::channel::<ControlEnvelope>();
     let addr = control::start(
         spec,
-        token,
         Arc::new(move |method, params| {
             let (reply_tx, reply_rx) = mpsc::channel();
             let started = Arc::new(AtomicBool::new(false));
@@ -687,7 +736,7 @@ fn start_control_bridge(
 fn main() {
     let cli = Cli::parse();
     if cli.list_controls {
-        let cmds: Vec<Value> = magic::command_specs().iter().map(magic::commands::CommandSpec::describe).collect();
+        let cmds: Vec<Value> = magic_engine::command_specs().iter().map(magic_engine::commands::CommandSpec::describe).collect();
         let payload = json!({
             "ok": true,
             "ports": {"magic": 9875},
@@ -695,10 +744,6 @@ fn main() {
         });
         let _ = writeln!(std::io::stdout(), "{}", serde_json::to_string_pretty(&payload).unwrap_or_default());
         return;
-    }
-    if cli.control_input_only && cli.control.is_none() {
-        diag(format_args!("magic: --control-input-only requires --control [PORT]"));
-        std::process::exit(2);
     }
     if let Some(spec) = &cli.control
         && let Err(err) = control::parse_control_addr(spec)
@@ -713,13 +758,11 @@ fn main() {
             std::process::exit(2);
         }
     };
-    let token = magic::workspace::control_token();
-
     craft_font_catalog::Catalog::global().scan_in_background();
 
     let mut session = Session::user_session().with_automation_roots(automation_roots);
 
-    if let Some(path) = &cli.project
+    if let Some(path) = cli.project.as_deref().or(cli.file.as_deref())
         && let Err(err) = session.execute("file.open", json!({"path": path}))
     {
         diag(format_args!("magic: could not open {path}: {err}"));
@@ -727,8 +770,8 @@ fn main() {
     }
 
     let wake_ctx: Arc<std::sync::Mutex<Option<egui::Context>>> = Arc::new(std::sync::Mutex::new(None));
-    let control_rx = match &cli.control {
-        Some(spec) => match start_control_bridge(spec, token.as_deref(), Arc::clone(&wake_ctx)) {
+    let control_rx = if let Some(spec) = &cli.control {
+        match start_control_bridge(spec, Arc::clone(&wake_ctx)) {
             Ok((address, rx)) => {
                 session.control_address = Some(address);
                 diag(format_args!("MAGIC_CONTROL_PORT={}\nmagic: control listening on {address}", address.port()));
@@ -738,8 +781,9 @@ fn main() {
                 diag(format_args!("magic: {err}"));
                 std::process::exit(1);
             }
-        },
-        None => None,
+        }
+    } else {
+        None
     };
 
     let initial_view = ViewMode::parse(&cli.view).unwrap_or(ViewMode::Project);
@@ -763,7 +807,6 @@ fn main() {
     };
 
     let in_window_menus = cli.in_window_menus;
-    let control_input_only = cli.control_input_only;
     let run_res = eframe::run_native(
         "Magic Studio",
         options,
@@ -771,7 +814,7 @@ fn main() {
             if let Ok(mut slot) = wake_ctx.lock() {
                 *slot = Some(cc.egui_ctx.clone());
             }
-            Ok(Box::new(MagicDesktopApp::new(cc, session, initial_view, in_window_menus, control_input_only, control_rx)))
+            Ok(Box::new(MagicDesktopApp::new(cc, session, initial_view, in_window_menus, control_rx)))
         }),
     );
     if let Err(error) = run_res {

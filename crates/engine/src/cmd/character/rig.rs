@@ -1,130 +1,172 @@
-//! `character.rig`: EffectCraft builds the puppet from the cut PhotoCraft document (`.pcraft` or
-//! `.psd` via `Import as Composition` with layer sizes), sets anchors (`layer.setTransform` or
-//! `layer.quickSetAnchor`), parents limbs to their hierarchy (`layer.setParent` with
-//! `compensate: true`), wires Puppet Pins with cascade follow-through (`puppet.addPin` +
-//! `puppet.follow`), and supports path-null rigs (`paths.pointsFollowNulls`).
+//! `character.rig` & `character.bone.*`: EffectCraft builds 2.5D puppet rigs from cut PhotoCraft documents,
+//! while `AniCraft` rigs and controls 2D artboard armatures (`bone.add`, `bone.remove`, `bone.set_limits`,
+//! `bone.pin`, `bone.pose`, `bone.solve`, `bone.info`).
+
+use std::path::{Path, PathBuf};
 
 use serde_json::{Value, json};
 
-use super::{View, bad, effectcraft, part_list, point, root_part, step};
-use crate::{Result, Session};
+use super::{View, bad, effectcraft, step};
+use crate::{EngineError, Result, Session};
 
-fn joint_steps(part: &Value) -> Result<Vec<Value>> {
-    let id = part["id"].as_str().ok_or_else(|| bad("a part has no id"))?;
-    if let Some(anchor_preset) = part["quick_anchor"].as_str().filter(|s| !s.is_empty()) {
-        return Ok(vec![step("layer.quickSetAnchor", json!({"layers": [id], "point": anchor_preset}))]);
+fn anicraft_exec(target: &Path, command_id: &str, params: &Value, save: bool) -> Result<Value> {
+    if !target.is_file() {
+        return Err(bad(format!("anicraft file not found: {}", target.display())));
     }
-    let joint = point(&part["joint"]).ok_or_else(|| bad(format!("part {id} has no joint")))?;
-    let bounds = part["bounds"].as_array().filter(|b| b.len() == 4).ok_or_else(|| bad(format!("part {id} has no layer bounds; run character.cut")))?;
-    let origin = [bounds[0].as_f64().unwrap_or(0.0), bounds[1].as_f64().unwrap_or(0.0)];
-    let anchor = json!([joint[0] - origin[0], joint[1] - origin[1]]);
-    Ok(vec![
-        step("layer.setTransform", json!({"layers": [id], "prop": "anchor", "value": anchor})),
-        step("layer.setTransform", json!({"layers": [id], "prop": "position", "value": joint})),
-    ])
+    let target_s = target.to_string_lossy().into_owned();
+    let params_s = serde_json::to_string(params).map_err(|e| bad(e.to_string()))?;
+    let mut args = vec!["exec", target_s.as_str(), command_id, params_s.as_str()];
+    if save {
+        args.extend(["--save", target_s.as_str()]);
+    }
+    crate::workspace::run_cli_json("anicraft-cli", &args, None).map_err(|e| EngineError::ExternalTool("anicraft-cli".into(), e))
 }
 
-const FPS: u32 = 24;
-
-fn record_rest(view: &View, project: &std::path::Path, mut parts: Value) -> Result<()> {
-    let mut layers: Vec<String> = part_list(&parts)?.iter().filter_map(|p| p["id"].as_str().map(str::to_string)).collect();
-    layers.push("root".into());
-    let mut steps = vec![step("comp.open", json!({"comp": view.comp()}))];
-    for id in &layers {
-        steps.push(step("prop.get", json!({"layer": id, "path": "transform/position", "time": 0})));
+fn resolve_anicraft_doc(s: &Session, p: &Value) -> Result<(String, String, PathBuf)> {
+    if let Some(path_str) = p["path"].as_str().or_else(|| p["file"].as_str()) {
+        let resolved = crate::workspace::resolve_workspace_path(s, path_str);
+        let name = resolved.file_stem().and_then(|n| n.to_str()).unwrap_or("character");
+        let cid = p["character"].as_str().map(crate::workspace::sanitize_asset_id).unwrap_or_else(|| crate::workspace::sanitize_asset_id(name));
+        return Ok((cid, name.to_string(), resolved));
     }
-    let out = effectcraft(&view.dir, Some(project), &steps, true)?;
-    let values: Vec<Value> = out.into_iter().skip(1).collect();
-    if values.len() != layers.len() {
-        return Err(bad(format!("EffectCraft returned {} rest positions for {} layers", values.len(), layers.len())));
+    let view = View::from_params(s, p)?;
+    let target = view.file("anicraft");
+    if !target.is_file() {
+        if let Some(parent) = target.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let target_s = target.to_string_lossy().into_owned();
+        let _ = crate::workspace::run_cli("anicraft-cli", &["new", "--out", target_s.as_str(), "--width", "1280", "--height", "720", "--fps", "24"], None);
     }
-    let mut rest = serde_json::Map::new();
-    for (id, v) in layers.iter().zip(values) {
-        rest.insert(id.clone(), v.get("value").cloned().unwrap_or(v));
-    }
-    parts["rest_position"] = Value::Object(rest);
-    parts["actions"] = json!({});
-    if parts["animation_style"].is_null() {
-        parts["animation_style"] = json!("cutout_2_5d");
-    }
-    view.write_parts(&parts)
+    Ok((view.id, view.folder_name, target))
 }
 
+/// `character.rig`: build a layered puppet rig in EffectCraft (.ecproj) from a cut PhotoCraft document.
 pub fn cmd_character_rig(s: &mut Session, p: &Value) -> Result<Value> {
     let view = View::from_params(s, p)?;
     let photo_source = view.require_photo_doc("character.cut")?;
-    let parts = view.parts()?;
-    let list = &part_list(&parts)?.clone();
-    let root = root_part(list)?;
-    let root_joint = list.iter().find(|p| p["id"].as_str() == Some(root)).and_then(|p| point(&p["joint"])).ok_or_else(|| bad("the root part has no joint"))?;
     let project = view.file("ecproj");
+
     let mut steps = vec![
         step("file.import", json!({"paths": [photo_source], "importAs": "compositionLayerSizes"})),
         step("comp.open", json!({"comp": view.comp()})),
-        step("comp.settings", json!({"frameRate": FPS})),
+        step("comp.settings", json!({"frameRate": 24})),
     ];
-    for part in list {
-        steps.extend(joint_steps(part)?);
+    if let Some(script_path) = p["script"].as_str() {
+        steps.push(step("file.runScript", json!({"path": script_path})));
     }
-    steps.push(step("layer.newNull", json!({"name": "root"})));
-    steps.push(step("layer.setTransform", json!({"layers": ["root"], "prop": "position", "value": root_joint})));
-    for part in list {
-        let id = part["id"].as_str().unwrap_or_default();
-        let parent = part["parent"].as_str().unwrap_or("root");
-        steps.push(step("layer.setParent", json!({"layers": [id], "parent": parent, "compensate": true})));
-        if let (Some(pins), Some(bounds)) = (part["pins"].as_array(), part["bounds"].as_array().filter(|b| b.len() == 4)) {
-            let ox = bounds[0].as_f64().unwrap_or(0.0);
-            let oy = bounds[1].as_f64().unwrap_or(0.0);
-            let bw = bounds[2].as_f64().unwrap_or(0.0);
-            let bh = bounds[3].as_f64().unwrap_or(0.0);
-            let mut pin_names = Vec::new();
-            for pin_pt in pins {
-                if let Some([px, py]) = point(pin_pt) {
-                    let lx = px - ox;
-                    let ly = py - oy;
-                    if lx >= 0.0 && lx <= bw && ly >= 0.0 && ly <= bh {
-                        steps.push(step("puppet.addPin", json!({"layer": id, "kind": "position", "position": [lx, ly]})));
-                        pin_names.push(format!("Puppet Pin {}", pin_names.len() + 1));
-                    }
-                }
-            }
-            if pin_names.len() >= 2 {
-                steps.push(step(
-                    "puppet.follow",
-                    json!({
-                        "layer": id,
-                        "leader": pin_names[0],
-                        "pins": &pin_names[1..],
-                        "delay": part["follow_delay"].as_f64().unwrap_or(0.08),
-                        "amount": part["follow_amount"].as_u64().unwrap_or(100),
-                        "cascade": true
-                    }),
-                ));
-            }
-        }
-        if part["path_follow_nulls"].as_bool() == Some(true) {
-            steps.push(step("paths.pointsFollowNulls", json!({"layer": id})));
-        }
+    if let Some(code) = p["code"].as_str() {
+        steps.push(step("script.run", json!({"code": code})));
     }
-    if project.is_file() {
-        let _ = std::fs::remove_file(&project);
-    }
+
     effectcraft(&view.dir, Some(&project), &steps, true)?;
-    record_rest(&view, &project, parts)?;
-    let preview_png = project.with_file_name(format!("{}-{}-preview.png", view.id, view.view));
-    let _ = super::effectcraft_frame(&project, &view.comp(), 0.0, 960, &preview_png);
-    if s.project_path.is_some() && project.is_file() {
-        let _ = s.execute(
-            "project.add_asset",
-            json!({"path": project, "kind": "character", "name": format!("{} Rig", view.id), "if_not_exists": true, "load": false}),
-        );
-    }
+    super::manage::sync_character_registration(s, &view.id, &view.folder_name, Some("rig_2_5d"), Some(&project), None, None);
+
     Ok(json!({
         "ok": true,
         "ecproj": project,
         "source": photo_source,
         "comp": view.comp(),
-        "layers": list.len() + 1,
-        "next": format!("character.action character={} view={} action=idle", view.id, view.view)
     }))
+}
+
+/// `character.bone.add`: add an IK/FK bone between two element instances (`bone.add` in AniCraft).
+pub fn cmd_bone_add(s: &mut Session, p: &Value) -> Result<Value> {
+    let (cid, name, anicraft_path) = resolve_anicraft_doc(s, p)?;
+    let from = p.get("from").ok_or_else(|| bad("from=<instance id> is required"))?;
+    let to = p.get("to").ok_or_else(|| bad("to=<instance id> is required"))?;
+    let mut params = json!({"from": from, "to": to});
+    if let Some(head) = p.get("head") {
+        params["head"] = head.clone();
+    }
+    if let Some(tail) = p.get("tail") {
+        params["tail"] = tail.clone();
+    }
+    if let Some(bone_name) = p.get("name") {
+        params["name"] = bone_name.clone();
+    }
+    let res = anicraft_exec(&anicraft_path, "bone.add", &params, true)?;
+    super::manage::sync_character_registration(s, &cid, &name, Some("artboard_2d"), None, Some(&anicraft_path), None);
+    Ok(json!({"ok": true, "character": cid, "anicraft": anicraft_path, "result": res}))
+}
+
+/// `character.bone.remove`: remove a bone and descendant joints (`bone.remove` in AniCraft).
+pub fn cmd_bone_remove(s: &mut Session, p: &Value) -> Result<Value> {
+    let (cid, _name, anicraft_path) = resolve_anicraft_doc(s, p)?;
+    let bone = p.get("bone").ok_or_else(|| bad("bone=<bone id or name> is required"))?;
+    let params = json!({"bone": bone});
+    let res = anicraft_exec(&anicraft_path, "bone.remove", &params, true)?;
+    Ok(json!({"ok": true, "character": cid, "anicraft": anicraft_path, "bone": bone, "result": res}))
+}
+
+/// `character.bone.setLimits`: configure bone joint angle constraints (`bone.set_limits` in AniCraft).
+pub fn cmd_bone_set_limits(s: &mut Session, p: &Value) -> Result<Value> {
+    let (cid, _name, anicraft_path) = resolve_anicraft_doc(s, p)?;
+    let bone = p.get("bone").ok_or_else(|| bad("bone=<bone id or name> is required"))?;
+    let mut params = json!({"bone": bone});
+    if let Some(c) = p.get("constrain") {
+        params["constrain"] = c.clone();
+    }
+    if let Some(min) = p.get("min") {
+        params["min"] = min.clone();
+    }
+    if let Some(max) = p.get("max") {
+        params["max"] = max.clone();
+    }
+    let res = anicraft_exec(&anicraft_path, "bone.set_limits", &params, true)?;
+    Ok(json!({"ok": true, "character": cid, "anicraft": anicraft_path, "bone": bone, "result": res}))
+}
+
+/// `character.bone.pin`: pin or unpin an armature joint (`bone.pin` in AniCraft).
+pub fn cmd_bone_pin(s: &mut Session, p: &Value) -> Result<Value> {
+    let (cid, _name, anicraft_path) = resolve_anicraft_doc(s, p)?;
+    let bone = p.get("bone").ok_or_else(|| bad("bone=<bone id or name> is required"))?;
+    let pinned = p["pinned"].as_bool().unwrap_or(true);
+    let params = json!({"bone": bone, "pinned": pinned});
+    let res = anicraft_exec(&anicraft_path, "bone.pin", &params, true)?;
+    Ok(json!({"ok": true, "character": cid, "anicraft": anicraft_path, "bone": bone, "pinned": pinned, "result": res}))
+}
+
+/// `character.bone.pose`: keyframe bone joint pose or translation at a timeline frame (`bone.pose` in AniCraft).
+pub fn cmd_bone_pose(s: &mut Session, p: &Value) -> Result<Value> {
+    let (cid, _name, anicraft_path) = resolve_anicraft_doc(s, p)?;
+    let mut params = json!({});
+    for k in ["bone", "angle", "rotate_by", "dx", "dy", "layer", "frame"] {
+        if let Some(v) = p.get(k) {
+            params[k] = v.clone();
+        }
+    }
+    let res = anicraft_exec(&anicraft_path, "bone.pose", &params, true)?;
+    Ok(json!({"ok": true, "character": cid, "anicraft": anicraft_path, "result": res}))
+}
+
+/// `character.bone.solve`: perform inverse kinematics (IK) solve by dragging a bone end (`bone.solve` in AniCraft).
+pub fn cmd_bone_solve(s: &mut Session, p: &Value) -> Result<Value> {
+    let (cid, _name, anicraft_path) = resolve_anicraft_doc(s, p)?;
+    let bone = p.get("bone").ok_or_else(|| bad("bone=<bone id or name> is required"))?;
+    let x = p.get("x").ok_or_else(|| bad("x=<stage px> is required"))?;
+    let y = p.get("y").ok_or_else(|| bad("y=<stage px> is required"))?;
+    let mut params = json!({"bone": bone, "x": x, "y": y});
+    if let Some(local) = p.get("local") {
+        params["local"] = local.clone();
+    }
+    if let Some(frame) = p.get("frame") {
+        params["frame"] = frame.clone();
+    }
+    let res = anicraft_exec(&anicraft_path, "bone.solve", &params, true)?;
+    Ok(json!({"ok": true, "character": cid, "anicraft": anicraft_path, "result": res}))
+}
+
+/// `character.bone.info`: inspect all armatures, bones, joints, limits, and pin states (`bone.info` in AniCraft).
+pub fn cmd_bone_info(s: &mut Session, p: &Value) -> Result<Value> {
+    let (cid, _name, anicraft_path) = resolve_anicraft_doc(s, p)?;
+    let mut params = json!({});
+    if let Some(frame) = p.get("frame") {
+        params["frame"] = frame.clone();
+    }
+    if let Some(layer) = p.get("layer") {
+        params["layer"] = layer.clone();
+    }
+    let res = anicraft_exec(&anicraft_path, "bone.info", &params, false)?;
+    Ok(json!({"ok": true, "character": cid, "anicraft": anicraft_path, "info": res}))
 }

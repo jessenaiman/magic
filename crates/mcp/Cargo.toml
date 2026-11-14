@@ -11,10 +11,11 @@ workspace = true
 
 [dependencies]
 log = { workspace = true }
-magic = { workspace = true }
+magic-engine = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 
-rmcp = { version = "3.5", default-features = false, features = ["server", "macros", "transport-io"] }
+# Official Rust MCP 2026-07-28 SDK (`modelcontextprotocol/rust-sdk`)
+rmcp = { version = "3.9", default-features = false, features = ["server", "macros", "transport-io"] }
 tokio = { version = "1", features = ["rt-multi-thread", "io-std", "sync"] }
 schemars = "1"

@@ -1,12 +1,12 @@
 //! Project lifecycle (`project.*` and ArtCraft `file.*` suite commands), assets,
-//! workshop/transcription (`timing-reference.json`), and `DesignCraft` Storyboard (`storyboard.*`).
+//! workshop/transcription, and `DesignCraft` Storyboard (`storyboard.*`).
 
 use super::{cmd_spec, query_spec};
 use crate::commands::{CommandSpec, always};
 use crate::project::{
-    cmd_file_save_as, cmd_project_add_asset, cmd_project_autosave, cmd_project_close, cmd_project_convert, cmd_project_import_file, cmd_project_list_assets,
-    cmd_project_load_asset, cmd_project_new, cmd_project_open, cmd_project_remove_asset, cmd_project_save, cmd_project_save_asset, cmd_project_trunk,
-    cmd_project_update_asset, cmd_workspace_init,
+    cmd_file_save_as, cmd_project_add_asset, cmd_project_asset_metadata, cmd_project_close, cmd_project_files, cmd_project_import_file,
+    cmd_project_list_assets, cmd_project_load_asset, cmd_project_new, cmd_project_open, cmd_project_remove_asset, cmd_project_save, cmd_project_save_asset,
+    cmd_project_update_asset,
 };
 use crate::workshop::{
     cmd_audio_analyze, cmd_project_search, cmd_workshop_add, cmd_workshop_approve_draft, cmd_workshop_files, cmd_workshop_import_transcript,
@@ -14,7 +14,7 @@ use crate::workshop::{
 };
 
 pub fn specs() -> Vec<CommandSpec> {
-    let mut out = Vec::with_capacity(52);
+    let mut out = Vec::with_capacity(45);
     out.extend(specs_project());
     out.extend(specs_file());
     out.extend(specs_workshop());
@@ -43,18 +43,46 @@ fn specs_project() -> Vec<CommandSpec> {
         ),
         query_spec!("project.list_assets", "List Project Assets", "{}", cmd_project_list_assets),
         query_spec!("project.snapshot", "Everything a View Draws for the Open Project", "{}", crate::cmd::project::cmd_project_snapshot),
+        query_spec!("project.status", "Open Project Dirty, Revision & Undo State", "{}", crate::project::cmd_project_status),
+        cmd_spec!(
+            "project.autosave_tick",
+            "Run Rolling Auto-Save Check (Maintains Dirty State)",
+            ["File"],
+            None,
+            "{\"force\":false}",
+            always,
+            crate::autosave::cmd_project_autosave_tick
+        ),
+        query_spec!("recovery.list", "List Orphaned Crash Recovery Snapshots", "{}", crate::recovery::cmd_recovery_list),
+        cmd_spec!(
+            "recovery.restore",
+            "Restore Crash Recovery Snapshot Into Session (Marks Dirty)",
+            ["File"],
+            None,
+            "{\"run_id\":\"optional\"}",
+            always,
+            crate::recovery::cmd_recovery_restore
+        ),
+        cmd_spec!(
+            "recovery.discard",
+            "Discard Orphaned Crash Recovery Snapshot",
+            ["File"],
+            None,
+            "{\"run_id\":\"optional\",\"all\":false}",
+            always,
+            crate::recovery::cmd_recovery_discard
+        ),
         cmd_spec!(
             "project.new",
-            "New Project (Requires Audio Track + Transcribes to FilmCraft & Starts Storyboard)",
+            "New Project (Requires Audio Track + Transcribes to FilmCraft & Initializes DesignCraft Storyboard)",
             ["File"],
             Some("Cmd+N"),
-            "{\"path\":\"folder/name.magic, or root + name\",\"root\":\"folder\",\"name\":\"project title\",\"mode\":\"project (song, requires audio) | animation\",\"audio\":\"required song audio path for song projects\",\"transcript\":\"optional pre-timed transcript JSON\",\"wizard\":{\"style\":\"\",\"world\":\"\",\"character\":\"\",\"motion\":\"\"},\"overwrite\":false}",
+            "{\"path\":\"folder/name.magic, or root + name\",\"root\":\"folder\",\"name\":\"project title\",\"mode\":\"project (song, requires audio) | animation\",\"audio\":\"required song audio path for song projects\",\"transcript\":\"optional pre-timed transcript JSON\",\"overwrite\":false}",
             always,
             cmd_project_new
         ),
         cmd_spec!("project.open", "Open Project", ["File"], Some("Cmd+O"), "{\"path\":\"folder/name.magic\"}", always, cmd_project_open),
         cmd_spec!("project.save", "Save Project", ["File"], Some("Cmd+S"), "{\"path\":\"optional_save_as.magic\"}", always, cmd_project_save),
-        cmd_spec!("project.autosave", "Write Crash-Recovery Journal (.history/*.autosave)", [], None, "{}", always, cmd_project_autosave),
         cmd_spec!("film.save", "Save Film (FilmCraft)", ["File"], None, "{}", always, crate::cmd::film::cmd_film_save),
         cmd_spec!("effect.save", "Save Lettering (EffectCraft)", ["File"], None, "{}", always, crate::cmd::words::native_motion::cmd_effect_save),
         cmd_spec!("shot.commit", "Save the Animation's Three Documents", ["Animation"], None, "{}", always, crate::cmd::commit::cmd_shot_commit),
@@ -88,6 +116,15 @@ fn specs_project() -> Vec<CommandSpec> {
             cmd_project_load_asset
         ),
         cmd_spec!(
+            "project.asset_metadata",
+            "Inspect EXIF/IPTC/XMP Metadata, Geotag via GPX, or Write XMP Sidecar",
+            ["Project Assets"],
+            None,
+            "{\"id\":\"asset_id\",\"path\":\"optional file\",\"include_tags\":false,\"gpx_path\":\"optional .gpx\",\"max_gap_secs\":300,\"write_xmp_sidecar\":false}",
+            always,
+            cmd_project_asset_metadata
+        ),
+        cmd_spec!(
             "project.import_file",
             "Import Project or Media File",
             ["Project Assets"],
@@ -98,30 +135,12 @@ fn specs_project() -> Vec<CommandSpec> {
         ),
         cmd_spec!(
             "project.save_asset",
-            "Save Asset Into Project assets/ Directory (Optional Workspace Promotion)",
+            "Copy & Save Asset Into Owned Project assets/ Directory",
             ["Project Assets"],
             None,
-            "{\"path\":\"file\",\"workspace_asset\":\"optional catalog id\",\"name\":\"optional\",\"character\":\"optional\",\"background\":\"optional\",\"image\":\"optional\",\"promote_to_workspace\":false,\"overwrite\":false}",
+            "{\"path\":\"file\",\"name\":\"optional\",\"character\":\"optional\",\"background\":\"optional\",\"image\":\"optional\",\"overwrite\":false}",
             always,
             cmd_project_save_asset
-        ),
-        cmd_spec!(
-            "project.workspace_init",
-            "Initialize Canonical magic/ Workspace (projects, assets, animations)",
-            ["File"],
-            None,
-            "{\"path\":\"optional magic workspace folder\",\"set_default\":false}",
-            always,
-            cmd_workspace_init
-        ),
-        cmd_spec!(
-            "project.convert",
-            "Convert Legacy Project (HyperFrames, Remotion, or Custom) Into magic/projects/<slug>",
-            ["File"],
-            None,
-            "{\"kind\":\"hyperframes|remotion|custom|auto\",\"source\":\"legacy project directory\",\"magic_root\":\"optional magic workspace folder\",\"name\":\"optional project title\",\"overwrite\":false}",
-            always,
-            cmd_project_convert
         ),
     ]
 }
@@ -158,7 +177,7 @@ fn specs_workshop() -> Vec<CommandSpec> {
     vec![
         query_spec!("workshop.status", "Workshop Stages", "{}", cmd_workshop_status),
         query_spec!("workshop.files", "Workshop Files", "{\"filter\":\"optional substring\",\"group\":\"optional\"}", cmd_workshop_files),
-        query_spec!("project.trunk", "ArtCraft Project File Trunk", "{}", cmd_project_trunk),
+        query_spec!("project.files", "Project Files", "{}", cmd_project_files),
         query_spec!("project.search", "Search Project, Files, Storyboard & Commands", "{\"query\":\"search text\"}", cmd_project_search),
         query_spec!("song.lyrics", "Song Lyrics (Artist Sheet or Transcript)", "{}", crate::cmd::words::lyrics::cmd_song_lyrics),
         query_spec!("song.waveform", "Song Audio Waveform", "{\"start\":0,\"end\":\"optional seconds\",\"bins\":800}", crate::cmd::song::waveform::read),
@@ -193,10 +212,10 @@ fn specs_workshop() -> Vec<CommandSpec> {
         ),
         cmd_spec!(
             "workshop.import_transcript",
-            "Import Transcript & Build timing-reference.json + Synced FilmCraft Lyric Track",
+            "Import Timed Transcript & Sync FilmCraft Lyric Track",
             ["Workshop"],
             None,
-            "{\"path\":\"transcript.json\",\"captions\":\"optional SRT\",\"replace\":false}",
+            "{\"path\":\"timed-lyrics.srt\",\"captions\":\"optional SRT\",\"replace\":false}",
             always,
             cmd_workshop_import_transcript
         ),
@@ -204,7 +223,7 @@ fn specs_workshop() -> Vec<CommandSpec> {
         cmd_spec!("workshop.remove", "Remove Workshop File", ["Workshop"], None, "{\"path\":\"file in project folder\"}", always, cmd_workshop_remove),
         cmd_spec!(
             "audio.analyze",
-            "Transcribe Song Audio via FilmCraft & Write timing-reference.json",
+            "Transcribe Song Audio via FilmCraft & Store Transcript in Project",
             ["File"],
             None,
             "{\"audio\":\"optional song path\",\"model\":\"whisper-base\"}",
@@ -214,121 +233,46 @@ fn specs_workshop() -> Vec<CommandSpec> {
     ]
 }
 
-fn specs_storyboard() -> Vec<CommandSpec> {
+pub(crate) fn specs_storyboard() -> Vec<CommandSpec> {
     vec![
-        cmd_spec!(
-            "storyboard.open",
-            "Open Storyboard PDF in PDFCraft (--control)",
-            ["Storyboard"],
-            None,
-            "{\"path\":\"optional storyboard.pdf\",\"page\":0}",
-            always,
-            crate::cmd::storyboard::cmd_storyboard_open
-        ),
-        cmd_spec!(
-            "storyboard.new",
-            "Initialize storyboard.pdf from Read-Only Master Template",
-            ["Storyboard"],
-            None,
-            "{\"path\":\"optional storyboard.pdf\",\"overwrite\":false}",
-            always,
-            crate::cmd::storyboard::cmd_storyboard_new
+        query_spec!(
+            "storyboard.status",
+            "Read-Only Status & Rendered Pages of Standalone storyboard.designcraft",
+            "{\"path\":\"optional storyboard.designcraft\",\"page\":\"optional 0-based page index\"}",
+            crate::cmd::storyboard::cmd_storyboard_status
         ),
         query_spec!(
             "storyboard.pages",
-            "Inspect 17-Page Storyboard PDF Sections, Fields & Previews",
-            "{\"path\":\"optional storyboard.pdf\",\"page\":\"optional index\",\"label\":\"optional field\",\"full\":false}",
+            "List Rendered PNG Pages of Standalone storyboard.designcraft (Read-Only)",
+            "{\"path\":\"optional storyboard.designcraft\",\"page\":\"optional 0-based page index\"}",
             crate::cmd::storyboard::cmd_storyboard_pages
         ),
-        query_spec!(
-            "storyboard.check",
-            "Red/Green Required-Field Readiness Across Storyboard Sections",
-            "{\"path\":\"optional storyboard.pdf\"}",
-            crate::cmd::storyboard::cmd_storyboard_check
-        ),
         cmd_spec!(
-            "storyboard.wizard",
-            "Populate Core Storyboard PDF Fields (Title, Style, World, Character, Motion)",
+            "storyboard.new",
+            "Initialize storyboard.designcraft from Starter Template and Render Pages",
             ["Storyboard"],
             None,
-            "{\"title\":\"optional\",\"style\":\"optional\",\"world\":\"optional\",\"character\":\"optional\",\"motion\":\"optional\"}",
+            "{\"path\":\"optional storyboard.designcraft\",\"template\":\"optional .designcraft\",\"overwrite\":false}",
             always,
-            crate::cmd::storyboard::cmd_storyboard_wizard
+            crate::cmd::storyboard::cmd_storyboard_new
         ),
         cmd_spec!(
-            "storyboard.bulk_generate",
-            "Plan Bulk Scene Still Generation From Storyboard References",
+            "storyboard.render",
+            "Render One Page (or All Pages) of storyboard.designcraft to PNG via designcraft-cli",
             ["Storyboard"],
             None,
-            "{\"overwrite\":false}",
+            "{\"page\":\"optional 0-based page (omit for all pages)\",\"scale\":1.5,\"output\":\"optional\"}",
             always,
-            crate::cmd::storyboard::cmd_storyboard_bulk_generate
+            crate::cmd::storyboard::cmd_storyboard_render
         ),
         cmd_spec!(
-            "storyboard.set",
-            "Edit Storyboard PDF Text Field or Place PhotoCraft / VectorCraft / EffectCraft Artwork",
+            "storyboard.open",
+            "Open storyboard.designcraft in DesignCraft",
             ["Storyboard"],
             None,
-            "{\"page\":0,\"label\":\"optional field\",\"text\":\"optional text\",\"image\":\"optional .png/.pcraft/.psd/.vectorcraft/.ecproj\",\"character\":\"optional id\",\"time\":0.0,\"remove_background\":false,\"lut\":\"optional .cube\",\"vectorize\":false,\"fields\":{},\"images\":{}}",
+            "{\"path\":\"optional storyboard.designcraft\"}",
             always,
-            crate::cmd::storyboard::cmd_storyboard_set
-        ),
-        cmd_spec!(
-            "storyboard.grade",
-            "Batch Grade Placed Storyboard Images via PhotoCraft (photocraft-cli batch --actions)",
-            ["Storyboard"],
-            None,
-            "{\"section\":\"optional Scenes|Backgrounds\",\"lut\":\"optional .cube/.3dl/.look\",\"vibrance\":15,\"curves\":[[0,0],[255,255]],\"sharpen\":40,\"auto_tone\":false,\"actions\":[]}",
-            always,
-            crate::cmd::storyboard::cmd_storyboard_grade
-        ),
-        cmd_spec!(
-            "storyboard.add",
-            "Read-Only Guard (Master Storyboard Layout Is Immutable)",
-            ["Storyboard"],
-            None,
-            "{}",
-            always,
-            crate::cmd::storyboard::cmd_storyboard_add
-        ),
-        cmd_spec!(
-            "storyboard.remove",
-            "Read-Only Guard (Master Storyboard Layout Is Immutable)",
-            ["Storyboard"],
-            None,
-            "{}",
-            always,
-            crate::cmd::storyboard::cmd_storyboard_remove
-        ),
-        cmd_spec!(
-            "storyboard.section",
-            "Read-Only Guard (Master Storyboard Sections Are Immutable)",
-            ["Storyboard"],
-            None,
-            "{}",
-            always,
-            crate::cmd::storyboard::cmd_storyboard_section
-        ),
-        cmd_spec!(
-            "storyboard.locations",
-            "Inspect or Update Storyboard Backgrounds Fields",
-            ["Storyboard"],
-            None,
-            "{\"page\":\"optional page\",\"fields\":{},\"images\":{}}",
-            always,
-            crate::cmd::storyboard::cmd_storyboard_locations
-        ),
-        query_spec!(
-            "storyboard.thumbnail",
-            "Render storyboard.pdf Pages to PNG via PDFCraft",
-            "{\"page\":0,\"rail\":true,\"scale\":1.5}",
-            crate::cmd::storyboard::cmd_storyboard_thumbnail
-        ),
-        query_spec!(
-            "storyboard.export",
-            "Export storyboard.pdf Copy or PNG Page Directory",
-            "{\"pdf\":\"optional path\",\"png_dir\":\"optional dir\",\"scale\":1.0}",
-            crate::cmd::storyboard::cmd_storyboard_export
+            crate::cmd::storyboard::cmd_storyboard_open
         ),
     ]
 }
