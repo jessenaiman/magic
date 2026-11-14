@@ -946,7 +946,7 @@ dependencies = [
 [[package]]
 name = "craft-aaf"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
+source = "git+https://github.com/storytold/craft-libs?branch=main#f2cd524f74d34275c5715563da7f56bd2284dce4"
 dependencies = [
  "craft-audio",
  "craft-cfb",
@@ -957,7 +957,7 @@ dependencies = [
 [[package]]
 name = "craft-anicraft-format"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
+source = "git+https://github.com/storytold/craft-libs?branch=main#f2cd524f74d34275c5715563da7f56bd2284dce4"
 dependencies = [
  "serde",
  "serde_json",
@@ -966,7 +966,7 @@ dependencies = [
 [[package]]
 name = "craft-atomic"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
+source = "git+https://github.com/storytold/craft-libs?branch=main#f2cd524f74d34275c5715563da7f56bd2284dce4"
 dependencies = [
  "rustix 1.1.6",
 ]
@@ -974,7 +974,7 @@ dependencies = [
 [[package]]
 name = "craft-audio"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
+source = "git+https://github.com/storytold/craft-libs?branch=main#f2cd524f74d34275c5715563da7f56bd2284dce4"
 dependencies = [
  "craft-media",
  "log",
@@ -986,7 +986,7 @@ dependencies = [
 [[package]]
 name = "craft-captions"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
+source = "git+https://github.com/storytold/craft-libs?branch=main#f2cd524f74d34275c5715563da7f56bd2284dce4"
 dependencies = [
  "craft-timeline",
  "craft-xml",
@@ -996,12 +996,12 @@ dependencies = [
 [[package]]
 name = "craft-cfb"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
+source = "git+https://github.com/storytold/craft-libs?branch=main#f2cd524f74d34275c5715563da7f56bd2284dce4"
 
 [[package]]
 name = "craft-dialogs"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
+source = "git+https://github.com/storytold/craft-libs?branch=main#f2cd524f74d34275c5715563da7f56bd2284dce4"
 dependencies = [
  "block2 0.6.2",
  "objc2 0.6.5",
@@ -1014,7 +1014,7 @@ dependencies = [
 [[package]]
 name = "craft-doc"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
+source = "git+https://github.com/storytold/craft-libs?branch=main#f2cd524f74d34275c5715563da7f56bd2284dce4"
 dependencies = [
  "craft-ecproj-format",
  "craft-pcraft-format",
@@ -1028,12 +1028,12 @@ dependencies = [
 [[package]]
 name = "craft-docpath"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
+source = "git+https://github.com/storytold/craft-libs?branch=main#f2cd524f74d34275c5715563da7f56bd2284dce4"
 
 [[package]]
 name = "craft-drawingml"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
+source = "git+https://github.com/storytold/craft-libs?branch=main#f2cd524f74d34275c5715563da7f56bd2284dce4"
 dependencies = [
  "craft-xml",
  "kurbo 0.13.1",
@@ -1044,7 +1044,7 @@ dependencies = [
 [[package]]
 name = "craft-ecproj-format"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
+source = "git+https://github.com/storytold/craft-libs?branch=main#f2cd524f74d34275c5715563da7f56bd2284dce4"
 dependencies = [
  "serde",
  "serde_json",
@@ -1054,12 +1054,12 @@ dependencies = [
 [[package]]
 name = "craft-eps"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
+source = "git+https://github.com/storytold/craft-libs?branch=main#f2cd524f74d34275c5715563da7f56bd2284dce4"
 
 [[package]]
 name = "craft-file-formats"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
+source = "git+https://github.com/storytold/craft-libs?branch=main#f2cd524f74d34275c5715563da7f56bd2284dce4"
 dependencies = [
  "craft-eps",
  "craft-idml",
@@ -1072,7 +1072,7 @@ dependencies = [
 [[package]]
 name = "craft-font-catalog"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
+source = "git+https://github.com/storytold/craft-libs?branch=main#f2cd524f74d34275c5715563da7f56bd2284dce4"
 dependencies = [
  "fontique",
  "skrifa 0.47.0",
@@ -1083,7 +1083,7 @@ dependencies = [
 [[package]]
 name = "craft-font-manager"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
+source = "git+https://github.com/storytold/craft-libs?branch=main#f2cd524f74d34275c5715563da7f56bd2284dce4"
 dependencies = [
  "craft-font-catalog",
  "craft-font-store",
@@ -1097,7 +1097,7 @@ dependencies = [
 [[package]]
 name = "craft-font-store"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
+source = "git+https://github.com/storytold/craft-libs?branch=main#f2cd524f74d34275c5715563da7f56bd2284dce4"
 dependencies = [
  "cap-primitives",
  "craft-atomic",
@@ -1118,7 +1118,7 @@ dependencies = [
 [[package]]
 name = "craft-fonts-build"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
+source = "git+https://github.com/storytold/craft-libs?branch=main#f2cd524f74d34275c5715563da7f56bd2284dce4"
 dependencies = [
  "skera",
  "skrifa 0.48.0",
@@ -1127,12 +1127,12 @@ dependencies = [
 [[package]]
 name = "craft-heif"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
+source = "git+https://github.com/storytold/craft-libs?branch=main#f2cd524f74d34275c5715563da7f56bd2284dce4"
 
 [[package]]
 name = "craft-i18n"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
+source = "git+https://github.com/storytold/craft-libs?branch=main#f2cd524f74d34275c5715563da7f56bd2284dce4"
 dependencies = [
  "fixed_decimal",
  "icu_decimal",
@@ -1155,7 +1155,7 @@ dependencies = [
 [[package]]
 name = "craft-idml"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
+source = "git+https://github.com/storytold/craft-libs?branch=main#f2cd524f74d34275c5715563da7f56bd2284dce4"
 dependencies = [
  "craft-xml",
  "craft-zip",
@@ -1165,13 +1165,14 @@ dependencies = [
 [[package]]
 name = "craft-image-codecs"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
+source = "git+https://github.com/storytold/craft-libs?branch=main#f2cd524f74d34275c5715563da7f56bd2284dce4"
 dependencies = [
  "craft-jpeg",
  "craft-metadata",
  "exr",
  "flate2",
  "half",
+ "hayro-jpeg2000",
  "image",
  "image-webp",
  "jpeg-encoder",
@@ -1188,7 +1189,7 @@ dependencies = [
 [[package]]
 name = "craft-jpeg"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
+source = "git+https://github.com/storytold/craft-libs?branch=main#f2cd524f74d34275c5715563da7f56bd2284dce4"
 dependencies = [
  "thiserror 2.0.21",
 ]
@@ -1196,7 +1197,7 @@ dependencies = [
 [[package]]
 name = "craft-keymap"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
+source = "git+https://github.com/storytold/craft-libs?branch=main#f2cd524f74d34275c5715563da7f56bd2284dce4"
 dependencies = [
  "egui",
  "serde",
@@ -1206,7 +1207,7 @@ dependencies = [
 [[package]]
 name = "craft-media"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
+source = "git+https://github.com/storytold/craft-libs?branch=main#f2cd524f74d34275c5715563da7f56bd2284dce4"
 dependencies = [
  "serde",
  "thiserror 2.0.21",
@@ -1215,7 +1216,7 @@ dependencies = [
 [[package]]
 name = "craft-menu"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
+source = "git+https://github.com/storytold/craft-libs?branch=main#f2cd524f74d34275c5715563da7f56bd2284dce4"
 dependencies = [
  "craft-keymap",
  "craft-quit",
@@ -1228,7 +1229,7 @@ dependencies = [
 [[package]]
 name = "craft-mesh"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
+source = "git+https://github.com/storytold/craft-libs?branch=main#f2cd524f74d34275c5715563da7f56bd2284dce4"
 dependencies = [
  "craft-opc",
  "craft-xml",
@@ -1239,7 +1240,7 @@ dependencies = [
 [[package]]
 name = "craft-metadata"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
+source = "git+https://github.com/storytold/craft-libs?branch=main#f2cd524f74d34275c5715563da7f56bd2284dce4"
 dependencies = [
  "brotli-decompressor",
  "chrono",
@@ -1251,7 +1252,7 @@ dependencies = [
 [[package]]
 name = "craft-opc"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
+source = "git+https://github.com/storytold/craft-libs?branch=main#f2cd524f74d34275c5715563da7f56bd2284dce4"
 dependencies = [
  "craft-xml",
  "craft-zip",
@@ -1262,7 +1263,7 @@ dependencies = [
 [[package]]
 name = "craft-pcraft-bundle"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
+source = "git+https://github.com/storytold/craft-libs?branch=main#f2cd524f74d34275c5715563da7f56bd2284dce4"
 dependencies = [
  "blake3",
  "craft-atomic",
@@ -1275,7 +1276,7 @@ dependencies = [
 [[package]]
 name = "craft-pcraft-format"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
+source = "git+https://github.com/storytold/craft-libs?branch=main#f2cd524f74d34275c5715563da7f56bd2284dce4"
 dependencies = [
  "serde",
  "serde_json",
@@ -1285,7 +1286,7 @@ dependencies = [
 [[package]]
 name = "craft-platform"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
+source = "git+https://github.com/storytold/craft-libs?branch=main#f2cd524f74d34275c5715563da7f56bd2284dce4"
 dependencies = [
  "async-channel",
  "async-io",
@@ -1298,7 +1299,7 @@ dependencies = [
 [[package]]
 name = "craft-psd"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
+source = "git+https://github.com/storytold/craft-libs?branch=main#f2cd524f74d34275c5715563da7f56bd2284dce4"
 dependencies = [
  "encoding_rs",
  "flate2",
@@ -1309,7 +1310,7 @@ dependencies = [
 [[package]]
 name = "craft-quit"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
+source = "git+https://github.com/storytold/craft-libs?branch=main#f2cd524f74d34275c5715563da7f56bd2284dce4"
 dependencies = [
  "dispatch2",
  "egui",
@@ -1320,7 +1321,7 @@ dependencies = [
 [[package]]
 name = "craft-raw"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
+source = "git+https://github.com/storytold/craft-libs?branch=main#f2cd524f74d34275c5715563da7f56bd2284dce4"
 dependencies = [
  "craft-metadata",
  "craft-tiff",
@@ -1332,7 +1333,7 @@ dependencies = [
 [[package]]
 name = "craft-settings"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
+source = "git+https://github.com/storytold/craft-libs?branch=main#f2cd524f74d34275c5715563da7f56bd2284dce4"
 dependencies = [
  "craft-atomic",
  "dirs",
@@ -1343,7 +1344,7 @@ dependencies = [
 [[package]]
 name = "craft-svg"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
+source = "git+https://github.com/storytold/craft-libs?branch=main#f2cd524f74d34275c5715563da7f56bd2284dce4"
 dependencies = [
  "craft-image-codecs",
  "craft-xml",
@@ -1358,7 +1359,7 @@ dependencies = [
 [[package]]
 name = "craft-text"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
+source = "git+https://github.com/storytold/craft-libs?branch=main#f2cd524f74d34275c5715563da7f56bd2284dce4"
 dependencies = [
  "hypher",
  "miniz_oxide 0.8.9",
@@ -1372,7 +1373,7 @@ dependencies = [
 [[package]]
 name = "craft-tiff"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
+source = "git+https://github.com/storytold/craft-libs?branch=main#f2cd524f74d34275c5715563da7f56bd2284dce4"
 dependencies = [
  "serde",
  "thiserror 2.0.21",
@@ -1381,7 +1382,7 @@ dependencies = [
 [[package]]
 name = "craft-time"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
+source = "git+https://github.com/storytold/craft-libs?branch=main#f2cd524f74d34275c5715563da7f56bd2284dce4"
 dependencies = [
  "serde",
  "thiserror 2.0.21",
@@ -1390,7 +1391,7 @@ dependencies = [
 [[package]]
 name = "craft-timeline"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
+source = "git+https://github.com/storytold/craft-libs?branch=main#f2cd524f74d34275c5715563da7f56bd2284dce4"
 dependencies = [
  "craft-time",
  "craft-xml",
@@ -1401,7 +1402,7 @@ dependencies = [
 [[package]]
 name = "craft-ui"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
+source = "git+https://github.com/storytold/craft-libs?branch=main#f2cd524f74d34275c5715563da7f56bd2284dce4"
 dependencies = [
  "craft-fonts-build",
  "craft-i18n",
@@ -1424,7 +1425,7 @@ dependencies = [
 [[package]]
 name = "craft-update"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
+source = "git+https://github.com/storytold/craft-libs?branch=main#f2cd524f74d34275c5715563da7f56bd2284dce4"
 dependencies = [
  "chrono",
  "dunce",
@@ -1451,7 +1452,7 @@ dependencies = [
 [[package]]
 name = "craft-vectorcraft-format"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
+source = "git+https://github.com/storytold/craft-libs?branch=main#f2cd524f74d34275c5715563da7f56bd2284dce4"
 dependencies = [
  "flate2",
  "serde",
@@ -1462,7 +1463,7 @@ dependencies = [
 [[package]]
 name = "craft-window"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
+source = "git+https://github.com/storytold/craft-libs?branch=main#f2cd524f74d34275c5715563da7f56bd2284dce4"
 dependencies = [
  "egui",
  "objc2 0.6.5",
@@ -1473,7 +1474,7 @@ dependencies = [
 [[package]]
 name = "craft-xml"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
+source = "git+https://github.com/storytold/craft-libs?branch=main#f2cd524f74d34275c5715563da7f56bd2284dce4"
 dependencies = [
  "quick-xml 0.41.0",
  "serde",
@@ -1483,7 +1484,7 @@ dependencies = [
 [[package]]
 name = "craft-zip"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
+source = "git+https://github.com/storytold/craft-libs?branch=main#f2cd524f74d34275c5715563da7f56bd2284dce4"
 dependencies = [
  "flate2",
  "thiserror 2.0.21",
@@ -2556,6 +2557,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "hayro-jpeg2000"
+version = "0.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c75ab947623ef4ccaa7acf0579edf7cbb5a73838e3839a7be73335e522f433a1"
+dependencies = [
+ "fearless_simd",
+]
+
+[[package]]
 name = "heck"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3248,8 +3258,8 @@ dependencies = [
  "rustix 1.1.6",
  "serde",
  "serde_json",
- "sha2 0.10.9",
- "skrifa 0.47.0",
+ "sha2 0.11.1",
+ "skrifa 0.48.0",
  "thiserror 2.0.21",
 ]
 
@@ -3318,7 +3328,7 @@ dependencies = [
  "log",
  "serde",
  "serde_json",
- "skrifa 0.47.0",
+ "skrifa 0.48.0",
  "thiserror 2.0.21",
 ]
 
