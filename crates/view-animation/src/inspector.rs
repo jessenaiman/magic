@@ -12,57 +12,12 @@ use serde_json::{Value, json};
 
 use magic_view_api::controls::{ScalarSpec, fill_card, pill_toggle, ring_slider_h, rotary_dial};
 use magic_view_api::fonts_ui::{FontPickerSpec, font_family_combo};
-use magic_view_api::widgets::{BtnSpec, action_button, status_pill, text_input};
-use magic_view_api::{PickerTarget, UiAction, ViewCtx, disabled_todo_button};
+use magic_view_api::widgets::{BtnSpec, action_button, status_pill};
+use magic_view_api::{PickerTarget, UiAction, ViewCtx};
 
 use crate::state::AnimationViewState;
 
-/// Left-column `T18` Time Remapping, Work Area, Layer/Key Stagger, & Precompose card.
-pub fn draw_time_and_stagger_card(state: &mut AnimationViewState, ui: &mut Ui, ctx: &mut ViewCtx<'_>, _cid: &str) {
-    let sky = ctx.pal.accent_sky;
-    fill_card(ui, ctx.pal, false, |ui| {
-        ui.horizontal_wrapped(|ui| {
-            ui.label(RichText::new("⏱ Time & Stagger (T18)").size(11.5).strong().color(sky));
-            // TODO: Read and find the docs
-            let _ = disabled_todo_button(ui, ctx, "anim-precomp", "", "Precomp", "Precompose character layers (layer.precompose)");
-        });
-        ring_slider_h(ui, ctx.reg, ctx.pal, ScalarSpec::new("anim-time-stretch", "Time Stretch", 25.0..=400.0, "%", sky), &mut state.time_stretch_pct);
-        ui.horizontal_wrapped(|ui| {
-            pill_toggle(ui, ctx.reg, ctx.pal, "anim-time-rev", "Reverse", &mut state.time_reverse, sky);
-            pill_toggle(ui, ctx.reg, ctx.pal, "anim-freeze", "Freeze", &mut state.freeze_frame, ctx.pal.accent_amber);
-        });
-        ring_slider_h(
-            ui,
-            ctx.reg,
-            ctx.pal,
-            ScalarSpec::new("anim-work-out", "Work Area Out", 0.5..=20.0, "s", ctx.pal.accent_emerald),
-            &mut state.work_out_sec,
-        );
-        ring_slider_h(
-            ui,
-            ctx.reg,
-            ctx.pal,
-            ScalarSpec::new("anim-stagger-frames", "Stagger Offset", 1.0..=24.0, "f", ctx.pal.accent_amber),
-            &mut state.stagger_frames,
-        );
-        ui.horizontal_wrapped(|ui| {
-            ui.spacing_mut().item_spacing.x = 4.0;
-            // TODO: Read and find the docs
-            let _ = action_button(
-                ui,
-                ctx.reg,
-                ctx.pal,
-                BtnSpec::label_only("anim-apply-timing", "Apply Remap", "Apply layer.timing & comp.workArea").primary().enabled(false),
-            );
-            // TODO: Read and find the docs
-            let _ = disabled_todo_button(ui, ctx, "anim-stagger-layers", "", "Stagger Layers", "Sequence layers via layer.quickOffset");
-            // TODO: Read and find the docs
-            let _ = disabled_todo_button(ui, ctx, "anim-stagger-keys", "", "Stagger Keys", "Offset keyframes via keys.quickOffset");
-        });
-    });
-}
-
-/// Right-hand inspector (`[Puppet] [3D & Cam] [Roto AI]`) for `T11`–`T17`.
+/// Right-hand inspector (`[Puppet] [3D & Mesh]`) for `T11`–`T16`.
 pub fn draw_puppet_and_3d_inspector(state: &mut AnimationViewState, ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str, view_obj: Option<&Value>) {
     fill_card(ui, ctx.pal, true, |ui| {
         ui.horizontal_wrapped(|ui| {
@@ -70,7 +25,6 @@ pub fn draw_puppet_and_3d_inspector(state: &mut AnimationViewState, ui: &mut Ui,
             for (tid, ico, lbl, tip) in [
                 ("puppet", "puppetPin", "Puppet", "5-Pin Puppet Mesh, Live Record, Null Rig & Follow-Through (T11-T13)"),
                 ("3d", "mesh3d", "3D & Mesh", "craft-mesh (.glb/.gltf/.obj/.fbx/.stl/.ply/.3mf), DoF Cam & IBL Lights (T14-T16)"),
-                ("roto", "scissors", "Roto AI", "Roto Brush 3.0 SAM 2.1, Object Matte & Procedural Rig Cycles (T17)"),
             ] {
                 let id = format!("anim-insp-tab-{tid}");
                 let sel = state.inspector_tab == tid;
@@ -93,7 +47,6 @@ pub fn draw_puppet_and_3d_inspector(state: &mut AnimationViewState, ui: &mut Ui,
         ui.separator();
         ScrollArea::vertical().id_salt("anim_right_insp_scroll").auto_shrink([false, false]).show(ui, |ui| match state.inspector_tab.as_str() {
             "3d" => draw_3d_camera_and_lights_tab(state, ui, ctx, cid, view_obj),
-            "roto" => draw_roto_and_expr_tab(state, ui, ctx, cid),
             _ => draw_puppet_tab(state, ui, ctx, cid, view_obj),
         });
     });
@@ -333,16 +286,7 @@ fn draw_puppet_tab(state: &mut AnimationViewState, ui: &mut Ui, ctx: &mut ViewCt
 
 #[allow(clippy::cognitive_complexity)]
 fn draw_3d_camera_and_lights_tab(state: &mut AnimationViewState, ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str, view_obj: Option<&Value>) {
-    ui.label(RichText::new("3D Renderer & Models (T14)").size(11.5).strong().color(ctx.pal.accent_sky));
-    ui.horizontal_wrapped(|ui| {
-        ui.spacing_mut().item_spacing.x = 4.0;
-        for (rmode, lbl) in [("classic3d", "Classic 3D"), ("advanced3d", "Advanced 3D PBR")] {
-            let id = format!("anim-renderer-{rmode}");
-            let sel = state.renderer_mode == rmode;
-            // TODO: Read and find the docs
-            let _ = action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, lbl, "Switch EffectCraft 3D renderer").selected(sel).enabled(false));
-        }
-    });
+    ui.label(RichText::new("3D Models (T14)").size(11.5).strong().color(ctx.pal.accent_sky));
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
         if action_button(
@@ -360,13 +304,6 @@ fn draw_3d_camera_and_lights_tab(state: &mut AnimationViewState, ui: &mut Ui, ct
                 directory: false,
                 save: false,
             });
-        }
-        for prim in ["cube", "sphere", "plane", "cylinder", "torus"] {
-            let id = format!("anim-prim-{prim}");
-            let sel = state.primitive_kind == prim;
-            // TODO: Read and find the docs
-            let _ =
-                action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, prim, "Insert 3D primitive (layer.new3dPrimitive)").selected(sel).enabled(false));
         }
     });
 
@@ -418,13 +355,6 @@ fn draw_3d_camera_and_lights_tab(state: &mut AnimationViewState, ui: &mut Ui, ct
     );
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
-        // TODO: Read and find the docs
-        let _ = action_button(
-            ui,
-            ctx.reg,
-            ctx.pal,
-            BtnSpec::new("anim-add-camera", "plus", "Add Camera", "Create 3D camera via layer.newCamera").primary().enabled(false),
-        );
         for tool in ["orbit", "pan", "dolly"] {
             let id = format!("anim-cam-tool-{tool}");
             let sel = state.cam_tool == tool;
@@ -447,81 +377,4 @@ fn draw_3d_camera_and_lights_tab(state: &mut AnimationViewState, ui: &mut Ui, ct
     ui.separator();
     ui.label(RichText::new("Lights & Environment IBL (T16)").size(11.5).strong().color(ctx.pal.accent_amber));
     pill_toggle(ui, ctx.reg, ctx.pal, "anim-light-shadows", "Cast 3D Shadows", &mut state.light_casts_shadows, ctx.pal.accent_amber);
-    ui.horizontal_wrapped(|ui| {
-        ui.spacing_mut().item_spacing.x = 4.0;
-        for lkind in ["Parallel", "Spot", "Point", "Ambient", "Environment"] {
-            let id = format!("anim-light-{lkind}");
-            let sel = state.light_kind.eq_ignore_ascii_case(lkind);
-            // TODO: Read and find the docs
-            let _ = action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, lkind, "Add 3D/IBL light via layer.newLight").selected(sel).enabled(false));
-        }
-    });
-}
-
-fn draw_roto_and_expr_tab(state: &mut AnimationViewState, ui: &mut Ui, ctx: &mut ViewCtx<'_>, _cid: &str) {
-    ui.label(RichText::new("Roto Brush 3.0 & Object Matte (T17)").size(11.5).strong().color(ctx.pal.accent_emerald));
-    ui.horizontal_wrapped(|ui| {
-        ui.spacing_mut().item_spacing.x = 4.0;
-        for (mid, lbl) in [("classical", "Classical"), ("mobilesam", "MobileSAM"), ("sam2.1-hiera-small", "SAM 2.1")] {
-            let id = format!("anim-sam-{mid}");
-            let sel = state.sam_model == mid;
-            // TODO: Read and find the docs
-            let _ = action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, lbl, "Select roto.model.select AI model").selected(sel).enabled(false));
-        }
-    });
-    ui.horizontal_wrapped(|ui| {
-        ui.spacing_mut().item_spacing.x = 4.0;
-        for (sk, lbl) in [("fg", "+ FG Stroke"), ("bg", "- BG Stroke"), ("refine", "Refine Edge")] {
-            let id = format!("anim-roto-stroke-{sk}");
-            let sel = state.roto_stroke_kind == sk;
-            // TODO: Read and find the docs
-            let _ = action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, lbl, "Apply roto.stroke").selected(sel).enabled(false));
-        }
-    });
-    ring_slider_h(
-        ui,
-        ctx.reg,
-        ctx.pal,
-        ScalarSpec::new("anim-roto-feather", "Matte Feather", 0.0..=25.0, "px", ctx.pal.accent_emerald),
-        &mut state.sam2_feather,
-    );
-    pill_toggle(ui, ctx.reg, ctx.pal, "anim-roto-decontam", "Decontaminate Edges", &mut state.sam2_decontaminate, ctx.pal.accent_sky);
-    ui.horizontal_wrapped(|ui| {
-        ui.spacing_mut().item_spacing.x = 4.0;
-        // TODO: Read and find the docs
-        let _ = action_button(
-            ui,
-            ctx.reg,
-            ctx.pal,
-            BtnSpec::label_only("anim-obj-matte", "Object Matte", "Run one-click objectMatte.apply").primary().enabled(false),
-        );
-        // TODO: Read and find the docs
-        let _ = disabled_todo_button(ui, ctx, "anim-roto-prop", "", "Propagate", "Run roto.propagate wait=true");
-        // TODO: Read and find the docs
-        let _ = disabled_todo_button(ui, ctx, "anim-roto-freeze", "", "Freeze", "Cache roto.freeze wait=true");
-    });
-
-    ui.separator();
-    ui.label(RichText::new("Procedural Rig Cycle & Pick-Whip").size(11.5).strong().color(ctx.pal.accent_amber));
-    text_input(ui, ctx.reg, "anim-expr-input", "Procedural Rig Cycle", &mut state.expr_code, "cycle_loop(span: 2.0)", (ui.available_width() - 4.0).max(140.0));
-    ui.horizontal_wrapped(|ui| {
-        ui.spacing_mut().item_spacing.x = 4.0;
-        for (lbl, preset) in
-            [("cycle_loop", "cycle_loop(span: 2.0)"), ("wing_flap", "wing_flap(hz: 2.2, deg: 24.0)"), ("pendulum", "pendulum_tail(deg: 10.0, hz: 1.4)")]
-        {
-            let id = format!("anim-proc-{lbl}");
-            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, lbl, "Load pure-Rust rig cycle preset")).clicked() {
-                state.expr_code = preset.into();
-            }
-        }
-        // TODO: Read and find the docs
-        let _ = action_button(
-            ui,
-            ctx.reg,
-            ctx.pal,
-            BtnSpec::label_only("anim-expr-apply", "Apply Cycle", "Write procedural rig cycle into .ecproj").primary().enabled(false),
-        );
-        // TODO: Read and find the docs
-        let _ = disabled_todo_button(ui, ctx, "anim-expr-whip", "", "@ Pick-Whip", "Bind rig property via EffectCraft Pick-Whip");
-    });
 }

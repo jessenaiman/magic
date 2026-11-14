@@ -147,17 +147,16 @@ pub enum ActiveModal {
 }
 
 #[derive(Clone, Debug)]
-pub struct AiUiState {
-    pub enabled: bool,
+pub struct OptionsUiState {
     pub options_tab: String,
     pub style_menu_open: bool,
     pub problem_summary: String,
     pub problem_steps: String,
 }
 
-impl Default for AiUiState {
+impl Default for OptionsUiState {
     fn default() -> Self {
-        Self { enabled: false, options_tab: "ai".into(), style_menu_open: false, problem_summary: String::new(), problem_steps: String::new() }
+        Self { options_tab: "general".into(), style_menu_open: false, problem_summary: String::new(), problem_steps: String::new() }
     }
 }
 
@@ -203,8 +202,6 @@ pub struct CachedPayloads {
     pub timeline: Value,
     pub film_status: Value,
     pub doctor: Value,
-    pub ai_status: Value,
-    pub extensions: Value,
     pub ec_comps: Value,
     pub lottie_last: Value,
     pub aep_report: Value,
@@ -247,7 +244,7 @@ pub struct UiShellState {
     pub control_port: Option<u16>,
     pub available_fonts: Vec<String>,
     pub font_picker_filter: String,
-    pub ai: AiUiState,
+    pub options: OptionsUiState,
     pub timeline: SharedTimelineState,
     pub cache: CachedPayloads,
     pub recoverable_sessions: Vec<Value>,
@@ -287,7 +284,7 @@ impl Default for UiShellState {
             control_port: None,
             available_fonts: Vec::new(),
             font_picker_filter: String::new(),
-            ai: AiUiState::default(),
+            options: OptionsUiState::default(),
             timeline: SharedTimelineState::default(),
             cache: CachedPayloads::default(),
             recoverable_sessions: Vec::new(),

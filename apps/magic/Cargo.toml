@@ -17,14 +17,9 @@ path = "src/main.rs"
 [dependencies]
 arboard = { workspace = true }
 clap = { workspace = true }
-craft-ai-agents = { workspace = true }
-craft-ai-client = { workspace = true }
-craft-ai-egui = { workspace = true }
-craft-ai-native = { workspace = true }
 craft-atomic = { workspace = true }
 craft-audio = { workspace = true }
 craft-dialogs = { workspace = true }
-craft-flags = { workspace = true }
 craft-font-catalog = { workspace = true }
 craft-font-manager = { workspace = true }
 craft-font-store = { workspace = true }

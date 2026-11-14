@@ -11,9 +11,6 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
-craft-ai-client = { workspace = true }
-craft-ai-core = { workspace = true }
-craft-ai-egui = { workspace = true }
 craft-keymap = { workspace = true }
 craft-menu = { workspace = true }
 craft-ui = { workspace = true }

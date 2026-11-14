@@ -63,7 +63,7 @@
 
 <br>
 
-Magic Studio (`magic`, `magic-cli`) is a song-driven production coordinator built on [`storytold/craft-libs`](https://github.com/storytold/craft-libs), [`storytold/craft-extensions`](https://github.com/storytold/craft-extensions/blob/main/README.md), [`storytold/craft-ai-integrations`](https://github.com/storytold/craft-ai-integrations/blob/main/README.md), and `eframe` / `egui` 0.37. Instead of locking artists into a closed format, every project folder holds real creative files — native [DesignCraft](https://github.com/storytold/designcraft) `.designcraft` storyboard layouts, open 2D/3D animation renders, [EffectCraft](https://github.com/storytold/effectcraft) lyric and motion compositions, and a sample-accurate [FilmCraft](https://github.com/storytold/filmcraft) multi-track sequence (`254,016,000,000` ticks per second, with `A1` holding the Song Master audio track).
+Magic Studio (`magic`, `magic-cli`) is a song-driven production coordinator built on [`storytold/craft-libs`](https://github.com/storytold/craft-libs) and `eframe` / `egui` 0.37. Instead of locking artists into a closed format, every project folder holds real creative files — native [DesignCraft](https://github.com/storytold/designcraft) `.designcraft` storyboard layouts, open 2D/3D animation renders, [EffectCraft](https://github.com/storytold/effectcraft) lyric and motion compositions, and a sample-accurate [FilmCraft](https://github.com/storytold/filmcraft) multi-track sequence (`254,016,000,000` ticks per second, with `A1` holding the Song Master audio track).
 
 <br>
 
@@ -71,7 +71,6 @@ Magic Studio (`magic`, `magic-cli`) is a song-driven production coordinator buil
 
 - **Standalone `.designcraft` storyboards (`01 Storyboard`).** `01 Storyboard` is an independent [DesignCraft](https://github.com/storytold/designcraft) workspace backed by the default `storyboard.designcraft` template (`designcraft-cli`), with zero coupling to `05 Studio`.
 - **Read-only PNG page viewer & DesignCraft handoff.** View rendered pages (`magic-cli exec storyboard.pages`, `magic-cli exec storyboard.render`, `magic-cli exec storyboard.open`), copy rendered PNG paths, or open `storyboard.designcraft` directly in [DesignCraft](https://github.com/storytold/designcraft/blob/main/README.md) ([DesignCraft MCP](https://github.com/storytold/designcraft/blob/main/docs/mcp.md)).
-- **Shared extensions & standard Craft AI.** Installed themes, plug-ins, and resources load read-only from [`storytold/craft-extensions`](https://github.com/storytold/craft-extensions/blob/main/README.md) (`craft-ext-store`, `app.extensions`), while connections, model bindings, and job history use [`storytold/craft-ai-integrations`](https://github.com/storytold/craft-ai-integrations/blob/main/README.md) (`AiClient::standard`, `craft-ai-egui`) without custom sidecars.
 
 ## Open multi-tool animations
 
@@ -119,8 +118,8 @@ export PATH="$HOME/.local/bin:$PATH"
 Create a brand-new song project or initialize Magic Studio inside an existing project folder:
 
 ```sh
-# Start a new project or attach to [existing_project] with song audio
-magic-cli new [existing_project] --audio song.wav --name "Lantern Harbor"
+# Start a new project with song audio
+magic-cli new --audio song.wav --name "Lantern Harbor"
 
 # Check installed Crafting Apps and map tracks into FilmCraft
 magic-cli exec app.doctor
@@ -188,7 +187,7 @@ And [**ArtCraft**](https://getartcraft.com/) itself, our AI image and video stud
 |---|---|
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Setup, `cargo xtask ci` (`fmt`, `clippy`, optional `MAGIC_RUN_TESTS=1`), branch and PR conventions |
 | [`AGENTS.md`](AGENTS.md) | Contributor and agent guidelines plus shared ArtCraft house rules |
-| [`docs/architecture.md`](docs/architecture.md) | Isolated per-view crates (`StageView`/`HomeView`), `craft-ext-store`, standard `craft-ai-integrations`, and `craft_ui::docking` |
+| [`docs/architecture.md`](docs/architecture.md) | Isolated per-view crates (`StageView`/`HomeView`) and `craft_ui::docking` |
 | [`docs/control-protocol.md`](docs/control-protocol.md) | Loopback JSON-lines `--control 9875` protocol reference |
 | [`docs/mcp.md`](docs/mcp.md) | `magic-cli mcp` (`--connect 9875` and headless), `magic://` resources, and root confinement |
 | [`SECURITY.md`](SECURITY.md) | Loopback control limits, CLI confinement, and vulnerability reporting |

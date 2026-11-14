@@ -151,7 +151,6 @@ fn classify_visual_or_3d(ext: &str) -> Option<FileClass> {
 
 fn classify_file(path: &Path) -> FileClass {
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or_default().to_ascii_lowercase();
-    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or_default().to_ascii_lowercase();
     if let Some(cls) = classify_craft_or_video(&ext).or_else(|| classify_visual_or_3d(&ext)) {
         return cls;
     }
@@ -170,7 +169,6 @@ fn classify_file(path: &Path) -> FileClass {
             let b = if matches!(ext.as_str(), "srt" | "lrc") { "SRT" } else { "TXT" };
             FileClass::new("audio_words", "Audio & Timed Lyrics", 5, 2, b, "Open", false)
         }
-        "zip" if name == "original-project.zip" => FileClass::new("project_files", "Project & Supporting Files", 6, 1, "ZIP", "Open", false),
         _ => {
             let b = if matches!(ext.as_str(), "json" | "jsonl") { "JSON" } else { "FILE" };
             FileClass::new("project_files", "Project & Supporting Files", 6, 4, b, "Open", false)

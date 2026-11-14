@@ -71,8 +71,6 @@ pub fn is_read_only_command(id: &str, params: &Value) -> bool {
         | "video.film"
         | "video.timeline"
         | "video.list_ec_comps"
-        | "ai.status"
-        | "ai.history"
         | "prefs.schema"
         | "prefs.get"
         | "command.list"
@@ -86,7 +84,6 @@ pub fn is_read_only_command(id: &str, params: &Value) -> bool {
         | "ui.timeline.hit"
         | "perf.stats"
         | "app.doctor"
-        | "app.extensions"
         | "app.update" => true,
         "project.root" => params.get("root").is_none_or(Value::is_null),
         "project.asset_metadata" => params.get("write_xmp_sidecar").and_then(Value::as_bool) != Some(true),

@@ -10,8 +10,6 @@ rust-version.workspace = true
 workspace = true
 
 [dependencies]
-craft-ai-agents = { workspace = true }
-craft-flags = { workspace = true }
 log = { workspace = true }
 magic-engine = { workspace = true }
 serde = { workspace = true }

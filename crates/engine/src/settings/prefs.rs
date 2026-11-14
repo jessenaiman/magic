@@ -24,12 +24,6 @@ use crate::{EngineError, Result};
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
-pub struct AiPrefs {
-    pub enabled: bool,
-}
-
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
 pub struct ProjectPrefs {
     pub root: Option<String>,
     pub storyboard_template: String,
@@ -115,7 +109,6 @@ impl Default for AutosavePrefs {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct MagicPrefs {
-    pub ai: AiPrefs,
     pub project: ProjectPrefs,
     pub lyrics: LyricsPrefs,
     pub animation: AnimationPrefs,
@@ -183,7 +176,6 @@ fn opt_str_from_value(value: &Value) -> Option<String> {
 impl MagicPrefs {
     pub fn get_value(&self, key: &str) -> Value {
         match key {
-            "ai.enabled" => json!(self.ai.enabled),
             "appearance.interface_style" => json!(self.appearance.interface_style),
             "appearance.theme" => json!(self.appearance.theme),
             "appearance.accessible_contrast" => json!(self.appearance.accessible_contrast),
@@ -209,7 +201,6 @@ impl MagicPrefs {
     pub fn set_value(&mut self, key: &str, value: &Value) -> Result<()> {
         validate_schema_value(key, value)?;
         match key {
-            "ai.enabled" => self.ai.enabled = value.as_bool().unwrap_or(false),
             "appearance.interface_style" => self.appearance.interface_style = value.as_str().unwrap_or("aurora").to_owned(),
             "appearance.theme" => self.appearance.theme = value.as_str().unwrap_or("dark").to_owned(),
             "appearance.accessible_contrast" => self.appearance.accessible_contrast = value.as_bool().unwrap_or(false),

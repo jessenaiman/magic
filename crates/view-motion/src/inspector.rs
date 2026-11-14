@@ -29,49 +29,10 @@ const EFFECTCRAFT_CATEGORIES: &[(&str, &str)] = &[
     ("wasm_plugin", "WASM Plug-in"),
 ];
 
-const EFFECTCRAFT_BLEND_MODES: &[&str] = &[
-    "normal",
-    "dissolve",
-    "dancingDissolve",
-    "darken",
-    "multiply",
-    "colorBurn",
-    "linearBurn",
-    "darkerColor",
-    "add",
-    "lighten",
-    "screen",
-    "colorDodge",
-    "linearDodge",
-    "lighterColor",
-    "overlay",
-    "softLight",
-    "hardLight",
-    "linearLight",
-    "vividLight",
-    "pinLight",
-    "hardMix",
-    "difference",
-    "classicDifference",
-    "exclusion",
-    "subtract",
-    "divide",
-    "hue",
-    "saturation",
-    "color",
-    "luminosity",
-    "stencilAlpha",
-    "stencilLuma",
-    "silhouetteAlpha",
-    "silhouetteLuma",
-    "alphaAdd",
-    "luminescentPremul",
-];
-
 use magic_view_api::controls::{EffectRowSpec, ScalarSpec, badge_accent_color, effect_row_button, fill_card, pill_toggle, ring_slider_h, rotary_dial};
 use magic_view_api::fonts_ui::{FontPickerSpec, font_family_combo};
 use magic_view_api::widgets::{BtnSpec, action_button, status_pill, text_input};
-use magic_view_api::{PickerTarget, UiAction, ViewCtx, disabled_todo_button};
+use magic_view_api::{PickerTarget, UiAction, ViewCtx};
 
 use crate::state::MotionViewState;
 
@@ -105,12 +66,8 @@ pub fn apply_motion_effect_choice(state: &mut MotionViewState, ctx: &mut ViewCtx
     );
 }
 
-/// Toolbar `.lottie` / `.json` export & import buttons (`T04`).
+/// Toolbar `.lottie` / `.json` import button (`T04`).
 pub fn draw_lottie_toolbar_buttons(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
-    // TODO: Read and find the docs
-    let _ = disabled_todo_button(ui, ctx, "motion-lottie-export", "upload", ".lottie", "Export V4 comp as Bodymovin .lottie (T04)");
-    // TODO: Read and find the docs
-    let _ = action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("motion-lottie-json", ".json", "Export Lottie .json").enabled(false));
     if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("motion-lottie-import", "+ Lottie", "Import .lottie / .json into effects/motion.ecproj (T04)"))
         .clicked()
     {
@@ -223,26 +180,8 @@ pub fn draw_craft_motion_effects_browser(state: &mut MotionViewState, ui: &mut U
     selected_anchor
 }
 
-/// Layer Compositing Switches (`38` Blend Modes, Track Mattes, Motion Blur, Adjustment, Alpha Queue — `T29`).
+/// Layer Compositing Switches (Track Mattes, Motion Blur, Adjustment — `T29`).
 pub fn draw_layer_compositing_switches(state: &mut MotionViewState, ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
-    ui.horizontal_wrapped(|ui| {
-        ui.label(RichText::new("38 Blend Modes (T29)").size(11.5).strong().color(ctx.pal.accent_emerald));
-        status_pill(ui, ctx.pal, &state.blend_mode, ctx.pal.accent_emerald);
-    });
-    ScrollArea::vertical().id_salt("motion_38_blend_box").max_height(88.0).show(ui, |ui| {
-        ui.horizontal_wrapped(|ui| {
-            ui.spacing_mut().item_spacing.x = 3.5;
-            ui.spacing_mut().item_spacing.y = 3.5;
-            for mode in EFFECTCRAFT_BLEND_MODES {
-                let id = format!("motion-blend-{mode}");
-                let sel = state.blend_mode == *mode;
-                // TODO: Read and find the docs
-                let _ = action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, mode, "Set EffectCraft layer blend mode").selected(sel).enabled(false));
-            }
-        });
-    });
-
-    ui.add_space(4.0);
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
         ui.spacing_mut().item_spacing.y = 4.0;
@@ -260,30 +199,18 @@ pub fn draw_layer_compositing_switches(state: &mut MotionViewState, ui: &mut Ui,
         let _ = pill_toggle(ui, ctx.reg, ctx.pal, "motion-sw-mblur", "Motion Blur", &mut state.motion_blur, ctx.pal.accent_emerald);
         let _ = pill_toggle(ui, ctx.reg, ctx.pal, "motion-sw-adj", "Adjustment", &mut state.adjustment_layer, ctx.pal.accent_amber);
     });
-
-    ui.horizontal_wrapped(|ui| {
-        ui.spacing_mut().item_spacing.x = 4.0;
-        ui.spacing_mut().item_spacing.y = 4.0;
-        ui.label(RichText::new("Alpha Queue:").size(10.5).color(ctx.pal.text_muted));
-        for preset in ["ProRes 4444 XQ", "WebM VP9+Alpha", "AV1 MP4", "32f EXR"] {
-            let id = format!("motion-rq-{preset}");
-            let sel = state.alpha_queue_preset == preset;
-            // TODO: Read and find the docs
-            let _ = action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, preset, "Queue EffectCraft alpha render preset").selected(sel).enabled(false));
-        }
-    });
 }
 
-/// Right-hand inspector (`[Shapes & FX] [308 FX & Blend] [Track & EXR]`) returning active effect anchor `Pos2`.
+/// Right-hand inspector (`[Shapes & FX] [308 FX & Matte] [Track & EXR]`) returning active effect anchor `Pos2`.
 pub fn draw_motion_inspector(state: &mut MotionViewState, ui: &mut Ui, ctx: &mut ViewCtx<'_>) -> Option<Pos2> {
     let mut fx_anchor = None;
     let panel = fill_card(ui, ctx.pal, true, |ui| {
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing.x = 4.0;
             for (tid, lbl, tip) in [
-                ("shapes", "Shapes & FX", "Transform Dials, Craft Motion Effects (`motion.effects`) & 9 Shape Ops"),
-                ("fx", "308 FX & Blend", "19-Category 308-FX Browser, .wasm Plug-in & 38 Blend Modes (T29)"),
-                ("track", "Track & EXR", "Point/Camera Tracker, Warp Stabilizer, EXR/Cryptomatte & OCIO (T30-T31)"),
+                ("shapes", "Shapes & FX", "Transform Dials, Craft Motion Effects (`motion.effects`) & Bezier Masks"),
+                ("fx", "308 FX & Matte", "19-Category 308-FX Browser, .wasm Plug-in & Track Matte (T29)"),
+                ("track", "Track & EXR", "Tracker Modes & EXR/Cryptomatte AOVs (T30-T31)"),
             ] {
                 let id = format!("motion-insp-tab-{tid}");
                 let sel = state.inspector_tab == tid;
@@ -335,31 +262,7 @@ fn draw_shapes_and_masks_tab(state: &mut MotionViewState, ui: &mut Ui, ctx: &mut
     let fx_anchor = draw_craft_motion_effects_browser(state, ui, ctx, "motion-insp", 12);
 
     ui.separator();
-    ui.label(RichText::new("9 Shape Layer Operators (T27)").size(11.5).strong().color(ctx.pal.accent_emerald));
-    ui.horizontal_wrapped(|ui| {
-        ui.spacing_mut().item_spacing.x = 4.0;
-        ui.spacing_mut().item_spacing.y = 4.0;
-        for (op, lbl) in [
-            ("trim", "Trim Paths"),
-            ("repeater", "Repeater"),
-            ("roundCorners", "Round"),
-            ("offsetPaths", "Offset"),
-            ("zigZag", "Zig Zag"),
-            ("twist", "Twist"),
-            ("wigglePaths", "Wiggle"),
-            ("mergePaths", "Merge"),
-            ("gradientStroke", "Grad Stroke"),
-        ] {
-            let id = format!("motion-shape-op-{op}");
-            let sel = state.shape_op == op;
-            // TODO: Read and find the docs
-            let _ =
-                action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, lbl, "Add shape operator via layer.addShapeItem").selected(sel).enabled(false));
-        }
-    });
-
-    ui.separator();
-    ui.label(RichText::new("Bezier Masks & Face Tracker (T28)").size(11.5).strong().color(ctx.pal.accent_sky));
+    ui.label(RichText::new("Bezier Masks (T28)").size(11.5).strong().color(ctx.pal.accent_sky));
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
         ui.spacing_mut().item_spacing.y = 4.0;
@@ -379,21 +282,6 @@ fn draw_shapes_and_masks_tab(state: &mut MotionViewState, ui: &mut Ui, ctx: &mut
         ScalarSpec::new("motion-mask-exp", "Mask Expansion", -40.0..=40.0, "px", ctx.pal.accent_amber),
         &mut state.mask_expansion,
     );
-    ui.horizontal_wrapped(|ui| {
-        ui.spacing_mut().item_spacing.x = 4.0;
-        ui.spacing_mut().item_spacing.y = 4.0;
-        // TODO: Read and find the docs
-        let _ = action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("motion-add-mask", "+ Pen Mask", "layer.addMask").primary().enabled(false));
-        // TODO: Read and find the docs
-        let _ = action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("motion-mask-interp", "Smart Interp", "mask.interpolate").enabled(false));
-        // TODO: Read and find the docs
-        let _ = action_button(
-            ui,
-            ctx.reg,
-            ctx.pal,
-            BtnSpec::label_only("motion-face-track", "Face Track AI", "MediaPipe faceDetailed + extractFaceMeasurements").enabled(false),
-        );
-    });
     fx_anchor
 }
 
@@ -504,29 +392,8 @@ fn draw_tracking_and_exr_tab(state: &mut MotionViewState, ui: &mut Ui, ctx: &mut
             }
         }
     });
-    ui.horizontal_wrapped(|ui| {
-        ui.spacing_mut().item_spacing.x = 4.0;
-        ui.spacing_mut().item_spacing.y = 4.0;
-        // TODO: Read and find the docs
-        let _ = action_button(
-            ui,
-            ctx.reg,
-            ctx.pal,
-            BtnSpec::label_only("motion-trk-solve", "Track & Solve", "track.point / track.cameraSolve").primary().enabled(false),
-        );
-        // TODO: Read and find the docs
-        let _ = action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("motion-warp-stab", "Warp Stabilizer", "track.warpStabilizer").enabled(false));
-        // TODO: Read and find the docs
-        let _ = action_button(
-            ui,
-            ctx.reg,
-            ctx.pal,
-            BtnSpec::label_only("motion-blender-py", "Export Blender .py", "track.exportBlenderScript (T30)").enabled(false),
-        );
-    });
-
     ui.separator();
-    ui.label(RichText::new("32f OpenEXR, Cryptomatte & OCIO (T31)").size(11.5).strong().color(ctx.pal.accent_amber));
+    ui.label(RichText::new("32f OpenEXR & Cryptomatte (T31)").size(11.5).strong().color(ctx.pal.accent_amber));
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
         ui.spacing_mut().item_spacing.y = 4.0;
@@ -539,14 +406,4 @@ fn draw_tracking_and_exr_tab(state: &mut MotionViewState, ui: &mut Ui, ctx: &mut
         }
     });
     let _ = pill_toggle(ui, ctx.reg, ctx.pal, "motion-preserve-rgb", "Preserve RGB (Bypass Color Mgmt)", &mut state.preserve_rgb, ctx.pal.accent_emerald);
-    ui.horizontal_wrapped(|ui| {
-        ui.spacing_mut().item_spacing.x = 4.0;
-        ui.spacing_mut().item_spacing.y = 4.0;
-        for view in ["ACEScg Linear", "ACES 1.3 Rec.709", "AgX Punchy", "Filmic sRGB"] {
-            let id = format!("motion-ocio-{view}");
-            let sel = state.ocio_view == view;
-            // TODO: Read and find the docs
-            let _ = action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, view, "OCIO Display Transform").selected(sel).enabled(false));
-        }
-    });
 }

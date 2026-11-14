@@ -1,11 +1,8 @@
 //! `project.new` / `file.new`: creates a self-contained `<project-slug>/` directory owning copies
-//! of all audio, assets, `storyboard.designcraft`, `effects/`, `film/`, and `exports/` (plus an
-//! inline `original-project.zip` strictly when `existing_project` / `migrate_from` points to a
-//! folder without a `.magic` file, `B10-ARCH`).
+//! of all audio, assets, `storyboard.designcraft`, `effects/`, `film/`, and `exports/`.
 
 use std::path::{Path, PathBuf};
 
-use craft_zip::{Compression, Writer};
 use serde_json::{Value, json};
 
 use super::{cmd_project_import_file, create_initial_project_file, project_mode, recent_warning, validate_project_name, write_project_file};
@@ -13,54 +10,6 @@ use crate::cmd::project::format::Project;
 use crate::{EngineError, Result, Session};
 
 const PROJECT_SCAFFOLD_DIRS: &[&str] = &["audio", "assets", "effects", "film", "exports"];
-const ZIP_SKIP_NAMES: &[&str] = &[".git", "target", "node_modules", "__pycache__", ".cache", ".DS_Store"];
-
-fn folder_contains_magic_file(dir: &Path) -> bool {
-    std::fs::read_dir(dir)
-        .into_iter()
-        .flatten()
-        .flatten()
-        .map(|e| e.path())
-        .any(|p| p.is_file() && p.extension().is_some_and(|e| e.eq_ignore_ascii_case("magic")))
-}
-
-fn collect_zip_entries(root: &Path, cur: &Path, dest_canon: Option<&Path>, writer: &mut Writer) -> Result<usize> {
-    let mut entries: Vec<PathBuf> = std::fs::read_dir(cur)?.flatten().map(|e| e.path()).collect();
-    entries.sort();
-    let mut count = 0usize;
-    for path in entries {
-        let Some(name) = path.file_name().and_then(|n| n.to_str()) else { continue };
-        if ZIP_SKIP_NAMES.iter().any(|skip| name.eq_ignore_ascii_case(skip)) || (name.starts_with('.') && name.ends_with(".craft_tmp")) {
-            continue;
-        }
-        if path.is_dir() {
-            count += collect_zip_entries(root, &path, dest_canon, writer)?;
-        } else if path.is_file()
-            && dest_canon != path.canonicalize().ok().as_deref()
-            && let Ok(rel) = path.strip_prefix(root)
-        {
-            let slash = rel.to_string_lossy().replace('\\', "/");
-            let data = std::fs::read(&path)?;
-            writer.add(&slash, &data, Compression::Deflated).map_err(|e| EngineError::CommandFailed("project.new".into(), e.to_string()))?;
-            count += 1;
-        }
-    }
-    Ok(count)
-}
-
-fn zip_non_magic_folder(source_dir: &Path, dest_zip: &Path) -> Result<Option<usize>> {
-    if !source_dir.is_dir() {
-        return Err(EngineError::InvalidParams(format!("existing_project directory does not exist: {}", source_dir.display())));
-    }
-    if folder_contains_magic_file(source_dir) {
-        return Ok(None);
-    }
-    let mut writer = Writer::new();
-    let count = collect_zip_entries(source_dir, source_dir, dest_zip.canonicalize().ok().as_deref(), &mut writer)?;
-    let bytes = writer.finish().map_err(|e| EngineError::CommandFailed("project.new".into(), e.to_string()))?;
-    craft_atomic::atomic_write(dest_zip, &bytes)?;
-    Ok(Some(count))
-}
 
 fn clear_stale_project_artifacts(project_dir: &Path) {
     let _ = std::fs::remove_file(project_dir.join("transcript.srt"));
@@ -306,22 +255,6 @@ pub fn cmd_project_new(s: &mut Session, params: &Value) -> Result<Value> {
     create_initial_project_file(s, overwrite)?;
 
     let mut steps = Vec::new();
-    let existing_opt = params.get("existing_project").or_else(|| params.get("migrate_from")).and_then(Value::as_str).map(str::trim).filter(|v| !v.is_empty());
-    if let Some(existing_raw) = existing_opt {
-        let existing_dir = crate::workspace::resolve_workspace_path(s, existing_raw);
-        let zip_dest = project_dir.join("original-project.zip");
-        if let Some(roots) = &s.automation_roots {
-            roots.check_read(&existing_dir)?;
-            roots.check_write(&zip_dest)?;
-        }
-        if let Some(entry_count) = zip_non_magic_folder(&existing_dir, &zip_dest)? {
-            copied_files.push(zip_dest.clone());
-            steps.push(json!({"command": "existing_project", "status": "archived original-project.zip", "archive": zip_dest, "entries": entry_count}));
-        } else {
-            steps.push(json!({"command": "existing_project", "status": "skipped (folder already contains a .magic file)"}));
-        }
-    }
-
     if !is_scratch {
         steps.extend(bootstrap_song_workshop(s, &path, &project_dir, params, overwrite, &mut copied_files));
         write_project_file(s)?;
@@ -345,115 +278,4 @@ pub fn cmd_project_new(s: &mut Session, params: &Value) -> Result<Value> {
         "workshop": workshop,
         "storyboard": storyboard,
     }))
-}
-
-#[cfg(test)]
-mod tests {
-    use std::path::PathBuf;
-
-    use craft_zip::{Archive, Limits};
-    use image::ImageEncoder;
-    use serde_json::json;
-
-    use super::cmd_project_new;
-    use crate::Session;
-    use crate::cmd::project::write_project_file;
-
-    fn temp_sandbox(label: &str) -> PathBuf {
-        let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
-        let dir = std::env::temp_dir().join(format!("magic_project_new_{label}_{}_{nanos}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        dir
-    }
-
-    fn minimal_wav_bytes() -> Vec<u8> {
-        let mut wav = Vec::with_capacity(48);
-        wav.extend_from_slice(b"RIFF");
-        wav.extend_from_slice(&40_u32.to_le_bytes());
-        wav.extend_from_slice(b"WAVEfmt ");
-        wav.extend_from_slice(&16_u32.to_le_bytes());
-        wav.extend_from_slice(&1_u16.to_le_bytes());
-        wav.extend_from_slice(&1_u16.to_le_bytes());
-        wav.extend_from_slice(&8000_u32.to_le_bytes());
-        wav.extend_from_slice(&16000_u32.to_le_bytes());
-        wav.extend_from_slice(&2_u16.to_le_bytes());
-        wav.extend_from_slice(&16_u16.to_le_bytes());
-        wav.extend_from_slice(b"data");
-        wav.extend_from_slice(&4_u32.to_le_bytes());
-        wav.extend_from_slice(&[0_u8; 4]);
-        wav
-    }
-
-    #[test]
-    fn project_new_creates_designcraft_storyboard_and_zips_only_non_magic_existing_project() {
-        let sandbox = temp_sandbox("self_contained");
-        let external_src = sandbox.join("external_inputs");
-        let legacy_src = sandbox.join("legacy_proj");
-        std::fs::create_dir_all(&external_src).unwrap();
-        std::fs::create_dir_all(legacy_src.join(".git")).unwrap();
-        crate::doc_state::write_file(legacy_src.join("notes.txt"), b"legacy").unwrap();
-        crate::doc_state::write_file(legacy_src.join(".git/HEAD"), b"ref: refs/heads/main\n").unwrap();
-
-        let ext_wav = external_src.join("song-demo.wav");
-        crate::doc_state::write_file(&ext_wav, minimal_wav_bytes()).unwrap();
-        let ext_png = external_src.join("cover.png");
-        let mut png_bytes = Vec::new();
-        image::codecs::png::PngEncoder::new(&mut png_bytes).write_image(&[255_u8, 128, 64, 255], 1, 1, image::ColorType::Rgba8.into()).unwrap();
-        crate::doc_state::write_file(&ext_png, &png_bytes).unwrap();
-
-        let mut session = Session::default();
-        let res = cmd_project_new(
-            &mut session,
-            &json!({
-                "root": sandbox.join("Magic"),
-                "name": "Hey Ho",
-                "audio": ext_wav,
-                "assets": [ext_png],
-                "existing_project": legacy_src,
-                "skip_audio_setup": true,
-            }),
-        )
-        .unwrap();
-
-        let created_magic = PathBuf::from(res["project"].as_str().unwrap());
-        let created_dir = created_magic.parent().unwrap();
-        assert_eq!(created_dir.file_name().unwrap().to_str().unwrap(), "hey-ho");
-        for sub in ["audio", "assets", "effects", "film", "exports"] {
-            assert!(created_dir.join(sub).is_dir(), "expected {sub}/ inside self-contained project");
-        }
-        assert!(created_dir.join("storyboard.designcraft").is_file());
-        let zip_path = created_dir.join("original-project.zip");
-        assert!(zip_path.is_file());
-        let zip_bytes = std::fs::read(&zip_path).unwrap();
-        let mut archive = Archive::open(&zip_bytes, Limits { max_entries: 128, max_total_bytes: 1 << 20 }).unwrap();
-        assert_eq!(archive.read("notes.txt", 1024).unwrap().as_deref(), Some(b"legacy".as_slice()));
-        assert!(archive.read(".git/HEAD", 1024).unwrap().is_none());
-
-        // An existing folder that already contains a `.magic` file must NOT produce `original-project.zip`.
-        let already_magic = sandbox.join("already_magic");
-        std::fs::create_dir_all(&already_magic).unwrap();
-        crate::doc_state::write_file(already_magic.join("existing.magic"), b"{}").unwrap();
-        let res2 = cmd_project_new(
-            &mut session,
-            &json!({
-                "root": sandbox.join("Magic"),
-                "name": "Second Song",
-                "audio": ext_wav,
-                "existing_project": already_magic,
-                "skip_audio_setup": true,
-            }),
-        )
-        .unwrap();
-        let dir2 = PathBuf::from(res2["project"].as_str().unwrap()).parent().unwrap().to_path_buf();
-        assert!(!dir2.join("original-project.zip").exists());
-
-        let _ = cmd_project_new(&mut session, &json!({"path": created_magic, "overwrite": true, "audio": ext_wav, "skip_audio_setup": true})).unwrap();
-        let saved_doc: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&created_magic).unwrap()).unwrap();
-        assert_eq!(saved_doc["workshop"]["audio"].as_str().unwrap(), "audio/song-demo.wav");
-        assert_eq!(saved_doc["workshop"]["storyboard"].as_str().unwrap(), "storyboard.designcraft");
-
-        write_project_file(&session).unwrap();
-
-        let _ = std::fs::remove_dir_all(&sandbox);
-    }
 }

@@ -25,7 +25,6 @@ pub struct Category {
 }
 
 pub const CATEGORIES: &[Category] = &[
-    Category { id: "ai", title: "AI & LLM (craft-ai-core)" },
     Category { id: "appearance", title: "Appearance & Interface Style" },
     Category { id: "general", title: "General" },
     Category { id: "project", title: "Project Workspace" },
@@ -36,7 +35,6 @@ pub const CATEGORIES: &[Category] = &[
 
 pub fn fields_with_cat() -> Vec<(&'static str, Field)> {
     vec![
-        ("ai", Field { key: "ai.enabled", label: "Enable Opt-In AI Shell (craft-ai-core)", kind: Kind::Bool, wired: true, enabled_by: None }),
         (
             "appearance",
             Field {

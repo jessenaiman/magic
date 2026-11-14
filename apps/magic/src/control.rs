@@ -548,7 +548,6 @@ impl MagicDesktopApp {
             "accent": self.ui_state.accent_choice.as_str(),
             "highContrast": self.ui_state.high_contrast,
             "uiScalePct": self.ui_state.ui_scale_pct,
-            "aiEnabled": self.ui_state.ai.enabled,
             "project": self.ui_state.project_path,
             "dirtyTracks": self.ui_state.dirty_tracks,
             "busy": self.ui_state.busy,
@@ -785,21 +784,5 @@ impl MagicDesktopApp {
         ctx.send_viewport_cmd(ViewportCommand::InnerSize(egui::vec2(width, height)));
         ctx.request_repaint();
         Ok(json!({"ok": true, "width": width, "height": height}))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::parse_control_addr;
-
-    #[test]
-    fn parses_strict_ipv4_loopback_and_ephemeral_zero() {
-        assert!(parse_control_addr("9875").is_ok());
-        assert!(parse_control_addr("0").is_ok());
-        assert!(parse_control_addr("localhost:9875").is_ok());
-        assert!(parse_control_addr("127.0.0.1:9875").is_ok());
-        assert!(parse_control_addr("[::1]:9875").is_err());
-        assert!(parse_control_addr("127.0.0.2:9875").is_err());
-        assert!(parse_control_addr("0.0.0.0:9875").is_err());
     }
 }

@@ -4,9 +4,6 @@
 #![forbid(unsafe_code)]
 #![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable))]
 
-use craft_ai_client::{Choice, RoleStatus};
-use craft_ai_core::history::HistoryLog;
-use craft_ai_egui::{ConnectionPanel, HistoryViewState};
 use craft_ui::fonts::{CraftFace, I18nScripts, UiFonts};
 use magic_view_animation::AnimationView;
 use magic_view_lyrics::LyricsView;
@@ -17,7 +14,7 @@ use magic_view_studio::StudioView;
 
 pub use magic_view_api as view_api;
 pub use magic_view_api::{
-    AccentChoice, ActiveModal, AiUiState, AutomationRegistry, BtnSpec, CachedPayloads, HomeView, InterfaceStyle, MagicPalette, PickerTarget,
+    AccentChoice, ActiveModal, AutomationRegistry, BtnSpec, CachedPayloads, HomeView, InterfaceStyle, MagicPalette, OptionsUiState, PickerTarget,
     SharedTimelineState, StageView, ThemeMode, UiAction, UiShellState, ViewCtx, ViewMode, action_button, controls, disabled_todo_button, editorial, filmbar,
     fonts_ui, icons, state, theme, timeline, widgets,
 };
@@ -30,17 +27,8 @@ pub mod shell;
 
 pub use docking::{DockFrameOutcome, DockWorkspaceState, PRESET_NAMES as WORKSPACE_PRESETS, PanelId};
 
-/// Cached role status and choices so `StatusView` never polls the OS keychain per frame.
-pub struct CachedAiRole {
-    pub id: String,
-    pub label: String,
-    pub status: RoleStatus,
-    pub choices: Vec<Choice>,
-    pub has_override: bool,
-}
-
 /// Owns the isolated view crates (`Project`, `01 Storyboard`, `02 Animations`, `03 Lyrics`,
-/// `04 Motion`, `05 Studio`) plus shared `craft-ai-egui` widget state inside the shell.
+/// `04 Motion`, `05 Studio`).
 pub struct StageHost {
     home: MagicHomeView,
     project: ProjectView,
@@ -49,13 +37,6 @@ pub struct StageHost {
     lyrics: LyricsView,
     motion: MotionView,
     studio: StudioView,
-    pub ai_panel: Option<ConnectionPanel>,
-    pub ai_history: HistoryViewState,
-    pub ai_log: HistoryLog,
-    pub ai_log_loaded: bool,
-    pub ai_roles: Vec<CachedAiRole>,
-    pub ai_roles_error: Option<String>,
-    pub ai_roles_loaded: bool,
 }
 
 impl Default for StageHost {
@@ -74,13 +55,6 @@ impl StageHost {
             lyrics: LyricsView::new(),
             motion: MotionView::new(),
             studio: StudioView::new(),
-            ai_panel: None,
-            ai_history: HistoryViewState::default(),
-            ai_log: HistoryLog::default(),
-            ai_log_loaded: false,
-            ai_roles: Vec::new(),
-            ai_roles_error: None,
-            ai_roles_loaded: false,
         }
     }
 

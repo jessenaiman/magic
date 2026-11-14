@@ -1,6 +1,5 @@
-//! Privacy-scrubbed diagnostics copy (`Copy Diagnostics` & `Report a Problem`), preference +
-//! `storytold/craft-ai-integrations`, project
-//! cache refresh, and safe HTTPS opener.
+//! Privacy-scrubbed diagnostics copy (`Copy Diagnostics` & `Report a Problem`), preference
+//! hydration, project cache refresh, and safe HTTPS opener.
 
 use std::path::PathBuf;
 
@@ -23,16 +22,11 @@ pub fn build_sanitized_diagnostics(session: &mut Session, ui_state: &mut UiShell
     {
         ui_state.cache.doctor = doc;
     }
-    if ui_state.cache.ai_status.is_null()
-        && let Ok(ai) = session.execute("ai.status", json!({}))
-    {
-        ui_state.cache.ai_status = ai;
-    }
 
     let proj_display = ui_state.project_path.as_ref().map_or_else(|| "none".into(), |p| scrub_home(&p.to_string_lossy()));
 
-    let summary = ui_state.ai.problem_summary.trim();
-    let steps = ui_state.ai.problem_steps.trim();
+    let summary = ui_state.options.problem_summary.trim();
+    let steps = ui_state.options.problem_steps.trim();
     let mut out = String::new();
     out.push_str("# Magic Studio Sanitized Diagnostics\n\n");
     if !summary.is_empty() {
@@ -54,8 +48,6 @@ pub fn build_sanitized_diagnostics(session: &mut Session, ui_state: &mut UiShell
         "accent": ui_state.accent_choice.as_str(),
         "ui_scale_pct": ui_state.ui_scale_pct,
         "project": proj_display,
-        "ai_enabled": ui_state.ai.enabled,
-        "ai_roles": ui_state.cache.ai_status.get("roles").cloned().unwrap_or(Value::Null),
         "craft_apps": ui_state.cache.doctor.get("apps").cloned().unwrap_or(Value::Null),
     });
     let json_text = serde_json::to_string_pretty(&payload).unwrap_or_else(|_| "{}".into());
@@ -65,8 +57,8 @@ pub fn build_sanitized_diagnostics(session: &mut Session, ui_state: &mut UiShell
     out
 }
 
-/// Hydrate appearance preferences and `craft-ai-integrations` status.
-pub fn hydrate_prefs_and_ai(session: &mut Session, ui_state: &mut UiShellState) {
+/// Hydrate appearance and autosave preferences from `craft-settings`.
+pub fn hydrate_prefs(session: &mut Session, ui_state: &mut UiShellState) {
     if let Ok(prefs_res) = session.execute("prefs.get", json!({})) {
         let p = &prefs_res["prefs"];
         if let Some(st) = p.pointer("/appearance/interface_style").and_then(Value::as_str).and_then(InterfaceStyle::parse) {
@@ -91,16 +83,6 @@ pub fn hydrate_prefs_and_ai(session: &mut Session, ui_state: &mut UiShellState) 
         if let Some(as_min) = p.pointer("/autosave/interval_minutes").and_then(Value::as_f64) {
             ui_state.autosave_minutes = as_min.clamp(1.0, 60.0);
         }
-    }
-    if let Ok(ai) = session.execute("ai.status", json!({})) {
-        sync_ai_ui_from_status(ui_state, &ai);
-        ui_state.cache.ai_status = ai;
-    }
-}
-
-pub fn sync_ai_ui_from_status(ui_state: &mut UiShellState, ai: &Value) {
-    if let Some(en) = ai.get("enabled").and_then(Value::as_bool) {
-        ui_state.ai.enabled = en;
     }
 }
 
@@ -176,17 +158,8 @@ pub fn refresh_cached_state(session: &mut Session, ui_state: &mut UiShellState, 
     if ui_state.project_path.is_some() && (prev_proj != ui_state.project_path || ui_state.timeline.title_text.is_empty()) {
         ui_state.timeline.title_text = ui_state.project_name();
     }
-    if initial {
-        if let Ok(cat) = session.execute("project.catalog", json!({})) {
-            ui_state.cache.catalog = cat;
-        }
-        if let Ok(ai) = session.execute("ai.status", json!({})) {
-            sync_ai_ui_from_status(ui_state, &ai);
-            ui_state.cache.ai_status = ai;
-        }
-        if let Ok(ext) = session.execute("app.extensions", json!({})) {
-            ui_state.cache.extensions = ext;
-        }
+    if initial && let Ok(cat) = session.execute("project.catalog", json!({})) {
+        ui_state.cache.catalog = cat;
     }
     if ui_state.project_path.is_some() {
         hydrate_open_project_caches(session, ui_state);

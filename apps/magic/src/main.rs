@@ -1,4 +1,4 @@
-//! `eframe` + `egui` + `storytold/craft-libs` + `storytold/craft-ai-integrations`
+//! `eframe` + `egui` + `storytold/craft-libs`
 //! desktop coordinator for Magic Studio (`magic --control 9875`).
 
 #![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable))]
@@ -158,7 +158,7 @@ impl MagicDesktopApp {
         magic_ui_egui::install_loaders(&cc.egui_ctx);
         let mut ui_state = UiShellState { view: initial_view, control_port: session.control_address.map(|a| a.port()), ..UiShellState::default() };
         magic_ui_egui::fonts_ui::refresh_available_fonts(&mut ui_state);
-        diagnostics::hydrate_prefs_and_ai(&mut session, &mut ui_state);
+        diagnostics::hydrate_prefs(&mut session, &mut ui_state);
         if session.settings.is_persistent()
             && let Ok(rec_val) = session.execute("recovery.list", json!({}))
             && let Some(entries) = rec_val["entries"].as_array().filter(|a| !a.is_empty())
@@ -306,11 +306,6 @@ impl MagicDesktopApp {
             }
             "video.list_ec_comps" => self.ui_state.cache.ec_comps = result.clone(),
             "app.doctor" => self.ui_state.cache.doctor = result.clone(),
-            "app.extensions" => self.ui_state.cache.extensions = result.clone(),
-            "ai.status" | "ai.configure" => {
-                diagnostics::sync_ai_ui_from_status(&mut self.ui_state, result);
-                self.ui_state.cache.ai_status = result.clone();
-            }
             _ => {}
         }
     }
@@ -389,12 +384,7 @@ impl MagicDesktopApp {
                 self.stage_host.home_mut().open_new_form();
                 self.refresh_view_data(ViewMode::Home);
             }
-            UiAction::OpenPreferences => {
-                self.stage_host.ai_roles_loaded = false;
-                let _ = self.execute_engine(ctx, "ai.status", json!({}));
-                let _ = self.execute_engine(ctx, "app.extensions", json!({}));
-                self.ui_state.active_modal = Some(ActiveModal::Preferences);
-            }
+            UiAction::OpenPreferences => self.ui_state.active_modal = Some(ActiveModal::Preferences),
             UiAction::OpenFontManager => {
                 craft_font_catalog::Catalog::global().rescan_if_changed();
                 magic_ui_egui::fonts_ui::refresh_available_fonts(&mut self.ui_state);

@@ -86,7 +86,7 @@ pub fn draw_workstation(
         draw_command_palette_popup(ui.ctx(), ctx, cmd_search_rect);
     }
     if let Some(modal) = ctx.state.active_modal {
-        draw_modal(ui.ctx(), ctx, host, modal);
+        draw_modal(ui.ctx(), ctx, modal);
     }
     draw_toast_if_active(ui.ctx(), ctx);
 
@@ -129,7 +129,7 @@ fn draw_top_menu_and_utilities(ui: &mut Ui, ctx: &mut ViewCtx<'_>, bar: &craft_m
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("menu-help-btn", "help", "About & Suite Doctor")).clicked() {
                 ctx.push(UiAction::OpenDoctor);
             }
-            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("menu-options-btn", "settings", "Options (Interface Style & Craft AI)")).clicked() {
+            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("menu-options-btn", "settings", "Options (Interface Style & Preferences)")).clicked() {
                 ctx.push(UiAction::OpenPreferences);
             }
             draw_persisted_style_controls(ui, ctx, wide);
@@ -322,7 +322,7 @@ fn draw_app_bar(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         &mut right_ui,
         ctx.reg,
         ctx.pal,
-        BtnSpec::icon_only("app-options-toggle", "settings", "Options (Interface Style & Craft AI)")
+        BtnSpec::icon_only("app-options-toggle", "settings", "Options (Interface Style & Preferences)")
             .selected(ctx.state.active_modal == Some(ActiveModal::Preferences)),
     )
     .clicked()

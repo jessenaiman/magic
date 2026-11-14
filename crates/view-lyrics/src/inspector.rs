@@ -12,7 +12,7 @@ use serde_json::{Value, json};
 use magic_view_api::controls::{EffectRowSpec, ScalarSpec, badge_accent_color, effect_row_button, fill_card, pill_toggle, ring_slider_h, rotary_dial};
 use magic_view_api::fonts_ui::{FontPickerSpec, font_family_combo, refresh_available_fonts};
 use magic_view_api::widgets::{BtnSpec, action_button, status_pill, text_input};
-use magic_view_api::{PickerTarget, UiAction, ViewCtx, disabled_todo_button};
+use magic_view_api::{PickerTarget, UiAction, ViewCtx};
 
 use crate::state::LyricsViewState;
 
@@ -275,27 +275,7 @@ fn draw_transform_and_craft_fx_tab(state: &mut LyricsViewState, ui: &mut Ui, ctx
 }
 
 fn draw_styles_and_3d_extrude_tab(state: &mut LyricsViewState, ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
-    ui.label(RichText::new("9 Layer Styles & Global Light (T24)").size(11.5).strong().color(ctx.pal.accent_amber));
-    ui.horizontal_wrapped(|ui| {
-        ui.spacing_mut().item_spacing.x = 4.0;
-        ui.spacing_mut().item_spacing.y = 4.0;
-        for (skind, lbl) in [
-            ("dropShadow", "Drop Shadow"),
-            ("innerShadow", "Inner Shadow"),
-            ("outerGlow", "Outer Glow"),
-            ("innerGlow", "Inner Glow"),
-            ("bevelEmboss", "Bevel & Emboss"),
-            ("satin", "Satin"),
-            ("colorOverlay", "Color Overlay"),
-            ("gradientOverlay", "Gradient Overlay"),
-            ("stroke", "Stroke"),
-        ] {
-            let id = format!("words-lstyle-{skind}");
-            let sel = state.layer_style_kind == skind;
-            // TODO: Read and find the docs
-            let _ = action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, lbl, "Toggle layer.layerStyle").selected(sel).enabled(false));
-        }
-    });
+    ui.label(RichText::new("Global Light, Glow & Stroke (T24)").size(11.5).strong().color(ctx.pal.accent_amber));
     ui.horizontal_wrapped(|ui| {
         rotary_dial(
             ui,
@@ -341,13 +321,6 @@ fn draw_styles_and_3d_extrude_tab(state: &mut LyricsViewState, ui: &mut Ui, ctx:
                 state.bevel_style = bev.into();
             }
         }
-        // TODO: Read and find the docs
-        let _ = action_button(
-            ui,
-            ctx.reg,
-            ctx.pal,
-            BtnSpec::label_only("words-apply-extrude", "Extrude 3D", "Set geometryOptions/extrusionDepth & bevelStyle").primary().enabled(false),
-        );
     });
 }
 
@@ -446,14 +419,6 @@ fn draw_range_and_curves_tab(state: &mut LyricsViewState, ui: &mut Ui, ctx: &mut
     pill_toggle(ui, ctx.reg, ctx.pal, "words-3d-per-char", "3D Per-Character Layer", &mut state.per_char_3d, ctx.pal.accent_emerald);
     pill_toggle(ui, ctx.reg, ctx.pal, "words-wiggly-sel", "Wiggly Selector", &mut state.wiggly_selector, ctx.pal.accent_amber);
 
-    // TODO: Read and find the docs
-    let _ = action_button(
-        ui,
-        ctx.reg,
-        ctx.pal,
-        BtnSpec::new("words-add-animator", "sparkles", "Apply Range Animator", "Execute text.addAnimator in effects/lyrics.ecproj").primary().enabled(false),
-    );
-
     ui.separator();
     ui.label(RichText::new("Variable Font Axes (T21)").size(11.5).strong().color(ctx.pal.accent_amber));
     let w_ch =
@@ -472,12 +437,10 @@ fn draw_range_and_curves_tab(state: &mut LyricsViewState, ui: &mut Ui, ctx: &mut
     {
         ctx.state.dirty_drafts.insert("lyrics".into());
     }
-    // TODO: Read and find the docs
-    let _ = disabled_todo_button(ui, ctx, "words-apply-shaping", "", "Apply Variable Shaping", "Sync layer.setText variations & OpenType features");
 
     ui.separator();
     ui.horizontal_wrapped(|ui| {
-        ui.label(RichText::new("Procedural Motion & Pick-Whip").size(11.5).strong().color(ctx.pal.accent_emerald));
+        ui.label(RichText::new("Procedural Motion").size(11.5).strong().color(ctx.pal.accent_emerald));
         let ok_drv = !state.expr_code.trim().is_empty();
         status_pill(ui, ctx.pal, if ok_drv { "Rust Driver" } else { "Manual" }, if ok_drv { ctx.pal.accent_emerald } else { ctx.pal.text_muted });
     });
@@ -504,15 +467,6 @@ fn draw_range_and_curves_tab(state: &mut LyricsViewState, ui: &mut Ui, ctx: &mut
                 state.expr_code = preset.into();
             }
         }
-        // TODO: Read and find the docs
-        let _ = disabled_todo_button(ui, ctx, "words-expr-whip", "", "@ Pick-Whip", "Bind lyric property via EffectCraft Pick-Whip");
-        // TODO: Read and find the docs
-        let _ = action_button(
-            ui,
-            ctx.reg,
-            ctx.pal,
-            BtnSpec::label_only("words-expr-apply", "Apply Driver", "Write procedural curve keyframes into lyrics.ecproj").primary().enabled(false),
-        );
     });
 
     ui.separator();
@@ -560,9 +514,6 @@ pub fn draw_captions_and_template_strip(state: &mut LyricsViewState, ui: &mut Ui
                     Some("Upgraded C1 captions to editable graphics"),
                 );
             }
-            text_input(ui, ctx.reg, "words-tpl-name", "Template Name", &mut state.template_name, "chorus-lower-third", 118.0);
-            // TODO: Read and find the docs
-            let _ = disabled_todo_button(ui, ctx, "words-export-ectpl", "", "Export .ectemplate", "Package Essential Graphics .ectemplate (T06)");
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("words-import-fcgt", "+ .fcgt", "Import FilmCraft Graphic Template (T06)")).clicked() {
                 ctx.push(UiAction::PickFile {
                     target: PickerTarget::ImportFcgt,

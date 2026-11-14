@@ -14,7 +14,7 @@ use magic_view_api::widgets::{BtnSpec, action_button, status_pill};
 use magic_view_api::{UiAction, ViewCtx};
 
 use crate::dock::draw_theatre_dock;
-use crate::inspector::{draw_puppet_and_3d_inspector, draw_time_and_stagger_card};
+use crate::inspector::draw_puppet_and_3d_inspector;
 use crate::state::AnimationViewState;
 
 pub fn draw_stage_header(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
@@ -399,8 +399,6 @@ fn draw_action_and_path_column(state: &mut AnimationViewState, ui: &mut Ui, ctx:
                 }
             });
         });
-        ui.add_space(6.0);
-        draw_time_and_stagger_card(state, ui, ctx, &cid);
     });
     let resp = ui.interact(scroll_out.inner_rect, ui.scope_id().with("motion_layers"), Sense::hover());
     ctx.reg.record("motion-layers", "Action & Path", &resp, None);

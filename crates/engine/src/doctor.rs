@@ -1,6 +1,6 @@
 //! `app.doctor` (`magic-cli app doctor`): verify headless sibling Craft CLIs (`designcraft-cli`,
-//! `photocraft-cli`, `vectorcraft-cli`, `effectcraft-cli`, `anicraft-cli`, `filmcraft-cli`, `deckcraft-cli`),
-//! `craft-ai-core` configuration, and `craft-settings` health.
+//! `photocraft-cli`, `vectorcraft-cli`, `effectcraft-cli`, `anicraft-cli`, `filmcraft-cli`, `deckcraft-cli`)
+//! and `craft-settings` health.
 
 use serde_json::{Value, json};
 
@@ -56,36 +56,8 @@ fn checks(s: &Session) -> Vec<Check> {
         format!("{}/{} Craft CLIs installed on PATH: [{}]", installed_clis.len(), craft_clis.len(), installed_clis.join(", ")),
     ));
 
-    let gate = crate::workspace::craft_agent_gate();
-    out.push(Check::ok(
-        "gate:craft-flags-and-agents",
-        format!(
-            "craft-flags: ai_mcp={}, ai_models={}; craft-ai-agents: switched_on={}, magic_allowed={}",
-            gate["ai_mcp"], gate["ai_models"], gate["agents_switched_on"], gate["magic_allowed"]
-        ),
-    ));
-
     let font_count = craft_font_catalog::Catalog::global().families().len();
     out.push(Check::ok("fonts:craft-font-catalog", format!("{font_count} font families indexed in craft-font-catalog")));
-
-    let ai = crate::craft_ai::craft_ai_status();
-    let ai_enabled = ai["enabled"].as_bool().unwrap_or(false);
-    let conn_count = ai["connections"].as_array().map_or(0, Vec::len);
-    let store_path = ai["storage"]["path"].as_str().unwrap_or("in-memory");
-    out.push(Check::ok(
-        "ai:craft-ai-core",
-        format!("ai.enabled={ai_enabled}, {conn_count} connection(s) configured via craft-ai-core (storage: {store_path})"),
-    ));
-
-    let tools_summary = match craft_ai_client::AppTools::standard("magic") {
-        Ok(tools) => {
-            let reports = tools.report();
-            let ready_count = reports.iter().filter(|r| matches!(r.status, craft_ai_client::RoleStatus::Ready(_))).count();
-            format!("{} tool(s) registered, {} ready", reports.len(), ready_count)
-        }
-        Err(e) => format!("in-memory / fallback: {e}"),
-    };
-    out.push(Check::ok("ai:craft-ai-client", tools_summary));
 
     let settings_report = s.settings.report_json();
     if settings_report["has_problems"].as_bool() == Some(true) || settings_report["read_only"].as_bool() == Some(true) {
@@ -101,12 +73,6 @@ fn checks(s: &Session) -> Vec<Check> {
             format!("craft-settings ready (persistent={}, path={})", settings_report["persistent"], settings_report["path"].as_str().unwrap_or("memory")),
         ));
     }
-
-    let ext = crate::extensions::extensions_report();
-    let ext_total = ext["counts"]["total"].as_u64().unwrap_or(0);
-    let ext_gen = ext["generation"].as_u64().unwrap_or(0);
-    let ext_root = ext["root"].as_str().unwrap_or("unavailable");
-    out.push(Check::ok("extensions:craft-ext-store", format!("{ext_total} extension(s) enabled for magic (generation={ext_gen}, root={ext_root})")));
 
     out
 }

@@ -12,10 +12,10 @@ use serde_json::{Value, json};
 use subcommands::{AnimationArgs, CaptionsArgs, ControlsArgs, ExportArgs, MeshCliArgs, ProjectArgs, RecoveryArgs, StudioArgs};
 
 const AFTER_HELP: &str = "\
-CREATE:     magic-cli new [existing_project] --audio song.wav --name \"My Song\"
+CREATE:     magic-cli new --audio song.wav --name \"My Song\"
 PROJECT:    magic-cli project status
 RECOVERY:   magic-cli recovery list | restore [run_id] | discard [--all] [run_id]
-STORYBOARD: magic-cli storyboard pages [page=0] | set [page=N] label=<field> text=\"...\" | image=PATH | render [page=0] | open | new
+STORYBOARD: magic-cli exec storyboard.pages | storyboard.render | storyboard.open | storyboard.new
 STUDIO:     magic-cli studio map-tracks --map lyrics:V3,V5:chorus --map motion:V4:beats
 CONTROLS:   magic-cli controls [filter] [--stage studio] [--live]
 EXPORT:     magic-cli export [out.mp4] --codec prores
@@ -65,8 +65,6 @@ pub struct Cli {
 
 #[derive(Args)]
 struct NewArgs {
-    /// Optional existing project directory or archive to import into the new project
-    existing_project: Option<String>,
     #[arg(long)]
     path: Option<String>,
     #[arg(long)]
@@ -242,16 +240,7 @@ fn put_opt_str(params: &mut Value, key: &str, val: Option<String>) {
 }
 
 fn build_new_params(args: NewArgs) -> Result<Value, String> {
-    let mut extra_tokens = args.arguments;
-    let existing_project = match args.existing_project {
-        Some(tok) if tok.contains('=') || tok.trim_start().starts_with('{') => {
-            extra_tokens.insert(0, tok);
-            None
-        }
-        other => other,
-    };
-    let mut params = parse_params(&extra_tokens, None)?;
-    put_opt_str(&mut params, "existing_project", existing_project);
+    let mut params = parse_params(&args.arguments, None)?;
     put_opt_str(&mut params, "path", args.path);
     put_opt_str(&mut params, "root", args.root);
     put_opt_str(&mut params, "name", args.name);
@@ -262,8 +251,7 @@ fn build_new_params(args: NewArgs) -> Result<Value, String> {
         params["overwrite"] = json!(true);
     }
     let is_anim = params.get("mode").and_then(Value::as_str) == Some("animation");
-    let has_existing = params.get("existing_project").and_then(Value::as_str).is_some_and(|s| !s.trim().is_empty());
-    if !is_anim && !has_existing && params.get("audio").and_then(Value::as_str).is_none_or(|s| s.trim().is_empty()) {
+    if !is_anim && params.get("audio").and_then(Value::as_str).is_none_or(|s| s.trim().is_empty()) {
         return Err(concat!(
             "magic-cli new requires --audio <SONG_FILE> (or audio=<SONG_FILE>) so Magic can transcribe ",
             "timestamps, sync the FilmCraft lyric track, and start the storyboard."

@@ -103,21 +103,6 @@ pub fn magic_data_dir() -> Option<PathBuf> {
     user_data_dir().map(|base| base.join("magic"))
 }
 
-/// Read launcher feature flags (`craft-flags`) and agent allowance (`craft-ai-agents`) without side effects.
-pub fn craft_agent_gate() -> Value {
-    let flags = craft_flags::load();
-    let agents_dir = craft_ai_agents::agents_dir();
-    let switched_on = craft_ai_agents::switched_on();
-    let magic_allowed = craft_ai_agents::allowed("magic");
-    json!({
-        "ai_mcp": flags.enabled(&craft_flags::AI_MCP),
-        "ai_models": flags.enabled(&craft_flags::AI_MODELS),
-        "agents_dir": agents_dir,
-        "agents_switched_on": switched_on,
-        "magic_allowed": magic_allowed,
-    })
-}
-
 /// Ensure `~/.local/share/magic/{templates,recovery,logs}` exist without writing embedded template blobs.
 pub fn ensure_default_app_folders() -> Option<PathBuf> {
     let base = magic_data_dir()?;

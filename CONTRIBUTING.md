@@ -19,6 +19,6 @@ Every run writes stage timings and compiler/Clippy diagnostics to `target/ci-rep
 
 ## Dependencies, Branches & Pull Requests
 
-- **Shared `storytold/craft-libs` Dependencies**: Workspace crates depend directly on `{ git = "https://github.com/storytold/craft-libs" }` (including `craft-ai-core`) so `cargo update` and `./install.sh --from-source` track `main` cleanly.
+- **Shared `storytold/craft-libs` Dependencies**: Workspace crates depend directly on `{ git = "https://github.com/storytold/craft-libs" }` so `cargo update` and `./install.sh --from-source` track `main` cleanly.
 - **Upstream Documentation**: Link directly to live `https://github.com/storytold/<repo>` `README.md` and `docs/` pages rather than maintaining offline snapshots.
 - **Pull Requests Only**: Never push directly to `main`. Open a focused pull request into `main` with no agent attribution trailers ([`AGENTS.md`](AGENTS.md) Rule 8 & Rule 15).

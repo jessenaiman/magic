@@ -1,9 +1,8 @@
-//! System, live UI shell controls, ArtCraft CLI pass-throughs, `craft-ai-integrations` settings,
+//! System, live UI shell controls, ArtCraft CLI pass-throughs,
 //! diagnostics, and preference command registrations.
 
 use super::{cmd_spec, query_spec};
 use crate::commands::{CommandSpec, always};
-use crate::craft_ai::{cmd_ai_configure, cmd_ai_history, cmd_ai_status};
 use crate::doctor::cmd_app_doctor;
 use crate::workshop::cmd_query_list;
 
@@ -14,7 +13,6 @@ fn requires_ui(_: &mut crate::Session, _: &serde_json::Value) -> crate::Result<s
 pub fn specs() -> Vec<CommandSpec> {
     let mut out = Vec::with_capacity(48);
     out.extend(specs_ui_and_craft_exec());
-    out.extend(specs_ai());
     out.extend(specs_edit_and_diagnostics());
     out.extend(crate::settings::commands::commands());
     out
@@ -81,20 +79,11 @@ fn specs_ui_and_craft_exec() -> Vec<CommandSpec> {
     ]
 }
 
-fn specs_ai() -> Vec<CommandSpec> {
-    vec![
-        query_spec!("ai.status", "Craft AI Status, Roles & SharedStore Connections", "{}", cmd_ai_status),
-        query_spec!("ai.history", "Craft AI Job History Log", "{\"app\":\"optional\",\"limit\":50,\"clear\":false}", cmd_ai_history),
-        cmd_spec!("ai.configure", "Configure AI Master Toggle & SharedStore Role Bindings", ["Edit"], None, "{\"enabled\":true}", always, cmd_ai_configure),
-    ]
-}
-
 fn specs_edit_and_diagnostics() -> Vec<CommandSpec> {
     vec![
         cmd_spec!("edit.undo", "Undo", ["Edit"], Some("Cmd+Z"), "{}", always, crate::session::undo::cmd_edit_undo),
         cmd_spec!("edit.redo", "Redo", ["Edit"], Some("Cmd+Shift+Z"), "{}", always, crate::session::undo::cmd_edit_redo),
         query_spec!("app.doctor", "Doctor: ArtCraft Suite & Environment Check", "{\"updates\":true}", cmd_app_doctor),
-        query_spec!("app.extensions", "List Installed Craft Extensions for Magic", "{\"root\":\"optional\"}", crate::extensions::cmd_app_extensions),
         query_spec!("app.update", "Check for Newer Release", "{}", crate::update::cmd_app_update),
         query_spec!("command.list", "List Engine Commands", "{\"filter\":\"optional\"}", cmd_query_list),
     ]

@@ -8,7 +8,7 @@ use serde_json::{Value, json};
 use magic_view_api::controls::{ScalarSpec, fill_card, paint_cubic_bezier, ring_slider_h};
 use magic_view_api::timeline::{CraftTimelineLane, CraftTimelineSpan, StandardTimelineSpec, TimelineFlavor, draw_standard_timeline};
 use magic_view_api::widgets::{BtnSpec, action_button};
-use magic_view_api::{UiAction, ViewCtx, disabled_todo_button};
+use magic_view_api::{UiAction, ViewCtx};
 
 use crate::state::AnimationViewState;
 
@@ -19,7 +19,7 @@ pub fn draw_theatre_dock(state: &mut AnimationViewState, ui: &mut Ui, ctx: &mut 
             ui.spacing_mut().item_spacing.x = 5.0;
             for (tid, lbl, tip) in [
                 ("theatre", "Theatre", "Action clips, ruler, channels & keyframe diamonds"),
-                ("keys", "Keys / Props", "Property reveal filter A/P/S/R/T/M/E/U/EE/UU & Separate XY (T20)"),
+                ("keys", "Keys / Props", "Property reveal filter A/P/S/R/T/M/E/U/EE/UU (T20)"),
                 ("curves", "Graph Editor", "Full-width Value & Speed Cubic Bezier Curve Workspace (T19)"),
             ] {
                 let id = format!("anim-dock-{tid}");
@@ -184,13 +184,9 @@ fn draw_property_reveal_dock(state: &mut AnimationViewState, ui: &mut Ui, ctx: &
                 state.prop_filter = prop.into();
             }
         }
-        // TODO: Read and find the docs
-        let _ = disabled_todo_button(ui, ctx, "anim-sep-xyz", "", "Separate XY", "prop.separateDimensions");
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-prev-key", "◀ Prev", "time.previousKey")).clicked() {
             state.scrub_seconds = (state.scrub_seconds - 0.5).max(0.0);
         }
-        // TODO: Read and find the docs
-        let _ = action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-add-key", "◆ Key", "prop.addKey").primary().enabled(false));
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-next-key", "Next ▶", "time.nextKey")).clicked() {
             let max_d = active_timeline_span(state, ctx);
             state.scrub_seconds = (state.scrub_seconds + 0.5).min(max_d);
@@ -247,20 +243,9 @@ fn draw_property_reveal_dock(state: &mut AnimationViewState, ui: &mut Ui, ctx: &
 fn draw_bezier_graph_editor_dock(state: &mut AnimationViewState, ui: &mut Ui, ctx: &mut ViewCtx<'_>, _cid: &str) {
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
-        for (interp, lbl) in [("linear", "Linear"), ("bezier", "Bezier"), ("continuousBezier", "Continuous Bezier"), ("hold", "Hold"), ("roving", "Roving")] {
-            let id = format!("anim-interp-{interp}");
-            let sel = state.key_interp == interp;
-            // TODO: Read and find the docs
-            let _ = action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, lbl, "keys.setInterpolation").selected(sel).enabled(false));
-        }
-        // TODO: Read and find the docs
-        let _ = action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-easy-ease-f9", "Easy Ease F9", "keys.easyEase").primary().enabled(false));
-
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-graph-prev", "◀", "Previous keyframe")).clicked() {
             state.scrub_seconds = (state.scrub_seconds - 0.5).max(0.0);
         }
-        // TODO: Read and find the docs
-        let _ = disabled_todo_button(ui, ctx, "anim-graph-key", "", "◆", "Add keyframe at playhead");
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-graph-next", "▶", "Next keyframe")).clicked() {
             let max_d = active_timeline_span(state, ctx);
             state.scrub_seconds = (state.scrub_seconds + 0.5).min(max_d);

@@ -20,7 +20,7 @@ use std::path::PathBuf;
 use egui::{Response, Ui};
 
 pub use docking::{DockFrameOutcome, DockWorkspaceState, PRESET_NAMES, PanelId};
-pub use state::{ActiveModal, AiUiState, CachedPayloads, PickerTarget, SharedTimelineState, UiAction, UiShellState, ViewCtx, ViewMode};
+pub use state::{ActiveModal, CachedPayloads, OptionsUiState, PickerTarget, SharedTimelineState, UiAction, UiShellState, ViewCtx, ViewMode};
 pub use theme::{AccentChoice, InterfaceStyle, MagicPalette, ThemeMode};
 pub use widgets::{AutomationRegistry, BtnSpec, action_button};
 

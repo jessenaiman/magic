@@ -77,7 +77,7 @@ fn specs_project() -> Vec<CommandSpec> {
             "New Project (Requires Audio Track + Transcribes to FilmCraft & Initializes DesignCraft Storyboard)",
             ["File"],
             Some("Cmd+N"),
-            "{\"path\":\"folder/name.magic, or root + name\",\"root\":\"folder\",\"name\":\"project title\",\"mode\":\"project (song, requires audio) | animation\",\"audio\":\"required song audio path for song projects\",\"transcript\":\"optional pre-timed transcript JSON\",\"existing_project\":\"optional non-.magic folder to archive into original-project.zip\",\"overwrite\":false}",
+            "{\"path\":\"folder/name.magic, or root + name\",\"root\":\"folder\",\"name\":\"project title\",\"mode\":\"project (song, requires audio) | animation\",\"audio\":\"required song audio path for song projects\",\"transcript\":\"optional pre-timed transcript JSON\",\"overwrite\":false}",
             always,
             cmd_project_new
         ),
@@ -152,7 +152,7 @@ fn specs_file() -> Vec<CommandSpec> {
             "New Project (ArtCraft Suite File Command)",
             ["File"],
             None,
-            "{\"path\":\"folder/name.magic, or root + name\",\"root\":\"folder\",\"name\":\"project title\",\"mode\":\"project|animation\",\"audio\":\"song audio path\",\"existing_project\":\"optional non-.magic folder\",\"overwrite\":false}",
+            "{\"path\":\"folder/name.magic, or root + name\",\"root\":\"folder\",\"name\":\"project title\",\"mode\":\"project|animation\",\"audio\":\"song audio path\",\"overwrite\":false}",
             always,
             cmd_project_new
         ),

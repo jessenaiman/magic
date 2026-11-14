@@ -5,7 +5,6 @@
 use egui::{Align, Align2, Color32, CornerRadius, Frame, Layout, Margin, RichText, ScrollArea, Sense, Stroke, StrokeKind, Ui, Vec2};
 use serde_json::json;
 
-use crate::StageHost;
 use crate::docking::PanelId;
 use crate::options_modal::{draw_options_window, draw_report_problem_window};
 use magic_view_api::controls::fill_card;
@@ -137,12 +136,12 @@ pub fn draw_history_panel_body(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
 }
 
 #[allow(clippy::cognitive_complexity)]
-pub fn draw_modal(egui_ctx: &egui::Context, ctx: &mut ViewCtx<'_>, host: &mut StageHost, modal: ActiveModal) {
+pub fn draw_modal(egui_ctx: &egui::Context, ctx: &mut ViewCtx<'_>, modal: ActiveModal) {
     match modal {
         ActiveModal::Preferences => {
-            if !draw_options_window(egui_ctx, ctx, host) {
+            if !draw_options_window(egui_ctx, ctx) {
                 ctx.state.active_modal = None;
-                ctx.state.ai.style_menu_open = false;
+                ctx.state.options.style_menu_open = false;
             }
             return;
         }
@@ -178,7 +177,7 @@ pub fn draw_modal(egui_ctx: &egui::Context, ctx: &mut ViewCtx<'_>, host: &mut St
         .show(egui_ctx, |ui| match modal {
             ActiveModal::Doctor => {
                 ui.horizontal(|ui| {
-                    ui.label("Installed ArtCraft CLI & `craft-ai-integrations` diagnostics:");
+                    ui.label("Installed ArtCraft CLI & workspace diagnostics:");
                     if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("doctor-refresh", "refresh", "Refresh Suite Doctor (app.doctor)")).clicked() {
                         ctx.exec("app.doctor", json!({}), None);
                     }
@@ -193,7 +192,7 @@ pub fn draw_modal(egui_ctx: &egui::Context, ctx: &mut ViewCtx<'_>, host: &mut St
             }
             ActiveModal::About => {
                 ui.label(RichText::new(concat!("Magic Studio ", env!("CARGO_PKG_VERSION"))).size(16.0).strong());
-                ui.label("eframe + egui + storytold/craft-libs + storytold/craft-ai-integrations coordinator.");
+                ui.label("eframe + egui + storytold/craft-libs coordinator.");
                 ui.label("Coordinates host DesignCraft, PhotoCraft, VectorCraft, EffectCraft, and FilmCraft over --control and <app>-cli.");
             }
             ActiveModal::UnsavedClose => {

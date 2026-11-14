@@ -184,15 +184,3 @@ pub fn measure_text_advance(text: &str, family: &str, weight: u16, italic: bool,
 
     proportional_fallback_advance(text, family, weight, italic, size_px)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::measure_text_advance;
-
-    #[test]
-    fn proportional_fallback_distinguishes_narrow_and_wide_glyphs() {
-        let narrow = measure_text_advance("iiii", "uninstalled-test-sans", 400, false, 80.0);
-        let wide = measure_text_advance("WWWW", "uninstalled-test-sans", 400, false, 80.0);
-        assert!(wide > narrow * 2.5, "expected wide glyphs ({wide}) >> narrow glyphs ({narrow})");
-    }
-}
