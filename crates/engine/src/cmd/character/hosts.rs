@@ -194,11 +194,11 @@ pub fn builtin_animation_hosts() -> Vec<Box<dyn AnimationHost>> {
     vec![Box::new(EffectCraftAnimationHost), Box::new(GlbMeshAnimationHost)]
 }
 
-/// `animation.hosts`: list built-in `AssetHost` & `AnimationHost` backends plus validated `extensions/` plugins.
-pub fn cmd_animation_hosts(s: &mut Session, _p: &Value) -> Result<Value> {
+/// `animation.hosts`: list built-in `AssetHost` & `AnimationHost` backends.
+pub fn cmd_animation_hosts(_s: &mut Session, _p: &Value) -> Result<Value> {
     let asset_hosts: Vec<Value> =
         builtin_asset_hosts().into_iter().map(|h| json!({"id": h.id(), "label": h.label(), "extensions": h.extensions(), "source": "builtin"})).collect();
-    let mut anim_hosts: Vec<Value> = builtin_animation_hosts()
+    let anim_hosts: Vec<Value> = builtin_animation_hosts()
         .into_iter()
         .map(|h| {
             json!({
@@ -211,21 +211,6 @@ pub fn cmd_animation_hosts(s: &mut Session, _p: &Value) -> Result<Value> {
             })
         })
         .collect();
-    for ext in crate::extensions::discover_extensions(Some(s), Some("animation.")) {
-        let canvas = CanvasMode::parse(ext.raw["canvas_mode"].as_str().unwrap_or("artboard_2d"));
-        let timeline = TimelineMode::parse(ext.raw["timeline_mode"].as_str().unwrap_or("keyframe_graph"));
-        let exts: Vec<&str> = ext.raw["extensions"].as_array().into_iter().flatten().filter_map(Value::as_str).collect();
-        anim_hosts.push(json!({
-            "id": ext.id,
-            "label": ext.name,
-            "role": ext.role,
-            "canvas_mode": canvas.as_str(),
-            "timeline_mode": timeline.as_str(),
-            "extensions": exts,
-            "trust": ext.trust.as_str(),
-            "source": "extension",
-        }));
-    }
     Ok(json!({
         "ok": true,
         "asset_hosts": asset_hosts,

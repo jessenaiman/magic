@@ -43,7 +43,6 @@ pub use rig::cmd_character_rig;
 pub use shot::{cmd_character_publish, cmd_character_shot};
 pub use sprite::cmd_character_sprite;
 
-pub(crate) const POSES: &str = include_str!("poses.json");
 pub(crate) const SKIP_CHARACTER_GROUPS: &[&str] = &[
     "_incoming",
     "approved-crops",
@@ -92,8 +91,6 @@ pub(crate) fn discover_character_folders(project_dir: &Path) -> Vec<(String, Opt
             || entry.join("parts").is_dir()
             || entry.join("sprites").is_dir()
             || entry.join("rig").is_dir()
-            || entry.join("parts.json").is_file()
-            || entry.join("character.magic").is_file()
             || std::fs::read_dir(&entry).into_iter().flatten().flatten().any(|f| {
                 let fp = f.path();
                 fp.is_file()
@@ -276,8 +273,7 @@ impl View {
         let char_folder = character_folder(&project_dir, &id);
         let folder_name = char_folder.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| id.clone());
         let sub = char_folder.join(&view);
-        let has_flat_craft = char_folder.join("parts.json").is_file()
-            || find_dir_ecproj(&char_folder, &id, &folder_name, &view, true).is_some()
+        let has_flat_craft = find_dir_ecproj(&char_folder, &id, &folder_name, &view, true).is_some()
             || find_dir_photo_doc(&char_folder, &id, &folder_name, &view, true).is_some()
             || find_dir_vector_doc(&char_folder, &id, &folder_name, &view, true).is_some();
         let (dir, is_flat) = if sub.is_dir() || !char_folder.is_dir() {
@@ -339,36 +335,12 @@ impl View {
             Err(bad(format!("{} is missing; run {made_by} first", path.display())))
         }
     }
-
-    pub fn parts(&self) -> Result<Value> {
-        let path = self.dir.join("parts.json");
-        let text = std::fs::read_to_string(&path).map_err(|_| bad(format!("{} is missing; run character.mark first", path.display())))?;
-        serde_json::from_str(&text).map_err(|e| bad(format!("parts.json: {e}")))
-    }
-
-    pub fn write_parts(&self, parts: &Value) -> Result<()> {
-        crate::doc_state::write_json(&self.dir.join("parts.json"), parts)?;
-        Ok(())
-    }
 }
 
 pub(crate) fn point(v: &Value) -> Option<[f64; 2]> {
     let a = v.as_array().filter(|a| a.len() == 2)?;
     let (x, y) = (a[0].as_f64()?, a[1].as_f64()?);
     (x.is_finite() && y.is_finite()).then_some([x, y])
-}
-
-pub(crate) fn part_list(parts: &Value) -> Result<&Vec<Value>> {
-    parts["parts"].as_array().filter(|p| !p.is_empty()).ok_or_else(|| bad("parts.json has no parts"))
-}
-
-pub(crate) fn root_part(parts: &[Value]) -> Result<&str> {
-    let roots: Vec<&str> = parts.iter().filter(|p| p["parent"].is_null() || p["parent"].as_str() == Some("")).filter_map(|p| p["id"].as_str()).collect();
-    match roots.as_slice() {
-        [root] => Ok(root),
-        [] => Err(bad("parts.json needs one root part with parent: null")),
-        _ => Err(bad("parts.json has more than one root part")),
-    }
 }
 
 pub(crate) fn step(command: &str, params: Value) -> Value {

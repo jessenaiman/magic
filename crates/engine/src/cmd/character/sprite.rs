@@ -3,11 +3,10 @@
 
 use std::path::{Path, PathBuf};
 
-use image::RgbaImage;
 use serde_json::{Value, json};
 
 use super::{bad, effectcraft, step};
-use crate::{Result, Session};
+use crate::{EngineError, Result, Session};
 
 /// Rectangular crop cell `[x, y, width, height]` inside a `cols x rows` sprite sheet of `(width, height)`.
 pub fn sprite_cell_rect(width: u32, height: u32, grid: (u32, u32), index: u32) -> [u32; 4] {
@@ -149,7 +148,6 @@ pub fn cmd_character_sprite(s: &mut Session, p: &Value) -> Result<Value> {
         "ecproj": project,
         "preview": preview_png,
     });
-    crate::doc_state::write_json(&dir.join("sprite.json"), &meta)?;
     Ok(json!({
         "ok": true,
         "sprite": meta,

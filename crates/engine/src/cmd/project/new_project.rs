@@ -358,7 +358,7 @@ mod tests {
 
     use super::cmd_project_new;
     use crate::Session;
-    use crate::cmd::project::{cmd_project_autosave, read_project_document, write_project_file};
+    use crate::cmd::project::{read_project_document, write_project_file};
 
     fn temp_sandbox(label: &str) -> PathBuf {
         let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();

@@ -95,61 +95,15 @@ fn discover_character_action_ecprojs(project_dir: &Path, folder: &Path, raw_id: 
         .collect()
 }
 
-fn extract_parts_rig_meta(parts_path: &Path) -> (Vec<Value>, Vec<Value>, Option<(f64, f64)>) {
-    let Ok(text) = std::fs::read_to_string(parts_path) else {
-        return (Vec::new(), Vec::new(), None);
-    };
-    let Ok(doc) = serde_json::from_str::<Value>(&text) else {
-        return (Vec::new(), Vec::new(), None);
-    };
-    let canvas = doc["size"]
-        .as_array()
-        .filter(|a| a.len() == 2)
-        .and_then(|a| Some((a[0].as_f64()?, a[1].as_f64()?)))
-        .or_else(|| Some((doc["width"].as_f64()?, doc["height"].as_f64()?)));
-    let mut joints = Vec::new();
-    let mut pins = Vec::new();
-    for part in doc["parts"].as_array().into_iter().flatten() {
-        let id = part["id"].as_str().unwrap_or_default();
-        if let Some(j) = point(&part["joint"]) {
-            joints.push(json!({
-                "id": id,
-                "parent": part["parent"],
-                "joint": j,
-                "bounds": part["bounds"],
-            }));
-        }
-        for pin_pt in part["pins"].as_array().into_iter().flatten() {
-            if let Some(pt) = point(pin_pt) {
-                pins.push(json!({ "part": id, "pin": pt }));
-            }
-        }
-    }
-    (joints, pins, canvas)
-}
-
 fn build_view_summary(dir: &Path, canonical_id: &str, raw_id: &str, view_name: &str, is_flat: bool) -> Option<Value> {
     let ecproj_path = find_dir_ecproj(dir, canonical_id, raw_id, view_name, is_flat);
     let pcraft_path = find_dir_pcraft(dir, canonical_id, raw_id, view_name, is_flat);
     let psd_path = find_dir_psd(dir, canonical_id, raw_id, view_name, is_flat);
     let photo_doc = find_dir_photo_doc(dir, canonical_id, raw_id, view_name, is_flat);
     let vector_doc = find_dir_vector_doc(dir, canonical_id, raw_id, view_name, is_flat);
-    let parts_path = dir.join("parts.json");
-    let has_parts = parts_path.is_file();
-    let (joints, pins, canvas) = extract_parts_rig_meta(&parts_path);
-    let drawing = std::fs::read_to_string(&parts_path)
-        .ok()
-        .and_then(|t| serde_json::from_str::<Value>(&t).ok())
-        .and_then(|p| p["image"].as_str().or_else(|| p["source"].as_str()).map(|i| dir.join(i)))
-        .filter(|p| p.is_file())
-        .or_else(|| {
-            let staged = dir.join(format!("{canonical_id}-{view_name}-drawing.png"));
-            staged.is_file().then_some(staged)
-        })
-        .or_else(|| {
-            let staged = dir.join(format!("{raw_id}-{view_name}-drawing.png"));
-            staged.is_file().then_some(staged)
-        })
+    let drawing = [dir.join(format!("{canonical_id}-{view_name}-drawing.png")), dir.join(format!("{raw_id}-{view_name}-drawing.png"))]
+        .into_iter()
+        .find(|p| p.is_file())
         .or_else(|| is_flat.then(|| find_initial_cutout(dir)).flatten());
     let rendered_frames = collect_view_frames(dir);
     let extracted_craft_png = if rendered_frames.is_empty() && drawing.is_none() {
@@ -161,14 +115,13 @@ fn build_view_summary(dir: &Path, canonical_id: &str, raw_id: &str, view_name: &
         None
     };
     let latest_frame = rendered_frames.first().cloned().or_else(|| drawing.clone()).or(extracted_craft_png);
-    let any_craft = ecproj_path.is_some() || photo_doc.is_some() || vector_doc.is_some() || has_parts || drawing.is_some();
+    let any_craft = ecproj_path.is_some() || photo_doc.is_some() || vector_doc.is_some() || drawing.is_some();
     if is_flat && !any_craft {
         return None;
     }
     Some(json!({
         "view": view_name,
-        "parts": has_parts,
-        "parts_path": has_parts.then_some(parts_path),
+        "parts": false,
         "drawing": drawing,
         "latest_frame": latest_frame,
         "rendered_frames": rendered_frames,
@@ -180,9 +133,8 @@ fn build_view_summary(dir: &Path, canonical_id: &str, raw_id: &str, view_name: &
         "vector_doc": vector_doc,
         "ecproj": ecproj_path.is_some(),
         "ecproj_path": ecproj_path,
-        "joints": joints,
-        "pins": pins,
-        "canvas_size": canvas.map(|(w, h)| json!([w, h])),
+        "joints": [],
+        "pins": [],
     }))
 }
 
@@ -243,7 +195,6 @@ pub fn cmd_character_list(s: &mut Session, _: &Value) -> Result<Value> {
                 "pins": [],
             }));
         }
-        let char_magic = folder.join("character.magic");
         let info_3d = mesh_io::inspect_character_3d(s, &project_dir, &canonical_id);
         let m3d_view = mesh_io::view_model3d_summary(&info_3d);
         if !m3d_view.is_null() {
@@ -275,7 +226,6 @@ pub fn cmd_character_list(s: &mut Session, _: &Value) -> Result<Value> {
                 "name": raw_name,
                 "group": group,
                 "folder": folder,
-                "character_magic": char_magic.is_file().then_some(char_magic),
                 "action_ecprojs": action_ecprojs,
                 "animation_style": animation_style,
                 "animation_styles": animation_styles,
@@ -446,13 +396,11 @@ pub fn sprite_summaries(folder: &Path) -> Vec<Value> {
         .filter_map(|dir| {
             let ecproj = newest(dir, "ecproj")?;
             let frames = rendered_pngs(&dir.join("frames")).unwrap_or_default();
-            let meta: Value = std::fs::read_to_string(dir.join("sprite.json")).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or(Value::Null);
-            let fps = meta["fps"].as_u64().unwrap_or(24);
-            let duration = meta["cycle_seconds"].as_f64().unwrap_or_else(|| frames.len() as f64 / fps.max(1) as f64);
-            let style = meta["animation_style"].as_str().unwrap_or("sprite_2d");
+            let fps = 24_u64;
+            let duration = frames.len() as f64 / fps as f64;
             Some(json!({
                 "name": dir.file_name().map(|n| n.to_string_lossy().into_owned()),
-                "animation_style": style,
+                "animation_style": "sprite_2d",
                 "ecproj": ecproj,
                 "preview": newest(&dir.join("clips"), "gif"),
                 "frames": frames,
@@ -471,11 +419,6 @@ pub fn sprite_summaries(folder: &Path) -> Vec<Value> {
     }
     for (vdir, is_flat, vname) in view_dirs {
         let Some(ecproj) = find_dir_ecproj(&vdir, &id, folder_name, vname, is_flat) else { continue };
-        let actions_map = std::fs::read_to_string(vdir.join("parts.json"))
-            .ok()
-            .and_then(|t| serde_json::from_str::<Value>(&t).ok())
-            .and_then(|p| p.get("actions").and_then(Value::as_object).cloned())
-            .unwrap_or_default();
         let mut seq_dirs: Vec<PathBuf> =
             std::fs::read_dir(vdir.join("frames")).into_iter().flatten().flatten().map(|e| e.path()).filter(|p| p.is_dir()).collect();
         seq_dirs.sort();
@@ -484,19 +427,8 @@ pub fn sprite_summaries(folder: &Path) -> Vec<Value> {
             if frames.is_empty() {
                 continue;
             }
-            let raw_dir_name = seq_dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-            let mut cycle_name = raw_dir_name.clone();
-            let mut duration = frames.len() as f64 / 24.0;
-            for (act_name, spec) in &actions_map {
-                if let (Some(st), Some(en)) = (spec.get("start").and_then(Value::as_f64), spec.get("end").and_then(Value::as_f64)) {
-                    let suffix = format!("-{st:.2}-{en:.2}");
-                    if raw_dir_name.ends_with(&suffix) {
-                        cycle_name = act_name.clone();
-                        duration = (en - st).max(0.1);
-                        break;
-                    }
-                }
-            }
+            let cycle_name = seq_dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            let duration = frames.len() as f64 / 24.0;
             if out.iter().any(|existing| existing["name"].as_str() == Some(cycle_name.as_str())) {
                 continue;
             }
