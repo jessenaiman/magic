@@ -13,7 +13,7 @@ fn amp_to_dbfs(amp: f32) -> f64 {
 
 pub fn read(s: &mut Session, p: &Value) -> Result<Value> {
     let bad = |message: &str| EngineError::InvalidParams(message.into());
-    let raw_song = s.song_audio.as_ref().ok_or_else(|| bad("Attach the song audio first"))?;
+    let raw_song = s.song_audio().ok_or_else(|| bad("Attach the song audio first"))?.to_path_buf();
     let path = if raw_song.is_file() {
         raw_song.clone()
     } else if let Ok(dir) = crate::workshop::project_dir(s) {

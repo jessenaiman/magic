@@ -2,6 +2,8 @@
 //! `storytold/craft-ai-integrations`, project
 //! cache refresh, and safe HTTPS opener.
 
+use std::path::PathBuf;
+
 use magic_engine::Session;
 use magic_ui_egui::{AccentChoice, InterfaceStyle, ThemeMode, UiShellState};
 use serde_json::{Value, json};

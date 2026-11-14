@@ -472,6 +472,91 @@ fn specs_character() -> Vec<CommandSpec> {
             always,
             crate::cmd::character::cmd_puppet_remove_pin
         ),
+        query_spec!(
+            "character.puppet.info",
+            "Inspect Puppet Mesh & Pins (EffectCraft)",
+            "{\"character\":\"id\",\"view\":\"front\",\"layer\":\"head\"}",
+            crate::cmd::character::cmd_puppet_info
+        ),
+        query_spec!("character.script.list", "List Installed & Sample Scripts (EffectCraft)", "{}", crate::cmd::character::cmd_script_list),
+        cmd_spec!(
+            "character.script.install",
+            "Install Script or Panel File into EffectCraft",
+            ["Animation"],
+            None,
+            "{\"path\":\"script.jsx\",\"panel\":false}",
+            always,
+            crate::cmd::character::cmd_script_install
+        ),
+        cmd_spec!(
+            "character.script.run",
+            "Run Script File or JavaScript Code in EffectCraft",
+            ["Animation"],
+            None,
+            "{\"code\":\"alert('hi')\"}",
+            always,
+            crate::cmd::character::cmd_script_run
+        ),
+        cmd_spec!(
+            "character.bone.add",
+            "Add IK/FK Bone in AniCraft",
+            ["Animation"],
+            None,
+            "{\"character\":\"id\",\"from\":1,\"to\":2}",
+            always,
+            crate::cmd::character::cmd_bone_add
+        ),
+        cmd_spec!(
+            "character.bone.remove",
+            "Remove Armature Bone in AniCraft",
+            ["Animation"],
+            None,
+            "{\"character\":\"id\",\"bone\":\"Bone 1\"}",
+            always,
+            crate::cmd::character::cmd_bone_remove
+        ),
+        cmd_spec!(
+            "character.bone.setLimits",
+            "Set Joint Angle Constraints in AniCraft",
+            ["Animation"],
+            None,
+            "{\"character\":\"id\",\"bone\":\"Bone 1\",\"min\":-45,\"max\":45}",
+            always,
+            crate::cmd::character::cmd_bone_set_limits
+        ),
+        cmd_spec!(
+            "character.bone.pin",
+            "Pin Armature Joint in AniCraft",
+            ["Animation"],
+            None,
+            "{\"character\":\"id\",\"bone\":\"Bone 1\",\"pinned\":true}",
+            always,
+            crate::cmd::character::cmd_bone_pin
+        ),
+        cmd_spec!(
+            "character.bone.pose",
+            "Pose Armature Bone in AniCraft",
+            ["Animation"],
+            None,
+            "{\"character\":\"id\",\"bone\":\"Bone 1\",\"angle\":30,\"frame\":1}",
+            always,
+            crate::cmd::character::cmd_bone_pose
+        ),
+        cmd_spec!(
+            "character.bone.solve",
+            "Inverse Kinematics Drag Solve in AniCraft",
+            ["Animation"],
+            None,
+            "{\"character\":\"id\",\"bone\":\"Bone 1\",\"x\":200,\"y\":300}",
+            always,
+            crate::cmd::character::cmd_bone_solve
+        ),
+        query_spec!(
+            "character.bone.info",
+            "Inspect Armatures and Bones in AniCraft",
+            "{\"character\":\"id\",\"frame\":1}",
+            crate::cmd::character::cmd_bone_info
+        ),
         cmd_spec!(
             "character.expression.set",
             "Set Expression (EffectCraft)",

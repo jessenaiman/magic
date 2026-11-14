@@ -53,12 +53,12 @@ Dependencies and assets use SPDX identifiers. An expression is allowed when ever
 
 # Magic Studio — instructions for agents
 
-Magic Studio (`magic`, `magic-cli`, `magic-tui`) is a pure-Rust ArtCraft production coordinator built on `eframe` + `egui` 0.37 and [`storytold/craft-libs`](https://github.com/storytold/craft-libs/blob/main/README.md). *(Root workspace license: `LicenseRef-Magic-Studio-NonResale` in [`LICENSE`](LICENSE); all shared crates and dependencies follow the Craft allowlist above.)*
+Magic Studio (`magic`, `magic-cli`) is a pure-Rust ArtCraft production coordinator built on `eframe` + `egui` 0.37 and [`storytold/craft-libs`](https://github.com/storytold/craft-libs/blob/main/README.md). *(Root workspace license: `LicenseRef-Magic-Studio-NonResale` in [`LICENSE`](LICENSE); all shared crates and dependencies follow the Craft allowlist above.)*
 
-## 1. Workspace & Pinned Dependencies
+## 1. Workspace & Floating Dependencies
 
-- **Crates**: `crates/util` (`magic-util`), `crates/engine` (`magic-engine`), `crates/mcp` (`magic-mcp`), `crates/ui-egui` (`magic-ui-egui`), `apps/magic`, `apps/magic-cli`, `apps/magic-tui`, and `xtask`.
-- **Pinned `storytold/*` revisions (`--locked`)**: [`Cargo.toml`](Cargo.toml) pins [`storytold/craft-libs`](https://github.com/storytold/craft-libs) to a reviewed commit and patches all 14 `egui` family crates from [`storytold/egui`](https://github.com/storytold/egui) (`6d518fc799681571963842f95b55a6b68431b15a`) plus [`storytold/winit`](https://github.com/storytold/winit) (`a517b3846ee8457d84ee4975110bfda6797c44dc`). Build reproducibly with `--locked` and verify with `MAGIC_RUN_TESTS=1 cargo xtask ci` (writing `target/ci-report.txt` and `target/ci-report.jsonl`).
+- **Crates**: `crates/util` (`magic-util`), `crates/engine` (`magic-engine`), `crates/mcp` (`magic-mcp`), `crates/ui-egui` (`magic-ui-egui`), `apps/magic`, `apps/magic-cli`, and `xtask`.
+- **Floating `storytold/*` branches (never pin `rev =`)**: [`Cargo.toml`](Cargo.toml) tracks [`storytold/craft-libs`](https://github.com/storytold/craft-libs) (`branch = "main"`), [`storytold/craft-ai-integrations`](https://github.com/storytold/craft-ai-integrations) (`branch = "main"`), [`storytold/egui`](https://github.com/storytold/egui) (`branch = "craft/0.37-pin"`), and [`storytold/winit`](https://github.com/storytold/winit) (`branch = "craft/0.30.13"`). Never hardcode `rev =` commits or build with `--locked`; install and update via `./install.sh --from-source` (`cargo update` + release build into `~/.local/bin`) and verify with `cargo xtask ci` (writing `target/ci-report.txt` and `target/ci-report.jsonl`).
 - **Read actual upstream docs before integrating**:
   - [`storytold/craft-libs`](https://github.com/storytold/craft-libs/blob/main/README.md) & [`docs/ai-shared-layer.md`](https://github.com/storytold/craft-libs/blob/main/docs/ai-shared-layer.md)
   - [`storytold/craft-ai-integrations`](https://github.com/storytold/craft-ai-integrations/blob/main/README.md)

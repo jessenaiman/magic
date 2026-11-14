@@ -10,7 +10,6 @@ use egui::{Align2, Color32, CornerRadius, FontId, Pos2, Rect, RichText, ScrollAr
 use serde_json::{Value, json};
 
 use crate::controls::{ScalarSpec, fill_card, paint_craft_doc_card, paint_local_image, pill_toggle, ring_slider_h, xy_path_pad};
-use crate::docking::PanelId;
 use crate::state::{UiAction, ViewCtx};
 use crate::views::animation_dock::draw_theatre_dock;
 use crate::views::animation_inspector::{draw_puppet_and_3d_inspector, draw_time_and_stagger_card};

@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use serde_json::{Value, json};
 
-use super::{cmd_project_save, ensure_default_asset_project};
+use super::ensure_default_asset_project;
 use crate::{EngineError, Result, Session};
 
 const IMAGE_EXTENSIONS: &[&str; 36] = &[
@@ -50,7 +50,7 @@ const MODEL_EXTENSIONS: &[&str; 2] = &["glb", "gltf"];
 
 pub(crate) fn project_index(s: &Session, params: &Value) -> Result<usize> {
     let id = params.get("id").and_then(Value::as_str).ok_or_else(|| EngineError::InvalidParams("missing project asset 'id'".into()))?;
-    s.project_assets.iter().position(|a| a.id == id).ok_or_else(|| EngineError::InvalidParams(format!("project asset '{id}' is not connected")))
+    s.project_assets().iter().position(|a| a.id == id).ok_or_else(|| EngineError::InvalidParams(format!("project asset '{id}' is not connected")))
 }
 
 pub(crate) fn asset_role(dir: Option<&Path>, path: Option<&Path>) -> &'static str {
@@ -128,7 +128,7 @@ pub(crate) fn resolve_asset_project_image(project_dir: Option<&Path>, asset_path
 pub fn cmd_project_list_assets(s: &mut Session, _: &Value) -> Result<Value> {
     let dir = s.project_path.as_deref().and_then(Path::parent);
     let assets = s
-        .project_assets
+        .project_assets()
         .iter()
         .map(|asset| {
             let mut entry = serde_json::to_value(asset).map_err(|e| EngineError::InvalidParams(e.to_string()))?;
@@ -264,7 +264,7 @@ fn copy_into_owned_assets(dir: &Path, params: &Value, source: &Path, kind: &str,
 fn unique_asset_id(s: &Session, base_id: &str, explicit: bool) -> Result<String> {
     let mut id = base_id.to_owned();
     let mut suffix = 2;
-    while s.project_assets.iter().any(|a| a.id == id) || s.assets.contains_key(&id) {
+    while s.project_assets().iter().any(|a| a.id == id) || s.assets.contains_key(&id) {
         if explicit {
             return Err(EngineError::InvalidParams(format!("asset id '{id}' already exists")));
         }
@@ -280,12 +280,12 @@ pub fn cmd_project_add_asset(s: &mut Session, params: &Value) -> Result<Value> {
     }
     let req = asset_request(s, params)?;
     if req.if_not_exists
-        && let Some(existing_id) = s.project_assets.iter().find(|a| a.path.as_deref() == Some(req.path.as_path())).map(|a| a.id.clone())
+        && let Some(existing_id) = s.project_assets().iter().find(|a| a.path.as_deref() == Some(req.path.as_path())).map(|a| a.id.clone())
     {
         if req.load {
             cmd_project_load_asset(s, &json!({"id": existing_id}))?;
         }
-        return Ok(json!({"ok": true, "asset_id": existing_id, "loaded": req.load, "assets": s.project_assets}));
+        return Ok(json!({"ok": true, "asset_id": existing_id, "loaded": req.load, "assets": s.project_assets()}));
     }
     let base_id = req
         .explicit_id
@@ -309,7 +309,7 @@ pub fn cmd_project_add_asset(s: &mut Session, params: &Value) -> Result<Value> {
         crate::native_media::trace_silhouette_svg(&stored, &svg_path, 1.5, params["strokes"].as_bool().unwrap_or(false))?;
         stored = svg_path;
     }
-    s.project_assets.push(crate::ProjectAsset {
+    s.require_project_mut()?.assets.push(crate::ProjectAsset {
         id: id.clone(),
         name: req.name,
         preset: None,
@@ -320,18 +320,15 @@ pub fn cmd_project_add_asset(s: &mut Session, params: &Value) -> Result<Value> {
     if req.load {
         cmd_project_load_asset(s, &json!({"id": id}))?;
     }
-    if params["save"].as_bool() == Some(true) {
-        cmd_project_save(s, &json!({}))?;
-    }
-    Ok(json!({"ok": true, "asset_id": id, "path": stored, "loaded": req.load, "assets": s.project_assets, "copied_to": copied}))
+    Ok(json!({"ok": true, "asset_id": id, "path": stored, "loaded": req.load, "assets": s.project_assets(), "copied_to": copied}))
 }
 
 pub fn cmd_project_remove_asset(s: &mut Session, params: &Value) -> Result<Value> {
     let index = project_index(s, params)?;
-    let entry = s.project_assets.remove(index);
+    let entry = s.require_project_mut()?.assets.remove(index);
     s.assets.remove(&entry.id);
     if s.active_asset.as_deref() == Some(&entry.id) {
-        s.active_asset = s.project_assets.iter().find(|e| s.assets.contains_key(&e.id)).map(|e| e.id.clone());
+        s.active_asset = s.project_assets().iter().find(|e| s.assets.contains_key(&e.id)).map(|e| e.id.clone());
     }
     Ok(json!({"ok": true, "removed": entry.id, "active_asset": s.active_asset}))
 }
@@ -340,22 +337,24 @@ pub fn cmd_project_update_asset(s: &mut Session, params: &Value) -> Result<Value
     let index = project_index(s, params)?;
     if let Some(raw_name) = params.get("name") {
         let name = raw_name.as_str().map(str::trim).filter(|n| !n.is_empty()).ok_or_else(|| EngineError::InvalidParams("asset name cannot be empty".into()))?;
-        s.project_assets[index].name = name.into();
+        s.require_project_mut()?.assets[index].name = name.into();
     }
     if let Some(raw_idx) = params.get("index") {
+        let assets_len = s.project_assets().len();
         let target = raw_idx
             .as_u64()
-            .filter(|i| (*i as usize) < s.project_assets.len())
+            .filter(|i| (*i as usize) < assets_len)
             .map(|i| i as usize)
             .ok_or_else(|| EngineError::InvalidParams("asset index out of range".into()))?;
-        let entry = s.project_assets.remove(index);
-        s.project_assets.insert(target, entry);
+        let assets = &mut s.require_project_mut()?.assets;
+        let entry = assets.remove(index);
+        assets.insert(target, entry);
     }
     cmd_project_list_assets(s, params)
 }
 
 pub fn cmd_project_load_asset(s: &mut Session, params: &Value) -> Result<Value> {
-    let entry = s.project_assets[project_index(s, params)?].clone();
+    let entry = s.project_assets()[project_index(s, params)?].clone();
     let reload = params.get("reload").and_then(Value::as_bool).unwrap_or(false);
     if !s.assets.contains_key(&entry.id) || reload {
         let path = entry.path.as_ref().ok_or_else(|| EngineError::InvalidParams(format!("project asset '{}' has no file path", entry.id)))?;
@@ -373,18 +372,87 @@ pub fn cmd_project_load_asset(s: &mut Session, params: &Value) -> Result<Value> 
             asset.width = w;
             asset.height = h;
         }
+        asset.metadata = magic_util::metadata::extract_image_metadata(path).ok();
         s.assets.insert(entry.id.clone(), asset);
     }
     s.active_asset = Some(entry.id.clone());
     Ok(json!({"ok": true, "asset_id": entry.id}))
 }
 
-/// Copy an external file into the open project's owned `<slug>/assets/` directory and save `<slug>.magic`.
+/// `project.asset_metadata`: inspect photo/image EXIF, IPTC, XMP, and container metadata,
+/// optionally geotagging from a GPX file or writing/merging a sibling `.xmp` sidecar.
+pub fn cmd_project_asset_metadata(s: &mut Session, params: &Value) -> Result<Value> {
+    let path = if let Some(id) = params.get("id").and_then(Value::as_str) {
+        if let Some(loaded) = s.assets.get(id) {
+            loaded.path.clone()
+        } else {
+            let idx = project_index(s, params)?;
+            s.project_assets()[idx].path.clone().ok_or_else(|| EngineError::InvalidParams(format!("project asset '{id}' has no file path")))?
+        }
+    } else if let Some(raw_path) = params.get("path").and_then(Value::as_str) {
+        crate::workspace::resolve_workspace_path(s, raw_path)
+    } else {
+        return Err(EngineError::InvalidParams("need 'id' or 'path'".into()));
+    };
+
+    if !path.is_file() {
+        return Err(EngineError::InvalidParams(format!("asset file does not exist: {}", path.display())));
+    }
+
+    let mut meta = magic_util::metadata::extract_image_metadata(&path).map_err(|e| EngineError::InvalidParams(format!("cannot read metadata: {e}")))?;
+    let mut gpx_match: Option<&'static str> = None;
+    if let Some(gpx_raw) = params.get("gpx_path").and_then(Value::as_str) {
+        let gpx_path = crate::workspace::resolve_workspace_path(s, gpx_raw);
+        let gpx_xml = std::fs::read_to_string(&gpx_path).map_err(|e| EngineError::InvalidParams(format!("cannot read GPX {}: {e}", gpx_path.display())))?;
+        let max_gap = params.get("max_gap_secs").and_then(Value::as_f64).unwrap_or(300.0);
+        if let Some(m) = magic_util::metadata::geotag_metadata_from_gpx(&mut meta, &gpx_xml, max_gap)
+            .map_err(|e| EngineError::InvalidParams(format!("GPX geotagging failed: {e}")))?
+        {
+            gpx_match = Some(match m {
+                magic_util::metadata::Match::Interpolated => "interpolated",
+                magic_util::metadata::Match::Nearest => "nearest",
+            });
+        }
+    }
+
+    let mut sidecar_written: Option<PathBuf> = None;
+    if params.get("write_xmp_sidecar").and_then(Value::as_bool) == Some(true) {
+        let sidecar = magic_util::metadata::find_xmp_sidecar(&path).unwrap_or_else(|| path.with_extension("xmp"));
+        let existing = std::fs::read_to_string(&sidecar).ok();
+        let rules = magic_util::metadata::MergeRules {
+            owned: &["xmp:Rating", "xmp:Label", "dc:title", "dc:description", "dc:creator", "dc:rights", "dc:subject"],
+            owned_if_present: &["exif:GPSLatitude", "exif:GPSLongitude", "exif:GPSAltitude", "tiff:Orientation"],
+            namespaces: &[],
+        };
+        let packet = magic_util::metadata::merge_or_write_xmp(existing.as_deref(), &meta, &rules)
+            .map_err(|e| EngineError::InvalidParams(format!("cannot format XMP sidecar: {e}")))?;
+        crate::doc_state::write_file(&sidecar, packet.as_bytes())?;
+        sidecar_written = Some(sidecar);
+    }
+
+    let oriented = meta.width.zip(meta.height).map(|(w, h)| magic_util::metadata::oriented_dimensions(w, h, meta.orientation));
+    let tags = if params.get("include_tags").and_then(Value::as_bool) == Some(true) {
+        let bytes = std::fs::read(&path)?;
+        Some(magic_util::metadata::inspect_tag_rows(&bytes))
+    } else {
+        None
+    };
+
+    Ok(json!({
+        "ok": true,
+        "path": path,
+        "metadata": meta,
+        "oriented_size": oriented.map(|(w, h)| json!({"width": w, "height": h})),
+        "gpx_match": gpx_match,
+        "sidecar_written": sidecar_written,
+        "tags": tags,
+    }))
+}
+
+/// Copy an external file into the open project's owned `<slug>/assets/` directory (in-memory project becomes dirty until `file.save`).
 pub fn cmd_project_save_asset(s: &mut Session, params: &Value) -> Result<Value> {
-    if s.project_path.is_none() {
+    if s.project_path.is_none() || s.project.is_none() {
         return Err(EngineError::InvalidParams("no project is open; open or create a .magic project first".into()));
     }
-    let mut merged = params.clone();
-    merged["save"] = json!(true);
-    cmd_project_add_asset(s, &merged)
+    cmd_project_add_asset(s, params)
 }

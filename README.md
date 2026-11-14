@@ -106,7 +106,7 @@ magic-cli --project song.magic studio map-tracks --save     # map Storyboard, An
 
 ## Get started
 
-Build and install `magic`, `magic-cli` and `magic-tui` from source (`./install.sh` builds with `--locked` against the pinned [`storytold/craft-libs`](https://github.com/storytold/craft-libs) revision in `Cargo.lock`):
+Build and install `magic` and `magic-cli` from source (`./install.sh --from-source` runs `cargo update` against floating `storytold/*` branches and installs into `~/.local/bin`):
 
 ```sh
 git clone https://github.com/jessenaiman/magic.git

@@ -262,15 +262,17 @@ mod tests {
             std::fs::create_dir_all(dir.join(sub)).unwrap();
         }
         let magic_file = dir.join("demo-song.magic");
-        crate::doc_state::write_json(&magic_file, &json!({"name": "Demo Song", "workshop": {}})).unwrap();
-        let session = Session { project_path: Some(magic_file), ..Default::default() };
+        let project = crate::project::Project::new_for_path(&magic_file, None);
+        crate::doc_state::write_json(&magic_file, &project.to_persisted_value(&magic_file)).unwrap();
+        let mut session = Session::default();
+        session.reset_for_opened_project(magic_file, project);
         (dir, session)
     }
 
     #[test]
     fn map_tracks_rejects_animation_target() {
         let (dir, mut session) = temp_project_session("reject_anim");
-        session.video_project_path = Some(dir.join("film/demo-song.fcproj"));
+        session.require_project_mut().unwrap().workshop.video_project = Some(dir.join("film/demo-song.fcproj"));
         for forbidden in ["animation", "animations"] {
             let err = cmd_video_map_tracks(
                 &mut session,

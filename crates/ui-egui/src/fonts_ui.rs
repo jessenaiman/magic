@@ -6,7 +6,8 @@ use std::sync::{Arc, Mutex, OnceLock};
 use craft_font_catalog::Catalog;
 use craft_font_manager::store::{Installer, NoStore, SuiteStore};
 use craft_font_manager::{FontsPanel, Options, Runner, Settings};
-use egui::{Align2, ComboBox, RichText, ScrollArea, Ui, Vec2};
+use craft_ui::ComboBox;
+use egui::{Align2, RichText, ScrollArea, Ui, Vec2};
 
 use crate::state::{ActiveModal, UiAction, UiShellState, ViewCtx};
 use crate::theme::MagicPalette;
@@ -15,6 +16,29 @@ use crate::widgets::{AutomationRegistry, BtnSpec, action_button, status_pill, te
 pub struct FontPickerSpec<'a> {
     pub id_prefix: &'a str,
     pub label: &'a str,
+}
+
+fn load_fonts_panel_settings() -> Settings {
+    let Some(dir) = magic_engine::settings::prefs::resolved_config_dir() else {
+        return Settings::default();
+    };
+    let path = dir.join("font-manager-settings.json");
+    if let Ok(bytes) = std::fs::read(&path)
+        && let Ok(settings) = serde_json::from_slice::<Settings>(&bytes)
+    {
+        return settings;
+    }
+    Settings::default()
+}
+
+pub fn save_fonts_panel_settings(settings: &Settings) {
+    let Some(dir) = magic_engine::settings::prefs::resolved_config_dir() else {
+        return;
+    };
+    let path = dir.join("font-manager-settings.json");
+    if let Ok(json_bytes) = serde_json::to_vec_pretty(settings) {
+        let _ = craft_atomic::atomic_write(&path, &json_bytes);
+    }
 }
 
 fn shared_fonts_panel() -> &'static Mutex<FontsPanel> {
@@ -28,7 +52,10 @@ fn shared_fonts_panel() -> &'static Mutex<FontsPanel> {
         };
         let index = installer.indexes().map_err(|e| e.to_string());
         let options = Options { catalog, installer, index, runner: Runner::Thread };
-        Mutex::new(FontsPanel::new(options, Settings::default()))
+        let settings = load_fonts_panel_settings();
+        let mut panel = FontsPanel::new(options, settings);
+        panel.show_downloads_switch(true);
+        Mutex::new(panel)
     })
 }
 
@@ -37,7 +64,7 @@ pub fn refresh_available_fonts(state: &mut UiShellState) {
     state.available_fonts = Catalog::global().families().iter().map(|f| f.to_string()).collect();
 }
 
-/// Reusable searchable `egui::ComboBox` font family selector wired to `Catalog::global()`,
+/// Reusable searchable `craft_ui::ComboBox` font family selector wired to `Catalog::global()`,
 /// showing style count, missing-font status, and a `Fonts…` button opening `FontsPanel`.
 #[allow(clippy::too_many_arguments)]
 pub fn font_family_combo(
@@ -127,7 +154,9 @@ pub fn draw_font_manager_body(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     ui.allocate_ui(Vec2::new(ui.available_width(), avail_h), |ui| {
         panel_guard.ui(ui);
     });
+    let current_settings = panel_guard.settings().clone();
     drop(panel_guard);
+    save_fonts_panel_settings(&current_settings);
     refresh_available_fonts(ctx.state);
 }
 

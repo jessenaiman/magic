@@ -60,6 +60,8 @@ fn is_read_only_call(id: &str, params: &Value) -> bool {
         id,
         "engine.commands"
             | "document.inspect"
+            | "project.status"
+            | "recovery.list"
             | "ui.inspect"
             | "ui.state"
             | "ui.drafts"
@@ -300,7 +302,7 @@ mod tests {
             count
         });
         let mut remote = Remote::new(addr.to_string(), None);
-        let err = remote.execute("project.status", json!({})).unwrap_err();
+        let err = remote.execute("project.save", json!({})).unwrap_err();
         assert!(err.contains("outcome unknown"));
         assert_eq!(handle.join().unwrap(), 1);
     }

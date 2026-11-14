@@ -4,7 +4,6 @@
 use serde_json::{Value, json};
 
 use super::assets::cmd_project_list_assets;
-use super::read_project_document;
 use crate::{EngineError, Result, Session};
 
 fn style_badge(style: &str) -> &'static str {
@@ -173,8 +172,14 @@ pub fn cmd_project_snapshot(s: &mut Session, _: &Value) -> Result<Value> {
     let footer = build_footer_model(&status, &storyboard, characters_arr.len());
     Ok(json!({
         "project": project,
+        "dirty": s.is_dirty(),
+        "revision": s.project_revision,
         "data": {
             "project": project,
+            "dirty": s.is_dirty(),
+            "revision": s.project_revision,
+            "can_undo": !s.history.undo.is_empty(),
+            "can_redo": !s.history.redo.is_empty(),
             "status": status,
             "storyboard": storyboard,
             "assets": assets,
@@ -191,8 +196,8 @@ pub fn theatre_state(s: &mut Session, params: &Value) -> Result<Value> {
     if params["expected_project"].as_str() != path.to_str() {
         return Err(EngineError::InvalidParams("Project changed".into()));
     }
-    let doc = read_project_document(path)?;
-    Ok(json!({"state": doc["theatre"], "status": if doc["theatre"].is_object() { "saved" } else { "empty" }}))
+    let theatre = s.require_project()?.theatre.clone().unwrap_or(Value::Null);
+    Ok(json!({"state": theatre, "status": if theatre.is_object() { "saved" } else { "empty" }}))
 }
 
 pub fn save_theatre_state(s: &mut Session, params: &Value) -> Result<Value> {
@@ -200,14 +205,7 @@ pub fn save_theatre_state(s: &mut Session, params: &Value) -> Result<Value> {
     if !params["state"]["sheetsById"].is_object() {
         return Err(EngineError::InvalidParams("Invalid Theatre snapshot".into()));
     }
-    let path = s.project_path.as_ref().ok_or_else(|| EngineError::InvalidParams("Open a project".into()))?;
-    if s.project_stamp.get().is_some() {
-        crate::link_watch::save_guard(path, s.project_stamp.get())?;
-    }
-    let mut doc = read_project_document(path)?;
-    doc["theatre"] = params["state"].clone();
-    let bytes = serde_json::to_vec_pretty(&doc).map_err(|e| EngineError::InvalidParams(e.to_string()))?;
-    craft_atomic::atomic_write(path, &bytes)?;
-    s.project_stamp.set(crate::link_watch::FileStamp::of(path));
-    Ok(json!({"saved": true, "project": path}))
+    let path = s.project_path.clone().ok_or_else(|| EngineError::InvalidParams("Open a project".into()))?;
+    s.require_project_mut()?.theatre = Some(params["state"].clone());
+    Ok(json!({"saved": true, "project": path, "dirty": s.is_dirty()}))
 }

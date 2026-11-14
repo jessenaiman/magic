@@ -6,7 +6,7 @@
 //! `Minimal`, `Ocean`, `Forest`, `Plum`, `Sand`) renders as a custom themed dropdown list.
 
 use egui::{Align, Align2, Color32, CornerRadius, FontId, Layout, Order, Pos2, Rect, RichText, ScrollArea, Sense, Stroke, StrokeKind, Ui, Vec2};
-use serde_json::{Value, json};
+use serde_json::json;
 
 use crate::controls::{ScalarSpec, pill_toggle, ring_slider_h};
 use crate::menus::translate_menu_command;
@@ -244,11 +244,26 @@ fn draw_register_connection_box(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                     .color(ctx.pal.accent_amber),
             );
             ui.horizontal_wrapped(|ui| {
-                for &(pid, plabel) in magic_engine::craft_ai::STANDARD_PROVIDERS {
-                    let btn_id = format!("ai-prov-{pid}");
-                    let sel = ctx.state.ai.new_conn_provider == pid;
-                    if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&btn_id, pid, plabel).selected(sel)).clicked() {
-                        ctx.state.ai.new_conn_provider = pid.to_owned();
+                let sel_local = ctx.state.ai.new_conn_provider == "local";
+                if action_button(
+                    ui,
+                    ctx.reg,
+                    ctx.pal,
+                    BtnSpec::label_only("ai-prov-local", "Local Loopback", "Local loopback proxy (http://127.0.0.1:8000/v1)").selected(sel_local),
+                )
+                .clicked()
+                {
+                    ctx.state.ai.new_conn_provider = "local".to_owned();
+                    ctx.state.ai.new_conn_endpoint = "http://127.0.0.1:8000/v1".to_owned();
+                    ctx.state.ai.new_conn_label = "Local Loopback Bridge".to_owned();
+                }
+                for preset in craft_ai_core::PRESETS {
+                    let btn_id = format!("ai-prov-{}", preset.key);
+                    let sel = ctx.state.ai.new_conn_provider == preset.provider;
+                    if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&btn_id, preset.name, preset.note).selected(sel)).clicked() {
+                        ctx.state.ai.new_conn_provider = preset.provider.to_owned();
+                        ctx.state.ai.new_conn_endpoint = preset.endpoint.to_owned();
+                        ctx.state.ai.new_conn_label = preset.name.to_owned();
                     }
                 }
             });

@@ -1,17 +1,17 @@
-//! Bounded in-memory undo and redo history for the open project.
+//! Undo/redo [`History`] storing typed `.magic` v1 [`Project`] snapshots and revision numbers.
 
-/// Maximum undo steps kept in memory; oldest is evicted when exceeded.
-pub const MAX_STEPS: usize = 200;
+use crate::cmd::project::format::Project;
 
-#[derive(Clone, Debug)]
+pub const MAX_STEPS: usize = 64;
+
+#[derive(Debug, Clone)]
 pub struct Step {
-    /// Command that made the change (shown as "Undo <label>").
     pub label: String,
-    /// Project state captured before the edit.
-    pub snapshot: serde_json::Value,
+    pub project: Project,
+    pub revision: u64,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct History {
     pub undo: Vec<Step>,
     pub redo: Vec<Step>,

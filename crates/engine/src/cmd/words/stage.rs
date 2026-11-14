@@ -58,7 +58,7 @@ pub(crate) fn project_backdrop_images(s: &Session, dir: &Path) -> Vec<Value> {
             push_unique_image(&mut out, &mut seen, item);
         }
     }
-    for a in s.project_assets.iter().filter(|a| a.path.as_deref().is_some_and(is_image_file)) {
+    for a in s.project_assets().iter().filter(|a| a.path.as_deref().is_some_and(is_image_file)) {
         push_unique_image(&mut out, &mut seen, json!({"id": a.id, "asset_id": a.id, "name": a.name, "path": a.path}));
     }
     out

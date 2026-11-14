@@ -1,7 +1,6 @@
 //! Words composition and EffectCraft/FilmCraft placement (`words.compose`, `words.apply`, `words.design`, `words.track`).
 use std::collections::HashMap;
 use std::fs;
-use std::path::PathBuf;
 
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -9,7 +8,7 @@ use sha2::{Digest, Sha256};
 pub use super::validate::cmd_words_effect_install;
 pub(crate) use super::validate::{kinetic_design, line_design, text_effect};
 use super::{
-    HOLD_TICK, aligned, cmd_words_read, cmd_words_save, cmd_words_studio_track, fill_untimed, invalid, printed_caption_words, studio_times, timing, word_tick,
+    aligned, cmd_words_read, cmd_words_save, cmd_words_studio_track, fill_untimed, invalid, printed_caption_words, studio_times, timing, word_tick,
     word_time_key,
 };
 use crate::time::{TICKS_PER_SECOND, Tick};

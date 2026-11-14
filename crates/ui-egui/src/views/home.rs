@@ -7,7 +7,7 @@ use egui::{Align, Align2, Color32, CornerRadius, FontId, Layout, Pos2, RichText,
 use serde_json::{Value, json};
 
 use crate::controls::{FilmbarOrientation, FilmbarStyle, paint_craft_badge, paint_craft_doc_card, paint_dashed_rect, paint_filmbar_frame, paint_local_image};
-use crate::state::{PickerTarget, UiAction, ViewCtx, ViewMode};
+use crate::state::{ActiveModal, PickerTarget, UiAction, ViewCtx, ViewMode};
 use crate::widgets::{BtnSpec, action_button, status_pill, text_input};
 
 const CHAR_CARD_W: f32 = 224.0;
@@ -22,6 +22,7 @@ pub fn show(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
         ui.vertical(|ui| {
             ui.add_space(2.0);
+            draw_recovery_banner(ui, ctx);
             draw_filter_and_action_bar(ui, ctx);
             if ctx.state.home.show_new_form {
                 ui.add_space(8.0);
@@ -39,6 +40,24 @@ pub fn show(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             }
         });
     });
+}
+
+fn draw_recovery_banner(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
+    if ctx.state.recoverable_sessions.is_empty() {
+        return;
+    }
+    let count = ctx.state.recoverable_sessions.len();
+    ui.horizontal(|ui| {
+        ui.label(RichText::new(format!("⚠️ Found {count} recoverable crash session(s)")).strong().color(ctx.pal.accent_amber));
+        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("home-rec-modal", "wand", "Review Recovery", "Open recovery dialog").primary()).clicked() {
+            ctx.state.active_modal = Some(ActiveModal::Recovery);
+        }
+        if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("home-rec-discard", "trash", "Discard All", "Discard recoverable sessions")).clicked() {
+            ctx.exec("recovery.discard", json!({"all": true}), Some("Discarded recovery snapshots"));
+            ctx.state.recoverable_sessions.clear();
+        }
+    });
+    ui.add_space(6.0);
 }
 
 fn catalog_projects(ctx: &ViewCtx<'_>) -> Vec<Value> {

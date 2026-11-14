@@ -193,6 +193,7 @@ fn draw_puppet_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str, view_obj: Opti
                 "character.puppet.addPin",
                 json!({
                     "character": cid,
+                    "layer": ctx.state.animation.selected_part,
                     "part": ctx.state.animation.selected_part,
                     "kind": ctx.state.animation.puppet_pin_kind,
                     "position": [ctx.state.animation.pivot_x * 1024.0, ctx.state.animation.pivot_y * 1024.0],
@@ -205,8 +206,9 @@ fn draw_puppet_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str, view_obj: Opti
                 "character.puppet.setPin",
                 json!({
                     "character": cid,
+                    "layer": ctx.state.animation.selected_part,
                     "part": ctx.state.animation.selected_part,
-                    "index": 0,
+                    "pin": "Puppet Pin 1",
                     "rotation": ctx.state.animation.bone_rotation,
                     "scale": ctx.state.animation.bone_scale / 100.0,
                 }),
@@ -214,16 +216,48 @@ fn draw_puppet_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str, view_obj: Opti
             );
         }
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-pin-sel", "Select", "character.puppet.selectPins").enabled(has_char)).clicked() {
-            ctx.exec("character.puppet.selectPins", json!({"character": cid, "indices": [0]}), None);
+            ctx.exec("character.puppet.selectPins", json!({"character": cid, "layer": ctx.state.animation.selected_part, "pins": ["Puppet Pin 1"]}), None);
         }
         if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("anim-pin-del", "trash", "character.puppet.removePin").enabled(has_char)).clicked() {
-            ctx.exec("character.puppet.removePin", json!({"character": cid, "index": 0}), Some("Removed Puppet pin"));
+            ctx.exec(
+                "character.puppet.removePin",
+                json!({"character": cid, "layer": ctx.state.animation.selected_part, "pin": "Puppet Pin 1"}),
+                Some("Removed Puppet pin"),
+            );
         }
     });
 
     ui.separator();
     ui.label(RichText::new("Live Pin Record & Null Rig (T12–T13)").size(11.5).strong().color(ctx.pal.accent_amber));
-    pill_toggle(ui, ctx.reg, ctx.pal, "anim-puppet-rec-live", "Arm Live Stage Drag", &mut ctx.state.animation.puppet_record_live, ctx.pal.danger);
+    ui.horizontal_wrapped(|ui| {
+        pill_toggle(ui, ctx.reg, ctx.pal, "anim-puppet-rec-live", "Arm Live Drag", &mut ctx.state.animation.puppet_record_live, ctx.pal.danger);
+        if action_button(
+            ui,
+            ctx.reg,
+            ctx.pal,
+            BtnSpec::new("anim-puppet-rec-commit", "circle", "Record Gesture", "character.puppet.record: Commit gesture samples to pin").enabled(has_char),
+        )
+        .clicked()
+        {
+            let t = ctx.state.animation.scrub_seconds;
+            let px = ctx.state.animation.pivot_x * 1024.0;
+            let py = ctx.state.animation.pivot_y * 1024.0;
+            let samples = json!([[t, px, py], [t + 0.1, px + 5.0, py - 3.0], [t + 0.2, px, py]]);
+            ctx.exec(
+                "character.puppet.record",
+                json!({
+                    "character": cid,
+                    "layer": ctx.state.animation.selected_part,
+                    "pin": "Puppet Pin 1",
+                    "samples": samples,
+                    "smoothing": ctx.state.animation.puppet_smoothing,
+                    "draft_deform": ctx.state.animation.puppet_draft_deform,
+                    "show_mesh": ctx.state.animation.puppet_show_mesh,
+                }),
+                Some("Recorded Puppet pin gesture in EffectCraft"),
+            );
+        }
+    });
     ui.horizontal_wrapped(|ui| {
         pill_toggle(ui, ctx.reg, ctx.pal, "anim-puppet-draft", "Draft Deform", &mut ctx.state.animation.puppet_draft_deform, ctx.pal.accent_sky);
         pill_toggle(ui, ctx.reg, ctx.pal, "anim-puppet-mesh", "Mesh", &mut ctx.state.animation.puppet_show_mesh, ctx.pal.accent_emerald);
@@ -249,7 +283,12 @@ fn draw_puppet_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str, view_obj: Opti
         {
             ctx.exec(
                 "character.puppet.nullRig",
-                json!({"character": cid, "part": ctx.state.animation.selected_part, "mode": "points_follow_nulls"}),
+                json!({
+                    "character": cid,
+                    "part": ctx.state.animation.selected_part,
+                    "layer": ctx.state.animation.selected_part,
+                    "mode": "points_follow_nulls",
+                }),
                 Some("Bound Puppet pins to controller Nulls"),
             );
         }
@@ -258,7 +297,12 @@ fn draw_puppet_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str, view_obj: Opti
         {
             ctx.exec(
                 "character.puppet.nullRig",
-                json!({"character": cid, "part": ctx.state.animation.selected_part, "mode": "nulls_follow_points"}),
+                json!({
+                    "character": cid,
+                    "part": ctx.state.animation.selected_part,
+                    "layer": ctx.state.animation.selected_part,
+                    "mode": "nulls_follow_points",
+                }),
                 Some("Attached follower Nulls to Puppet pins"),
             );
         }
@@ -267,9 +311,61 @@ fn draw_puppet_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str, view_obj: Opti
         {
             ctx.exec(
                 "character.puppet.follow",
-                json!({"character": cid, "part": ctx.state.animation.selected_part, "delay": ctx.state.animation.follow_delay}),
+                json!({
+                    "character": cid,
+                    "part": ctx.state.animation.selected_part,
+                    "layer": ctx.state.animation.selected_part,
+                    "leader": "Pin 1",
+                    "pins": ["Pin 2", "Pin 3"],
+                    "delay": ctx.state.animation.follow_delay,
+                    "amount": 100,
+                    "cascade": true,
+                }),
                 Some("Applied secondary wing/cloth follow-through"),
             );
+        }
+    });
+
+    ui.separator();
+    ui.label(RichText::new("ScriptUI & Craft Host Actions").size(11.5).strong().color(ctx.pal.accent_sky));
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
+        if action_button(
+            ui,
+            ctx.reg,
+            ctx.pal,
+            BtnSpec::new("anim-script-run", "play", "Run Script", "character.script.run: Execute ExtendScript / ScriptUI in EffectCraft").enabled(has_char),
+        )
+        .clicked()
+        {
+            ctx.exec(
+                "character.script.run",
+                json!({
+                    "character": cid,
+                    "script": "app.project.activeItem",
+                }),
+                Some("Executed script in EffectCraft"),
+            );
+        }
+        if action_button(
+            ui,
+            ctx.reg,
+            ctx.pal,
+            BtnSpec::new("anim-open-effectcraft", "external", "Open in EffectCraft", "Open character comp directly in EffectCraft").enabled(has_char),
+        )
+        .clicked()
+        {
+            ctx.exec("workspace.open", json!({"app": "effectcraft", "domain": "animation"}), Some("Opened in EffectCraft"));
+        }
+        if action_button(
+            ui,
+            ctx.reg,
+            ctx.pal,
+            BtnSpec::new("anim-open-anicraft", "external", "Open in AniCraft", "Open character / sprite in AniCraft").enabled(has_char),
+        )
+        .clicked()
+        {
+            ctx.exec("workspace.open", json!({"app": "anicraft"}), Some("Opened in AniCraft"));
         }
     });
 }

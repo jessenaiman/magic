@@ -8,7 +8,7 @@
 
 #![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable))]
 
-use craft_ui::fonts::{I18nScripts, UiFonts};
+use craft_ui::fonts::{CraftFace, I18nScripts, UiFonts};
 
 pub mod controls;
 pub mod docking;
@@ -36,5 +36,8 @@ pub use widgets::AutomationRegistry;
 /// `color_fonts` script font chain shared with `craft-font-catalog`).
 pub fn install_loaders(ctx: &egui::Context) {
     egui_extras::install_image_loaders(ctx);
-    UiFonts::new(&I18nScripts).ui_language("en").install(ctx);
+    let lang = magic_util::active_language_code();
+    let faces: Vec<CraftFace> = magic_util::CRAFT_FONTS.iter().copied().map(CraftFace::from).collect();
+    UiFonts::new(&I18nScripts).ui_language(lang).craft_faces(&faces).install(ctx);
+    craft_ui::direction::apply(ctx, craft_ui::direction::resolve(lang, craft_ui::direction::Setting::Language));
 }

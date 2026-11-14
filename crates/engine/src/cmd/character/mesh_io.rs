@@ -150,7 +150,7 @@ fn candidate_3d_dirs(project_dir: &Path, id: &str) -> Vec<PathBuf> {
 
 fn registered_model(s: &Session, id: &str) -> Option<PathBuf> {
     let norm = id.replace('-', "_");
-    s.project_assets.iter().filter(|a| a.kind == "model_3d" && a.id.replace('-', "_") == norm).find_map(|a| a.path.clone().filter(|p| p.is_file()))
+    s.project_assets().iter().filter(|a| a.kind == "model_3d" && a.id.replace('-', "_") == norm).find_map(|a| a.path.clone().filter(|p| p.is_file()))
 }
 
 fn scan_anim_json_clips(dirs: &[PathBuf]) -> Vec<Value> {

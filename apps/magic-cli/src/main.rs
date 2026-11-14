@@ -9,10 +9,12 @@ use std::io::{BufRead, Write};
 
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use serde_json::{Value, json};
-use subcommands::{AnimationArgs, CaptionsArgs, ControlsArgs, ExportArgs, FinishArgs, MeshCliArgs, StoryboardArgs, StudioArgs};
+use subcommands::{AnimationArgs, CaptionsArgs, ControlsArgs, ExportArgs, FinishArgs, MeshCliArgs, ProjectArgs, RecoveryArgs, StoryboardArgs, StudioArgs};
 
 const AFTER_HELP: &str = "\
 CREATE:     magic-cli new [existing_project] --audio song.wav --name \"My Song\"
+PROJECT:    magic-cli project status
+RECOVERY:   magic-cli recovery list | restore [run_id] | discard [--all] [run_id]
 STORYBOARD: magic-cli storyboard status | open | new | add-section <name> | add-element <section> <name> | export [out]
 STUDIO:     magic-cli studio map-tracks --map lyrics:V3,V5:chorus --map motion:V4:beats
 CONTROLS:   magic-cli controls [filter] [--stage studio] [--live]
@@ -100,6 +102,10 @@ enum Cmd {
     Describe { id: String },
     /// Inspect project, storyboard, timeline, or doctor state as JSON
     Inspect { target: Option<String> },
+    /// Open project dirty, revision, and undo state (`project.status`)
+    Project(ProjectArgs),
+    /// List, restore, or discard crash recovery snapshots (`recovery.list`, `recovery.restore`, `recovery.discard`)
+    Recovery(RecoveryArgs),
     /// Show live Magic Studio window or headless workspace status
     Status,
     /// Pure-Rust `craft-mesh` 3D scene inspection & conversion (`inspect`, `convert` across `.glb`, `.gltf`, `.obj`, `.fbx`, `.stl`, `.ply`, `.3mf`)
@@ -288,6 +294,8 @@ fn list_commands(target: &mut Target, filter: Option<String>) -> Result<(), Stri
 fn inspect(target: &mut Target, what: Option<String>) -> Result<(), String> {
     let value = match what.as_deref().unwrap_or("all") {
         "project" => target.call("workshop.status", json!({})).or_else(|_| target.call("project.catalog", json!({})))?,
+        "project.status" | "status" => target.call("project.status", json!({})).or_else(|_| target.call("workshop.status", json!({})))?,
+        "recovery" => target.call("recovery.list", json!({}))?,
         "storyboard" => target.call("storyboard.status", json!({}))?,
         "timeline" | "sequence" => target.call("video.timeline", json!({}))?,
         "doctor" => target.call("app.doctor", json!({}))?,
@@ -428,7 +436,7 @@ fn run_app_call(target: &mut Target, port: Option<String>, method: Option<String
     Ok(())
 }
 
-fn resolve_shorthand(tokens: &[String]) -> Result<(String, Vec<String>), String> {
+pub(crate) fn resolve_shorthand(tokens: &[String]) -> Result<(String, Vec<String>), String> {
     let known: Vec<&str> = magic_engine::command_specs().iter().map(|c| c.id).collect();
     let words: Vec<&String> = tokens.iter().take_while(|t| !t.contains('=') && !t.starts_with('-') && !t.starts_with('{')).collect();
     for n in (1..=words.len()).rev() {
@@ -519,7 +527,13 @@ fn run(cli: Cli) -> Result<(), String> {
             Cmd::Controls(args) => subcommands::run_controls(&mut target, args),
             Cmd::Describe { id } => describe(&id),
             Cmd::Inspect { target: what } => inspect(&mut target, what),
-            Cmd::Status => inspect(&mut target, None),
+            Cmd::Project(args) => subcommands::run_project(&mut target, args),
+            Cmd::Recovery(args) => subcommands::run_recovery(&mut target, args),
+            Cmd::Status => {
+                let res = target.call("project.status", json!({})).or_else(|_| target.call("workshop.status", json!({})))?;
+                emit(&res);
+                Ok(())
+            }
             Cmd::Mesh(args) => subcommands::run_mesh_cli(&mut target, args),
             Cmd::Finish(args) => subcommands::run_finish(&mut target, args),
             Cmd::Export(args) => subcommands::run_export(&mut target, args),
@@ -617,7 +631,12 @@ mod tests {
         }
 
         // Middleman wrapper subcommands `film` and `effect` were removed in favor of direct FilmCraft / EffectCraft CLI/control usage.
-        assert!(Cli::try_parse_from(["magic-cli", "film", "exec", "sequence.inspect"]).is_err());
-        assert!(Cli::try_parse_from(["magic-cli", "effect", "exec", "comp.info"]).is_err());
+        let film = Cli::try_parse_from(["magic-cli", "film", "exec", "sequence.inspect"]).unwrap();
+        let Some(Cmd::Registry(tokens)) = film.command else { panic!("expected removed film to not be a first-class subcommand") };
+        assert!(super::resolve_shorthand(&tokens).is_err());
+
+        let effect = Cli::try_parse_from(["magic-cli", "effect", "exec", "comp.info"]).unwrap();
+        let Some(Cmd::Registry(tokens)) = effect.command else { panic!("expected removed effect to not be a first-class subcommand") };
+        assert!(super::resolve_shorthand(&tokens).is_err());
     }
 }

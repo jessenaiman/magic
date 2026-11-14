@@ -50,7 +50,7 @@ fn background(s: &Session, dir: &Path, entry: &Value) -> Result<PathBuf> {
             .ok_or_else(|| invalid("background media path missing"));
     }
     let id = entry["asset"].as_str().ok_or_else(|| invalid("each background needs asset or path"))?;
-    s.project_assets
+    s.project_assets()
         .iter()
         .find(|a| a.id == id)
         .and_then(|a| a.path.clone())
@@ -63,6 +63,7 @@ fn spans(times: &[Tick], duration: Tick) -> Vec<(Tick, Tick)> {
     times.iter().enumerate().map(|(i, from)| (*from, (times.get(i + 1).copied().unwrap_or(duration) - *from).max(Tick::ZERO))).collect()
 }
 
+#[allow(dead_code)]
 fn resolve_scene_image(scene: &Value, dir: &Path, assets: &[crate::ProjectAsset]) -> Option<PathBuf> {
     let asset_id = scene["image_asset_id"].as_str().or_else(|| scene["background_asset"].as_str()).or_else(|| scene["asset"].as_str());
     if let Some(id) = asset_id
@@ -73,6 +74,7 @@ fn resolve_scene_image(scene: &Value, dir: &Path, assets: &[crate::ProjectAsset]
     scene["image_path"].as_str().or_else(|| scene["path"].as_str()).map(|p| dir.join(p)).filter(|p| p.is_file())
 }
 
+#[allow(dead_code)]
 fn backgrounds_from_words(words_doc: &Value, dir: &Path, assets: &[crate::ProjectAsset]) -> Vec<(Tick, PathBuf)> {
     let mut out: Vec<(Tick, PathBuf)> = words_doc["animations"]
         .as_array()
@@ -91,7 +93,7 @@ fn backgrounds_from_words(words_doc: &Value, dir: &Path, assets: &[crate::Projec
 
 fn auto_backgrounds(s: &Session, dir: &Path, duration: Tick) -> Option<Vec<(Tick, PathBuf)>> {
     let imgs: Vec<PathBuf> =
-        s.project_assets.iter().filter(|a| a.kind == "image").filter_map(|a| a.path.as_ref().map(|p| dir.join(p))).filter(|p| p.is_file()).collect();
+        s.project_assets().iter().filter(|a| a.kind == "image").filter_map(|a| a.path.as_ref().map(|p| dir.join(p))).filter(|p| p.is_file()).collect();
     if imgs.is_empty() {
         return None;
     }
@@ -169,7 +171,7 @@ fn auto_discovered_animations(dir: &Path, duration: Tick) -> Vec<ClipSpec> {
 
 fn inputs(s: &Session, dir: &Path, p: &Value) -> Result<Inputs> {
     let name = s.project_path.as_ref().and_then(|p| p.file_stem()).map_or("Film".into(), |n| n.to_string_lossy().into_owned());
-    let audio = s.song_audio.clone().map(|a| dir.join(a)).filter(|a| a.is_file());
+    let audio = s.song_audio().map(|a| dir.join(a)).filter(|a| a.is_file());
     let lettering = first_existing_overlay(
         dir,
         p["lettering"].as_str(),
@@ -208,7 +210,7 @@ fn inputs(s: &Session, dir: &Path, p: &Value) -> Result<Inputs> {
     Ok(Inputs { name, audio, lettering, motion_overlay, backgrounds, characters, lyrics_clips, duration })
 }
 
-fn build_film(s: &Session, dir: &Path, project: &Path, film: &Inputs, fps: FrameRate) -> Result<()> {
+fn build_film(_s: &Session, dir: &Path, project: &Path, film: &Inputs, fps: FrameRate) -> Result<()> {
     let fps = fps.sane();
     let mut unique_paths: Vec<PathBuf> = Vec::new();
     let mut push_unique = |p: &Path| -> usize {

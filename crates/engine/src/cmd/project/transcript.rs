@@ -173,7 +173,7 @@ pub(crate) fn srt_from_paragraphs(doc: &Value) -> Option<String> {
 }
 
 fn probed_duration(s: &Session) -> Option<Tick> {
-    crate::cmd::film::media_duration_ticks(s.song_audio.as_deref()?, false).ok()
+    crate::cmd::film::media_duration_ticks(s.song_audio()?, false).ok()
 }
 
 /// Sync the SRT caption/lyric track onto the linked `FilmCraft` timeline.
@@ -188,12 +188,8 @@ pub fn cmd_workshop_import_transcript(s: &mut Session, params: &Value) -> Result
         .and_then(Value::as_str)
         .map(|p| resolve_workspace_path(s, p))
         .ok_or_else(|| EngineError::InvalidParams("missing transcript 'path'".into()))?;
-    let mut doc: Value =
-        serde_json::from_str(&std::fs::read_to_string(&source)?).map_err(|e| EngineError::InvalidParams(format!("not a JSON transcript: {e}")))?;
+    let mut doc = transcript_document(&source)?;
     let caption_raw = params["captions"].as_str().map(|p| resolve_workspace_path(s, p)).map(std::fs::read_to_string).transpose()?;
-    if doc.is_array() {
-        doc = json!({"words": doc});
-    }
     if let Some(words) = doc["words"].as_array_mut() {
         for w in words {
             if let Some((start, end)) = timed_span(w) {
@@ -222,10 +218,10 @@ pub fn cmd_workshop_import_transcript(s: &mut Session, params: &Value) -> Result
     let probed = probed_duration(s);
     doc["recording_duration_tick"] = json!(probed.map(|t| t.0));
     let mut problems = transcript_problems(&doc);
-    if let (Some(recorded), Some(song)) = (doc.get("audio").and_then(Value::as_str), s.song_audio.as_ref()) {
+    if let (Some(recorded), Some(song)) = (doc.get("audio").and_then(Value::as_str), s.song_audio()) {
         let recorded_path = Path::new(recorded);
         let same_name = recorded_path.file_name().is_some() && recorded_path.file_name() == song.file_name();
-        if recorded_path != song.as_path() && !same_name {
+        if recorded_path != song && !same_name {
             problems.push(format!("transcript is for {recorded}, but this project's song is {}", song.display()));
         } else {
             doc["audio"] = json!(song);
@@ -246,6 +242,7 @@ pub fn cmd_workshop_import_transcript(s: &mut Session, params: &Value) -> Result
 
     let mut status = workshop_status(s)?;
     status["imported"] = json!(copied);
+    status["grouping"] = json!(grouping);
     status["recording_duration_tick"] = json!(probed.map(|t| t.0));
     Ok(status)
 }
@@ -256,11 +253,11 @@ pub fn cmd_audio_analyze(s: &mut Session, params: &Value) -> Result<Value> {
     let audio = params["audio"]
         .as_str()
         .map(|p| resolve_workspace_path(s, p))
-        .or_else(|| s.song_audio.clone())
+        .or_else(|| s.song_audio().map(Path::to_path_buf))
         .filter(|p| p.is_file())
         .ok_or_else(|| EngineError::InvalidParams("no song audio: pass audio=<file> or workshop.set_audio".into()))?;
-    if s.song_audio.as_ref() != Some(&audio) {
-        s.song_audio = Some(audio.clone());
+    if s.song_audio() != Some(audio.as_path()) {
+        s.require_project_mut()?.workshop.audio = Some(audio.clone());
     }
     crate::cmd::film::assembly::ensure_song_film(s, &audio)?;
 

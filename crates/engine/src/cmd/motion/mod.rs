@@ -143,6 +143,7 @@ fn collect_motion_craft_files(dir: &Path) -> (Vec<PathBuf>, Vec<PathBuf>, Vec<(u
     (svgs, vcrafts, frames, ec_layers)
 }
 
+#[allow(dead_code)]
 fn words_from_timing_json(path: &Path) -> Option<Vec<Value>> {
     let bytes = fs::read(path).ok()?;
     let tref = serde_json::from_slice::<Value>(&bytes).ok()?;
@@ -205,7 +206,7 @@ fn words_from_words_doc_or_song(s: &mut Session, dir: &Path) -> Vec<Value> {
     }
 
     let mut raw_lines = Vec::new();
-    for line in s.song.lyrics.lines() {
+    for line in s.song_metadata().map(|m| m.lyrics.as_str()).unwrap_or_default().lines() {
         let trimmed = line.trim();
         if !trimmed.is_empty() {
             raw_lines.push(("Song".to_owned(), trimmed.to_owned()));

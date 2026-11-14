@@ -490,3 +490,66 @@ pub fn run_mesh_cli(target: &mut Target, args: MeshCliArgs) -> Result<(), String
         _ => target.run("mesh.inspect", json!({"path": args.path})),
     }
 }
+
+#[derive(Args)]
+pub struct ProjectArgs {
+    #[command(subcommand)]
+    pub command: Option<ProjectCmd>,
+}
+
+#[derive(Subcommand)]
+pub enum ProjectCmd {
+    /// Show open project dirty, revision, and undo state (`project.status`)
+    Status,
+}
+
+pub fn run_project(target: &mut Target, args: ProjectArgs) -> Result<(), String> {
+    match args.command.unwrap_or(ProjectCmd::Status) {
+        ProjectCmd::Status => target.run("project.status", json!({})),
+    }
+}
+
+#[derive(Args)]
+pub struct RecoveryArgs {
+    #[command(subcommand)]
+    pub command: Option<RecoveryCmd>,
+}
+
+#[derive(Subcommand)]
+pub enum RecoveryCmd {
+    /// List orphaned crash recovery snapshots (`recovery.list`)
+    List,
+    /// Restore a crash recovery snapshot (`recovery.restore`)
+    Restore {
+        /// Optional specific recovery run ID to restore (restores newest when omitted)
+        run_id: Option<String>,
+    },
+    /// Discard one or all crash recovery snapshots (`recovery.discard`)
+    Discard {
+        /// Optional specific recovery run ID to discard
+        run_id: Option<String>,
+        /// Discard all orphaned recovery snapshots
+        #[arg(long)]
+        all: bool,
+    },
+}
+
+pub fn run_recovery(target: &mut Target, args: RecoveryArgs) -> Result<(), String> {
+    match args.command.unwrap_or(RecoveryCmd::List) {
+        RecoveryCmd::List => target.run("recovery.list", json!({})),
+        RecoveryCmd::Restore { run_id } => {
+            let mut params = json!({});
+            if let Some(id) = run_id {
+                params["run_id"] = json!(id);
+            }
+            target.run("recovery.restore", params)
+        }
+        RecoveryCmd::Discard { run_id, all } => {
+            let mut params = json!({"all": all});
+            if let Some(id) = run_id {
+                params["run_id"] = json!(id);
+            }
+            target.run("recovery.discard", params)
+        }
+    }
+}

@@ -46,9 +46,9 @@ pub fn cmd_workshop_set_audio(s: &mut Session, params: &Value) -> Result<Value> 
     let source_audio = song_audio_path(s, raw)?;
     let overwrite = params.get("overwrite").and_then(Value::as_bool).unwrap_or(false);
     let (audio, copied) = crate::cmd::project::copy_audio_into_project(&dir, &source_audio, overwrite)?;
-    s.song_audio = Some(audio.clone());
-    s.video_target = "filmcraft".into();
-    crate::cmd::project::write_project_file(s)?;
+    let proj = s.require_project_mut()?;
+    proj.workshop.audio = Some(audio.clone());
+    proj.workshop.target = "filmcraft".into();
     crate::cmd::film::assembly::ensure_song_film(s, &audio)?;
     let mut status = workshop_status(s)?;
     status["audio"] = json!(audio);
@@ -62,8 +62,7 @@ pub fn cmd_workshop_set_target(s: &mut Session, params: &Value) -> Result<Value>
     if !VIDEO_TARGETS.contains(&target) {
         return Err(EngineError::InvalidParams(format!("target must be one of {VIDEO_TARGETS:?}")));
     }
-    s.video_target = target.into();
-    crate::cmd::project::write_project_file(s)?;
+    s.require_project_mut()?.workshop.target = target.into();
     workshop_status(s)
 }
 
@@ -245,8 +244,7 @@ pub fn cmd_workshop_split_panels(s: &mut Session, params: &Value) -> Result<Valu
 pub fn cmd_workshop_approve_draft(s: &mut Session, params: &Value) -> Result<Value> {
     project_dir(s)?;
     let approved = params.get("approved").and_then(Value::as_bool).unwrap_or(true);
-    s.draft_approved = approved;
-    crate::cmd::project::write_project_file(s)?;
+    s.require_project_mut()?.workshop.draft_approved = approved;
     workshop_status(s)
 }
 
@@ -263,7 +261,7 @@ pub fn cmd_workshop_files(s: &mut Session, params: &Value) -> Result<Value> {
     let dir = project_dir(s)?;
     let filter = params.get("filter").and_then(Value::as_str).map(str::to_ascii_lowercase).unwrap_or_default();
     let mut rows = Vec::new();
-    if let Some(audio) = s.song_audio.clone().filter(|p| p.is_file()) {
+    if let Some(audio) = s.song_audio().filter(|p| p.is_file()).map(Path::to_path_buf) {
         add_catalog_row(&mut rows, &dir, "audio", audio, &filter);
     }
     for p in files_in(&dir.join("liner-notes"), None) {
@@ -319,11 +317,11 @@ pub fn cmd_workshop_remove(s: &mut Session, params: &Value) -> Result<Value> {
     let file_name = canon_target.file_name().ok_or_else(|| EngineError::InvalidParams("invalid file name".into()))?;
     let moved_to = trash_destination(&trash_dir, file_name);
     std::fs::rename(&canon_target, &moved_to)?;
-    if s.song_audio.as_ref().and_then(|p| p.canonicalize().ok()).as_ref() == Some(&canon_target) {
-        s.song_audio = None;
+    let proj = s.require_project_mut()?;
+    if proj.workshop.audio.as_ref().and_then(|p| p.canonicalize().ok()).as_ref() == Some(&canon_target) {
+        proj.workshop.audio = None;
     }
-    s.project_assets.retain(|a| a.path.as_ref().and_then(|p| p.canonicalize().ok()).as_ref() != Some(&canon_target));
-    crate::cmd::project::write_project_file(s)?;
+    proj.assets.retain(|a| a.path.as_ref().and_then(|p| p.canonicalize().ok()).as_ref() != Some(&canon_target));
     let mut status = workshop_status(s)?;
     status["removed"] = json!(canon_target);
     status["trashed_to"] = json!(moved_to);

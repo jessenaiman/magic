@@ -71,7 +71,7 @@ pub(crate) fn brief_header(dir: &Path) -> String {
 }
 
 pub(crate) fn stage_body(s: &Session, stage: &str) -> String {
-    let target = s.video_target.as_str();
+    let target = s.video_target();
     match stage {
         "song" => "Stage 1 — Song. Link the song audio (`magic-cli new --audio <song>`).".to_string(),
         "transcript" => format!("Stage 2 — Transcription & Timing (`transcript.srt`).\n  magic-cli exec audio.analyze\nVideo target: {target}."),
@@ -166,13 +166,13 @@ fn workshop_transcript_summary(dir: &Path, _video_target: &str, _transcripts: &[
 }
 
 fn workshop_animated_assets(s: &Session) -> Vec<Value> {
-    s.project_assets.iter().map(|a| json!({"id": a.id, "name": a.name, "kind": a.kind, "path": a.path})).collect()
+    s.project_assets().iter().map(|a| json!({"id": a.id, "name": a.name, "kind": a.kind, "path": a.path})).collect()
 }
 
 pub(crate) fn workshop_status(s: &mut Session) -> Result<Value> {
     let dir = project_dir(s)?;
-    let target = s.video_target.clone();
-    let audio_ok = s.song_audio.as_ref().is_some_and(|p| p.is_file());
+    let target = s.video_target().to_owned();
+    let audio_ok = s.song_audio().is_some_and(|p| p.is_file());
     let liner = files_in(&dir.join("liner-notes"), None);
     let transcripts = transcript_files(&dir);
     let assets = workshop_asset_files(&dir);
@@ -192,10 +192,10 @@ pub(crate) fn workshop_status(s: &mut Session) -> Result<Value> {
     let animated = workshop_animated_assets(s);
     let mut stages = vec![
         json!({"id": "song", "title": "Song", "done": audio_ok, "why": song_why,
-            "inputs": s.song_audio.iter().map(|p| file_chip(p)).chain(liner.iter().map(|p| file_chip(p))).collect::<Vec<_>>(),
+            "inputs": s.song_audio().into_iter().map(file_chip).chain(liner.iter().map(|p| file_chip(p))).collect::<Vec<_>>(),
             "outputs": Vec::<Value>::new(), "brief": stage_brief(s, &dir, "song")}),
         json!({"id": "transcript", "title": "Transcript & Timing Ref", "done": transcript_valid, "why": transcript_why,
-            "inputs": s.song_audio.iter().map(|p| file_chip(p)).collect::<Vec<_>>(), "outputs": transcript_outputs,
+            "inputs": s.song_audio().into_iter().map(file_chip).collect::<Vec<_>>(), "outputs": transcript_outputs,
             "document": supplied_transcript, "problems": transcript_errors, "brief": stage_brief(s, &dir, "transcript")}),
         json!({"id": "storyboard", "title": "DesignCraft Storyboard", "done": sb_exists, "optional": true,
             "why": if sb_exists { "DesignCraft storyboard document ready." } else { "Optional creative DesignCraft storyboard (`storyboard.new`)." },
@@ -212,7 +212,7 @@ pub(crate) fn workshop_status(s: &mut Session) -> Result<Value> {
     }
     let setup_ready = audio_ok && transcript_valid;
     let studio_info = studio(&dir);
-    let effective_video_project = s.video_project_path.clone().or_else(|| video_project_path(&dir));
+    let effective_video_project = s.video_project_path().map(Path::to_path_buf).or_else(|| video_project_path(&dir));
     let lyrics_ready = dir.join("effects/lyrics.ecproj").is_file() || dir.join("lettering/lyrics.ecproj").is_file();
     let motion_ready = dir.join("effects/motion.ecproj").is_file() || dir.join("motion/actions.ecproj").is_file();
 
@@ -280,7 +280,7 @@ pub fn cmd_project_search(s: &mut Session, params: &Value) -> Result<Value> {
         .map(|c| json!({"id": c.id, "label": c.label, "params": c.params}))
         .collect();
     let subjects: Vec<Value> = s
-        .project_assets
+        .project_assets()
         .iter()
         .filter(|a| {
             q_lower.is_empty()

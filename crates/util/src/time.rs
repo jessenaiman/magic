@@ -3,7 +3,10 @@
 //! and [`craft_timeline::rate`].
 
 pub use craft_timeline::rate;
-pub use craft_timeline::time::{FrameRate, TICKS_PER_SECOND, Tick, TimeRange};
+pub use craft_timeline::time::{FrameRate, TICKS_PER_SECOND, Tick, TimeDisplay, TimeRange, format_time};
+pub use craft_timeline::{
+    Format as InterchangeFormat, ale, build, decode_text, detect_text, edl, fcp7, fcpxml, fx, model, otio, path as timeline_path, report, time as timeline_time,
+};
 
 use serde_json::{Value, json};
 
@@ -47,13 +50,46 @@ pub fn parse_frame_rate(v: &Value) -> Option<FrameRate> {
             "60" => Some(FrameRate::FPS_60),
             "119.88" => Some(FrameRate::FPS_119_88),
             "120" => Some(FrameRate::FPS_120),
-            _ => trimmed.parse::<f64>().ok().filter(|&f| f.is_finite() && f > 0.0).map(FrameRate::from_f64),
+            _ => trimmed.parse::<f64>().ok().filter(|&f| f.is_finite() && f > 0.0).map(rate::rate_from_f64),
         };
     }
     if let Some(n) = v.as_i64() {
         return (n > 0).then(|| FrameRate::new(n, 1));
     }
-    v.as_f64().filter(|f| f.is_finite() && *f > 0.0).map(FrameRate::from_f64)
+    v.as_f64().filter(|&f| f.is_finite() && f > 0.0).map(rate::rate_from_f64)
+}
+
+/// Snap a positive finite `fps` to an exact broadcast [`FrameRate`], falling back to default.
+pub fn rate_from_seconds_fps(fps: f64) -> FrameRate {
+    if fps.is_finite() && fps > 0.0 { rate::rate_from_f64(fps) } else { FrameRate::default() }
+}
+
+/// Convert `seconds` into an exact [`Tick`], clamping non-finite or negative values to zero.
+pub fn tick_from_nonneg_seconds(seconds: f64) -> Tick {
+    let clamped = if seconds.is_finite() && seconds > 0.0 { seconds } else { 0.0 };
+    Tick::from_seconds_f64(clamped)
+}
+
+/// Format `seconds` at `fps` as SMPTE timecode via `craft_timeline::time`.
+pub fn format_smpte(seconds: f64, fps: f64) -> String {
+    let rate = rate_from_seconds_fps(fps);
+    let tick = tick_from_nonneg_seconds(seconds);
+    format_time(tick, rate, rate.is_ntsc(), TimeDisplay::Timecode, 48_000)
+}
+
+/// Return the zero-based frame index containing `seconds` at `fps`.
+pub fn frame_at_seconds(seconds: f64, fps: f64) -> i64 {
+    let rate = rate_from_seconds_fps(fps);
+    let tick = tick_from_nonneg_seconds(seconds);
+    rate.frame_at(tick)
+}
+
+/// Step `seconds` by `delta_frames` frames at `fps`, clamping at frame `0`.
+pub fn step_frame_seconds(seconds: f64, fps: f64, delta_frames: i64) -> f64 {
+    let rate = rate_from_seconds_fps(fps);
+    let cur_frame = frame_at_seconds(seconds, fps);
+    let next_frame = cur_frame.saturating_add(delta_frames).max(0);
+    rate.tick_of(next_frame).seconds()
 }
 
 pub fn frame_rate_json(rate: FrameRate) -> Value {

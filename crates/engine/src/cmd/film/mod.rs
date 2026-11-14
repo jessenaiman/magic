@@ -36,19 +36,19 @@ fn film(s: &Session) -> Result<Film> {
     let dir = crate::workshop::project_dir(s)?;
     let name = s.project_path.as_ref().and_then(|p| p.file_stem()).map_or("Film".into(), |n| n.to_string_lossy().into_owned());
     let project = s
-        .video_project_path
-        .clone()
+        .video_project_path()
+        .map(Path::to_path_buf)
         .filter(|p| p.extension().is_some_and(|e| e == "fcproj"))
         .unwrap_or_else(|| dir.join("film").join(format!("{name}.fcproj")));
     Ok(Film { dir, name, project })
 }
 
 pub(crate) fn link(s: &mut Session, project: &Path) -> Result<()> {
-    if s.video_project_path.as_deref() == Some(project) {
+    if s.video_project_path() == Some(project) {
         return Ok(());
     }
-    s.video_project_path = Some(project.to_path_buf());
-    crate::project::write_project_file(s)
+    s.require_project_mut()?.workshop.video_project = Some(project.to_path_buf());
+    Ok(())
 }
 
 fn filmcraft_cli_available() -> bool {
@@ -124,6 +124,7 @@ impl Film {
         Ok(&self.project)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn require(&self) -> Result<&Path> {
         if self.project.is_file() { Ok(&self.project) } else { Err(bad("No film timeline yet; run video.assemble first")) }
     }

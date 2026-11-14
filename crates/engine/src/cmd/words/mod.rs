@@ -111,12 +111,9 @@ pub fn cmd_words_workspace(s: &mut Session, params: &Value) -> Result<Value> {
                 (files.len() == 1).then(|| files[0].clone())
             }
         };
-        if s.lyrics_workspace.as_ref() != Some(&folder) {
-            s.lyrics_workspace = Some(folder);
-        }
-        s.song_audio = audio;
+        s.set_standalone_lyrics_workspace(Some(folder), audio);
     }
-    Ok(json!({"ok":true,"standalone":s.lyrics_workspace.is_some(),"path":s.lyrics_workspace,"audio":s.song_audio}))
+    Ok(json!({"ok":true,"standalone":s.lyrics_workspace.is_some(),"path":s.lyrics_workspace,"audio":s.song_audio()}))
 }
 
 fn norm(text: &str) -> String {
@@ -540,7 +537,7 @@ pub(crate) fn timing(anim: &mut Value) {
     }
 }
 
-#[allow(clippy::cognitive_complexity)]
+#[allow(dead_code, clippy::cognitive_complexity)]
 fn normalize_words_doc(mut doc: Value) -> Value {
     if let Some(anims) = doc["animations"].as_array_mut() {
         for anim in anims.iter_mut() {

@@ -137,6 +137,8 @@ pub(crate) struct MagicDesktopApp {
     pub(crate) last_applied_scale_pct: u16,
     pub(crate) frame_started: Instant,
     pub(crate) last_tick: Instant,
+    pub(crate) last_autosave_poll: Instant,
+    pub(crate) last_window_title: String,
     pub(crate) in_window_menus: bool,
     #[cfg(target_os = "macos")]
     native_menu: Option<MacMenuHooks>,
@@ -156,6 +158,13 @@ impl MagicDesktopApp {
         let mut ui_state = UiShellState { view: initial_view, control_port: session.control_address.map(|a| a.port()), ..UiShellState::default() };
         magic_ui_egui::fonts_ui::refresh_available_fonts(&mut ui_state);
         diagnostics::hydrate_prefs_and_ai(&mut session, &mut ui_state);
+        if session.settings.is_persistent()
+            && let Ok(rec_val) = session.execute("recovery.list", json!({}))
+            && let Some(entries) = rec_val["entries"].as_array().filter(|a| !a.is_empty())
+        {
+            ui_state.recoverable_sessions = entries.clone();
+            ui_state.active_modal = Some(ActiveModal::Recovery);
+        }
         MagicPalette::resolve(ui_state.theme_mode, ui_state.interface_style, ui_state.accent_choice, ui_state.high_contrast, None).apply(&cc.egui_ctx);
 
         #[cfg(target_os = "macos")]
@@ -199,6 +208,8 @@ impl MagicDesktopApp {
             last_applied_scale_pct: 100,
             frame_started: now,
             last_tick: now,
+            last_autosave_poll: now,
+            last_window_title: String::new(),
             in_window_menus: use_in_window,
             #[cfg(target_os = "macos")]
             native_menu,
@@ -581,6 +592,20 @@ impl eframe::App for MagicDesktopApp {
         }
 
         self.file_sync.poll_frame(ctx, &mut self.session, &mut self.ui_state);
+
+        let is_dirty = self.session.is_dirty() || self.ui_state.is_dirty();
+        let proj_name = self.session.project_path.as_ref().and_then(|p| p.file_stem().and_then(|s| s.to_str())).unwrap_or("Untitled");
+        let prefix = if is_dirty { "* " } else { "" };
+        let title = format!("{prefix}{proj_name} — Magic Studio");
+        if title != self.last_window_title {
+            self.last_window_title = title.clone();
+            ctx.send_viewport_cmd(ViewportCommand::Title(title));
+        }
+
+        if self.ui_state.autosave_enabled && self.session.is_dirty() && self.frame_started.duration_since(self.last_autosave_poll) >= Duration::from_secs(3) {
+            self.last_autosave_poll = self.frame_started;
+            let _ = self.session.execute("project.autosave_tick", json!({}));
+        }
 
         if ctx.input(|i| i.viewport().close_requested()) && !self.lifecycle.is_approved() {
             if lifecycle::verify_clean(&self.session, &self.ui_state).is_err() {

@@ -11,6 +11,7 @@ use std::path::Path;
 use craft_audio::{BitDepth, DecodeOptions, Decoder, EncodeFormat, EncodeOptions, ReadSeekSource};
 use craft_doc::{Kind, Limits, RenditionKind};
 use craft_ecproj_format::{Head as EcprojHead, ReadError as EcprojReadError};
+use craft_file_formats::Format;
 use craft_font_catalog::Catalog;
 use craft_media::isobmff::{TrackKind as IsoTrackKind, open as open_isobmff};
 use craft_media::matroska::{TrackKind as MkvTrackKind, open as open_matroska};
@@ -19,6 +20,7 @@ use craft_pcraft_format::{
     COMPOSITE as PCRAFT_COMPOSITE, FORMAT_VERSION as PCRAFT_FORMAT_VERSION, FULL_COMPOSITE as PCRAFT_FULL_COMPOSITE, Limits as PcraftManifestLimits,
     MANIFEST as PCRAFT_MANIFEST, SAVE_LOCK as PCRAFT_SAVE_LOCK, THUMB as PCRAFT_THUMB, read_manifest as read_pcraft_manifest,
 };
+use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::time::Tick;
@@ -27,32 +29,42 @@ use crate::{Result, UtilError};
 const PCRAFT_PREVIEWS: &[&str] = &[PCRAFT_FULL_COMPOSITE, PCRAFT_COMPOSITE, PCRAFT_THUMB];
 
 /// True when `path` has one of Magic Studio's Craft project extensions
-/// (`DesignCraft`, `PhotoCraft`, `VectorCraft`, `EffectCraft`, `FilmCraft`) or `.magic`.
+/// (`DesignCraft`, `PhotoCraft`, `VectorCraft`, `EffectCraft`, `FilmCraft`, `AniCraft`) or `.magic`.
 pub fn has_craft_doc_extension(path: &Path) -> bool {
-    path.extension().and_then(|e| e.to_str()).is_some_and(|ext| {
-        matches!(
-            ext.to_ascii_lowercase().as_str(),
-            "magic"
-                | "fcproj"
-                | "fcgt"
-                | "ecproj"
-                | "ectemplate"
-                | "pcraft"
-                | "psd"
-                | "psb"
-                | "ora"
-                | "xcf"
-                | "kra"
-                | "pdn"
-                | "vectorcraft"
-                | "vcraft"
-                | "drawcraft"
-                | "designcraft"
-                | "idml"
-                | "indd"
-                | "indt"
+    let Some(ext) = path.extension().and_then(|e| e.to_str()) else {
+        return false;
+    };
+    if let Some(fmt) = craft_file_formats::from_extension(ext)
+        && matches!(
+            fmt,
+            Format::DesignCraft | Format::Pcraft | Format::Psd | Format::Ora | Format::Kra | Format::Xcf | Format::Pdn | Format::Idml | Format::Indd
         )
-    })
+    {
+        return true;
+    }
+    matches!(
+        ext.to_ascii_lowercase().as_str(),
+        "magic"
+            | "fcproj"
+            | "fcgt"
+            | "ecproj"
+            | "ectemplate"
+            | "anicraft"
+            | "pcraft"
+            | "psd"
+            | "psb"
+            | "ora"
+            | "xcf"
+            | "kra"
+            | "pdn"
+            | "vectorcraft"
+            | "vcraft"
+            | "drawcraft"
+            | "designcraft"
+            | "idml"
+            | "indd"
+            | "indt"
+    )
 }
 
 /// True when `path` is an unpacked PhotoCraft `.pcraft` directory bundle containing `manifest.json`.
@@ -118,18 +130,55 @@ fn inspect_pcraft_dir_bundle(dir: &Path) -> Option<Value> {
     }))
 }
 
+struct AnicraftValueDecoder;
+impl craft_anicraft_format::PayloadDecoder<Value> for AnicraftValueDecoder {
+    type Document = Value;
+    fn decode<'de, D>(&mut self, deserializer: D, _paths: Option<Vec<Value>>) -> std::result::Result<Self::Document, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        Value::deserialize(deserializer)
+    }
+}
+
 pub fn inspect_craft_envelope(path: &Path) -> Option<Value> {
     if is_unpacked_pcraft_dir(path) {
         return inspect_pcraft_dir_bundle(path);
     }
     let bytes = std::fs::read(path).ok()?;
-    let info = craft_doc::info(&bytes, &Limits::default()).ok()?;
-    Some(json!({
-        "kind": info.kind.extension(),
-        "version": info.version,
-        "generator": info.generator,
-        "supported": info.supported,
-    }))
+    if let Ok(info) = craft_doc::info(&bytes, &Limits::default()) {
+        return Some(json!({
+            "kind": info.kind.extension(),
+            "version": info.version,
+            "generator": info.generator,
+            "supported": info.supported,
+        }));
+    }
+    if (path.extension().is_some_and(|e| e.eq_ignore_ascii_case("vectorcraft") || e.eq_ignore_ascii_case("drawcraft"))
+        || craft_vectorcraft_format::sniff(&bytes))
+        && let Ok(vf) = craft_vectorcraft_format::File::<serde::de::IgnoredAny>::read(&bytes)
+    {
+        return Some(json!({
+            "kind": vf.format,
+            "version": vf.version,
+            "generator": vf.generator,
+            "supported": vf.version <= craft_vectorcraft_format::VERSION,
+        }));
+    }
+    if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("anicraft"))
+        && let Ok(text) = std::str::from_utf8(&bytes)
+    {
+        let mut dec = AnicraftValueDecoder;
+        if let Ok(env) = craft_anicraft_format::read(text, &mut dec) {
+            return Some(json!({
+                "kind": env.format,
+                "version": env.version,
+                "generator": "AniCraft",
+                "supported": env.version <= craft_anicraft_format::FORMAT_VERSION,
+            }));
+        }
+    }
+    None
 }
 
 pub fn craft_outline_summary(path: &Path) -> Option<String> {
@@ -177,6 +226,16 @@ pub fn extract_craft_preview(path: &Path, out_png: &Path) -> Result<bool> {
 
     let bytes = std::fs::read(path).map_err(|e| UtilError::Invalid(format!("{}: {e}", path.display())))?;
     if craft_doc::sniff(&bytes).is_none() {
+        if let Ok(vf) = craft_vectorcraft_format::File::<serde::de::IgnoredAny>::read(&bytes)
+            && let Some(preview) = vf.preview
+            && let Some(decoded) = craft_vectorcraft_format::base64::decode(&preview.data)
+        {
+            if let Some(parent) = out_png.parent() {
+                std::fs::create_dir_all(parent).map_err(|e| UtilError::Invalid(format!("{}: {e}", parent.display())))?;
+            }
+            craft_atomic::atomic_write(out_png, &decoded).map_err(|e| UtilError::Invalid(format!("{}: {e}", out_png.display())))?;
+            return Ok(true);
+        }
         return Ok(false);
     }
     let limits = Limits::default();
@@ -203,12 +262,33 @@ pub fn fast_dimensions(path: &Path) -> Option<(u32, u32, bool)> {
         }
         return None;
     }
-    if let Ok((w, h)) = image::image_dimensions(path) {
-        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or_default().to_ascii_lowercase();
-        let has_alpha = matches!(ext.as_str(), "png" | "webp" | "gif" | "svg" | "tif" | "tiff");
+    let bytes_opt = std::fs::read(path).ok();
+    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or_default().to_ascii_lowercase();
+    if let Some(bytes) = bytes_opt.as_deref()
+        && let Ok(Some(insp)) = craft_image_codecs::inspect_raster(bytes)
+    {
+        let has_alpha = matches!(
+            insp.color_type,
+            craft_image_codecs::RasterColorType::Rgba | craft_image_codecs::RasterColorType::CmykAlpha | craft_image_codecs::RasterColorType::GrayAlpha
+        );
+        let orientation = crate::metadata::extract_image_metadata_bytes(bytes, (!ext.is_empty()).then_some(ext.as_str())).orientation;
+        let (w, h) = crate::metadata::oriented_dimensions(insp.width, insp.height, orientation);
         return Some((w, h, has_alpha));
     }
-    let bytes = std::fs::read(path).ok()?;
+    if let Ok((w, h)) = image::image_dimensions(path) {
+        let has_alpha = matches!(ext.as_str(), "png" | "webp" | "gif" | "svg" | "tif" | "tiff");
+        let orientation =
+            bytes_opt.as_deref().and_then(|bytes| crate::metadata::extract_image_metadata_bytes(bytes, (!ext.is_empty()).then_some(ext.as_str())).orientation);
+        let (ow, oh) = crate::metadata::oriented_dimensions(w, h, orientation);
+        return Some((ow, oh, has_alpha));
+    }
+    let bytes = bytes_opt?;
+    let meta = crate::metadata::extract_image_metadata_bytes(&bytes, (!ext.is_empty()).then_some(ext.as_str()));
+    if let (Some(w), Some(h)) = (meta.width, meta.height) {
+        let has_alpha = matches!(ext.as_str(), "psd" | "psb" | "png" | "webp" | "gif" | "svg" | "tif" | "tiff");
+        let (ow, oh) = crate::metadata::oriented_dimensions(w, h, meta.orientation);
+        return Some((ow, oh, has_alpha));
+    }
     if craft_doc::sniff(&bytes).is_some()
         && let Ok(outline) = craft_doc::outline(&bytes, &Limits::default())
     {

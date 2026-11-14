@@ -73,23 +73,12 @@ pub struct TimelineOutcome {
 }
 
 pub fn format_smpte_timecode(sec: f64, fps: f64) -> String {
-    let clamped = if sec.is_finite() && sec > 0.0 { sec } else { 0.0 };
-    let rate = fps.round().max(1.0) as u64;
-    let total_frames = (clamped * (rate as f64)).floor() as u64;
-    let ff = total_frames % rate;
-    let total_secs = total_frames / rate;
-    let ss = total_secs % 60;
-    let mm = (total_secs / 60) % 60;
-    let hh = total_secs / 3600;
-    format!("{hh:02}:{mm:02}:{ss:02}:{ff:02}")
+    magic_util::time::format_smpte(sec, fps)
 }
 
 fn format_ruler_tick(sec: f64, dur: f64, flavor: TimelineFlavor, fps: f64) -> String {
     if flavor == TimelineFlavor::FilmCraft && dur >= 8.0 {
-        let mins = (sec / 60.0).floor() as u64;
-        let secs = (sec % 60.0).floor() as u64;
-        let ff = ((sec.fract()) * fps.max(1.0)).floor() as u64;
-        format!("{mins:02}:{secs:02}:{ff:02}")
+        magic_util::time::format_smpte(sec, fps)
     } else if dur <= 12.0 {
         format!("{sec:.1}s")
     } else {
@@ -161,7 +150,6 @@ fn draw_timeline_header_bar(
 ) {
     let dur = spec.total_dur_sec.max(1.0);
     let fps = spec.fps.max(1.0);
-    let frame_dt = 1.0 / fps;
     let any_dirty = lanes.iter().any(|l| l.dirty);
 
     ui.horizontal_wrapped(|ui| {
@@ -188,7 +176,7 @@ fn draw_timeline_header_bar(
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only(&format!("{}-tl-step-b", spec.id_prefix), "stepBack", "Step back 1 frame (Left)"))
                 .clicked()
             {
-                *playhead_sec = (*playhead_sec - frame_dt).max(0.0);
+                *playhead_sec = magic_util::time::step_frame_seconds(*playhead_sec, fps, -1);
                 out.scrubbed = true;
             }
             let play_ico = if ctx.state.audio_playing { "pause" } else { "play" };
@@ -205,7 +193,7 @@ fn draw_timeline_header_bar(
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only(&format!("{}-tl-step-f", spec.id_prefix), "stepForward", "Step forward 1 frame (Right)"))
                 .clicked()
             {
-                *playhead_sec = (*playhead_sec + frame_dt).min(dur);
+                *playhead_sec = magic_util::time::step_frame_seconds(*playhead_sec, fps, 1).min(dur);
                 out.scrubbed = true;
             }
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only(&format!("{}-tl-end", spec.id_prefix), "skipEnd", "Jump to sequence end (End)")).clicked()
@@ -219,7 +207,7 @@ fn draw_timeline_header_bar(
                 out.razor_at = Some(*playhead_sec);
             }
         } else {
-            let cur_frame = ((*playhead_sec * fps).round().max(0.0)) as u64;
+            let cur_frame = magic_util::time::frame_at_seconds(*playhead_sec, fps).max(0);
             ui.label(RichText::new(format!("{:.2}s · f{cur_frame:04} ({fps:.0}fps)", *playhead_sec)).monospace().size(9.8).color(ctx.pal.accent_emerald));
             if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only(&format!("{}-ec-prevk", spec.id_prefix), "prevKeyframe", "Step to previous keyframe"))
                 .clicked()

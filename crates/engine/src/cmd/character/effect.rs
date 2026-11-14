@@ -39,18 +39,17 @@ pub fn cmd_puppet_add_pin(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"ok": true, "layer": layer, "kind": kind, "position": [x, y], "result": result}))
 }
 
-/// `character.puppet.setPin` — configure Advanced/Bend/Starch/Overlap pin rotation, scale, stiffness, or inFront (`T11`).
+/// `character.puppet.setPin` — configure Advanced/Bend/Starch/Overlap pin position, rotation, scale, amount, extent, or inFront (`T11`).
 pub fn cmd_puppet_set_pin(s: &mut Session, p: &Value) -> Result<Value> {
     let view = View::from_params(s, p)?;
     let project = view.require("ecproj", "character.rig")?;
-    let layer = p["layer"].as_str().unwrap_or("#1");
-    let pin = p["pin"].as_str().unwrap_or("Puppet Pin 1");
-    let mut params = json!({"layer": layer, "pin": pin});
-    for key in ["rotation", "scale", "stiffness", "extent", "inFront"] {
-        if let Some(val) = p.get(key) {
-            params[key] = val.clone();
-        }
+    let pin = p["pin"].as_str().filter(|v| !v.trim().is_empty()).ok_or_else(|| bad("pin=<pin uid or name> is required"))?;
+    let mut params = json!({"pin": pin});
+    let layer = p["layer"].as_str().filter(|v| !v.trim().is_empty());
+    if let Some(l) = layer {
+        params["layer"] = json!(l);
     }
+    super::puppet::apply_pin_properties(&mut params, p);
     let result = effect_one(&view, &project, "puppet.setPin", params)?;
     Ok(json!({"ok": true, "layer": layer, "pin": pin, "result": result}))
 }
@@ -59,9 +58,22 @@ pub fn cmd_puppet_set_pin(s: &mut Session, p: &Value) -> Result<Value> {
 pub fn cmd_puppet_select_pins(s: &mut Session, p: &Value) -> Result<Value> {
     let view = View::from_params(s, p)?;
     let project = view.require("ecproj", "character.rig")?;
-    let layer = p["layer"].as_str().unwrap_or("#1");
-    let pins = p.get("pins").cloned().unwrap_or_else(|| json!(["Puppet Pin 1"]));
-    let result = effect_one(&view, &project, "puppet.selectPins", json!({"layer": layer, "pins": pins}))?;
+    let pins = if let Some(arr) = p.get("pins").and_then(Value::as_array) {
+        if arr.is_empty() {
+            return Err(bad("pins must contain at least one pin uid or name"));
+        }
+        Value::Array(arr.clone())
+    } else if let Some(pin) = p["pin"].as_str().filter(|v| !v.trim().is_empty()) {
+        json!([pin])
+    } else {
+        return Err(bad("pins=[<pin>, ...] or pin=<pin uid or name> is required"));
+    };
+    let mut params = json!({"pins": pins});
+    let layer = p["layer"].as_str().filter(|v| !v.trim().is_empty());
+    if let Some(l) = layer {
+        params["layer"] = json!(l);
+    }
+    let result = effect_one(&view, &project, "puppet.selectPins", params)?;
     Ok(json!({"ok": true, "layer": layer, "pins": pins, "result": result}))
 }
 
@@ -69,10 +81,14 @@ pub fn cmd_puppet_select_pins(s: &mut Session, p: &Value) -> Result<Value> {
 pub fn cmd_puppet_null_rig(s: &mut Session, p: &Value) -> Result<Value> {
     let view = View::from_params(s, p)?;
     let project = view.require("ecproj", "character.rig")?;
-    let layer = p["layer"].as_str().unwrap_or("#1");
+    let layer = p["layer"].as_str().filter(|v| !v.trim().is_empty());
     let mode = p["mode"].as_str().unwrap_or("points_follow_nulls");
     let ec_cmd = if mode == "nulls_follow_points" { "paths.nullsFollowPoints" } else { "paths.pointsFollowNulls" };
-    let result = effect_one(&view, &project, ec_cmd, json!({"layer": layer}))?;
+    let mut params = json!({});
+    if let Some(l) = layer {
+        params["layer"] = json!(l);
+    }
+    let result = effect_one(&view, &project, ec_cmd, params)?;
     Ok(json!({"ok": true, "layer": layer, "command": ec_cmd, "result": result}))
 }
 

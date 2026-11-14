@@ -186,12 +186,64 @@ impl AnimationHost for GlbMeshAnimationHost {
     }
 }
 
+pub struct AniCraftAnimationHost;
+impl AnimationHost for AniCraftAnimationHost {
+    fn id(&self) -> &str {
+        "anicraft"
+    }
+    fn label(&self) -> &str {
+        "AniCraft 2D Artboard & FrameSheet Animation (.anicraft)"
+    }
+    fn canvas_mode(&self) -> CanvasMode {
+        CanvasMode::Artboard2D
+    }
+    fn timeline_mode(&self) -> TimelineMode {
+        TimelineMode::FrameSheet
+    }
+    fn extensions(&self) -> &[&str] {
+        &["anicraft"]
+    }
+    fn render_preview_frame(&self, project: &Path, _comp: Option<&str>, seconds: f64, _max_side: u32, output: &Path) -> Result<()> {
+        let frame = (seconds * 24.0).round().max(1.0) as u64;
+        let proj_s = project.to_string_lossy().into_owned();
+        let out_s = output.to_string_lossy().into_owned();
+        let frame_s = frame.to_string();
+        let args = ["render", proj_s.as_str(), "--out", out_s.as_str(), "--frame", frame_s.as_str()];
+        crate::workspace::run_cli("anicraft-cli", &args, None).map_err(|e| EngineError::ExternalTool("anicraft-cli".into(), e))?;
+        Ok(())
+    }
+    fn render_alpha_clip(&self, project: &Path, _comp: Option<&str>, output_mov: &Path) -> Result<Value> {
+        let proj_s = project.to_string_lossy().into_owned();
+        let out_s = output_mov.to_string_lossy().into_owned();
+        if let Some(parent) = output_mov.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let ext = output_mov.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase).unwrap_or_default();
+        if matches!(ext.as_str(), "mp4" | "webm") {
+            let params = json!({"path": out_s});
+            let args = ["exec", proj_s.as_str(), "file.export_video", &params.to_string()];
+            return crate::workspace::run_cli_json("anicraft-cli", &args, None).map_err(|e| EngineError::ExternalTool("anicraft-cli".into(), e));
+        }
+        if ext == "gif" {
+            let args = ["gif", proj_s.as_str(), "--out", out_s.as_str(), "--overwrite", "yes"];
+            let gif_res = crate::workspace::run_cli_json("anicraft-cli", &args, None).map_err(|e| EngineError::ExternalTool("anicraft-cli".into(), e))?;
+            return Ok(json!({"ok": true, "output": output_mov, "gif": gif_res}));
+        }
+        let seq_dir = if ext.is_empty() { output_mov.to_path_buf() } else { output_mov.with_extension("frames") };
+        std::fs::create_dir_all(&seq_dir)?;
+        let seq_dir_s = seq_dir.to_string_lossy().into_owned();
+        let args = ["render-seq", proj_s.as_str(), "--out-dir", seq_dir_s.as_str()];
+        let seq_res = crate::workspace::run_cli_json("anicraft-cli", &args, None).map_err(|e| EngineError::ExternalTool("anicraft-cli".into(), e))?;
+        Ok(json!({"ok": true, "output": output_mov, "frames_dir": seq_dir, "seq": seq_res}))
+    }
+}
+
 pub fn builtin_asset_hosts() -> Vec<Box<dyn AssetHost>> {
     vec![Box::new(PhotoCraftAssetHost), Box::new(VectorCraftAssetHost), Box::new(TextureCraftAssetHost)]
 }
 
 pub fn builtin_animation_hosts() -> Vec<Box<dyn AnimationHost>> {
-    vec![Box::new(EffectCraftAnimationHost), Box::new(GlbMeshAnimationHost)]
+    vec![Box::new(EffectCraftAnimationHost), Box::new(AniCraftAnimationHost), Box::new(GlbMeshAnimationHost)]
 }
 
 /// `animation.hosts`: list built-in `AssetHost` & `AnimationHost` backends.

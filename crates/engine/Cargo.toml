@@ -19,8 +19,14 @@ serde_json = { workspace = true }
 sha2 = { workspace = true }
 thiserror = { workspace = true }
 
-# Shared Craft foundation libraries (`storytold/craft-libs`, `craft-ai-core`)
+# Shared Craft foundation libraries (`storytold/craft-libs` & `storytold/craft-ai-integrations`)
+craft-ai-agents = { workspace = true }
+craft-ai-client = { workspace = true }
 craft-ai-core = { workspace = true }
+craft-ai-features = { workspace = true }
+craft-ai-native = { workspace = true }
+craft-aaf = { workspace = true }
+craft-anicraft-format = { workspace = true }
 craft-atomic = { workspace = true }
 craft-audio = { workspace = true }
 craft-captions = { workspace = true }
@@ -29,16 +35,25 @@ craft-doc = { workspace = true }
 craft-docpath = { workspace = true }
 craft-drawingml = { workspace = true }
 craft-ecproj-format = { workspace = true }
+craft-file-formats = { workspace = true }
+craft-flags = { workspace = true }
 craft-font-catalog = { workspace = true }
+craft-font-store = { workspace = true }
+craft-image-codecs = { workspace = true }
 craft-media = { workspace = true }
 craft-mesh = { workspace = true }
+craft-metadata = { workspace = true }
+craft-pcraft-bundle = { workspace = true }
+craft-pcraft-format = { workspace = true }
 craft-settings = { workspace = true }
 craft-svg = { workspace = true }
 craft-text = { workspace = true }
 craft-timeline = { workspace = true }
 craft-update = { workspace = true }
+craft-vectorcraft-format = { workspace = true }
 craft-zip = { workspace = true }
 magic-util = { workspace = true }
+skrifa = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 rustix = { workspace = true }

@@ -4,8 +4,9 @@
 use super::{cmd_spec, query_spec};
 use crate::commands::{CommandSpec, always};
 use crate::project::{
-    cmd_file_save_as, cmd_project_add_asset, cmd_project_close, cmd_project_files, cmd_project_import_file, cmd_project_list_assets, cmd_project_load_asset,
-    cmd_project_new, cmd_project_open, cmd_project_remove_asset, cmd_project_save, cmd_project_save_asset, cmd_project_update_asset,
+    cmd_file_save_as, cmd_project_add_asset, cmd_project_asset_metadata, cmd_project_close, cmd_project_files, cmd_project_import_file,
+    cmd_project_list_assets, cmd_project_load_asset, cmd_project_new, cmd_project_open, cmd_project_remove_asset, cmd_project_save, cmd_project_save_asset,
+    cmd_project_update_asset,
 };
 use crate::workshop::{
     cmd_audio_analyze, cmd_project_search, cmd_workshop_add, cmd_workshop_approve_draft, cmd_workshop_files, cmd_workshop_import_transcript,
@@ -42,6 +43,35 @@ fn specs_project() -> Vec<CommandSpec> {
         ),
         query_spec!("project.list_assets", "List Project Assets", "{}", cmd_project_list_assets),
         query_spec!("project.snapshot", "Everything a View Draws for the Open Project", "{}", crate::cmd::project::cmd_project_snapshot),
+        query_spec!("project.status", "Open Project Dirty, Revision & Undo State", "{}", crate::project::cmd_project_status),
+        cmd_spec!(
+            "project.autosave_tick",
+            "Run Rolling Auto-Save Check (Maintains Dirty State)",
+            ["File"],
+            None,
+            "{\"force\":false}",
+            always,
+            crate::autosave::cmd_project_autosave_tick
+        ),
+        query_spec!("recovery.list", "List Orphaned Crash Recovery Snapshots", "{}", crate::recovery::cmd_recovery_list),
+        cmd_spec!(
+            "recovery.restore",
+            "Restore Crash Recovery Snapshot Into Session (Marks Dirty)",
+            ["File"],
+            None,
+            "{\"run_id\":\"optional\"}",
+            always,
+            crate::recovery::cmd_recovery_restore
+        ),
+        cmd_spec!(
+            "recovery.discard",
+            "Discard Orphaned Crash Recovery Snapshot",
+            ["File"],
+            None,
+            "{\"run_id\":\"optional\",\"all\":false}",
+            always,
+            crate::recovery::cmd_recovery_discard
+        ),
         cmd_spec!(
             "project.new",
             "New Project (Requires Audio Track + Transcribes to FilmCraft & Initializes DeckCraft Storyboard)",
@@ -84,6 +114,15 @@ fn specs_project() -> Vec<CommandSpec> {
             "{\"id\":\"asset_id\",\"reload\":false}",
             always,
             cmd_project_load_asset
+        ),
+        cmd_spec!(
+            "project.asset_metadata",
+            "Inspect EXIF/IPTC/XMP Metadata, Geotag via GPX, or Write XMP Sidecar",
+            ["Project Assets"],
+            None,
+            "{\"id\":\"asset_id\",\"path\":\"optional file\",\"include_tags\":false,\"gpx_path\":\"optional .gpx\",\"max_gap_secs\":300,\"write_xmp_sidecar\":false}",
+            always,
+            cmd_project_asset_metadata
         ),
         cmd_spec!(
             "project.import_file",

@@ -73,9 +73,44 @@ fn draw_stage_stack(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
             ui.add_space(6.0);
             draw_song_and_lyrics_card(ui, ctx);
             ui.add_space(8.0);
-            draw_offline_and_source_guard_card(ui, ctx);
+            draw_project_status_card(ui, ctx);
             ui.add_space(8.0);
             draw_pipeline_jumps(ui, ctx);
+        });
+    });
+}
+
+fn draw_project_status_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
+    fill_card(ui, ctx.pal, false, |ui| {
+        ui.vertical(|ui| {
+            let is_dirty = ctx.state.is_dirty();
+            let dirty_col = if is_dirty { ctx.pal.accent_amber } else { ctx.pal.accent_emerald };
+            let dirty_text = if is_dirty { "Unsaved changes" } else { "Saved" };
+            draw_section_status_header(ui, dirty_col, ".magic v1 Project State", ctx.pal.text_primary, dirty_text, dirty_col);
+            ui.add_space(4.0);
+
+            ui.horizontal_wrapped(|ui| {
+                if let Some(path) = &ctx.state.project_path {
+                    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("project.magic");
+                    status_pill(ui, ctx.pal, name, ctx.pal.accent_sky);
+                } else {
+                    status_pill(ui, ctx.pal, "Untitled", ctx.pal.accent_amber);
+                }
+                status_pill(ui, ctx.pal, "Schema v1", ctx.pal.text_secondary);
+                if ctx.state.saving {
+                    status_pill(ui, ctx.pal, "Saving…", ctx.pal.accent_amber);
+                }
+            });
+
+            ui.add_space(6.0);
+            ui.label(RichText::new("Linked Craft Apps Readiness").size(11.0).strong().color(ctx.pal.text_secondary));
+            ui.add_space(2.0);
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing = Vec2::new(4.0, 4.0);
+                for app in ["DeckCraft", "AniCraft", "PhotoCraft", "VectorCraft", "EffectCraft", "FilmCraft"] {
+                    paint_craft_badge(ui, ctx.pal, app, false);
+                }
+            });
         });
     });
 }

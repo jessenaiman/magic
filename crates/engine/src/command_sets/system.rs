@@ -3,7 +3,7 @@
 
 use super::{cmd_spec, query_spec};
 use crate::commands::{CommandSpec, always};
-use crate::craft_ai::{cmd_ai_configure, cmd_ai_consent, cmd_ai_status};
+use crate::craft_ai::{cmd_ai_configure, cmd_ai_consent, cmd_ai_history, cmd_ai_status};
 use crate::doctor::cmd_app_doctor;
 use crate::workshop::cmd_query_list;
 
@@ -84,6 +84,7 @@ fn specs_ui_and_craft_exec() -> Vec<CommandSpec> {
 fn specs_ai() -> Vec<CommandSpec> {
     vec![
         query_spec!("ai.status", "Craft AI Status, Roles & SharedStore Connections", "{}", cmd_ai_status),
+        query_spec!("ai.history", "Craft AI Job History Log", "{\"app\":\"optional\",\"limit\":50}", cmd_ai_history),
         cmd_spec!("ai.configure", "Configure AI Master Toggle & SharedStore Role Bindings", ["Edit"], None, "{\"enabled\":true}", always, cmd_ai_configure),
         cmd_spec!(
             "ai.consent",

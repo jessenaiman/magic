@@ -49,6 +49,16 @@ pub fn draw_theatre_dock(ui: &mut Ui, ctx: &mut ViewCtx<'_>, cid: &str) {
                         Some("Placed character clip onto FilmCraft V2"),
                     );
                 }
+                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-dock-ec-open", "EffectCraft", "Open in EffectCraft").enabled(!cid.is_empty()))
+                    .clicked()
+                {
+                    ctx.exec("workspace.open", json!({"app": "effectcraft", "domain": "animation"}), Some("Opened in EffectCraft"));
+                }
+                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("anim-dock-ani-open", "AniCraft", "Open in AniCraft").enabled(!cid.is_empty()))
+                    .clicked()
+                {
+                    ctx.exec("workspace.open", json!({"app": "anicraft"}), Some("Opened in AniCraft"));
+                }
             });
         });
 

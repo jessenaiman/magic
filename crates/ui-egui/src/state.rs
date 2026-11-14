@@ -146,6 +146,7 @@ pub enum ActiveModal {
     ReportProblem,
     About,
     UnsavedClose,
+    Recovery,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -219,6 +220,7 @@ pub struct UiShellState {
     pub animation: AnimationViewState,
     pub studio: StudioViewState,
     pub cache: CachedPayloads,
+    pub recoverable_sessions: Vec<Value>,
 }
 
 impl Default for UiShellState {
@@ -264,6 +266,7 @@ impl Default for UiShellState {
             animation: AnimationViewState::default(),
             studio: StudioViewState::default(),
             cache: CachedPayloads::default(),
+            recoverable_sessions: Vec::new(),
         }
     }
 }
@@ -388,6 +391,10 @@ impl UiShellState {
             "drafts": drafts,
             "dirty_tracks": dirty_tracks,
         })
+    }
+
+    pub fn is_dirty(&self) -> bool {
+        !self.dirty_drafts.is_empty() || !self.dirty_tracks.is_empty() || self.cache.snapshot.pointer("/data/dirty").and_then(Value::as_bool).unwrap_or(false)
     }
 
     pub fn set_toast(&mut self, now: f64, msg: impl Into<String>) {

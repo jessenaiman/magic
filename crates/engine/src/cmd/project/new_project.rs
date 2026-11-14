@@ -8,7 +8,8 @@ use std::path::{Path, PathBuf};
 use craft_zip::{Compression, Writer};
 use serde_json::{Value, json};
 
-use super::{cmd_project_import_file, create_initial_project_file, project_mode, recent_warning, reset_for_project, validate_project_name, write_project_file};
+use super::{cmd_project_import_file, create_initial_project_file, project_mode, recent_warning, validate_project_name, write_project_file};
+use crate::cmd::project::format::Project;
 use crate::{EngineError, Result, Session};
 
 const PROJECT_SCAFFOLD_DIRS: &[&str] = &["audio", "assets", "effects", "film", "exports"];
@@ -62,9 +63,7 @@ fn zip_non_magic_folder(source_dir: &Path, dest_zip: &Path) -> Result<Option<usi
 }
 
 fn clear_stale_project_artifacts(project_dir: &Path) {
-    for rel_file in ["transcript.srt"] {
-        let _ = std::fs::remove_file(project_dir.join(rel_file));
-    }
+    let _ = std::fs::remove_file(project_dir.join("transcript.srt"));
     for rel_dir in [".preview", "lettering/.preview", "motion/.preview", "storyboard/.preview", "film/frames"] {
         let _ = std::fs::remove_dir_all(project_dir.join(rel_dir));
     }
@@ -203,11 +202,10 @@ fn bootstrap_song_workshop(s: &mut Session, path: &Path, project_dir: &Path, par
         }
     }
 
-    let (Some(audio_in_project), false) = (s.song_audio.clone(), params["skip_audio_setup"] == true) else {
-        if s.song_audio.is_none() {
+    let (Some(audio_in_project), false) = (s.song_audio().map(Path::to_path_buf), params["skip_audio_setup"] == true) else {
+        if s.song_audio().is_none() {
             match crate::cmd::film::assembly::cmd_video_assemble(s, &json!({"name": project_title, "export": false})) {
                 Ok(res) => {
-                    let _ = write_project_file(s);
                     steps.push(json!({"command": "video.assemble", "status": "empty FilmCraft shell initialized", "fcproj": res["project"]}));
                 }
                 Err(e) => steps.push(json!({"command": "video.assemble", "status": "deferred", "error": e.to_string()})),
@@ -218,7 +216,6 @@ fn bootstrap_song_workshop(s: &mut Session, path: &Path, project_dir: &Path, par
 
     match crate::cmd::film::assembly::ensure_song_film(s, &audio_in_project) {
         Ok(fcproj) => {
-            let _ = write_project_file(s);
             steps.push(json!({"command": "film.ensure_song_film", "status": "audio placed on FilmCraft timeline", "fcproj": fcproj}));
         }
         Err(e) => steps.push(json!({"command": "film.ensure_song_film", "status": "deferred", "error": e.to_string()})),
@@ -300,12 +297,12 @@ pub fn cmd_project_new(s: &mut Session, params: &Value) -> Result<Value> {
         None => None,
     };
 
-    reset_for_project(s, path.clone(), Vec::new());
-    s.song_audio = local_audio;
-    s.project_mode = mode;
+    let mut project = Project::new_for_path(&path, mode);
+    project.workshop.audio = local_audio;
     if let Some(title) = params.get("title").or_else(|| params.get("name")).and_then(Value::as_str).map(str::trim).filter(|t| !t.is_empty()) {
-        s.song.title = title.to_owned();
+        project.song.title = title.to_owned();
     }
+    s.reset_for_opened_project(path.clone(), project);
     create_initial_project_file(s, overwrite)?;
 
     let mut steps = Vec::new();
@@ -328,6 +325,7 @@ pub fn cmd_project_new(s: &mut Session, params: &Value) -> Result<Value> {
     if !is_scratch {
         steps.extend(bootstrap_song_workshop(s, &path, &project_dir, params, overwrite, &mut copied_files));
         write_project_file(s)?;
+        s.mark_saved();
     }
 
     let warnings = recent_warning(s, &path, !is_scratch && params["record_recent"] != false);
@@ -339,10 +337,11 @@ pub fn cmd_project_new(s: &mut Session, params: &Value) -> Result<Value> {
         "project_dir": project_dir,
         "directories": directories,
         "copied_files": copied_files,
-        "mode": s.project_mode,
+        "mode": s.project_mode(),
+        "dirty": s.is_dirty(),
         "warnings": warnings,
         "steps": steps,
-        "assets": s.project_assets,
+        "assets": s.project_assets(),
         "workshop": workshop,
         "storyboard": storyboard,
     }))
@@ -358,7 +357,7 @@ mod tests {
 
     use super::cmd_project_new;
     use crate::Session;
-    use crate::cmd::project::{read_project_document, write_project_file};
+    use crate::cmd::project::write_project_file;
 
     fn temp_sandbox(label: &str) -> PathBuf {
         let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
@@ -449,7 +448,7 @@ mod tests {
         assert!(!dir2.join("original-project.zip").exists());
 
         let _ = cmd_project_new(&mut session, &json!({"path": created_magic, "overwrite": true, "audio": ext_wav, "skip_audio_setup": true})).unwrap();
-        let saved_doc = read_project_document(&created_magic).unwrap();
+        let saved_doc: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&created_magic).unwrap()).unwrap();
         assert_eq!(saved_doc["workshop"]["audio"].as_str().unwrap(), "audio/song-demo.wav");
         assert_eq!(saved_doc["workshop"]["storyboard"].as_str().unwrap(), "storyboard.designcraft");
 

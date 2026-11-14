@@ -18,6 +18,8 @@ use serde_json::{Value, json};
 use std::sync::{Arc, Mutex};
 
 pub const RESOURCE_PROJECT_URI: &str = "magic://project";
+pub const RESOURCE_PROJECT_STATUS_URI: &str = "magic://project/status";
+pub const RESOURCE_RECOVERY_URI: &str = "magic://recovery";
 pub const RESOURCE_STORYBOARD_URI: &str = "magic://storyboard";
 pub const RESOURCE_TIMELINE_URI: &str = "magic://timeline";
 pub const RESOURCE_BRIDGE_URI: &str = "magic://bridge";
@@ -58,6 +60,30 @@ struct BatchParams {
 struct DocInspectParams {
     /// `"all"` (default), `"project"`, `"storyboard"`, or `"timeline"`.
     target: Option<String>,
+}
+
+#[derive(Debug, Default, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct ProjectStatusParams {}
+
+#[derive(Debug, Default, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct RecoveryListParams {}
+
+#[derive(Debug, Default, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct RecoveryRestoreParams {
+    /// Optional specific recovery run ID to restore (restores newest when omitted).
+    run_id: Option<String>,
+}
+
+#[derive(Debug, Default, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct RecoveryDiscardParams {
+    /// Specific recovery run ID to discard.
+    run_id: Option<String>,
+    /// Discard all orphaned recovery runs.
+    all: Option<bool>,
 }
 
 #[derive(Debug, Default, Deserialize, JsonSchema)]
@@ -208,6 +234,12 @@ impl Server {
             Resource::new(RESOURCE_PROJECT_URI, "project")
                 .with_description("Open Magic Studio project and workshop stage status (workshop.status)")
                 .with_mime_type("application/json"),
+            Resource::new(RESOURCE_PROJECT_STATUS_URI, "project_status")
+                .with_description("Open project dirty, revision, and undo state (project.status)")
+                .with_mime_type("application/json"),
+            Resource::new(RESOURCE_RECOVERY_URI, "recovery")
+                .with_description("Orphaned crash recovery snapshots and recovery runs (recovery.list)")
+                .with_mime_type("application/json"),
             Resource::new(RESOURCE_STORYBOARD_URI, "storyboard")
                 .with_description("Storyboard DesignCraft document status and sections (storyboard.status)")
                 .with_mime_type("application/json"),
@@ -225,6 +257,14 @@ impl Server {
     pub async fn read_magic_resource(&self, uri: &str) -> Result<ReadResourceResult, McpError> {
         let payload = match uri {
             RESOURCE_PROJECT_URI => match self.run("workshop.status", json!({})).await {
+                Ok(val) => val,
+                Err(err) => json!({"ok": false, "uri": uri, "error": err}),
+            },
+            RESOURCE_PROJECT_STATUS_URI => match self.run("project.status", json!({})).await {
+                Ok(val) => val,
+                Err(err) => json!({"ok": false, "uri": uri, "error": err}),
+            },
+            RESOURCE_RECOVERY_URI => match self.run("recovery.list", json!({})).await {
                 Ok(val) => val,
                 Err(err) => json!({"ok": false, "uri": uri, "error": err}),
             },
@@ -380,6 +420,26 @@ impl Server {
         self.exec_batch(p).await
     }
 
+    #[tool(description = "Get open project status, dirty flag, revision, and undo/redo readiness (`project.status`).")]
+    async fn project_status(&self, Parameters(_): Parameters<ProjectStatusParams>) -> CallToolResult {
+        output(self.run("project.status", json!({})).await)
+    }
+
+    #[tool(description = "List recoverable crash snapshots and autosaves (`recovery.list`).")]
+    async fn recovery_list(&self, Parameters(_): Parameters<RecoveryListParams>) -> CallToolResult {
+        output(self.run("recovery.list", json!({})).await)
+    }
+
+    #[tool(description = "Restore an orphaned crash recovery snapshot (`recovery.restore`).")]
+    async fn recovery_restore(&self, Parameters(p): Parameters<RecoveryRestoreParams>) -> CallToolResult {
+        output(self.run("recovery.restore", compact(json!(p))).await)
+    }
+
+    #[tool(description = "Discard one or all orphaned recovery runs (`recovery.discard`).")]
+    async fn recovery_discard(&self, Parameters(p): Parameters<RecoveryDiscardParams>) -> CallToolResult {
+        output(self.run("recovery.discard", compact(json!(p))).await)
+    }
+
     #[tool(description = "Inspect the open `.magic` project, storyboard, or timeline (`all|project|storyboard|timeline`).")]
     async fn inspect_document(&self, Parameters(p): Parameters<DocInspectParams>) -> CallToolResult {
         self.exec_doc_inspect(p.target.as_deref()).await
@@ -510,7 +570,9 @@ mod tests {
     use rmcp::model::ResourceContents;
     use serde_json::{Value, json};
 
-    use super::{RESOURCE_BRIDGE_URI, RESOURCE_PROJECT_URI, RESOURCE_STORYBOARD_URI, RESOURCE_TIMELINE_URI, Server};
+    use super::{
+        RESOURCE_BRIDGE_URI, RESOURCE_PROJECT_STATUS_URI, RESOURCE_PROJECT_URI, RESOURCE_RECOVERY_URI, RESOURCE_STORYBOARD_URI, RESOURCE_TIMELINE_URI, Server,
+    };
     use crate::Backend;
 
     #[derive(Default)]
@@ -531,6 +593,8 @@ mod tests {
             self.calls.push(id.to_owned());
             match id {
                 "workshop.status" => Ok(json!({"ok": true, "name": "Demo Song"})),
+                "project.status" => Ok(json!({"ok": true, "dirty": false})),
+                "recovery.list" => Ok(json!({"ok": true, "count": 0})),
                 "storyboard.status" => Ok(json!({"ok": true, "sections": ["Style", "Scenes"]})),
                 "video.timeline" => Ok(json!({"ok": true, "tracks": [{"label": "V1"}]})),
                 "app.doctor" => Ok(json!({"ok": true, "apps": {"filmcraft": true}})),
@@ -548,12 +612,17 @@ mod tests {
 
         let listed = server.list_magic_resources();
         let uris: Vec<&str> = listed.resources.iter().map(|r| r.uri.as_str()).collect();
-        assert_eq!(uris, vec![RESOURCE_PROJECT_URI, RESOURCE_STORYBOARD_URI, RESOURCE_TIMELINE_URI, RESOURCE_BRIDGE_URI]);
+        assert_eq!(
+            uris,
+            vec![RESOURCE_PROJECT_URI, RESOURCE_PROJECT_STATUS_URI, RESOURCE_RECOVERY_URI, RESOURCE_STORYBOARD_URI, RESOURCE_TIMELINE_URI, RESOURCE_BRIDGE_URI]
+        );
 
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
             for (uri, expected_key, expected_val) in [
                 (RESOURCE_PROJECT_URI, "name", json!("Demo Song")),
+                (RESOURCE_PROJECT_STATUS_URI, "dirty", json!(false)),
+                (RESOURCE_RECOVERY_URI, "count", json!(0)),
                 (RESOURCE_STORYBOARD_URI, "sections", json!(["Style", "Scenes"])),
                 (RESOURCE_TIMELINE_URI, "tracks", json!([{"label": "V1"}])),
             ] {

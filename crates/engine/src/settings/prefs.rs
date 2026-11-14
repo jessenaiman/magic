@@ -292,8 +292,9 @@ impl SessionSettings {
     }
 
     /// Platform/portable persistent store (`Location::Auto`) opened once per user session.
+    /// Uses `Location::Memory` when `MAGIC_NO_PREFS` is truthy or `MAGIC_CONFIG_DIR=""`.
     pub fn auto() -> Self {
-        Self::open_at(Location::Auto)
+        if no_prefs_env() { Self::open_at(Location::Memory) } else { Self::open_at(Location::Auto) }
     }
 
     pub fn prefs(&self) -> MagicPrefs {
@@ -407,7 +408,19 @@ impl SessionSettings {
     }
 }
 
+pub fn no_prefs_env() -> bool {
+    std::env::var("MAGIC_NO_PREFS").ok().is_some_and(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"))
+}
+
+pub fn resolved_config_dir() -> Option<PathBuf> {
+    if no_prefs_env() {
+        return None;
+    }
+    craft_settings::paths::resolve(MagicPrefs::APP_ID, &craft_settings::Portable::DEFAULT, &Location::Auto, &craft_settings::paths::Probe::default()).dir
+}
+
 /// Process-level compatibility accessor for stateless callers outside a [`crate::Session`].
 pub fn open_store() -> SettingsStore<MagicPrefs> {
-    SettingsStore::<MagicPrefs>::open(Location::Auto).0
+    let loc = if no_prefs_env() { Location::Memory } else { Location::Auto };
+    SettingsStore::<MagicPrefs>::open(loc).0
 }

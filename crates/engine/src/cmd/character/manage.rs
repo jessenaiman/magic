@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 
 use super::{
     View, bad, character_folder, check_ecproj_head, discover_character_folders, ecproj_first_comp_name, effectcraft, effectcraft_frame, effectcraft_render,
-    find_dir_ecproj, find_dir_pcraft, find_dir_photo_doc, find_dir_psd, find_dir_vector_doc, find_initial_cutout, mesh_io, point, sprite, step,
+    find_dir_ecproj, find_dir_pcraft, find_dir_photo_doc, find_dir_psd, find_dir_vector_doc, find_initial_cutout, mesh_io, sprite, step,
 };
 use crate::{Result, Session};
 
@@ -142,19 +142,10 @@ fn build_view_summary(dir: &Path, canonical_id: &str, raw_id: &str, view_name: &
 pub fn cmd_character_list(s: &mut Session, _: &Value) -> Result<Value> {
     let project_dir = crate::workshop::project_dir(s)?;
     let animation_map = read_animation_map(&project_dir);
-    let cast: Vec<String> = s
-        .project_path
-        .as_ref()
-        .and_then(|p| std::fs::read_to_string(p).ok())
-        .and_then(|t| serde_json::from_str::<Value>(&t).ok())
-        .and_then(|d| d["animation_cast"].as_array().cloned())
-        .unwrap_or_default()
-        .iter()
-        .filter_map(|v| v.as_str().map(str::to_owned))
-        .collect();
+    let cast: Vec<String> = s.project().map(|p| p.animation_cast.clone()).unwrap_or_default();
 
     let mut discovered = discover_character_folders(&project_dir);
-    for asset in s.project_assets.iter().filter(|a| a.kind == "model_3d") {
+    for asset in s.project_assets().iter().filter(|a| a.kind == "model_3d") {
         let id = asset.id.replace('_', "-");
         if !discovered.iter().any(|(raw, _, _)| crate::workspace::sanitize_asset_id(raw) == crate::workspace::sanitize_asset_id(&id)) {
             discovered.push((id.clone(), None, project_dir.join("assets/characters").join(&id)));
@@ -538,6 +529,49 @@ pub fn cmd_animation_open(s: &mut Session, p: &Value) -> Result<Value> {
     }))
 }
 
+pub fn sync_character_registration(
+    s: &mut Session,
+    char_id: &str,
+    char_name: &str,
+    style: Option<&str>,
+    ecproj: Option<&Path>,
+    anicraft: Option<&Path>,
+    model_3d: Option<&Path>,
+) {
+    if let Some(proj) = s.project_mut() {
+        if let Some(record) = proj.characters.iter_mut().find(|c| c.id == char_id) {
+            if !char_name.is_empty() && record.name.is_empty() {
+                record.name = char_name.to_owned();
+            }
+            if let Some(st) = style.filter(|s| !s.is_empty()) {
+                record.animation_style = st.to_owned();
+            }
+            if let Some(p) = ecproj {
+                record.ecproj = Some(p.to_path_buf());
+            }
+            if let Some(p) = anicraft {
+                record.anicraft = Some(p.to_path_buf());
+            }
+            if let Some(p) = model_3d {
+                record.model_3d = Some(p.to_path_buf());
+            }
+        } else {
+            let record = crate::cmd::project::format::CharacterRecord {
+                id: char_id.to_owned(),
+                name: if char_name.is_empty() { char_id.to_owned() } else { char_name.to_owned() },
+                animation_style: style.unwrap_or_default().to_owned(),
+                ecproj: ecproj.map(|p| p.to_path_buf()),
+                anicraft: anicraft.map(|p| p.to_path_buf()),
+                model_3d: model_3d.map(|p| p.to_path_buf()),
+                views: Vec::new(),
+                sprites: Vec::new(),
+                scripts: Vec::new(),
+            };
+            proj.characters.push(record);
+        }
+    }
+}
+
 pub fn cmd_character_import(s: &mut Session, p: &Value) -> Result<Value> {
     let raw_path = p["path"].as_str().ok_or_else(|| bad("path=<file> is required"))?;
     let source = crate::workspace::resolve_workspace_path(s, raw_path);
@@ -577,6 +611,16 @@ pub fn cmd_character_import(s: &mut Session, p: &Value) -> Result<Value> {
             }
             d
         };
+        let ecproj_opt = (ext == "ecproj").then_some(dest.as_path());
+        let anicraft_opt = (ext == "anicraft").then_some(dest.as_path());
+        let style = if ext == "ecproj" {
+            Some("rig_2_5d")
+        } else if ext == "anicraft" {
+            Some("artboard_2d")
+        } else {
+            None
+        };
+        sync_character_registration(s, &char_id, clean_stem, style, ecproj_opt, anicraft_opt, None);
         return Ok(json!({
             "ok": true,
             "character": char_id,

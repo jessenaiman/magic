@@ -14,6 +14,7 @@
 
 pub mod anim;
 pub mod media;
+pub mod metadata;
 pub mod text;
 pub mod time;
 

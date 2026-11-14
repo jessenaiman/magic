@@ -11,13 +11,23 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
+craft-ai-agents = { workspace = true }
+craft-ai-client = { workspace = true }
+craft-ai-core = { workspace = true }
+craft-ai-egui = { workspace = true }
+craft-ai-features = { workspace = true }
+craft-ai-native = { workspace = true }
+craft-atomic = { workspace = true }
+craft-flags = { workspace = true }
 craft-font-catalog = { workspace = true }
 craft-font-manager = { workspace = true }
 craft-font-store = { workspace = true }
 craft-keymap = { workspace = true }
 craft-menu = { workspace = true }
 craft-text = { workspace = true }
+craft-timeline = { workspace = true }
 craft-ui = { workspace = true }
+craft-update = { workspace = true }
 craft-window = { workspace = true }
 egui = { workspace = true }
 egui_extras = { workspace = true }

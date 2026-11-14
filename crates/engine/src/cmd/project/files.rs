@@ -295,7 +295,7 @@ fn partition_project_assets(s: &Session, canon_dir: &Path) -> (BTreeMap<PathBuf,
     let mut by_path = BTreeMap::<PathBuf, Vec<ProjectAsset>>::new();
     let mut external = Vec::new();
     let mut missing = Vec::new();
-    for asset in &s.project_assets {
+    for asset in s.project_assets() {
         let Some(path) = asset.path.as_ref() else {
             missing.push(asset.clone());
             continue;
@@ -398,7 +398,7 @@ pub fn cmd_project_files(s: &mut Session, _params: &Value) -> Result<Value> {
         ok: true,
         project_dir: canon_dir,
         count: rows.len(),
-        registered_asset_count: s.project_assets.len(),
+        registered_asset_count: s.project_assets().len(),
         linked_comp_count: linked_comps.len(),
         files: rows,
         external_assets,

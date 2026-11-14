@@ -13,7 +13,6 @@ use magic_ui_egui::{PickerTarget, UiShellState, ViewMode};
 use serde_json::{Value, json};
 
 use crate::MagicDesktopApp;
-use crate::diagnostics;
 
 #[derive(Default)]
 pub(crate) struct AudioTransportPlayer {

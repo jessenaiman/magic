@@ -96,15 +96,28 @@ pub fn user_data_dir() -> Option<PathBuf> {
 }
 
 /// App-level Magic Studio data root (`~/.local/share/magic` / `~/Library/Application Support/magic`).
-/// Returns `None` when `MAGIC_CONFIG_DIR` is set to empty (`""`) for isolated test/agent runs (`craft-settings#12`).
+/// Returns `None` when `MAGIC_CONFIG_DIR` is empty (`""`) or `MAGIC_NO_PREFS` is set (`craft-settings#12`).
 pub fn magic_data_dir() -> Option<PathBuf> {
-    if std::env::var_os("MAGIC_CONFIG_DIR").is_some_and(|v| v.is_empty()) {
-        return None;
-    }
+    crate::settings::prefs::resolved_config_dir()?;
     if let Some(explicit) = std::env::var_os("MAGIC_DATA_DIR").filter(|v| !v.is_empty()).map(PathBuf::from).filter(|p| p.is_absolute()) {
         return Some(explicit);
     }
     user_data_dir().map(|base| base.join("magic"))
+}
+
+/// Read launcher feature flags (`craft-flags`) and agent allowance (`craft-ai-agents`) without side effects.
+pub fn craft_agent_gate() -> Value {
+    let flags = craft_flags::load();
+    let agents_dir = craft_ai_agents::agents_dir();
+    let switched_on = craft_ai_agents::switched_on();
+    let magic_allowed = craft_ai_agents::allowed("magic");
+    json!({
+        "ai_mcp": flags.enabled(&craft_flags::AI_MCP),
+        "ai_models": flags.enabled(&craft_flags::AI_MODELS),
+        "agents_dir": agents_dir,
+        "agents_switched_on": switched_on,
+        "magic_allowed": magic_allowed,
+    })
 }
 
 /// Ensure `~/.local/share/magic/{templates,recovery,logs}` exist without writing embedded template blobs.
@@ -191,7 +204,7 @@ fn infer_project_doc_for_app(s: &crate::Session, app: &str, domain: Option<&str>
         ("lyrics", _) => vec![proj_dir.join("effects/lyrics.ecproj"), proj_dir.join("lettering/lyrics.ecproj")],
         ("motion", _) => vec![proj_dir.join("effects/motion.ecproj"), proj_dir.join("motion/actions.ecproj")],
         (_, "filmcraft") => {
-            let mut v: Vec<PathBuf> = s.video_project_path.iter().cloned().collect();
+            let mut v: Vec<PathBuf> = s.video_project_path().map(Path::to_path_buf).into_iter().collect();
             if let Ok(rd) = std::fs::read_dir(proj_dir.join("film")) {
                 v.extend(rd.flatten().map(|e| e.path()).filter(|p| has_extension(p, &["fcproj"])));
             }

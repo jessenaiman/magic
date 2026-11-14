@@ -32,6 +32,24 @@ pub fn encode_png_atomic(img: &RgbaImage, out: &Path) -> Result<()> {
 
 /// Load a raster image or extract an embedded Craft preview (`.pcraft`, `.vectorcraft`, `.ecproj`).
 pub fn load_rgba(input: &Path) -> Result<RgbaImage> {
+    if input.is_file()
+        && let Ok(bytes) = std::fs::read(input)
+    {
+        if let Ok(dec) = craft_image_codecs::decode(&bytes) {
+            let (w, h) = (dec.width(), dec.height());
+            if let Some(img) = RgbaImage::from_raw(w, h, dec.to_rgba8()) {
+                return Ok(img);
+            }
+        }
+        if craft_vectorcraft_format::sniff(&bytes)
+            && let Ok(vf) = craft_vectorcraft_format::File::<serde::de::IgnoredAny>::read(&bytes)
+            && let Some(preview) = vf.preview
+            && let Some(decoded) = craft_vectorcraft_format::base64::decode(&preview.data)
+            && let Ok(img) = image::load_from_memory(&decoded)
+        {
+            return Ok(img.to_rgba8());
+        }
+    }
     if let Ok(img) = image::open(input) {
         return Ok(img.to_rgba8());
     }
@@ -49,8 +67,10 @@ pub fn load_rgba(input: &Path) -> Result<RgbaImage> {
         && craft_doc::sniff(&bytes).is_some()
     {
         let limits = Limits::default();
-        if let Ok(rend) =
-            craft_doc::rendition(&bytes, RenditionKind::Composite, &limits).or_else(|_| craft_doc::rendition(&bytes, RenditionKind::Thumbnail, &limits))
+        if let Some(rend) = craft_doc::rendition(&bytes, RenditionKind::Composite, &limits)
+            .ok()
+            .flatten()
+            .or_else(|| craft_doc::rendition(&bytes, RenditionKind::Thumbnail, &limits).ok().flatten())
             && let Ok(img) = image::load_from_memory(&rend.bytes)
         {
             return Ok(img.to_rgba8());

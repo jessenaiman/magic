@@ -10,6 +10,7 @@
 #![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable))]
 
 pub mod animation_model;
+pub mod autosave;
 pub mod cmd;
 pub mod command_sets;
 pub mod commands;
@@ -24,6 +25,7 @@ pub mod link_watch;
 pub mod native_media;
 pub mod project_lock;
 pub(crate) mod read_only_file;
+pub mod recovery;
 pub mod session;
 pub mod settings;
 pub mod time;

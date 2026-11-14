@@ -11,20 +11,28 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
+craft-anicraft-format = { workspace = true }
 craft-atomic = { workspace = true }
 craft-audio = { workspace = true }
 craft-doc = { workspace = true }
 craft-docpath = { workspace = true }
 craft-ecproj-format = { workspace = true }
+craft-file-formats = { workspace = true }
 craft-font-catalog = { workspace = true }
 craft-fonts-build = { workspace = true }
+craft-heif = { workspace = true }
 craft-i18n = { workspace = true }
+craft-image-codecs = { workspace = true }
 craft-media = { workspace = true }
+craft-metadata = { workspace = true }
 craft-pcraft-bundle = { workspace = true }
 craft-pcraft-format = { workspace = true }
+craft-psd = { workspace = true }
+craft-raw = { workspace = true }
 craft-settings = { workspace = true }
 craft-text = { workspace = true }
 craft-timeline = { workspace = true }
+craft-vectorcraft-format = { workspace = true }
 image = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true }

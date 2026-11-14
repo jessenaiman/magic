@@ -39,7 +39,14 @@ egui_extras = { version = "0.37", default-features = false, features = ["svg", "
 
 # Shared Craft foundation libraries (`storytold/craft-libs`)
 # Optional embedded font & locale checkouts (`CRAFT_FONTS_DIR` and `CRAFT_I18N_DIR`) are read by `crates/util/build.rs`.
-craft-ai-core = { git = "https://github.com/storytold/craft-libs", branch = "main" }
+craft-ai-agents = { git = "https://github.com/storytold/craft-ai-integrations", branch = "main" }
+craft-ai-client = { git = "https://github.com/storytold/craft-ai-integrations", branch = "main" }
+craft-ai-core = { git = "https://github.com/storytold/craft-ai-integrations", branch = "main" }
+craft-ai-egui = { git = "https://github.com/storytold/craft-ai-integrations", branch = "main" }
+craft-ai-features = { git = "https://github.com/storytold/craft-ai-integrations", branch = "main" }
+craft-ai-native = { git = "https://github.com/storytold/craft-ai-integrations", branch = "main" }
+craft-aaf = { git = "https://github.com/storytold/craft-libs", branch = "main" }
+craft-anicraft-format = { git = "https://github.com/storytold/craft-libs", branch = "main" }
 craft-atomic = { git = "https://github.com/storytold/craft-libs", branch = "main" }
 craft-audio = { git = "https://github.com/storytold/craft-libs", branch = "main", features = ["decode", "encode", "peaks", "serde"] }
 craft-captions = { git = "https://github.com/storytold/craft-libs", branch = "main" }
@@ -49,25 +56,33 @@ craft-doc = { git = "https://github.com/storytold/craft-libs", branch = "main" }
 craft-docpath = { git = "https://github.com/storytold/craft-libs", branch = "main" }
 craft-drawingml = { git = "https://github.com/storytold/craft-libs", branch = "main" }
 craft-ecproj-format = { git = "https://github.com/storytold/craft-libs", branch = "main" }
+craft-file-formats = { git = "https://github.com/storytold/craft-libs", branch = "main" }
+craft-flags = { git = "https://github.com/storytold/craft-libs", branch = "main" }
 craft-font-catalog = { git = "https://github.com/storytold/craft-libs", branch = "main", features = ["system"] }
 craft-font-manager = { git = "https://github.com/storytold/craft-libs", branch = "main", features = ["egui"] }
 craft-font-store = { git = "https://github.com/storytold/craft-libs", branch = "main", features = ["bundled-index"] }
 craft-fonts-build = { git = "https://github.com/storytold/craft-libs", branch = "main" }
+craft-heif = { git = "https://github.com/storytold/craft-libs", branch = "main", default-features = false, features = ["metadata"] }
 craft-i18n = { git = "https://github.com/storytold/craft-libs", branch = "main" }
+craft-image-codecs = { git = "https://github.com/storytold/craft-libs", branch = "main" }
 craft-keymap = { git = "https://github.com/storytold/craft-libs", branch = "main", features = ["egui"] }
 craft-media = { git = "https://github.com/storytold/craft-libs", branch = "main", default-features = false, features = ["isobmff", "matroska", "ogg", "serde"] }
 craft-menu = { git = "https://github.com/storytold/craft-libs", branch = "main" }
 craft-mesh = { git = "https://github.com/storytold/craft-libs", branch = "main" }
+craft-metadata = { git = "https://github.com/storytold/craft-libs", branch = "main" }
 craft-pcraft-bundle = { git = "https://github.com/storytold/craft-libs", branch = "main" }
 craft-pcraft-format = { git = "https://github.com/storytold/craft-libs", branch = "main" }
 craft-platform = { git = "https://github.com/storytold/craft-libs", branch = "main", features = ["egui", "appearance"] }
+craft-psd = { git = "https://github.com/storytold/craft-libs", branch = "main" }
 craft-quit = { git = "https://github.com/storytold/craft-libs", branch = "main", features = ["egui"] }
+craft-raw = { git = "https://github.com/storytold/craft-libs", branch = "main", default-features = false, features = ["mrw", "cr3"] }
 craft-settings = { git = "https://github.com/storytold/craft-libs", branch = "main" }
 craft-svg = { git = "https://github.com/storytold/craft-libs", branch = "main" }
 craft-text = { git = "https://github.com/storytold/craft-libs", branch = "main" }
 craft-timeline = { git = "https://github.com/storytold/craft-libs", branch = "main", features = ["serde", "xml", "otio"] }
-craft-ui = { git = "https://github.com/storytold/craft-libs", branch = "main", features = ["serde", "color_fonts", "native-windows"] }
-craft-update = { git = "https://github.com/storytold/craft-libs", branch = "main" }
+craft-ui = { git = "https://github.com/storytold/craft-libs", branch = "main", features = ["serde", "color_fonts", "native-windows", "system_fonts"] }
+craft-update = { git = "https://github.com/storytold/craft-libs", branch = "main", features = ["egui"] }
+craft-vectorcraft-format = { git = "https://github.com/storytold/craft-libs", branch = "main" }
 craft-window = { git = "https://github.com/storytold/craft-libs", branch = "main", features = ["egui"] }
 craft-zip = { git = "https://github.com/storytold/craft-libs", branch = "main" }
 
@@ -86,16 +101,16 @@ thiserror = "2"
 
 # Reviewed ArtCraft `storytold/egui` and `storytold/winit` branches
 [patch.crates-io]
-ecolor = { git = "https://github.com/storytold/egui.git", branch = "main" }
-eframe = { git = "https://github.com/storytold/egui.git", branch = "main" }
-egui = { git = "https://github.com/storytold/egui.git", branch = "main" }
-egui-wgpu = { git = "https://github.com/storytold/egui.git", branch = "main" }
-egui-winit = { git = "https://github.com/storytold/egui.git", branch = "main" }
-egui_extras = { git = "https://github.com/storytold/egui.git", branch = "main" }
-egui_glow = { git = "https://github.com/storytold/egui.git", branch = "main" }
-emath = { git = "https://github.com/storytold/egui.git", branch = "main" }
-epaint = { git = "https://github.com/storytold/egui.git", branch = "main" }
-epaint_default_fonts = { git = "https://github.com/storytold/egui.git", branch = "main" }
+ecolor = { git = "https://github.com/storytold/egui.git", branch = "craft/0.37-pin" }
+eframe = { git = "https://github.com/storytold/egui.git", branch = "craft/0.37-pin" }
+egui = { git = "https://github.com/storytold/egui.git", branch = "craft/0.37-pin" }
+egui-wgpu = { git = "https://github.com/storytold/egui.git", branch = "craft/0.37-pin" }
+egui-winit = { git = "https://github.com/storytold/egui.git", branch = "craft/0.37-pin" }
+egui_extras = { git = "https://github.com/storytold/egui.git", branch = "craft/0.37-pin" }
+egui_glow = { git = "https://github.com/storytold/egui.git", branch = "craft/0.37-pin" }
+emath = { git = "https://github.com/storytold/egui.git", branch = "craft/0.37-pin" }
+epaint = { git = "https://github.com/storytold/egui.git", branch = "craft/0.37-pin" }
+epaint_default_fonts = { git = "https://github.com/storytold/egui.git", branch = "craft/0.37-pin" }
 winit = { git = "https://github.com/storytold/winit.git", branch = "craft/0.30.13" }
 
 [workspace.lints.rust]
@@ -127,6 +142,9 @@ debug = false
 
 [profile.dev.package.symphonia-bundle-flac]
 overflow-checks = false
+
+[profile.dev.package.craft-audio]
+opt-level = 3
 
 [profile.release]
 lto = "thin"

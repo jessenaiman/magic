@@ -38,8 +38,11 @@ pub use manage::{
 pub use mark::cmd_character_mark;
 pub use mesh_io::{cmd_mesh_convert, cmd_mesh_inspect};
 pub use meta::{cmd_character_meta, cmd_character_save_marks};
-pub use puppet::{cmd_puppet_expression, cmd_puppet_follow, cmd_puppet_lipsync, cmd_puppet_record, cmd_puppet_rig_face};
-pub use rig::cmd_character_rig;
+pub use puppet::{
+    cmd_puppet_expression, cmd_puppet_follow, cmd_puppet_info, cmd_puppet_lipsync, cmd_puppet_record, cmd_puppet_rig_face, cmd_script_install, cmd_script_list,
+    cmd_script_run,
+};
+pub use rig::{cmd_bone_add, cmd_bone_info, cmd_bone_pin, cmd_bone_pose, cmd_bone_remove, cmd_bone_set_limits, cmd_bone_solve, cmd_character_rig};
 pub use shot::{cmd_character_publish, cmd_character_shot};
 pub use sprite::cmd_character_sprite;
 
@@ -224,6 +227,10 @@ pub(crate) fn find_dir_ecproj(dir: &Path, id: &str, folder_name: &str, view: &st
     find_by_ext(dir, id, folder_name, view, is_flat, "ecproj")
 }
 
+pub(crate) fn find_dir_anicraft(dir: &Path, id: &str, folder_name: &str, view: &str, is_flat: bool) -> Option<PathBuf> {
+    find_by_ext(dir, id, folder_name, view, is_flat, "anicraft")
+}
+
 pub(crate) fn find_dir_pcraft(dir: &Path, id: &str, folder_name: &str, view: &str, is_flat: bool) -> Option<PathBuf> {
     find_by_ext(dir, id, folder_name, view, is_flat, "pcraft")
 }
@@ -298,6 +305,7 @@ impl View {
     pub fn file(&self, ext: &str) -> PathBuf {
         let found = match ext {
             "ecproj" => find_dir_ecproj(&self.dir, &self.id, &self.folder_name, &self.view, self.is_flat),
+            "anicraft" => find_dir_anicraft(&self.dir, &self.id, &self.folder_name, &self.view, self.is_flat),
             "pcraft" => find_dir_pcraft(&self.dir, &self.id, &self.folder_name, &self.view, self.is_flat),
             "psd" => find_dir_psd(&self.dir, &self.id, &self.folder_name, &self.view, self.is_flat),
             "vectorcraft" | "svg" => find_by_ext(&self.dir, &self.id, &self.folder_name, &self.view, self.is_flat, ext),

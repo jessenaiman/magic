@@ -49,6 +49,7 @@ fn checks(s: &Session) -> Vec<Check> {
             ));
         }
     }
+
     let anicraft_cli_ok = resolve_executable_path("anicraft-cli").is_some();
     if anicraft_cli_ok {
         out.push(Check::ok("host:anicraft", "anicraft ready (anicraft-cli installed for stdio serve/mcp)"));
@@ -61,10 +62,55 @@ fn checks(s: &Session) -> Vec<Check> {
         ));
     }
 
+    let deckcraft_cli_ok = resolve_executable_path("deckcraft-cli").is_some();
+    if deckcraft_cli_ok {
+        out.push(Check::ok("host:deckcraft", "deckcraft ready (deckcraft-cli installed for Storyboard decks)"));
+    } else {
+        out.push(Check::problem(
+            "warn",
+            "host:deckcraft",
+            "`deckcraft-cli` is not installed on PATH",
+            "Install DeckCraft (`deckcraft-cli` for Storyboard decks and presentation slide templates)",
+        ));
+    }
+
+    let craft_clis = ["designcraft-cli", "photocraft-cli", "vectorcraft-cli", "effectcraft-cli", "anicraft-cli", "filmcraft-cli", "deckcraft-cli"];
+    let installed_clis: Vec<&str> = craft_clis.iter().copied().filter(|cli| resolve_executable_path(cli).is_some()).collect();
+    out.push(Check::ok(
+        "cli:discovery",
+        format!("{}/{} Craft CLIs installed on PATH: [{}]", installed_clis.len(), craft_clis.len(), installed_clis.join(", ")),
+    ));
+
+    let gate = crate::workspace::craft_agent_gate();
+    out.push(Check::ok(
+        "gate:craft-flags-and-agents",
+        format!(
+            "craft-flags: ai_mcp={}, ai_models={}; craft-ai-agents: switched_on={}, magic_allowed={}",
+            gate["ai_mcp"], gate["ai_models"], gate["agents_switched_on"], gate["magic_allowed"]
+        ),
+    ));
+
+    let font_count = craft_font_catalog::Catalog::global().families().len();
+    out.push(Check::ok("fonts:craft-font-catalog", format!("{font_count} font families indexed in craft-font-catalog")));
+
     let ai = crate::craft_ai::craft_ai_status();
     let ai_enabled = ai["enabled"].as_bool().unwrap_or(false);
     let conn_count = ai["connections"].as_array().map_or(0, Vec::len);
-    out.push(Check::ok("ai:craft-ai-core", format!("ai.enabled={ai_enabled}, {conn_count} connection(s) configured via craft-ai-core")));
+    let store_path = ai["storage"]["path"].as_str().unwrap_or("in-memory");
+    out.push(Check::ok(
+        "ai:craft-ai-core",
+        format!("ai.enabled={ai_enabled}, {conn_count} connection(s) configured via craft-ai-core (storage: {store_path})"),
+    ));
+
+    let tools_summary = match craft_ai_client::AppTools::standard("magic") {
+        Ok(tools) => {
+            let reports = tools.report();
+            let ready_count = reports.iter().filter(|r| matches!(r.status, craft_ai_client::RoleStatus::Ready(_))).count();
+            format!("{} tool(s) registered, {} ready", reports.len(), ready_count)
+        }
+        Err(e) => format!("in-memory / fallback: {e}"),
+    };
+    out.push(Check::ok("ai:craft-ai-client", tools_summary));
 
     let settings_report = s.settings.report_json();
     if settings_report["has_problems"].as_bool() == Some(true) || settings_report["read_only"].as_bool() == Some(true) {

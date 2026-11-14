@@ -164,6 +164,7 @@ pub fn draw_modal(egui_ctx: &egui::Context, ctx: &mut ViewCtx<'_>, modal: Active
         ActiveModal::Doctor => "ArtCraft Suite Doctor",
         ActiveModal::About => "About Magic Studio",
         ActiveModal::UnsavedClose => "Unsaved Changes",
+        ActiveModal::Recovery => "Crash Recovery",
         ActiveModal::Preferences | ActiveModal::FontManager | ActiveModal::ReportProblem => return,
     };
     let mut keep_open = true;
@@ -217,6 +218,63 @@ pub fn draw_modal(egui_ctx: &egui::Context, ctx: &mut ViewCtx<'_>, modal: Active
                             ctx.state.active_modal = None;
                         }
                     });
+                });
+            }
+            ActiveModal::Recovery => {
+                ui.label(RichText::new("One or more crash recovery sessions were found.").strong());
+                ui.add_space(4.0);
+                ScrollArea::vertical().max_height(240.0).show(ui, |ui| {
+                    let entries = ctx.state.recoverable_sessions.clone();
+                    for entry in entries {
+                        let run_id = entry["run_id"].as_str().unwrap_or_default().to_owned();
+                        let name = entry["name"].as_str().unwrap_or("Untitled");
+                        let time = entry["saved_at_utc"].as_str().unwrap_or_default();
+                        ui.group(|ui| {
+                            ui.horizontal(|ui| {
+                                ui.vertical(|ui| {
+                                    ui.label(RichText::new(name).strong());
+                                    ui.label(RichText::new(format!("{run_id} · {time}")).size(10.5).color(ctx.pal.text_muted));
+                                });
+                                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                                    let btn_discard = format!("rec-discard-{run_id}");
+                                    if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new(&btn_discard, "trash", "Discard", "Discard this recovery session"))
+                                        .clicked()
+                                    {
+                                        ctx.exec("recovery.discard", json!({"run_id": run_id}), Some("Discarded recovery snapshot"));
+                                        ctx.state.recoverable_sessions.retain(|e| e["run_id"].as_str() != Some(&run_id));
+                                        if ctx.state.recoverable_sessions.is_empty() {
+                                            ctx.state.active_modal = None;
+                                        }
+                                    }
+                                    let btn_restore = format!("rec-restore-{run_id}");
+                                    if action_button(
+                                        ui,
+                                        ctx.reg,
+                                        ctx.pal,
+                                        BtnSpec::new(&btn_restore, "refresh", "Restore", "Restore this recovery session").primary(),
+                                    )
+                                    .clicked()
+                                    {
+                                        ctx.exec("recovery.restore", json!({"run_id": run_id}), Some("Restored crash recovery snapshot"));
+                                        ctx.state.recoverable_sessions.retain(|e| e["run_id"].as_str() != Some(&run_id));
+                                        ctx.state.active_modal = None;
+                                    }
+                                });
+                            });
+                        });
+                    }
+                });
+                ui.add_space(6.0);
+                ui.horizontal(|ui| {
+                    if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("rec-discard-all", "trash", "Discard All", "Discard all recovered sessions")).clicked()
+                    {
+                        ctx.exec("recovery.discard", json!({"all": true}), Some("Discarded all recovery snapshots"));
+                        ctx.state.recoverable_sessions.clear();
+                        ctx.state.active_modal = None;
+                    }
+                    if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only("rec-close", "Close", "Close recovery dialog")).clicked() {
+                        ctx.state.active_modal = None;
+                    }
                 });
             }
             ActiveModal::Preferences | ActiveModal::FontManager | ActiveModal::ReportProblem => {}
