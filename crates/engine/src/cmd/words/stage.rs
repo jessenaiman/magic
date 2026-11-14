@@ -155,23 +155,22 @@ pub fn cmd_words_lyrics_view(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 pub(crate) fn live_effectcraft_catalog() -> (bool, Value) {
-    let connected = crate::workspace::control_probe("effectcraft");
-    let list = if connected {
-        crate::workspace::control_exec("effectcraft", "library.list", json!({}))
+    let available = crate::workspace::resolve_executable_path("effectcraft-cli").is_some();
+    let list = if available {
+        crate::workspace::run_cli_json("effectcraft-cli", &["--empty", "exec", "library.list", "--json"], None)
             .ok()
             .and_then(|v| v.get("effects").or_else(|| v.get("items")).or_else(|| v.get("catalog")).cloned().or_else(|| v.is_array().then_some(v)))
             .unwrap_or_else(|| json!([]))
     } else {
         json!([])
     };
-    (connected, list)
+    (available, list)
 }
 
 fn runtime_effectcraft_tools() -> Value {
-    let endpoint = crate::workspace::control_endpoint("effectcraft").map(|(addr, _)| format!("tcp://{addr}"));
     let (connected, effects) = live_effectcraft_catalog();
     json!({
-        "endpoint": endpoint,
+        "cli": crate::workspace::resolve_executable_path("effectcraft-cli"),
         "connected": connected,
         "text_presets": [],
         "animator_properties": ["position", "scale", "rotation", "skew", "opacity", "tracking", "fillColor", "strokeWidth"],
@@ -238,15 +237,13 @@ pub fn cmd_words_effects(_s: &mut Session, p: &Value) -> Result<Value> {
     }
     let tools = runtime_words_tools();
     let (connected, effects) = live_effectcraft_catalog();
-    let endpoint = crate::workspace::control_endpoint("effectcraft").map(|(a, _)| format!("tcp://{a}"));
     let installed = effects.as_array().map_or(0, Vec::len);
     Ok(json!({
         "ok": true,
-        "source": "effectcraft (--control API / effectcraft-cli)",
+        "source": "effectcraft-cli",
         "domain": "lyrics",
         "track": "V3",
         "api_connected": connected,
-        "api_endpoints": {"effectcraft": endpoint},
         "effects": effects,
         "installed": installed,
         "kinds": {
@@ -534,10 +531,7 @@ pub fn cmd_words_save(s: &mut Session, p: &Value) -> Result<Value> {
     anim["origin"] = p.get("origin").filter(|v| v.is_string()).cloned().unwrap_or(json!("magic"));
     let saved = anim.clone();
     save(s, &dir, &doc)?;
-    let ecproj = crate::cmd::words::lyrics_ecproj_path(&dir);
-    let save_params = if ecproj.is_file() { json!({"path": ecproj}) } else { json!({}) };
-    let live_saved = crate::workspace::control_probe("effectcraft") && crate::workspace::control_exec("effectcraft", "file.save", save_params).is_ok();
-    Ok(json!({"ok": true, "conflict": false, "path": document_path(&dir), "live_app_saved": live_saved, "animation": saved}))
+    Ok(json!({"ok": true, "conflict": false, "path": document_path(&dir), "animation": saved}))
 }
 
 pub fn cmd_words_link(s: &mut Session, p: &Value) -> Result<Value> {

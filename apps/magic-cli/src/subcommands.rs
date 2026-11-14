@@ -1,14 +1,13 @@
-//! Ergonomic `FilmCraft` × `EffectCraft`, `Studio`, and `Storyboard` CLI subcommands for `magic-cli`.
+//! Ergonomic `FilmCraft` × `EffectCraft` and `Studio` CLI subcommands for `magic-cli`.
 //!
 //! Covers `--control` discovery (`controls`), Studio batch track mapping (`studio map-tracks`),
-//! thin Storyboard operations (`storyboard status | open | new | add-section | add-element | export`),
-//! bidirectional timeline interchange (`interchange`), FilmCraft Studio finishing (`finish`),
-//! pure-Rust codec export (`export`), V3 ↔ C1 broadcast captions (`captions`), and review markers (`markers`).
+//! `export`, V3 ↔ C1 broadcast captions (`captions`), `mesh`, `project`, and `recovery`.
+//! Storyboard commands (`storyboard.*`) dispatch directly through [`crate::resolve_shorthand`] with no wrapper.
 
 use clap::{Args, Subcommand};
 use serde_json::{Value, json};
 
-use crate::{Target, emit, parse_params};
+use crate::{Target, emit};
 
 #[derive(Args)]
 pub struct ControlsArgs {
@@ -113,81 +112,6 @@ pub struct StudioMapTracksArgs {
     /// Default group name when `--map` omits `:<group>`
     #[arg(long)]
     pub group: Option<String>,
-}
-
-#[derive(Args)]
-pub struct StoryboardArgs {
-    #[command(subcommand)]
-    pub command: StoryboardCmd,
-}
-
-#[derive(Subcommand)]
-pub enum StoryboardCmd {
-    /// Inspect Storyboard DesignCraft status (`storyboard.status`)
-    Status {
-        #[arg(long)]
-        path: Option<String>,
-        #[arg(long)]
-        params: Option<String>,
-        arguments: Vec<String>,
-    },
-    /// Open `storyboard.designcraft` in host DesignCraft (`storyboard.open`)
-    Open {
-        #[arg(long)]
-        path: Option<String>,
-        #[arg(long)]
-        page: Option<usize>,
-        #[arg(long)]
-        params: Option<String>,
-        arguments: Vec<String>,
-    },
-    /// Initialize `storyboard.designcraft` (`storyboard.new`)
-    New {
-        #[arg(long)]
-        path: Option<String>,
-        #[arg(long)]
-        overwrite: bool,
-        #[arg(long)]
-        params: Option<String>,
-        arguments: Vec<String>,
-    },
-    /// Add a section to `storyboard.designcraft` (`storyboard.add_section`)
-    AddSection {
-        name: String,
-        #[arg(long)]
-        path: Option<String>,
-        #[arg(long)]
-        params: Option<String>,
-        arguments: Vec<String>,
-    },
-    /// Add an element to a section in `storyboard.designcraft` (`storyboard.add_element`)
-    AddElement {
-        section: String,
-        name: String,
-        #[arg(long)]
-        path: Option<String>,
-        #[arg(long)]
-        params: Option<String>,
-        arguments: Vec<String>,
-    },
-    /// Export `storyboard.designcraft` (`storyboard.export`)
-    Export {
-        out: Option<String>,
-        #[arg(long)]
-        format: Option<String>,
-        #[arg(long)]
-        params: Option<String>,
-        arguments: Vec<String>,
-    },
-}
-
-#[derive(Args)]
-pub struct FinishArgs {
-    /// `video.finish` op (`workspace`, `mark_in`, `mark_out`, `insert`, `overwrite`, `lift`, `extract`, `trim_mode`, `lumetri_*`, `audio_*`, `jobs_list`)
-    pub op: String,
-    #[arg(long)]
-    pub params: Option<String>,
-    pub arguments: Vec<String>,
 }
 
 #[derive(Args)]
@@ -333,82 +257,6 @@ pub fn run_studio(target: &mut Target, args: StudioArgs) -> Result<(), String> {
     }
 }
 
-#[allow(clippy::cognitive_complexity)]
-pub fn build_storyboard_call(cmd: StoryboardCmd) -> Result<(&'static str, Value), String> {
-    match cmd {
-        StoryboardCmd::Status { path, params, arguments } => {
-            let mut p = parse_params(&arguments, params.as_deref())?;
-            if let Some(v) = path {
-                p["path"] = json!(v);
-            }
-            Ok(("storyboard.status", p))
-        }
-        StoryboardCmd::Open { path, page, params, arguments } => {
-            let mut p = parse_params(&arguments, params.as_deref())?;
-            if let Some(v) = path {
-                p["path"] = json!(v);
-            }
-            if let Some(pg) = page {
-                p["page"] = json!(pg);
-            }
-            Ok(("storyboard.open", p))
-        }
-        StoryboardCmd::New { path, overwrite, params, arguments } => {
-            let mut p = parse_params(&arguments, params.as_deref())?;
-            if let Some(v) = path {
-                p["path"] = json!(v);
-            }
-            if overwrite {
-                p["overwrite"] = json!(true);
-            }
-            Ok(("storyboard.new", p))
-        }
-        StoryboardCmd::AddSection { name, path, params, arguments } => {
-            let mut p = parse_params(&arguments, params.as_deref())?;
-            p["name"] = json!(name.clone());
-            if p.get("section").is_none() {
-                p["section"] = json!(name);
-            }
-            if let Some(v) = path {
-                p["path"] = json!(v);
-            }
-            Ok(("storyboard.add_section", p))
-        }
-        StoryboardCmd::AddElement { section, name, path, params, arguments } => {
-            let mut p = parse_params(&arguments, params.as_deref())?;
-            p["section"] = json!(section);
-            p["name"] = json!(name.clone());
-            if p.get("element").is_none() {
-                p["element"] = json!(name);
-            }
-            if let Some(v) = path {
-                p["path"] = json!(v);
-            }
-            Ok(("storyboard.add_element", p))
-        }
-        StoryboardCmd::Export { out, format, params, arguments } => {
-            let mut p = parse_params(&arguments, params.as_deref())?;
-            if let Some(dest) = out {
-                if p.get("output").is_none() {
-                    p["output"] = json!(dest.clone());
-                }
-                if p.get("path").is_none() {
-                    p["path"] = json!(dest);
-                }
-            }
-            if let Some(fmt) = format {
-                p["format"] = json!(fmt);
-            }
-            Ok(("storyboard.export", p))
-        }
-    }
-}
-
-pub fn run_storyboard(target: &mut Target, args: StoryboardArgs) -> Result<(), String> {
-    let (id, params) = build_storyboard_call(args.command)?;
-    target.run(id, params)
-}
-
 pub fn run_controls(target: &mut Target, args: ControlsArgs) -> Result<(), String> {
     let q = args.filter.unwrap_or_default().to_ascii_lowercase();
     let stage_q = args.stage.unwrap_or_default().to_ascii_lowercase();
@@ -435,12 +283,6 @@ pub fn run_controls(target: &mut Target, args: ControlsArgs) -> Result<(), Strin
         "live_elements": live_elements,
     }));
     Ok(())
-}
-
-pub fn run_finish(target: &mut Target, args: FinishArgs) -> Result<(), String> {
-    let mut p = parse_params(&args.arguments, args.params.as_deref())?;
-    p["op"] = json!(args.op);
-    target.run("video.finish", p)
 }
 
 pub fn run_export(target: &mut Target, args: ExportArgs) -> Result<(), String> {

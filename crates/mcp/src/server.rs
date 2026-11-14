@@ -241,7 +241,7 @@ impl Server {
                 .with_description("Orphaned crash recovery snapshots and recovery runs (recovery.list)")
                 .with_mime_type("application/json"),
             Resource::new(RESOURCE_STORYBOARD_URI, "storyboard")
-                .with_description("Storyboard DesignCraft document status and sections (storyboard.status)")
+                .with_description("Standalone read-only Storyboard DesignCraft pages (storyboard.pages)")
                 .with_mime_type("application/json"),
             Resource::new(RESOURCE_TIMELINE_URI, "timeline")
                 .with_description("FilmCraft sequence tracks, clips, and synced markers (video.timeline)")
@@ -268,7 +268,7 @@ impl Server {
                 Ok(val) => val,
                 Err(err) => json!({"ok": false, "uri": uri, "error": err}),
             },
-            RESOURCE_STORYBOARD_URI => match self.run("storyboard.status", json!({})).await {
+            RESOURCE_STORYBOARD_URI => match self.run("storyboard.pages", json!({})).await {
                 Ok(val) => val,
                 Err(err) => json!({"ok": false, "uri": uri, "error": err}),
             },
@@ -364,12 +364,12 @@ impl Server {
     async fn exec_doc_inspect(&self, target: Option<&str>) -> CallToolResult {
         let res = match target.unwrap_or("all") {
             "project" => self.run("workshop.status", json!({})).await,
-            "storyboard" => self.run("storyboard.status", json!({})).await,
+            "storyboard" => self.run("storyboard.pages", json!({})).await,
             "timeline" | "sequence" => self.run("video.timeline", json!({})).await,
             "all" => match self.run("workshop.status", json!({})).await {
                 Ok(project) => Ok(json!({
                     "project": project,
-                    "storyboard": self.run("storyboard.status", json!({})).await.unwrap_or(Value::Null),
+                    "storyboard": self.run("storyboard.pages", json!({})).await.unwrap_or(Value::Null),
                     "timeline": self.run("video.timeline", json!({})).await.unwrap_or(Value::Null),
                 })),
                 Err(e) => Err(e),
@@ -454,7 +454,7 @@ impl Server {
     async fn render_preview(&self, Parameters(p): Parameters<PreviewParams>) -> CallToolResult {
         let sec = p.time.unwrap_or(0.0);
         let res = match p.stage.as_deref().unwrap_or("studio") {
-            "storyboard" => self.run("storyboard.thumbnail", json!({"page": p.page.unwrap_or(0), "scale": 1.0})).await,
+            "storyboard" => self.run("storyboard.render", json!({"page": p.page.unwrap_or(0), "scale": 1.0})).await,
             "lyrics" | "design" => self.run("words.preview_frame", json!({"time": sec})).await,
             "motion" => self.run("motion.preview_frame", json!({"time": sec})).await,
             "animation" | "animations" => self.run("character.frame", json!({"time": sec})).await,
@@ -528,7 +528,7 @@ impl Server {
     )]
     async fn screenshot(&self, Parameters(p): Parameters<ShotParams>) -> CallToolResult {
         if p.window == Some(false) {
-            return output(self.run("storyboard.thumbnail", json!({"page": p.page.unwrap_or(0), "scale": 1.0})).await);
+            return output(self.run("storyboard.render", json!({"page": p.page.unwrap_or(0), "scale": 1.0})).await);
         }
         output(self.run("ui.screenshot", compact(json!({"path": p.path, "panel": p.panel, "id": p.id}))).await)
     }
@@ -595,7 +595,7 @@ mod tests {
                 "workshop.status" => Ok(json!({"ok": true, "name": "Demo Song"})),
                 "project.status" => Ok(json!({"ok": true, "dirty": false})),
                 "recovery.list" => Ok(json!({"ok": true, "count": 0})),
-                "storyboard.status" => Ok(json!({"ok": true, "sections": ["Style", "Scenes"]})),
+                "storyboard.pages" => Ok(json!({"ok": true, "page_count": 1, "pages": [{"page": 0}]})),
                 "video.timeline" => Ok(json!({"ok": true, "tracks": [{"label": "V1"}]})),
                 "app.doctor" => Ok(json!({"ok": true, "apps": {"filmcraft": true}})),
                 "ui.inspect" => Ok(json!({"view": "studio"})),
@@ -623,7 +623,7 @@ mod tests {
                 (RESOURCE_PROJECT_URI, "name", json!("Demo Song")),
                 (RESOURCE_PROJECT_STATUS_URI, "dirty", json!(false)),
                 (RESOURCE_RECOVERY_URI, "count", json!(0)),
-                (RESOURCE_STORYBOARD_URI, "sections", json!(["Style", "Scenes"])),
+                (RESOURCE_STORYBOARD_URI, "page_count", json!(1)),
                 (RESOURCE_TIMELINE_URI, "tracks", json!([{"label": "V1"}])),
             ] {
                 let read = server.read_magic_resource(uri).await.unwrap();

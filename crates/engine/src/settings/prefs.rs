@@ -28,18 +28,11 @@ pub struct AiPrefs {
     pub enabled: bool,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ProjectPrefs {
     pub root: Option<String>,
     pub storyboard_template: String,
-    pub storyboard_format: String,
-}
-
-impl Default for ProjectPrefs {
-    fn default() -> Self {
-        Self { root: None, storyboard_template: String::new(), storyboard_format: "designcraft".into() }
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -198,7 +191,6 @@ impl MagicPrefs {
             "appearance.ui_scale" => json!(self.appearance.ui_scale),
             "project.root" => opt_str_json(&self.project.root),
             "project.storyboard_template" => json!(self.project.storyboard_template),
-            "project.storyboard_format" => json!(self.project.storyboard_format),
             "lyrics.default_size" => json!(self.lyrics.default_size),
             "lyrics.outline" => json!(self.lyrics.outline),
             "animation.loop_preview" => json!(self.animation.loop_preview),
@@ -228,7 +220,6 @@ impl MagicPrefs {
                 let raw = value.as_str().map(str::trim).unwrap_or_default();
                 self.project.storyboard_template = if raw == "magic" { String::new() } else { raw.to_owned() };
             }
-            "project.storyboard_format" => self.project.storyboard_format = value.as_str().unwrap_or("designcraft").to_owned(),
             "lyrics.default_size" => self.lyrics.default_size = value.as_i64().unwrap_or(72),
             "lyrics.outline" => self.lyrics.outline = value.as_bool().unwrap_or(true),
             "animation.loop_preview" => self.animation.loop_preview = value.as_bool().unwrap_or(true),

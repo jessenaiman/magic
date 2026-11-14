@@ -5,10 +5,10 @@ use craft_keymap::{CommandRef, Keymap};
 use craft_menu::{Gate, Item, ItemRole, ItemState, LayoutOptions, MenuBar, MenuBarUi, MenuRole, Row, Target, apply_keymap, apply_state, from_items, layout};
 use serde_json::{Value, json};
 
-use crate::docking::{PRESET_NAMES, PanelId, is_dock_command_id};
-use crate::state::{PickerTarget, UiAction, UiShellState, ViewMode};
-use crate::theme::ThemeMode;
-use crate::widgets::AutomationRegistry;
+use magic_view_api::docking::{PRESET_NAMES, PanelId, is_dock_command_id};
+use magic_view_api::state::{PickerTarget, UiAction, UiShellState, ViewMode};
+use magic_view_api::theme::ThemeMode;
+use magic_view_api::widgets::AutomationRegistry;
 
 /// Clean app-level menus only — stage actions live directly on each view's ribbon & toolbar.
 pub const MENU_ORDER: &[&str] = &["File", "Edit", "View", "Window", "Help"];
@@ -216,11 +216,7 @@ pub fn translate_menu_command(cmd: &CommandRef, state: &mut UiShellState) -> Opt
         return Some(UiAction::DockCommand { id: cmd.id.clone(), params: cmd.params.clone() });
     }
     match cmd.id.as_str() {
-        "project.new" => {
-            state.view = ViewMode::Home;
-            state.home.show_new_form = true;
-            None
-        }
+        "project.new" => Some(UiAction::OpenNewProjectForm),
         "project.open" => Some(UiAction::PickFile {
             target: PickerTarget::OpenProject,
             title: "Open Magic Studio Project (.magic)".into(),

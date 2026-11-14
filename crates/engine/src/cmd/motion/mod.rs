@@ -64,15 +64,13 @@ fn save_doc(_s: &mut Session, _dir: &Path, _doc: &Value) -> Result<()> {
 
 pub fn cmd_motion_effects(_s: &mut Session, _p: &Value) -> Result<Value> {
     let (connected, effects) = crate::cmd::words::stage::live_effectcraft_catalog();
-    let endpoint = crate::workspace::control_endpoint("effectcraft").map(|(a, _)| format!("tcp://{a}"));
     let installed = effects.as_array().map_or(0, Vec::len);
     Ok(json!({
         "ok": true,
-        "source": "effectcraft (--control API / effectcraft-cli)",
+        "source": "effectcraft-cli",
         "domain": "motion",
         "track": "V4",
         "api_connected": connected,
-        "api_endpoints": {"effectcraft": endpoint},
         "effects": effects,
         "installed": installed,
     }))

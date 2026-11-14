@@ -1,11 +1,9 @@
 //! App-level default folders (`~/.local/share/magic/{templates,recovery,logs}`), unified
 //! `craft-docpath` path resolution, and OS editor handoff (`workspace.open`).
 
-use std::io::{BufRead, BufReader, Read, Write};
-use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4, TcpStream};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::time::Duration;
 
 use serde_json::{Value, json};
 
@@ -217,7 +215,7 @@ fn infer_project_doc_for_app(s: &crate::Session, app: &str, domain: Option<&str>
             proj_dir.join("lettering/lyrics.ecproj"),
             proj_dir.join("motion/actions.ecproj"),
         ],
-        (_, "designcraft") => vec![proj_dir.join("storyboard.designcraft"), proj_dir.join("storyboard.idml")],
+        (_, "designcraft") => vec![proj_dir.join("storyboard.designcraft")],
         (_, "vectorcraft") => ["assets", "assets/vectors", "motion/svg"]
             .into_iter()
             .flat_map(|sub| std::fs::read_dir(proj_dir.join(sub)).into_iter().flatten().flatten().map(|e| e.path()))
@@ -295,66 +293,14 @@ pub fn asset_id_for_import(typed_name: Option<&str>, path: &Path) -> String {
         .unwrap_or_else(|| "asset".to_string())
 }
 
-pub const CRAFT_APPS: &[(&str, &str, u16)] = &[
-    ("designcraft", "designcraft-cli", 7979),
-    ("photocraft", "photocraft-cli", 7878),
-    ("vectorcraft", "vectorcraft-cli", 7980),
-    ("effectcraft", "effectcraft-cli", 9877),
-    ("filmcraft", "filmcraft-cli", 9876),
+pub const CRAFT_APPS: &[(&str, &str)] = &[
+    ("designcraft", "designcraft-cli"),
+    ("photocraft", "photocraft-cli"),
+    ("vectorcraft", "vectorcraft-cli"),
+    ("effectcraft", "effectcraft-cli"),
+    ("filmcraft", "filmcraft-cli"),
+    ("anicraft", "anicraft-cli"),
 ];
-
-const CONTROL_REPLY_LIMIT: u64 = 16 * 1024 * 1024;
-
-pub fn control_endpoint(app: &str) -> Option<(SocketAddr, Option<String>)> {
-    let (_, _, default_port) = CRAFT_APPS.iter().find(|(id, _, _)| *id == app)?;
-    let prefix = app.to_ascii_uppercase();
-    let token = std::env::var(format!("{prefix}_CONTROL_TOKEN")).ok().map(|s| s.trim().to_owned()).filter(|s| !s.is_empty());
-    if matches!(app, "filmcraft" | "photocraft") && token.is_none() {
-        return None;
-    }
-    let port = std::env::var(format!("{prefix}_CONTROL_PORT")).ok().and_then(|s| s.trim().parse::<u16>().ok()).unwrap_or(*default_port);
-    Some((SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, port)), token))
-}
-
-pub fn control_probe(app: &str) -> bool {
-    let Some((addr, _)) = control_endpoint(app) else {
-        return false;
-    };
-    TcpStream::connect_timeout(&addr, Duration::from_millis(80)).is_ok()
-}
-
-pub fn control_call(app: &str, method: &str, params: Value) -> std::result::Result<Value, String> {
-    let (addr, token) = control_endpoint(app).ok_or_else(|| format!("{app} --control endpoint is unavailable or requires auth token"))?;
-    let mut stream = TcpStream::connect_timeout(&addr, Duration::from_millis(500)).map_err(|e| format!("{app} ({addr}): {e}"))?;
-    let _ = stream.set_read_timeout(Some(Duration::from_secs(30)));
-    let _ = stream.set_write_timeout(Some(Duration::from_secs(5)));
-    let mut req = json!({"id": 1, "method": method, "params": params});
-    if let Some(tok) = token {
-        req["token"] = json!(tok);
-    }
-    let line = serde_json::to_string(&req).map_err(|e| e.to_string())?;
-    stream.write_all(line.as_bytes()).map_err(|e| format!("{app} write: {e}"))?;
-    stream.write_all(b"\n").map_err(|e| format!("{app} write: {e}"))?;
-    let _ = stream.flush();
-
-    let mut reply_line = String::new();
-    let mut reader = BufReader::new(stream).take(CONTROL_REPLY_LIMIT);
-    reader.read_line(&mut reply_line).map_err(|e| format!("{app} read: {e}"))?;
-    if reply_line.trim().is_empty() {
-        return Err(format!("{app} closed connection without a reply"));
-    }
-    let resp: Value = serde_json::from_str(reply_line.trim()).map_err(|e| format!("{app} reply JSON: {e}"))?;
-    if resp["ok"] == true {
-        Ok(resp.get("result").cloned().unwrap_or(Value::Null))
-    } else {
-        let msg = resp.pointer("/error/message").and_then(Value::as_str).or_else(|| resp["error"].as_str()).unwrap_or("unknown control error");
-        Err(format!("{app} {method}: {msg}"))
-    }
-}
-
-pub fn control_exec(app: &str, command: &str, params: Value) -> std::result::Result<Value, String> {
-    control_call(app, "engine.execute", json!({"command": command, "params": params}))
-}
 
 pub fn run_cli<S: AsRef<str>>(cli_name: &str, args: &[S], stdin_text: Option<&str>) -> std::result::Result<String, String> {
     let exe = resolve_executable_path(cli_name).ok_or_else(|| format!("`{cli_name}` is not installed on PATH"))?;

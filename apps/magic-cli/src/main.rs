@@ -9,16 +9,16 @@ use std::io::{BufRead, Write};
 
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use serde_json::{Value, json};
-use subcommands::{AnimationArgs, CaptionsArgs, ControlsArgs, ExportArgs, FinishArgs, MeshCliArgs, ProjectArgs, RecoveryArgs, StoryboardArgs, StudioArgs};
+use subcommands::{AnimationArgs, CaptionsArgs, ControlsArgs, ExportArgs, MeshCliArgs, ProjectArgs, RecoveryArgs, StudioArgs};
 
 const AFTER_HELP: &str = "\
 CREATE:     magic-cli new [existing_project] --audio song.wav --name \"My Song\"
 PROJECT:    magic-cli project status
 RECOVERY:   magic-cli recovery list | restore [run_id] | discard [--all] [run_id]
-STORYBOARD: magic-cli storyboard status | open | new | add-section <name> | add-element <section> <name> | export [out]
+STORYBOARD: magic-cli storyboard pages [page=0] | set [page=N] label=<field> text=\"...\" | image=PATH | render [page=0] | open | new
 STUDIO:     magic-cli studio map-tracks --map lyrics:V3,V5:chorus --map motion:V4:beats
 CONTROLS:   magic-cli controls [filter] [--stage studio] [--live]
-FINISH:     magic-cli finish <op> [key=val ...] | magic-cli export [out.mp4] --codec prores
+EXPORT:     magic-cli export [out.mp4] --codec prores
 MCP:        magic-cli mcp [--connect 127.0.0.1:9875 | --headless]
 LIVE:       magic --control 9875, then magic-cli app --port 9875 ui.inspect";
 
@@ -92,8 +92,6 @@ enum Cmd {
     Animation(AnimationArgs),
     /// Ergonomic Studio commands (`map-tracks` batch track-to-group mapping into Lyrics & Motion)
     Studio(StudioArgs),
-    /// Thin Storyboard commands (`status`, `open`, `new`, `add-section`, `add-element`, `export`)
-    Storyboard(StoryboardArgs),
     /// List engine commands (`id` and `label`; `describe` shows one in full)
     Commands { filter: Option<String> },
     /// List all `--control` RPC methods (`:9875`) and stage commands
@@ -110,8 +108,6 @@ enum Cmd {
     Status,
     /// Pure-Rust `craft-mesh` 3D scene inspection & conversion (`inspect`, `convert` across `.glb`, `.gltf`, `.obj`, `.fbx`, `.stl`, `.ply`, `.3mf`)
     Mesh(MeshCliArgs),
-    /// Execute a FilmCraft Studio finishing operation (`T32`–`T42`: edit, trim, color, FX, audio, mixer, titles)
-    Finish(FinishArgs),
     /// Export master film via FilmCraft's pure-Rust codecs (`H.264`, `HEVC`, `ProRes`, `DNxHR`, `APV`, `AV1`, `MXF`, `EXR`, `Opus`) (`T42`)
     Export(ExportArgs),
     /// Bidirectional `V3` Lyrics ↔ `C1` FilmCraft broadcast captions (`Subtitle`, `CEA-608`, `CEA-708`, `Teletext`) (`T26`)
@@ -296,7 +292,7 @@ fn inspect(target: &mut Target, what: Option<String>) -> Result<(), String> {
         "project" => target.call("workshop.status", json!({})).or_else(|_| target.call("project.catalog", json!({})))?,
         "project.status" | "status" => target.call("project.status", json!({})).or_else(|_| target.call("workshop.status", json!({})))?,
         "recovery" => target.call("recovery.list", json!({}))?,
-        "storyboard" => target.call("storyboard.status", json!({}))?,
+        "storyboard" => target.call("storyboard.pages", json!({}))?,
         "timeline" | "sequence" => target.call("video.timeline", json!({}))?,
         "doctor" => target.call("app.doctor", json!({}))?,
         "ui" => target.call("ui.inspect", json!({}))?,
@@ -312,7 +308,7 @@ fn inspect(target: &mut Target, what: Option<String>) -> Result<(), String> {
                 "mode": if target.connect.is_some() { "live" } else { "headless" },
                 "ui": ui_live,
                 "project": proj,
-                "storyboard": target.call("storyboard.status", json!({})).ok(),
+                "storyboard": target.call("storyboard.pages", json!({})).ok(),
                 "timeline": target.call("video.timeline", json!({})).ok(),
                 "doctor": target.call("app.doctor", json!({})).ok(),
             })
@@ -522,7 +518,6 @@ fn run(cli: Cli) -> Result<(), String> {
             Cmd::New(args) => run_new(&mut target, args),
             Cmd::Animation(args) => subcommands::run_animation(&mut target, args),
             Cmd::Studio(args) => subcommands::run_studio(&mut target, args),
-            Cmd::Storyboard(args) => subcommands::run_storyboard(&mut target, args),
             Cmd::Commands { filter } => list_commands(&mut target, filter),
             Cmd::Controls(args) => subcommands::run_controls(&mut target, args),
             Cmd::Describe { id } => describe(&id),
@@ -535,7 +530,6 @@ fn run(cli: Cli) -> Result<(), String> {
                 Ok(())
             }
             Cmd::Mesh(args) => subcommands::run_mesh_cli(&mut target, args),
-            Cmd::Finish(args) => subcommands::run_finish(&mut target, args),
             Cmd::Export(args) => subcommands::run_export(&mut target, args),
             Cmd::Captions(args) => subcommands::run_captions(&mut target, args),
             Cmd::Exec { command, params, arguments } => {
@@ -568,75 +562,5 @@ fn main() {
     if let Err(err) = run(cli) {
         let _ = writeln!(std::io::stderr(), "{err}");
         std::process::exit(1);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use clap::Parser;
-    use serde_json::json;
-
-    use super::{AFTER_HELP, Cli, Cmd, build_new_params};
-    use crate::subcommands::{StudioCmd, build_storyboard_call, parse_studio_mappings};
-
-    #[test]
-    fn cli_new_existing_project_and_removed_wizard_archive_flags() {
-        assert!(!AFTER_HELP.contains("ARCHIVE:"));
-        assert!(!AFTER_HELP.contains("--wizard"));
-
-        let parsed = Cli::try_parse_from(["magic-cli", "new", "./legacy-song", "--audio", "song.wav", "--name", "My Song"]).unwrap();
-        let Some(Cmd::New(args)) = parsed.command else {
-            panic!("expected Cmd::New");
-        };
-        let params = build_new_params(args).unwrap();
-        assert_eq!(params["existing_project"], json!("./legacy-song"));
-        assert_eq!(params["audio"], json!("song.wav"));
-        assert_eq!(params["name"], json!("My Song"));
-
-        assert!(Cli::try_parse_from(["magic-cli", "new", "--wizard", "--audio", "song.wav"]).is_err());
-    }
-
-    #[test]
-    fn cli_studio_map_tracks_and_storyboard_subcommands_forward_cleanly() {
-        let studio = Cli::try_parse_from(["magic-cli", "studio", "map-tracks", "--map", "lyrics:V3,V5:chorus", "--map", "motion:V4:beats"]).unwrap();
-        let Some(Cmd::Studio(s_args)) = studio.command else {
-            panic!("expected Cmd::Studio");
-        };
-        let StudioCmd::MapTracks(m_args) = s_args.command;
-        let payload = parse_studio_mappings(&m_args).unwrap();
-        assert_eq!(
-            payload,
-            json!({
-                "mappings": [
-                    {"target": "lyrics", "tracks": ["V3", "V5"], "group": "chorus"},
-                    {"target": "motion", "tracks": ["V4"], "group": "beats"}
-                ]
-            })
-        );
-
-        for (argv, expected_id) in [
-            (vec!["magic-cli", "storyboard", "status"], "storyboard.status"),
-            (vec!["magic-cli", "storyboard", "open"], "storyboard.open"),
-            (vec!["magic-cli", "storyboard", "new"], "storyboard.new"),
-            (vec!["magic-cli", "storyboard", "add-section", "Chorus"], "storyboard.add_section"),
-            (vec!["magic-cli", "storyboard", "add-element", "Chorus", "LeadHero"], "storyboard.add_element"),
-            (vec!["magic-cli", "storyboard", "export", "out/spreads"], "storyboard.export"),
-        ] {
-            let cli = Cli::try_parse_from(argv).unwrap();
-            let Some(Cmd::Storyboard(sb)) = cli.command else {
-                panic!("expected Cmd::Storyboard");
-            };
-            let (cmd_id, _) = build_storyboard_call(sb.command).unwrap();
-            assert_eq!(cmd_id, expected_id);
-        }
-
-        // Middleman wrapper subcommands `film` and `effect` were removed in favor of direct FilmCraft / EffectCraft CLI/control usage.
-        let film = Cli::try_parse_from(["magic-cli", "film", "exec", "sequence.inspect"]).unwrap();
-        let Some(Cmd::Registry(tokens)) = film.command else { panic!("expected removed film to not be a first-class subcommand") };
-        assert!(super::resolve_shorthand(&tokens).is_err());
-
-        let effect = Cli::try_parse_from(["magic-cli", "effect", "exec", "comp.info"]).unwrap();
-        let Some(Cmd::Registry(tokens)) = effect.command else { panic!("expected removed effect to not be a first-class subcommand") };
-        assert!(super::resolve_shorthand(&tokens).is_err());
     }
 }

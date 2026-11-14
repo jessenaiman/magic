@@ -52,19 +52,20 @@ pub fn root() -> Result<PathBuf> {
     configured_root(open_store().get())
 }
 
-/// Resolve the user's custom `.designcraft` / `.idml` / `.indt` starter template (`U25`) or optional
+/// Resolve the user's custom `.designcraft` starter template (`U25`) or optional
 /// user-placed template in `~/.local/share/magic/templates/`. Never writes or mutates starter files.
 pub fn storyboard_template_path(s: &Session) -> Option<PathBuf> {
     let raw = s.settings.prefs().project.storyboard_template;
     let trimmed = raw.trim();
     if !trimmed.is_empty() && trimmed != "magic" {
         let custom = crate::workspace::resolve_workspace_path(s, trimmed);
-        if custom.is_file() && crate::workspace::has_extension(&custom, &["designcraft", "idml", "indt"]) {
+        if custom.is_file() && crate::workspace::has_extension(&custom, &["designcraft"]) {
             return Some(custom);
         }
     }
     let base = crate::workspace::ensure_default_app_folders()?;
-    ["templates/storyboard.designcraft", "templates/storyboard.idml", "templates/storyboard.indt"].into_iter().map(|rel| base.join(rel)).find(|p| p.is_file())
+    let starter = base.join("templates/storyboard.designcraft");
+    starter.is_file().then_some(starter)
 }
 
 pub(crate) fn stored_settings() -> Value {

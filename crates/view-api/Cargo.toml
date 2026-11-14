@@ -1,0 +1,23 @@
+[package]
+name = "magic-view-api"
+description = "Shared stage view traits, docking types, palette, icons, widgets, and timeline primitives for Magic Studio"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+craft-atomic = { workspace = true }
+craft-font-catalog = { workspace = true }
+craft-font-manager = { workspace = true }
+craft-ui = { workspace = true }
+egui = { workspace = true }
+image = { workspace = true }
+magic-engine = { workspace = true }
+magic-util = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }

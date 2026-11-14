@@ -74,7 +74,7 @@ fn specs_project() -> Vec<CommandSpec> {
         ),
         cmd_spec!(
             "project.new",
-            "New Project (Requires Audio Track + Transcribes to FilmCraft & Initializes DeckCraft Storyboard)",
+            "New Project (Requires Audio Track + Transcribes to FilmCraft & Initializes DesignCraft Storyboard)",
             ["File"],
             Some("Cmd+N"),
             "{\"path\":\"folder/name.magic, or root + name\",\"root\":\"folder\",\"name\":\"project title\",\"mode\":\"project (song, requires audio) | animation\",\"audio\":\"required song audio path for song projects\",\"transcript\":\"optional pre-timed transcript JSON\",\"existing_project\":\"optional non-.magic folder to archive into original-project.zip\",\"overwrite\":false}",
@@ -233,79 +233,46 @@ fn specs_workshop() -> Vec<CommandSpec> {
     ]
 }
 
-fn specs_storyboard() -> Vec<CommandSpec> {
+pub(crate) fn specs_storyboard() -> Vec<CommandSpec> {
     vec![
         query_spec!(
             "storyboard.status",
-            "Inspect DesignCraft Storyboard (.designcraft / .idml) & Rendered Pages",
-            "{\"path\":\"optional storyboard.designcraft\"}",
+            "Read-Only Status & Rendered Pages of Standalone storyboard.designcraft",
+            "{\"path\":\"optional storyboard.designcraft\",\"page\":\"optional 0-based page index\"}",
             crate::cmd::storyboard::cmd_storyboard_status
         ),
         query_spec!(
             "storyboard.pages",
-            "Inspect DesignCraft Storyboard Pages (Alias for storyboard.status)",
-            "{\"path\":\"optional storyboard.designcraft\"}",
-            crate::cmd::storyboard::cmd_storyboard_status
-        ),
-        query_spec!(
-            "storyboard.check",
-            "Inspect DesignCraft Storyboard Readiness (Alias for storyboard.status)",
-            "{\"path\":\"optional storyboard.designcraft\"}",
-            crate::cmd::storyboard::cmd_storyboard_status
+            "List Rendered PNG Pages of Standalone storyboard.designcraft (Read-Only)",
+            "{\"path\":\"optional storyboard.designcraft\",\"page\":\"optional 0-based page index\"}",
+            crate::cmd::storyboard::cmd_storyboard_pages
         ),
         cmd_spec!(
-            "storyboard.thumbnail",
-            "Render Storyboard Page Previews via designcraft-cli (Alias for storyboard.export)",
+            "storyboard.new",
+            "Initialize storyboard.designcraft from Starter Template and Render Pages",
             ["Storyboard"],
             None,
-            "{\"format\":\"png\"}",
+            "{\"path\":\"optional storyboard.designcraft\",\"template\":\"optional .designcraft\",\"overwrite\":false}",
             always,
-            crate::cmd::storyboard::cmd_storyboard_export
+            crate::cmd::storyboard::cmd_storyboard_new
+        ),
+        cmd_spec!(
+            "storyboard.render",
+            "Render One Page (or All Pages) of storyboard.designcraft to PNG via designcraft-cli",
+            ["Storyboard"],
+            None,
+            "{\"page\":\"optional 0-based page (omit for all pages)\",\"scale\":1.5,\"output\":\"optional\"}",
+            always,
+            crate::cmd::storyboard::cmd_storyboard_render
         ),
         cmd_spec!(
             "storyboard.open",
-            "Open Storyboard Document in Host DesignCraft (.designcraft / .idml)",
+            "Open storyboard.designcraft in DesignCraft",
             ["Storyboard"],
             None,
             "{\"path\":\"optional storyboard.designcraft\"}",
             always,
             crate::cmd::storyboard::cmd_storyboard_open
-        ),
-        cmd_spec!(
-            "storyboard.new",
-            "Create DesignCraft Storyboard From Starter Template or Flexible Seed",
-            ["Storyboard"],
-            None,
-            "{\"path\":\"optional storyboard.designcraft\",\"template\":\"optional .designcraft/.idml/.indt\",\"width\":612,\"height\":792,\"overwrite\":false}",
-            always,
-            crate::cmd::storyboard::cmd_storyboard_new
-        ),
-        cmd_spec!(
-            "storyboard.add_section",
-            "Add Section to Storyboard Document via designcraft-cli",
-            ["Storyboard"],
-            None,
-            "{\"section\":\"section name\",\"path\":\"optional storyboard.designcraft\"}",
-            always,
-            crate::cmd::storyboard::cmd_storyboard_add_section
-        ),
-        cmd_spec!(
-            "storyboard.add_element",
-            "Add Text or Placed Image Element to Storyboard Section via designcraft-cli",
-            ["Storyboard"],
-            None,
-            "{\"section\":\"section name\",\"name\":\"element name\",\"text\":\"optional text\",\"image\":\"optional image path\"}",
-            always,
-            crate::cmd::storyboard::cmd_storyboard_add_element
-        ),
-        cmd_spec!(
-            "storyboard.export",
-            "Export Storyboard Document to PDF, IDML, EPUB, or Page PNGs via designcraft-cli",
-            ["Storyboard"],
-            None,
-            "{\"format\":\"png|pdf|idml|epub\",\"output\":\"optional file\",\"png_dir\":\"optional storyboard/slides\"}",
-            always,
-            crate::cmd::storyboard::cmd_storyboard_export
         ),
     ]
 }

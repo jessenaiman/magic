@@ -115,13 +115,12 @@ pub fn fields_with_cat() -> Vec<(&'static str, Field)> {
             "project",
             Field {
                 key: "project.storyboard_template",
-                label: "Custom Storyboard Starter Template (.designcraft / .idml / .indt)",
+                label: "Custom Storyboard Starter Template (.designcraft)",
                 kind: Kind::Text,
                 wired: true,
                 enabled_by: None,
             },
         ),
-        ("project", Field { key: "project.storyboard_format", label: "Storyboard Reference Format", kind: Kind::Text, wired: true, enabled_by: None }),
         (
             "lyrics",
             Field {

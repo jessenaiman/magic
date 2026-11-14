@@ -6,9 +6,6 @@ Every non-code asset bundled in this repository is listed below with its author,
 | :--- | :--- | :--- | :--- | :--- |
 | `assets/app-icon/icon.png` | Jesse Naiman | Original Magic Studio artwork | `LicenseRef-Magic-Studio-NonResale` | Desktop window & launcher icon |
 | `docs/brand/LICENSE-brand.txt` | Jesse Naiman | Brand usage notice | `LicenseRef-Magic-Studio-NonResale` | Brand mark terms |
-| `figcraft/magic-studio-master.figcraft` | Jesse Naiman | Original FigCraft UI design package | `LicenseRef-Magic-Studio-NonResale` | Canonical UI wireframes & layout sheets |
-| `figcraft/diagrams/09-mayhem-diagram.svg` | Jesse Naiman | Original vector architecture diagram | `LicenseRef-Magic-Studio-NonResale` | Mayhem telemetry layout diagram |
-| `figcraft/diagrams/10-backstage-tui-diagram.svg` | Jesse Naiman | Original vector architecture diagram | `LicenseRef-Magic-Studio-NonResale` | Backstage (`apps/magic-tui`) 4-pane diagram |
 | `assets/icons/archive-zip.svg` | Jesse Naiman / Magic Studio | Original clean-room 24x24 vector icon | `MIT OR Apache-2.0` | ZIP package & export bundle icon |
 | `assets/icons/bezier-spline.svg` | Jesse Naiman / Magic Studio | Original clean-room 24x24 vector icon | `MIT OR Apache-2.0` | Cubic Bezier spline & tangent handles icon |
 | `assets/icons/captions-cc.svg` | Jesse Naiman / Magic Studio | Original clean-room 24x24 vector icon | `MIT OR Apache-2.0` | Broadcast closed-captions (SRT/VTT/TTML/CEA-608/708) icon |

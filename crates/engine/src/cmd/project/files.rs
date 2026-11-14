@@ -91,9 +91,7 @@ fn visual_kind(class: &FileClass) -> &'static str {
 fn classify_craft_or_video(ext: &str) -> Option<FileClass> {
     match ext {
         "magic" => Some(FileClass::new("project_files", "Project & Supporting Files", 6, 0, "MAGIC", "Open", true)),
-        "designcraft" | "idml" | "indt" => {
-            Some(FileClass::new("designcraft", "DesignCraft Storyboard (.designcraft / .idml)", 1, 1, "DC", "Open in DesignCraft", true))
-        }
+        "designcraft" => Some(FileClass::new("designcraft", "DesignCraft Storyboard (.designcraft)", 1, 1, "DC", "Open in DesignCraft", true)),
         "fcproj" => Some(FileClass::new("filmcraft", "FilmCraft (.fcproj)", 0, 1, "FC", "Open in FilmCraft", true)),
         "ecproj" => Some(FileClass::new("effect_film", "EffectCraft (.ecproj)", 2, 1, "EC", "Open in EffectCraft", true)),
         "mp4" | "mov" | "webm" | "mkv" => {
@@ -211,7 +209,7 @@ fn resolve_craft_preview(project_dir: &Path, path: &Path, badge: &str, modified_
     }
     match badge {
         "FC" => first_png_in_dir(&project_dir.join("film/frames")),
-        "DC" => first_png_in_dir(&project_dir.join("storyboard/slides")),
+        "DC" => first_png_in_dir(&project_dir.join("storyboard/renders")),
         "EC" => path.parent().and_then(|p| first_png_in_dir(&p.join(".preview")).or_else(|| first_png_in_dir(p))),
         _ => None,
     }
@@ -409,7 +407,7 @@ pub fn cmd_project_files(s: &mut Session, _params: &Value) -> Result<Value> {
 
 fn target_subfolder_for_ext(ext: &str) -> &'static str {
     match ext {
-        "designcraft" | "idml" | "indt" => ".",
+        "designcraft" => ".",
         "ecproj" => "effects",
         "fcproj" | "mp4" | "mov" | "webm" | "mkv" | "srt" | "lrc" => "film",
         _ if AUDIO_EXTENSIONS.contains(&ext) => "audio",

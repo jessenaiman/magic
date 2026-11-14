@@ -20,7 +20,7 @@ pub(crate) mod preview;
 pub(crate) mod stage;
 pub(crate) mod validate;
 
-pub use compose::{cmd_words_apply, cmd_words_compose, cmd_words_design, cmd_words_effect_install, cmd_words_track};
+pub use compose::{cmd_words_apply, cmd_words_compose, cmd_words_design, cmd_words_track};
 pub(crate) use stage::one_of;
 pub use stage::{cmd_words_effects, cmd_words_link, cmd_words_lyrics_view, cmd_words_read, cmd_words_save};
 

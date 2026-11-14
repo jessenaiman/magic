@@ -1378,6 +1378,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "craft-atomic"
+version = "0.1.0"
+source = "git+https://github.com/storytold/craft-libs?rev=8f5a2831614e632f91ad367f7af2a6e5b61b9529#8f5a2831614e632f91ad367f7af2a6e5b61b9529"
+dependencies = [
+ "rustix 1.1.6",
+]
+
+[[package]]
 name = "craft-audio"
 version = "0.1.0"
 source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
@@ -1486,6 +1494,28 @@ version = "0.1.0"
 source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
 
 [[package]]
+name = "craft-ext-core"
+version = "0.1.0"
+source = "git+https://github.com/storytold/craft-extensions?branch=main#964c71574affa68da560a19d0efc4bb1f0263aee"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "craft-ext-store"
+version = "0.1.0"
+source = "git+https://github.com/storytold/craft-extensions?branch=main#964c71574affa68da560a19d0efc4bb1f0263aee"
+dependencies = [
+ "craft-atomic 0.1.0 (git+https://github.com/storytold/craft-libs?rev=8f5a2831614e632f91ad367f7af2a6e5b61b9529)",
+ "craft-ext-core",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
+ "zip",
+]
+
+[[package]]
 name = "craft-file-formats"
 version = "0.1.0"
 source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
@@ -1503,7 +1533,7 @@ name = "craft-flags"
 version = "0.1.0"
 source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
 dependencies = [
- "craft-atomic",
+ "craft-atomic 0.1.0 (git+https://github.com/storytold/craft-libs?branch=main)",
  "dirs",
  "toml_edit",
 ]
@@ -1539,7 +1569,7 @@ version = "0.1.0"
 source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
 dependencies = [
  "cap-primitives",
- "craft-atomic",
+ "craft-atomic 0.1.0 (git+https://github.com/storytold/craft-libs?branch=main)",
  "craft-font-catalog",
  "flate2",
  "log",
@@ -1704,7 +1734,7 @@ version = "0.1.0"
 source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
 dependencies = [
  "blake3",
- "craft-atomic",
+ "craft-atomic 0.1.0 (git+https://github.com/storytold/craft-libs?branch=main)",
  "craft-pcraft-format",
  "craft-zip",
  "ruzstd",
@@ -1773,7 +1803,7 @@ name = "craft-settings"
 version = "0.1.0"
 source = "git+https://github.com/storytold/craft-libs?branch=main#7ad4765ee55496d0ccdb7659ad7a6375c7bbb484"
 dependencies = [
- "craft-atomic",
+ "craft-atomic 0.1.0 (git+https://github.com/storytold/craft-libs?branch=main)",
  "dirs",
  "serde",
  "toml_edit",
@@ -3705,7 +3735,7 @@ dependencies = [
  "craft-ai-client",
  "craft-ai-egui",
  "craft-ai-native",
- "craft-atomic",
+ "craft-atomic 0.1.0 (git+https://github.com/storytold/craft-libs?branch=main)",
  "craft-audio",
  "craft-dialogs",
  "craft-flags",
@@ -3753,7 +3783,7 @@ dependencies = [
  "craft-ai-features",
  "craft-ai-native",
  "craft-anicraft-format",
- "craft-atomic",
+ "craft-atomic 0.1.0 (git+https://github.com/storytold/craft-libs?branch=main)",
  "craft-audio",
  "craft-captions",
  "craft-designcraft-format",
@@ -3761,6 +3791,8 @@ dependencies = [
  "craft-docpath",
  "craft-drawingml",
  "craft-ecproj-format",
+ "craft-ext-core",
+ "craft-ext-store",
  "craft-file-formats",
  "craft-flags",
  "craft-font-catalog",
@@ -3808,31 +3840,24 @@ dependencies = [
 name = "magic-ui-egui"
 version = "0.19.0"
 dependencies = [
- "craft-ai-agents",
  "craft-ai-client",
  "craft-ai-core",
  "craft-ai-egui",
- "craft-ai-features",
- "craft-ai-native",
- "craft-atomic",
- "craft-flags",
- "craft-font-catalog",
- "craft-font-manager",
- "craft-font-store",
  "craft-keymap",
  "craft-menu",
- "craft-text",
- "craft-timeline",
  "craft-ui",
- "craft-update",
  "craft-window",
  "egui",
  "egui_extras",
- "image",
- "log",
  "magic-engine",
  "magic-util",
- "serde",
+ "magic-view-animation",
+ "magic-view-api",
+ "magic-view-lyrics",
+ "magic-view-motion",
+ "magic-view-project",
+ "magic-view-storyboard",
+ "magic-view-studio",
  "serde_json",
 ]
 
@@ -3841,7 +3866,7 @@ name = "magic-util"
 version = "0.19.0"
 dependencies = [
  "craft-anicraft-format",
- "craft-atomic",
+ "craft-atomic 0.1.0 (git+https://github.com/storytold/craft-libs?branch=main)",
  "craft-audio",
  "craft-doc",
  "craft-docpath",
@@ -3868,6 +3893,80 @@ dependencies = [
  "serde_json",
  "skrifa 0.47.0",
  "thiserror 2.0.21",
+]
+
+[[package]]
+name = "magic-view-animation"
+version = "0.19.0"
+dependencies = [
+ "egui",
+ "magic-view-api",
+ "serde_json",
+]
+
+[[package]]
+name = "magic-view-api"
+version = "0.19.0"
+dependencies = [
+ "craft-atomic 0.1.0 (git+https://github.com/storytold/craft-libs?branch=main)",
+ "craft-font-catalog",
+ "craft-font-manager",
+ "craft-ui",
+ "egui",
+ "image",
+ "magic-engine",
+ "magic-util",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "magic-view-lyrics"
+version = "0.19.0"
+dependencies = [
+ "craft-font-catalog",
+ "egui",
+ "magic-view-api",
+ "serde_json",
+]
+
+[[package]]
+name = "magic-view-motion"
+version = "0.19.0"
+dependencies = [
+ "egui",
+ "magic-engine",
+ "magic-view-api",
+ "serde_json",
+]
+
+[[package]]
+name = "magic-view-project"
+version = "0.19.0"
+dependencies = [
+ "egui",
+ "magic-engine",
+ "magic-util",
+ "magic-view-api",
+ "serde_json",
+]
+
+[[package]]
+name = "magic-view-storyboard"
+version = "0.19.0"
+dependencies = [
+ "egui",
+ "magic-view-api",
+ "serde_json",
+]
+
+[[package]]
+name = "magic-view-studio"
+version = "0.19.0"
+dependencies = [
+ "egui",
+ "magic-view-api",
+ "serde_json",
 ]
 
 [[package]]
@@ -8046,6 +8145,7 @@ dependencies = [
  "typed-path",
  "windows-sys 0.61.2",
  "zeroize",
+ "zopfli",
 ]
 
 [[package]]
@@ -8059,6 +8159,18 @@ name = "zmij"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
+
+[[package]]
+name = "zopfli"
+version = "0.8.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aaf7fc5d30c28483d93805c4a5e12b05bbb52407fa67c5f8bd552374cd01fb11"
+dependencies = [
+ "bumpalo",
+ "crc32fast",
+ "log",
+ "simd-adler32",
+]
 
 [[package]]
 name = "zune-core"

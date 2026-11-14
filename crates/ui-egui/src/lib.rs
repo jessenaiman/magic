@@ -1,36 +1,128 @@
-//! `egui` + `storytold/craft-libs` workstation shell for Magic Studio.
-//!
-//! Built on [`craft_ui::docking`] (`docs/craft-reference/craft-libs/docs/ui-docking.md`),
-//! [`craft_ui::fonts::UiFonts`], [`craft_ui::theme::WidgetPalette`], [`craft_menu`],
-//! [`craft_window`], [`craft_font_manager::FontsPanel`], shared Craft-document timelines
-//! (`timeline.rs`), workstation `Options` & diagnostics (`options_modal.rs`, `modals.rs`), and
-//! GPU `egui::Painter` controls (`controls.rs`, `filmbar.rs`).
+//! `egui` + `storytold/craft-libs` workstation shell hosting isolated per-stage view crates
+//! through [`StageView`] and [`HomeView`] contracts in [`magic_view_api`].
 
+#![forbid(unsafe_code)]
 #![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable))]
 
+use craft_ai_client::{Choice, RoleStatus};
+use craft_ai_core::history::HistoryLog;
+use craft_ai_egui::{ConnectionPanel, HistoryViewState};
 use craft_ui::fonts::{CraftFace, I18nScripts, UiFonts};
+use magic_view_animation::AnimationView;
+use magic_view_lyrics::LyricsView;
+use magic_view_motion::MotionView;
+use magic_view_project::{MagicHomeView, ProjectView};
+use magic_view_storyboard::StoryboardView;
+use magic_view_studio::StudioView;
 
-pub mod controls;
+pub use magic_view_api as view_api;
+pub use magic_view_api::{
+    AccentChoice, ActiveModal, AiUiState, AutomationRegistry, BtnSpec, CachedPayloads, HomeView, InterfaceStyle, MagicPalette, PickerTarget,
+    SharedTimelineState, StageView, ThemeMode, UiAction, UiShellState, ViewCtx, ViewMode, action_button, controls, disabled_todo_button, editorial, filmbar,
+    fonts_ui, icons, state, theme, timeline, widgets,
+};
+
 pub mod docking;
-pub mod editorial;
-pub mod filmbar;
-pub mod fonts_ui;
-pub mod icons;
 pub mod menus;
 pub mod modals;
 pub mod options_modal;
 pub mod shell;
-pub mod state;
-pub mod state_views;
-pub mod theme;
-pub mod timeline;
-pub mod views;
-pub mod widgets;
 
 pub use docking::{DockFrameOutcome, DockWorkspaceState, PRESET_NAMES as WORKSPACE_PRESETS, PanelId};
-pub use state::{ActiveModal, PickerTarget, UiAction, UiShellState, ViewCtx, ViewMode};
-pub use theme::{AccentChoice, InterfaceStyle, MagicPalette, ThemeMode};
-pub use widgets::AutomationRegistry;
+
+/// Cached role status and choices so `StatusView` never polls the OS keychain per frame.
+pub struct CachedAiRole {
+    pub id: String,
+    pub label: String,
+    pub status: RoleStatus,
+    pub choices: Vec<Choice>,
+    pub has_override: bool,
+}
+
+/// Owns the isolated view crates (`Project`, `01 Storyboard`, `02 Animations`, `03 Lyrics`,
+/// `04 Motion`, `05 Studio`) plus shared `craft-ai-egui` widget state inside the shell.
+pub struct StageHost {
+    home: MagicHomeView,
+    project: ProjectView,
+    storyboard: StoryboardView,
+    animation: AnimationView,
+    lyrics: LyricsView,
+    motion: MotionView,
+    studio: StudioView,
+    pub ai_panel: Option<ConnectionPanel>,
+    pub ai_history: HistoryViewState,
+    pub ai_log: HistoryLog,
+    pub ai_log_loaded: bool,
+    pub ai_roles: Vec<CachedAiRole>,
+    pub ai_roles_error: Option<String>,
+    pub ai_roles_loaded: bool,
+}
+
+impl Default for StageHost {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl StageHost {
+    pub fn new() -> Self {
+        Self {
+            home: MagicHomeView::new(),
+            project: ProjectView::new(),
+            storyboard: StoryboardView::new(),
+            animation: AnimationView::new(),
+            lyrics: LyricsView::new(),
+            motion: MotionView::new(),
+            studio: StudioView::new(),
+            ai_panel: None,
+            ai_history: HistoryViewState::default(),
+            ai_log: HistoryLog::default(),
+            ai_log_loaded: false,
+            ai_roles: Vec::new(),
+            ai_roles_error: None,
+            ai_roles_loaded: false,
+        }
+    }
+
+    pub fn home(&self) -> &dyn HomeView {
+        &self.home
+    }
+
+    pub fn home_mut(&mut self) -> &mut dyn HomeView {
+        &mut self.home
+    }
+
+    pub fn stage(&self, mode: ViewMode) -> &dyn StageView {
+        match mode {
+            ViewMode::Home | ViewMode::Project => &self.project,
+            ViewMode::Storyboard => &self.storyboard,
+            ViewMode::Animation => &self.animation,
+            ViewMode::Design => &self.lyrics,
+            ViewMode::Motion => &self.motion,
+            ViewMode::Studio => &self.studio,
+        }
+    }
+
+    pub fn stage_mut(&mut self, mode: ViewMode) -> &mut dyn StageView {
+        match mode {
+            ViewMode::Home | ViewMode::Project => &mut self.project,
+            ViewMode::Storyboard => &mut self.storyboard,
+            ViewMode::Animation => &mut self.animation,
+            ViewMode::Design => &mut self.lyrics,
+            ViewMode::Motion => &mut self.motion,
+            ViewMode::Studio => &mut self.studio,
+        }
+    }
+
+    pub fn reset_for_project_switch(&mut self) {
+        self.project.reset_for_project();
+        self.storyboard.reset_for_project();
+        self.animation.reset_for_project();
+        self.lyrics.reset_for_project();
+        self.motion.reset_for_project();
+        self.studio.reset_for_project();
+    }
+}
 
 /// Install `egui_extras` image/SVG loaders and `craft_ui::fonts::UiFonts` (`system_fonts` +
 /// `color_fonts` script font chain shared with `craft-font-catalog`).

@@ -1,4 +1,4 @@
-//! Kinetic-lyric frame preview via live `EffectCraft :9877` / `effectcraft-cli render-frame --transparent`,
+//! Kinetic-lyric frame preview via headless `effectcraft-cli render-frame --transparent`,
 //! falling back to embedded `craft-doc` preview only when EffectCraft is not installed.
 
 use serde_json::{Value, json};

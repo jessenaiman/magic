@@ -80,14 +80,6 @@ pub fn load_rgba(input: &Path) -> Result<RgbaImage> {
 }
 
 fn try_photocraft_isolate(input: &Path, output: &Path) -> bool {
-    if crate::workspace::control_probe("photocraft") {
-        let ok = crate::workspace::control_exec("photocraft", "file.open", json!({"path": input})).is_ok()
-            && crate::workspace::control_exec("photocraft", "layer.removeBackground", json!({})).is_ok()
-            && crate::workspace::control_exec("photocraft", "file.saveACopy", json!({"path": output, "overwrite": true})).is_ok();
-        if ok && output.is_file() {
-            return true;
-        }
-    }
     let Some(in_s) = input.to_str() else {
         return false;
     };
@@ -98,7 +90,7 @@ fn try_photocraft_isolate(input: &Path, output: &Path) -> bool {
         && output.is_file()
 }
 
-/// Isolate a subject to transparent RGBA via host `PhotoCraft` (`photocraft --control` or `photocraft-cli`).
+/// Isolate a subject to transparent RGBA via headless `photocraft-cli`.
 pub fn isolate_subject_rgba(input: &Path, output: &Path, _chroma_hex: Option<&str>, _feather_px: f64) -> Result<Value> {
     if input == output {
         return Err(bad(format!("refusing to overwrite source image {}", input.display())));
@@ -123,14 +115,6 @@ pub fn isolate_subject_rgba(input: &Path, output: &Path, _chroma_hex: Option<&st
 }
 
 fn try_vectorcraft_trace(input: &Path, output: &Path) -> bool {
-    if crate::workspace::control_probe("vectorcraft") {
-        let ok = crate::workspace::control_exec("vectorcraft", "document.open", json!({"path": input})).is_ok()
-            && crate::workspace::control_exec("vectorcraft", "imageTrace.makeAndExpand", json!({})).is_ok()
-            && crate::workspace::control_exec("vectorcraft", "document.export", json!({"path": output, "format": "svg"})).is_ok();
-        if ok && output.is_file() {
-            return true;
-        }
-    }
     let Some(in_s) = input.to_str() else {
         return false;
     };
@@ -143,14 +127,6 @@ fn try_vectorcraft_trace(input: &Path, output: &Path) -> bool {
 
 fn try_photocraft_split_layers(src: &Path, layers_dir: &Path) -> bool {
     let export_params = json!({"dir": layers_dir, "prefix": "part"});
-    if crate::workspace::control_probe("photocraft") {
-        let ok = crate::workspace::control_exec("photocraft", "file.open", json!({"path": src})).is_ok()
-            && crate::workspace::control_exec("photocraft", "layer.maskAllObjects", json!({})).is_ok()
-            && crate::workspace::control_exec("photocraft", "file.export.layersToFiles", export_params.clone()).is_ok();
-        if ok {
-            return true;
-        }
-    }
     let Some(src_s) = src.to_str() else {
         return false;
     };

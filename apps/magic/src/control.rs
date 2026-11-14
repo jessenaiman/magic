@@ -272,7 +272,7 @@ impl MagicDesktopApp {
             "render.frame" => {
                 let sec = params.get("time").or_else(|| params.get("seconds")).and_then(Value::as_f64).unwrap_or(self.ui_state.audio_time_sec);
                 let raw = match params.get("stage").and_then(Value::as_str).unwrap_or("studio") {
-                    "storyboard" => self.execute_engine(ctx, "storyboard.thumbnail", json!({"page": params["page"].as_u64().unwrap_or(0), "scale": 1.0}))?,
+                    "storyboard" => self.execute_engine(ctx, "storyboard.render", json!({"page": params["page"].as_u64().unwrap_or(0)}))?,
                     "lyrics" | "design" => self.execute_engine(ctx, "words.preview_frame", json!({"time": sec}))?,
                     "motion" => self.execute_engine(ctx, "motion.preview_frame", json!({"time": sec}))?,
                     "animation" | "animations" => self.execute_engine(ctx, "character.frame", json!({"time": sec}))?,
@@ -377,7 +377,7 @@ impl MagicDesktopApp {
                 let status = self.session.execute("workshop.status", json!({})).unwrap_or(Value::Null);
                 match target {
                     "project" => Ok(status),
-                    "storyboard" => self.session.execute("storyboard.check", json!({})).map_err(|e| e.to_string()),
+                    "storyboard" => self.session.execute("storyboard.status", json!({})).map_err(|e| e.to_string()),
                     "timeline" => self.session.execute("video.timeline", json!({})).map_err(|e| e.to_string()),
                     _ => Ok(json!({
                         "ok": true,
@@ -385,7 +385,7 @@ impl MagicDesktopApp {
                         "project_path": self.session.project_path,
                         "dirty": crate::lifecycle::verify_clean(&self.session, &self.ui_state).is_err(),
                         "workshop": status,
-                        "storyboard": self.session.execute("storyboard.check", json!({})).ok(),
+                        "storyboard": self.session.execute("storyboard.status", json!({})).ok(),
                         "timeline": self.session.execute("video.timeline", json!({})).ok(),
                     })),
                 }
@@ -561,12 +561,12 @@ impl MagicDesktopApp {
             "docking": magic_ui_egui::docking::inspect_docking(ctx, &self.ui_state),
             "panels": {
                 "workspace": self.ui_state.docking.active_name,
-                "studioWorkspace": self.ui_state.studio.inspector_tab,
-                "studioScopes": self.ui_state.docking.is_panel_visible(magic_ui_egui::PanelId::Scopes) || self.ui_state.studio.scopes_visible,
-                "animTab": self.ui_state.animation.inspector_tab,
-                "theatreTab": self.ui_state.animation.dock_tab,
-                "lyricsTab": self.ui_state.lyrics.inspector_tab,
-                "motionTab": self.ui_state.motion.inspector_tab,
+                "studioWorkspace": self.stage_host.stage(ViewMode::Studio).inspector_tab(),
+                "studioScopes": self.ui_state.docking.is_panel_visible(magic_ui_egui::PanelId::Scopes) || self.ui_state.timeline.scopes_visible,
+                "animTab": self.stage_host.stage(ViewMode::Animation).inspector_tab(),
+                "theatreTab": self.stage_host.stage(ViewMode::Animation).dock_tab(),
+                "lyricsTab": self.stage_host.stage(ViewMode::Design).inspector_tab(),
+                "motionTab": self.stage_host.stage(ViewMode::Motion).inspector_tab(),
                 "ribbonCollapsed": self.ui_state.ribbon_collapsed,
                 "assetsOpen": self.ui_state.docking.is_panel_visible(magic_ui_egui::PanelId::Assets),
                 "historyOpen": self.ui_state.docking.is_panel_visible(magic_ui_egui::PanelId::History),
@@ -657,7 +657,7 @@ impl MagicDesktopApp {
         Ok(json!({
             "ok": true,
             "requestedView": self.ui_state.view.as_id(),
-            "studioWorkspace": self.ui_state.studio.inspector_tab,
+            "studioWorkspace": self.stage_host.stage(ViewMode::Studio).inspector_tab(),
             "theme": self.ui_state.theme_mode.as_str(),
             "interfaceStyle": self.ui_state.interface_style.as_str(),
             "accent": self.ui_state.accent_choice.as_str(),
@@ -684,25 +684,27 @@ impl MagicDesktopApp {
             self.ui_state.focused_panel = focused.to_owned();
         }
         if let Some(ws) = params.get("studioWorkspace").and_then(Value::as_str) {
-            if !matches!(ws, "matrix" | "edit" | "color" | "fx" | "audio" | "titles" | "export") {
-                return Err(format!("unknown studioWorkspace `{ws}`"));
-            }
-            self.ui_state.studio.inspector_tab = ws.to_owned();
+            let tab = match ws {
+                "matrix" => "matrix",
+                "export" | "finishing" => "export",
+                _ => return Err("studioWorkspace must be one of: matrix, export".to_owned()),
+            };
+            self.stage_host.stage_mut(ViewMode::Studio).set_inspector_tab(tab);
         }
         if let Some(sc) = params.get("studioScopes").and_then(Value::as_bool) {
-            self.ui_state.studio.scopes_visible = sc;
+            self.ui_state.timeline.scopes_visible = sc;
         }
         if let Some(at) = params.get("animTab").and_then(Value::as_str) {
-            self.ui_state.animation.inspector_tab = at.to_owned();
+            self.stage_host.stage_mut(ViewMode::Animation).set_inspector_tab(at);
         }
         if let Some(tt) = params.get("theatreTab").and_then(Value::as_str) {
-            self.ui_state.animation.dock_tab = tt.to_owned();
+            self.stage_host.stage_mut(ViewMode::Animation).set_dock_tab(tt);
         }
         if let Some(lt) = params.get("lyricsTab").and_then(Value::as_str) {
-            self.ui_state.lyrics.inspector_tab = lt.to_owned();
+            self.stage_host.stage_mut(ViewMode::Design).set_inspector_tab(lt);
         }
         if let Some(mt) = params.get("motionTab").and_then(Value::as_str) {
-            self.ui_state.motion.inspector_tab = mt.to_owned();
+            self.stage_host.stage_mut(ViewMode::Motion).set_inspector_tab(mt);
         }
         if let Some(rc) = params.get("ribbonCollapsed").and_then(Value::as_bool) {
             self.ui_state.ribbon_collapsed = rc;
@@ -733,15 +735,15 @@ impl MagicDesktopApp {
             return Err("No active song audio is linked in the current project".into());
         }
         if let Some(sec) = params.get("seconds").and_then(Value::as_f64) {
-            self.audio_player.seek(&mut self.ui_state, sec.max(0.0));
+            self.audio_player.seek(&mut self.ui_state, &mut self.stage_host, sec.max(0.0));
         }
         match action {
             "play" => {
                 let time = self.ui_state.audio_time_sec;
-                self.audio_player.start_at(&mut self.ui_state, time)
+                self.audio_player.start_at(&mut self.ui_state, &mut self.stage_host, time)
             }
             "stop" => self.audio_player.stop(&mut self.ui_state),
-            "toggle" => self.audio_player.toggle(&mut self.ui_state),
+            "toggle" => self.audio_player.toggle(&mut self.ui_state, &mut self.stage_host),
             _ => {}
         }
         Ok(json!({

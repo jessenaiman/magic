@@ -5,7 +5,7 @@
 use std::path::PathBuf;
 
 use magic_engine::Session;
-use magic_ui_egui::{AccentChoice, InterfaceStyle, ThemeMode, UiShellState};
+use magic_ui_egui::{AccentChoice, InterfaceStyle, StageHost, ThemeMode, UiShellState};
 use serde_json::{Value, json};
 
 fn scrub_home(raw: &str) -> String {
@@ -133,11 +133,8 @@ fn hydrate_open_project_caches(session: &mut Session, ui_state: &mut UiShellStat
     if let Ok(wf) = session.execute("song.waveform", json!({"bins": 240})) {
         ui_state.cache.song_waveform = wf;
     }
-    if let Ok(pages) = session.execute("storyboard.pages", json!({"full": true})) {
+    if let Ok(pages) = session.execute("storyboard.pages", json!({})) {
         ui_state.cache.storyboard_pages = pages;
-    }
-    if let Ok(chk) = session.execute("storyboard.check", json!({})) {
-        ui_state.cache.storyboard_check = chk;
     }
     if let Ok(chars) = session.execute("character.list", json!({})) {
         ui_state.cache.characters = chars;
@@ -163,11 +160,12 @@ fn hydrate_open_project_caches(session: &mut Session, ui_state: &mut UiShellStat
     }
 }
 
-pub fn refresh_cached_state(session: &mut Session, ui_state: &mut UiShellState, initial: bool) {
+pub fn refresh_cached_state(session: &mut Session, ui_state: &mut UiShellState, stage_host: &mut StageHost, initial: bool) {
     let prev_proj = ui_state.project_path.clone();
     let current_proj = session.project_path.clone();
     if prev_proj != current_proj {
         ui_state.reset_for_project_switch();
+        stage_host.reset_for_project_switch();
     }
     if let Ok(snap) = session.execute("project.snapshot", json!({})) {
         ui_state.project_path = snap["project"].as_str().map(PathBuf::from);
@@ -175,8 +173,8 @@ pub fn refresh_cached_state(session: &mut Session, ui_state: &mut UiShellState, 
     } else {
         ui_state.project_path = current_proj;
     }
-    if ui_state.project_path.is_some() && (prev_proj != ui_state.project_path || ui_state.studio.title_text.is_empty()) {
-        ui_state.studio.title_text = ui_state.project_name();
+    if ui_state.project_path.is_some() && (prev_proj != ui_state.project_path || ui_state.timeline.title_text.is_empty()) {
+        ui_state.timeline.title_text = ui_state.project_name();
     }
     if initial {
         if let Ok(cat) = session.execute("project.catalog", json!({})) {
@@ -185,6 +183,9 @@ pub fn refresh_cached_state(session: &mut Session, ui_state: &mut UiShellState, 
         if let Ok(ai) = session.execute("ai.status", json!({})) {
             sync_ai_ui_from_status(ui_state, &ai);
             ui_state.cache.ai_status = ai;
+        }
+        if let Ok(ext) = session.execute("app.extensions", json!({})) {
+            ui_state.cache.extensions = ext;
         }
     }
     if ui_state.project_path.is_some() {

@@ -261,10 +261,7 @@ fn render_or_resolve_animation(project_dir: &Path, ecproj: &Path, comp: &str, ca
         return Ok(companion);
     }
     if force_render {
-        return Err(EngineError::ExternalTool(
-            "effectcraft".into(),
-            format!("Cannot render {}: EffectCraft is not running on --control 9877 and `effectcraft-cli` is not on PATH", ecproj.display()),
-        ));
+        return Err(EngineError::ExternalTool("effectcraft".into(), format!("Cannot render {}: `effectcraft-cli` is not on PATH", ecproj.display())));
     }
     Ok(ecproj.to_path_buf())
 }

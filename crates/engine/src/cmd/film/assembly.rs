@@ -63,34 +63,6 @@ fn spans(times: &[Tick], duration: Tick) -> Vec<(Tick, Tick)> {
     times.iter().enumerate().map(|(i, from)| (*from, (times.get(i + 1).copied().unwrap_or(duration) - *from).max(Tick::ZERO))).collect()
 }
 
-#[allow(dead_code)]
-fn resolve_scene_image(scene: &Value, dir: &Path, assets: &[crate::ProjectAsset]) -> Option<PathBuf> {
-    let asset_id = scene["image_asset_id"].as_str().or_else(|| scene["background_asset"].as_str()).or_else(|| scene["asset"].as_str());
-    if let Some(id) = asset_id
-        && let Some(path) = assets.iter().find(|a| a.id == id).and_then(|a| a.path.as_ref()).map(|p| dir.join(p)).filter(|p| p.is_file())
-    {
-        return Some(path);
-    }
-    scene["image_path"].as_str().or_else(|| scene["path"].as_str()).map(|p| dir.join(p)).filter(|p| p.is_file())
-}
-
-#[allow(dead_code)]
-fn backgrounds_from_words(words_doc: &Value, dir: &Path, assets: &[crate::ProjectAsset]) -> Vec<(Tick, PathBuf)> {
-    let mut out: Vec<(Tick, PathBuf)> = words_doc["animations"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(|sc| {
-            let start = sc.get("song_anchor_tick").or_else(|| sc.get("song_anchor")).and_then(parse_tick).unwrap_or(Tick::ZERO);
-            Some((start, resolve_scene_image(sc, dir, assets)?))
-        })
-        .collect();
-    out.sort_by_key(|a| a.0);
-    let min_gap = Tick::from_units(1, 1000);
-    out.dedup_by(|a, b| a.1 == b.1 || (a.0 - b.0).abs() < min_gap);
-    out
-}
-
 fn auto_backgrounds(s: &Session, dir: &Path, duration: Tick) -> Option<Vec<(Tick, PathBuf)>> {
     let imgs: Vec<PathBuf> =
         s.project_assets().iter().filter(|a| a.kind == "image").filter_map(|a| a.path.as_ref().map(|p| dir.join(p))).filter(|p| p.is_file()).collect();
@@ -236,7 +208,7 @@ fn build_film(_s: &Session, dir: &Path, project: &Path, film: &Inputs, fps: Fram
         true,
         &[
             json!({"id": "file.newProject", "params": {"name": film.name}}),
-            json!({"id": "file.newSequence", "params": {"name": film.name, "width": 1920, "height": 1080, "fps": fps.as_f64()}}),
+            json!({"id": "file.newSequence", "params": {"name": film.name, "width": 1920, "height": 1080, "fps": fps.as_f64(), "audio": 1}}),
             json!({"id": "file.import", "params": {"paths": media}}),
         ],
     )?;
@@ -343,10 +315,45 @@ fn export(dir: &Path, project: &Path, name: &str) -> Result<PathBuf> {
     Ok(out)
 }
 
+fn paths_match(a: &Path, b: &Path) -> bool {
+    if a == b {
+        return true;
+    }
+    match (std::fs::canonicalize(a), std::fs::canonicalize(b)) {
+        (Ok(ca), Ok(cb)) => ca == cb,
+        _ => false,
+    }
+}
+
+fn import_and_place_a1(dir: &Path, project: &Path, song: &Path) -> Result<()> {
+    let imported = run(dir, project, false, &[json!({"id": "file.import", "params": {"paths": [arg(song)]}})])?;
+    if let Some(item) = imported.first().and_then(|r| ids(r, "items").first().copied()) {
+        run(
+            dir,
+            project,
+            false,
+            &[json!({"id": "timeline.place", "params": {"item": item, "track": SONG_TRACK, "frame": 0, "insert": false, "video": false}})],
+        )?;
+    }
+    Ok(())
+}
+
 pub(crate) fn ensure_song_film(s: &mut Session, audio: &Path) -> Result<PathBuf> {
     let dir = crate::workshop::project_dir(s)?;
     let wanted = crate::cmd::film::film_path(s)?;
+    let song = if audio.is_absolute() { audio.to_path_buf() } else { dir.join(audio) };
     if wanted.is_file() {
+        if song.is_file() {
+            match crate::cmd::film::read_fcproj_a1_slot(&wanted) {
+                Some((item_id, existing)) if !paths_match(&existing, &song) => {
+                    crate::cmd::film::replace_item_footage(&wanted, item_id, &song)?;
+                }
+                None => {
+                    import_and_place_a1(&dir, &wanted, &song)?;
+                }
+                _ => {}
+            }
+        }
         crate::cmd::film::link(s, &wanted)?;
         return Ok(wanted);
     }
@@ -354,14 +361,13 @@ pub(crate) fn ensure_song_film(s: &mut Session, audio: &Path) -> Result<PathBuf>
         std::fs::create_dir_all(folder)?;
     }
     let name = s.project_path.as_ref().and_then(|p| p.file_stem()).map_or("Film".into(), |n| n.to_string_lossy().into_owned());
-    let song = dir.join(audio);
     let made = run(
         &dir,
         &wanted,
         true,
         &[
             json!({"id": "file.newProject", "params": {"name": name}}),
-            json!({"id": "file.newSequence", "params": {"name": name, "width": 1920, "height": 1080, "fps": FrameRate::FPS_24.as_f64()}}),
+            json!({"id": "file.newSequence", "params": {"name": name, "width": 1920, "height": 1080, "fps": FrameRate::FPS_24.as_f64(), "audio": 1}}),
             json!({"id": "file.import", "params": {"paths": [arg(&song)]}}),
         ],
     )?;

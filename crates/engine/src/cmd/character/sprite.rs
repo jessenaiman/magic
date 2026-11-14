@@ -27,15 +27,6 @@ fn try_photocraft_align_cell(sheet: &Path, rect: [u32; 4], lock_baseline: bool, 
     let [x, y, w, h] = rect;
     let crop_params = json!({"x": x, "y": y, "width": w, "height": h});
     let align_cmd = if lock_baseline { "layer.align.bottomEdges" } else { "layer.align.horizontalCenters" };
-    if crate::workspace::control_probe("photocraft") {
-        let ok = crate::workspace::control_exec("photocraft", "file.open", json!({"path": sheet})).is_ok()
-            && crate::workspace::control_exec("photocraft", "image.crop", crop_params.clone()).is_ok()
-            && crate::workspace::control_exec("photocraft", align_cmd, json!({})).is_ok()
-            && crate::workspace::control_exec("photocraft", "file.saveACopy", json!({"path": out, "overwrite": true})).is_ok();
-        if ok && out.is_file() {
-            return true;
-        }
-    }
     let Some(sheet_s) = sheet.to_str() else {
         return false;
     };

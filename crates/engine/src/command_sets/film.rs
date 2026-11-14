@@ -65,15 +65,6 @@ pub(super) fn specs_film() -> Vec<CommandSpec> {
             always,
             crate::cmd::film::cmd_video_bake_link
         ),
-        cmd_spec!(
-            "video.finish",
-            "Execute FilmCraft Studio Finishing Operation (Edit, Trim, Color, FX, Audio, Titles)",
-            ["Studio"],
-            None,
-            "{\"op\":\"mark_in|mark_out|insert|overwrite|lift|extract|add_edit|trim_mode|sequence_rate|color_space|lumetri_look|fx_apply|audio_gain|audio_ducking|mixer_strip|graphic_text|scopes\"}",
-            always,
-            crate::cmd::film::cmd_video_finish
-        ),
         query_spec!("video.film", "Film Timeline, Preview and Export Status", "{}", crate::cmd::film::cmd_video_film),
         cmd_spec!("video.preview", "Render Half-Scale Film Preview (FilmCraft)", ["Studio"], None, "{}", always, crate::cmd::film::cmd_video_preview),
         cmd_spec!("video.export", "Export Final Film (FilmCraft)", ["Studio"], None, "{}", always, crate::cmd::film::cmd_video_export),

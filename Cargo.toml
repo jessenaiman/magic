@@ -4,6 +4,13 @@ members = [
     "crates/util",
     "crates/engine",
     "crates/mcp",
+    "crates/view-api",
+    "crates/view-project",
+    "crates/view-storyboard",
+    "crates/view-animation",
+    "crates/view-lyrics",
+    "crates/view-motion",
+    "crates/view-studio",
     "crates/ui-egui",
     "apps/magic",
     "apps/magic-cli",
@@ -22,6 +29,13 @@ repository = "https://github.com/jessenaiman/magic"
 magic-util = { path = "crates/util" }
 magic-engine = { path = "crates/engine" }
 magic-mcp = { path = "crates/mcp" }
+magic-view-api = { path = "crates/view-api" }
+magic-view-project = { path = "crates/view-project" }
+magic-view-storyboard = { path = "crates/view-storyboard" }
+magic-view-animation = { path = "crates/view-animation" }
+magic-view-lyrics = { path = "crates/view-lyrics" }
+magic-view-motion = { path = "crates/view-motion" }
+magic-view-studio = { path = "crates/view-studio" }
 magic-ui-egui = { path = "crates/ui-egui" }
 
 # UI toolkit (`storytold/egui` 0.37 family — patched in `[patch.crates-io]` below)
@@ -45,6 +59,8 @@ craft-ai-core = { git = "https://github.com/storytold/craft-ai-integrations", br
 craft-ai-egui = { git = "https://github.com/storytold/craft-ai-integrations", branch = "main" }
 craft-ai-features = { git = "https://github.com/storytold/craft-ai-integrations", branch = "main" }
 craft-ai-native = { git = "https://github.com/storytold/craft-ai-integrations", branch = "main" }
+craft-ext-core = { git = "https://github.com/storytold/craft-extensions", branch = "main" }
+craft-ext-store = { git = "https://github.com/storytold/craft-extensions", branch = "main" }
 craft-aaf = { git = "https://github.com/storytold/craft-libs", branch = "main" }
 craft-anicraft-format = { git = "https://github.com/storytold/craft-libs", branch = "main" }
 craft-atomic = { git = "https://github.com/storytold/craft-libs", branch = "main" }

@@ -11,7 +11,6 @@ pub fn specs() -> Vec<CommandSpec> {
     let mut out = Vec::with_capacity(80);
     out.extend(specs_words());
     out.extend(specs_motion());
-    out.extend(specs_image());
     out.extend(specs_character());
     out.extend(super::film::specs_film());
     out
@@ -64,15 +63,6 @@ fn specs_words() -> Vec<CommandSpec> {
             "CLI-Mapped Craft Typography Effects (EffectCraft, VectorCraft & PhotoCraft)",
             "{\"app\":\"optional effectcraft|vectorcraft|photocraft\",\"category\":\"optional\",\"filter\":\"optional\"}",
             crate::cmd::words::cmd_words_effects
-        ),
-        cmd_spec!(
-            "words.effect_install",
-            "Install a Registry Effect",
-            ["Lyrics"],
-            None,
-            "{\"name\":\"per-word-rise\"}",
-            always,
-            crate::cmd::words::cmd_words_effect_install
         ),
         cmd_spec!(
             "words.captions",
@@ -214,23 +204,10 @@ fn specs_motion() -> Vec<CommandSpec> {
     ]
 }
 
-fn specs_image() -> Vec<CommandSpec> {
-    vec![cmd_spec!(
-        "image.generate",
-        "Generate Image via Configured Provider Shell (craft-ai-core)",
-        ["Project Assets"],
-        None,
-        "{\"prompt\":\"description\",\"references\":[],\"remove_background\":false,\"vectorize\":false,\"name\":\"optional\"}",
-        always,
-        crate::craft_ai::cmd_image_generate
-    )]
-}
-
 fn specs_character() -> Vec<CommandSpec> {
     vec![
         query_spec!("character.list", "Characters and Their Craft Files (.pcraft, .ecproj)", "{}", crate::cmd::character::cmd_character_list),
         query_spec!("character.meta", "Character Views, Parts and Actions", "{\"character\":\"id\"}", crate::cmd::character::cmd_character_meta),
-        query_spec!("character.actions", "Actions in Shared Pose Table", "{}", crate::cmd::character::cmd_character_actions),
         query_spec!(
             "character.keys",
             "Rig Layers, Keyframes and Curves",
@@ -257,24 +234,6 @@ fn specs_character() -> Vec<CommandSpec> {
             crate::cmd::character::cmd_character_import
         ),
         cmd_spec!(
-            "character.mark",
-            "Mark Parts and Joints",
-            ["Animation"],
-            None,
-            "{\"character\":\"id\",\"view\":\"front\",\"image\":\"drawing.png\"}",
-            always,
-            crate::cmd::character::cmd_character_mark
-        ),
-        cmd_spec!(
-            "character.save_marks",
-            "Save Adjusted Part Outlines & Joints",
-            ["Animation"],
-            None,
-            "{\"character\":\"id\",\"view\":\"front\",\"parts\":[]}",
-            always,
-            crate::cmd::character::cmd_character_save_marks
-        ),
-        cmd_spec!(
             "character.cut",
             "Isolate & Cut Parts Into Layers (PhotoCraft + VectorCraft)",
             ["Animation"],
@@ -291,15 +250,6 @@ fn specs_character() -> Vec<CommandSpec> {
             "{\"character\":\"id\",\"view\":\"front\"}",
             always,
             crate::cmd::character::cmd_character_rig
-        ),
-        cmd_spec!(
-            "character.action",
-            "Key & Expression-Drive Action in EffectCraft",
-            ["Animation"],
-            None,
-            "{\"character\":\"id\",\"view\":\"front\",\"action\":\"idle\",\"times\":1}",
-            always,
-            crate::cmd::character::cmd_character_action
         ),
         cmd_spec!(
             "character.sprite",

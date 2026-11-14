@@ -1,49 +1,9 @@
-//! Words design validation and effect registration (`words.effect_install`, `kinetic_design`, `line_design`, `text_effect`).
-use crate::{Result, Session};
+//! Words design validation (`kinetic_design`, `line_design`, `text_effect`).
+use crate::Result;
 use serde_json::{Value, json};
 use std::{fs, path::Path};
 
 use super::{MOVES, invalid, one_of};
-
-/// `words.effect_install`: register an EffectCraft preset/overlay effect in `lettering/effects/<name>.json`.
-pub fn cmd_words_effect_install(s: &mut Session, p: &Value) -> Result<Value> {
-    let dir = crate::cmd::words::workspace_dir(s)?;
-    let raw_name = p["name"]
-        .as_str()
-        .filter(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.')))
-        .ok_or_else(|| invalid("name must be a valid Craft effect id (letters, digits, '.', '_' or '-')"))?;
-    let safe_stem: String = raw_name.chars().map(|c| if c == '.' { '-' } else { c }).collect();
-    let rel = format!("effects/presets/{safe_stem}.json");
-    let name = raw_name;
-    let target = dir.join(&rel);
-    let live_applied =
-        if crate::workspace::control_probe("effectcraft") && crate::workspace::control_exec("effectcraft", "effect.apply", json!({"effect": name})).is_ok() {
-            let _ = crate::workspace::control_exec("effectcraft", "file.save", json!({}));
-            true
-        } else {
-            false
-        };
-    if target.is_file() {
-        return Ok(json!({"name":name,"src":rel,"installed":false,"already":true,"live_app_synced":live_applied}));
-    }
-    if let Some(parent) = target.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    let spec = json!({
-        "name": name,
-        "engine": "effectcraft",
-        "text_variable": "text",
-        "cues": true,
-        "variables": {
-            "text": {"id": "text", "type": "string", "role": "content"},
-            "cues": {"id": "cues", "type": "string", "role": "timing"},
-            "color": {"id": "color", "type": "string"},
-            "speed": {"id": "speed", "type": "number"}
-        }
-    });
-    crate::doc_state::write_file(&target, serde_json::to_vec_pretty(&spec).map_err(|e| invalid(e.to_string()))?)?;
-    Ok(json!({"name":name,"src":rel,"installed":true,"already":false,"live_app_synced":live_applied}))
-}
 
 fn hex_color(v: &Value) -> Option<Value> {
     v.as_str().filter(|c| c.len() == 7 && c.starts_with('#') && c[1..].bytes().all(|b| b.is_ascii_hexdigit())).map(|c| json!(c))
@@ -365,7 +325,7 @@ pub(crate) fn text_effect(dir: &Path, choice: &Value) -> Result<Value> {
     let rel = format!("effects/presets/{name}.json");
     let path = dir.join(&rel);
     if !path.is_file() {
-        return Err(invalid(format!("{name} is not installed in this project; run words.effect_install first")));
+        return Err(invalid(format!("effects/presets/{name}.json is not present in this project")));
     }
     let spec: Value = serde_json::from_slice(&fs::read(&path)?).map_err(|e| invalid(e.to_string()))?;
     let text = spec["text_variable"].as_str().unwrap_or("text");

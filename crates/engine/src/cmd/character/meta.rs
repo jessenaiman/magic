@@ -4,7 +4,7 @@ use std::path::Path;
 
 use serde_json::{Value, json};
 
-use super::{View, bad};
+use super::View;
 use crate::{Result, Session};
 
 /// A file's modification time, so Studio reloads images and frames after a change.
@@ -82,8 +82,4 @@ pub fn cmd_character_meta(s: &mut Session, p: &Value) -> Result<Value> {
         "sprites": sprites,
         "model_3d": info_3d
     }))
-}
-
-pub fn cmd_character_save_marks(_s: &mut Session, _p: &Value) -> Result<Value> {
-    Err(bad("pending Step 2 Project-backed character mark storage"))
 }

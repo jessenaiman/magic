@@ -3,8 +3,8 @@
 //! `ogg`), and lossless audio decode/encode/peaks (`craft-audio`).
 //!
 //! Rendering, editing, and lossy broadcast codecs stay in the host Craft applications
-//! (`DesignCraft`, `PhotoCraft`, `VectorCraft`, `EffectCraft`, `FilmCraft`), accessed via their
-//! `--control` JSON-lines API and `<app>-cli` binaries.
+//! (`DesignCraft`, `DeckCraft`, `PhotoCraft`, `VectorCraft`, `EffectCraft`, `FilmCraft`), driven via
+//! headless `<app>-cli` binaries.
 
 use std::path::Path;
 

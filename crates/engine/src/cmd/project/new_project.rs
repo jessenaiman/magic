@@ -195,7 +195,7 @@ fn bootstrap_song_workshop(s: &mut Session, path: &Path, project_dir: &Path, par
 
     let sb = path.with_file_name(crate::cmd::storyboard::DEFAULT_STORYBOARD_FILE);
     if !sb.is_file() || overwrite {
-        let sb_req = json!({"path": sb, "overwrite": overwrite, "title": project_title});
+        let sb_req = json!({"path": sb, "overwrite": overwrite});
         match crate::cmd::storyboard::cmd_storyboard_new(s, &sb_req) {
             Ok(_) => steps.push(json!({"command": "storyboard.new", "status": "storyboard.designcraft initialized"})),
             Err(e) => steps.push(json!({"command": "storyboard.new", "status": "failed", "error": e.to_string()})),

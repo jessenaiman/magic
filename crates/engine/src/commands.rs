@@ -44,14 +44,6 @@ pub fn is_read_only_command(id: &str, params: &Value) -> bool {
     match id {
         "project.catalog" | "file.recent" => params.get("forget").is_none_or(Value::is_null) && params["clear"] != true,
         "video.sync_links" => params.get("render").and_then(Value::as_bool) != Some(true),
-        "video.finish" => matches!(params["op"].as_str().unwrap_or_default(), "jobs_list" | "scopes" | "workspace"),
-        "storyboard.locations" => {
-            params.get("fields").is_none()
-                && params.get("images").is_none()
-                && params.get("text").is_none()
-                && params.get("image").is_none()
-                && params.get("refs").is_none()
-        }
         "project.attach"
         | "file.list"
         | "project.identity"
@@ -63,11 +55,9 @@ pub fn is_read_only_command(id: &str, params: &Value) -> bool {
         | "project.files"
         | "storyboard.status"
         | "storyboard.pages"
-        | "storyboard.check"
         | "animation.hosts"
         | "animation.locate_from_studio"
         | "character.list"
-        | "character.actions"
         | "song.lyrics"
         | "words.align"
         | "words.read"
@@ -96,6 +86,7 @@ pub fn is_read_only_command(id: &str, params: &Value) -> bool {
         | "ui.timeline.hit"
         | "perf.stats"
         | "app.doctor"
+        | "app.extensions"
         | "app.update" => true,
         "project.root" => params.get("root").is_none_or(Value::is_null),
         "project.asset_metadata" => params.get("write_xmp_sidecar").and_then(Value::as_bool) != Some(true),

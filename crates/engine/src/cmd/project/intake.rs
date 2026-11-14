@@ -273,11 +273,9 @@ pub fn cmd_workshop_files(s: &mut Session, params: &Value) -> Result<Value> {
     for p in panel_files(&dir) {
         add_catalog_row(&mut rows, &dir, "panel", p, &filter);
     }
-    for rel in [crate::cmd::storyboard::DEFAULT_STORYBOARD_FILE, "storyboard.pptx"] {
-        let deck = dir.join(rel);
-        if deck.is_file() {
-            add_catalog_row(&mut rows, &dir, "storyboard_deck", deck, &filter);
-        }
+    let deck = dir.join(crate::cmd::storyboard::DEFAULT_STORYBOARD_FILE);
+    if deck.is_file() {
+        add_catalog_row(&mut rows, &dir, "storyboard_deck", deck, &filter);
     }
     for p in workshop_asset_files(&dir) {
         add_catalog_row(&mut rows, &dir, "asset", p, &filter);

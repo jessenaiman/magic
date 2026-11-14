@@ -3,13 +3,11 @@
 //! and `EffectCraft` rigs, puppet-pins, renders, and publishes `V2` `"Character Animation"` tracks
 //! into `FilmCraft`.
 
-mod action;
 pub(crate) mod cut;
 pub mod effect;
 pub mod hosts;
 pub mod keys;
 pub mod manage;
-mod mark;
 pub mod mesh_io;
 mod meta;
 pub mod path;
@@ -24,7 +22,6 @@ use serde_json::{Value, json};
 
 use crate::{EngineError, Result, Session};
 
-pub use action::{cmd_character_action, cmd_character_actions};
 pub use cut::cmd_character_cut;
 pub use effect::{
     cmd_expression_set, cmd_keyframe_easy_ease, cmd_keyframe_velocity, cmd_layer_new_3d_model, cmd_layer_set_blend_mode, cmd_layer_set_parent, cmd_mask_add,
@@ -35,9 +32,8 @@ pub use manage::{
     classify_animation_style, cmd_animation_open, cmd_animation_view, cmd_character_frame, cmd_character_import, cmd_character_list, cmd_character_open,
     cmd_character_render, cmd_character_set, sprite_summaries,
 };
-pub use mark::cmd_character_mark;
 pub use mesh_io::{cmd_mesh_convert, cmd_mesh_inspect};
-pub use meta::{cmd_character_meta, cmd_character_save_marks};
+pub use meta::cmd_character_meta;
 pub use puppet::{
     cmd_puppet_expression, cmd_puppet_follow, cmd_puppet_info, cmd_puppet_lipsync, cmd_puppet_record, cmd_puppet_rig_face, cmd_script_install, cmd_script_list,
     cmd_script_run,
@@ -356,33 +352,7 @@ pub(crate) fn step(command: &str, params: Value) -> Value {
 }
 
 pub(crate) fn effectcraft_available() -> bool {
-    crate::workspace::control_probe("effectcraft") || crate::workspace::resolve_executable_path("effectcraft-cli").is_some()
-}
-
-fn effectcraft_live(target: Option<&Path>, steps: &[Value], save: bool, has_save_as: bool) -> std::result::Result<Vec<Value>, String> {
-    if let Some(p) = target.filter(|p| p.is_file()) {
-        crate::workspace::control_exec("effectcraft", "file.open", json!({"path": p}))?;
-    } else {
-        crate::workspace::control_exec("effectcraft", "file.newProject", json!({}))?;
-    }
-    let mut results = Vec::with_capacity(steps.len());
-    for step_val in steps {
-        let cmd_id = step_val["command"].as_str().or_else(|| step_val["id"].as_str()).ok_or_else(|| "missing EffectCraft step command id".to_string())?;
-        let params = step_val.get("params").cloned().unwrap_or_else(|| json!({}));
-        results.push(crate::workspace::control_exec("effectcraft", cmd_id, params)?);
-    }
-    if save && !has_save_as {
-        if let Some(p) = target {
-            if p.is_file() {
-                crate::workspace::control_exec("effectcraft", "file.save", json!({}))?;
-            } else {
-                crate::workspace::control_exec("effectcraft", "file.saveAs", json!({"path": p}))?;
-            }
-        } else {
-            crate::workspace::control_exec("effectcraft", "file.save", json!({}))?;
-        }
-    }
-    Ok(results)
+    crate::workspace::resolve_executable_path("effectcraft-cli").is_some()
 }
 
 fn effectcraft_cli(target: Option<&Path>, steps: &[Value], save: bool, has_save_as: bool) -> std::result::Result<Vec<Value>, String> {
@@ -415,25 +385,13 @@ pub(crate) fn effectcraft(cwd: &Path, project: Option<&Path>, steps: &[Value], s
     let fallback_proj = cwd.join("rig.ecproj");
     let has_save_as = steps.iter().any(|st| st["command"].as_str() == Some("file.saveAs"));
     let target = project.or_else(|| (!has_save_as).then_some(fallback_proj.as_path()));
-    if crate::workspace::control_probe("effectcraft") {
-        return effectcraft_live(target, steps, save, has_save_as).map_err(|e| crate::EngineError::ExternalTool("effectcraft".into(), e));
-    }
-    effectcraft_cli(target, steps, save, has_save_as).map_err(|e| crate::EngineError::ExternalTool("effectcraft".into(), e))
+    effectcraft_cli(target, steps, save, has_save_as).map_err(|e| crate::EngineError::ExternalTool("effectcraft-cli".into(), e))
 }
 
 pub(crate) fn effectcraft_frame(project: &Path, comp: &str, seconds: f64, max_side: u32, output: &Path) -> Result<()> {
     let side = max_side.clamp(64, 4096);
     if let Some(parent) = output.parent() {
         std::fs::create_dir_all(parent)?;
-    }
-    if crate::workspace::control_probe("effectcraft") {
-        let mut params = json!({"time": seconds, "max_side": side, "transparent": true, "path": output});
-        if !comp.trim().is_empty() {
-            params["comp"] = json!(comp);
-        }
-        if crate::workspace::control_call("effectcraft", "render.frame", params).is_ok() && output.is_file() {
-            return Ok(());
-        }
     }
     if project.is_file() && crate::workspace::resolve_executable_path("effectcraft-cli").is_some() {
         let proj_s = project.to_string_lossy().into_owned();
@@ -464,8 +422,8 @@ pub(crate) fn effectcraft_frame(project: &Path, comp: &str, seconds: f64, max_si
         return Ok(());
     }
     Err(crate::EngineError::ExternalTool(
-        "effectcraft".into(),
-        format!("`effectcraft` is not running on `--control 9877`, `effectcraft-cli` could not render, and {} has no embedded preview", project.display()),
+        "effectcraft-cli".into(),
+        format!("`effectcraft-cli` could not render and {} has no embedded preview", project.display()),
     ))
 }
 
@@ -475,12 +433,6 @@ pub(crate) fn effectcraft_render(project: &Path, params: Value) -> Result<Value>
     if let Some(parent) = out_path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    if crate::workspace::control_probe("effectcraft")
-        && let Ok(res) = crate::workspace::control_exec("effectcraft", "file.export", params.clone())
-        && out_path.is_file()
-    {
-        return Ok(res);
-    }
     let proj_s = project.to_string_lossy().into_owned();
     let mut args = vec!["--project", proj_s.as_str(), "render", "--out", out_str, "--json"];
     if let Some(comp) = params["comp"].as_str().map(str::trim).filter(|c| !c.is_empty()) {
@@ -489,5 +441,5 @@ pub(crate) fn effectcraft_render(project: &Path, params: Value) -> Result<Value>
     if let Some(fmt) = params["format"].as_str().map(str::trim).filter(|f| !f.is_empty()) {
         args.extend(["--format", fmt]);
     }
-    crate::workspace::run_cli_json("effectcraft-cli", &args, None).map_err(|e| crate::EngineError::ExternalTool("effectcraft".into(), e))
+    crate::workspace::run_cli_json("effectcraft-cli", &args, None).map_err(|e| crate::EngineError::ExternalTool("effectcraft-cli".into(), e))
 }

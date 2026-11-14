@@ -5,16 +5,19 @@
 //! Uses custom themed popups — `Interface Style` (`Aurora`, `Modern`, `Classic`,
 //! `Minimal`, `Ocean`, `Forest`, `Plum`, `Sand`) renders as a custom themed dropdown list.
 
+use craft_ai_egui::{ConnectionPanel, HistoryAction, PanelEvent, StatusAction, StatusView, ai_status, history_view};
 use egui::{Align, Align2, Color32, CornerRadius, FontId, Layout, Order, Pos2, Rect, RichText, ScrollArea, Sense, Stroke, StrokeKind, Ui, Vec2};
-use serde_json::json;
+use magic_engine::craft_ai::{builtin_roles, has_role_override, standard_ai_client, standard_connection_manager};
+use serde_json::{Value, json};
 
-use crate::controls::{ScalarSpec, pill_toggle, ring_slider_h};
 use crate::menus::translate_menu_command;
-use crate::state::{UiAction, ViewCtx};
-use crate::theme::{AccentChoice, INTERFACE_SIZE_PRESETS, InterfaceStyle, ThemeMode};
-use crate::widgets::{BtnSpec, action_button, status_pill, text_input};
+use crate::{CachedAiRole, StageHost};
+use magic_view_api::controls::{ScalarSpec, pill_toggle, ring_slider_h};
+use magic_view_api::state::{UiAction, ViewCtx};
+use magic_view_api::theme::{AccentChoice, INTERFACE_SIZE_PRESETS, InterfaceStyle, ThemeMode};
+use magic_view_api::widgets::{BtnSpec, action_button, status_pill, text_input};
 
-pub fn draw_options_window(egui_ctx: &egui::Context, ctx: &mut ViewCtx<'_>) -> bool {
+pub fn draw_options_window(egui_ctx: &egui::Context, ctx: &mut ViewCtx<'_>, host: &mut StageHost) -> bool {
     let mut keep_open = true;
     egui::Window::new("Options")
         .id(egui::Id::unique(("magic_modal", "Options")))
@@ -41,8 +44,11 @@ pub fn draw_options_window(egui_ctx: &egui::Context, ctx: &mut ViewCtx<'_>) -> b
                     }
                 }
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("options-refresh-ai", "refresh", "Refresh AI & Preferences status")).clicked() {
+                    if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("options-refresh-ai", "refresh", "Refresh AI & Extensions status")).clicked() {
                         ctx.exec("ai.status", json!({}), None);
+                        ctx.exec("app.extensions", json!({}), None);
+                        host.ai_log_loaded = false;
+                        host.ai_roles_loaded = false;
                     }
                 });
             });
@@ -52,13 +58,13 @@ pub fn draw_options_window(egui_ctx: &egui::Context, ctx: &mut ViewCtx<'_>) -> b
                 match ctx.state.ai.options_tab.as_str() {
                     "general" => draw_general_tab(ui, ctx),
                     "fonts" => {
-                        crate::fonts_ui::draw_font_manager_body(ui, ctx);
+                        magic_view_api::fonts_ui::draw_font_manager_body(ui, ctx);
                         ui.separator();
-                        crate::fonts_ui::draw_font_sources_settings(ui);
+                        magic_view_api::fonts_ui::draw_font_sources_settings(ui);
                     }
                     "autosave" => draw_autosave_tab(ui, ctx),
                     "history" => crate::modals::draw_options_history_tab(ui, ctx),
-                    _ => draw_ai_llm_tab(ui, ctx),
+                    _ => draw_ai_llm_tab(ui, ctx, host),
                 }
             });
         });
@@ -195,7 +201,7 @@ fn draw_interface_style_popup(egui_ctx: &egui::Context, ctx: &mut ViewCtx<'_>, p
     });
 }
 
-fn draw_ai_llm_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
+fn draw_ai_llm_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>, host: &mut StageHost) {
     ctx.pal.inset_frame().show(ui, |ui| {
         ui.vertical(|ui| {
             ui.horizontal(|ui| {
@@ -221,7 +227,7 @@ fn draw_ai_llm_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
                 status_pill(ui, ctx.pal, lbl, col);
             });
             ui.label(
-                RichText::new("Shared store & secret references managed via `craft-ai-core`. Raw API keys are never written to project files.")
+                RichText::new("Shared connections, models, and consent ledger are managed by `storytold/craft-ai-integrations`.")
                     .size(10.5)
                     .color(ctx.pal.text_muted),
             );
@@ -229,111 +235,172 @@ fn draw_ai_llm_tab(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     });
 
     ui.add_space(8.0);
-    draw_register_connection_box(ui, ctx);
+    draw_ai_roles_box(ui, ctx, host);
     ui.add_space(8.0);
-    draw_consent_ledger_box(ui, ctx);
+    draw_ai_history_box(ui, ctx, host);
+    ui.add_space(8.0);
+    draw_extensions_box(ui, ctx);
 }
 
-fn draw_register_connection_box(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
+fn handle_ai_status_action(ctx: &mut ViewCtx<'_>, host: &mut StageHost, role_id: &str, act: StatusAction) {
+    match act {
+        StatusAction::Pick { connection, model } => {
+            host.ai_roles_loaded = false;
+            ctx.exec("ai.configure", json!({"bind_role": {"role": role_id, "connection": connection, "model": model}}), Some("Updated Craft AI role binding"));
+        }
+        StatusAction::UseDefault => {
+            host.ai_roles_loaded = false;
+            ctx.exec("ai.configure", json!({"clear_role": role_id}), Some("Reset role to launcher default"));
+        }
+        StatusAction::AddConnection | StatusAction::OpenLauncher => match standard_connection_manager() {
+            Ok(mgr) => host.ai_panel = Some(ConnectionPanel::new(mgr)),
+            Err(err) => ctx.push(UiAction::ShowToast(format!("Craft AI: {err}"))),
+        },
+    }
+}
+
+fn ensure_ai_roles_loaded(host: &mut StageHost) {
+    if host.ai_roles_loaded {
+        return;
+    }
+    host.ai_roles_loaded = true;
+    host.ai_roles.clear();
+    match standard_ai_client() {
+        Ok(client) => {
+            host.ai_roles_error = None;
+            for role in builtin_roles() {
+                host.ai_roles.push(CachedAiRole {
+                    id: role.id.to_string(),
+                    label: role.label.clone(),
+                    status: client.status(&role),
+                    choices: client.choices(&role).unwrap_or_default(),
+                    has_override: has_role_override(&role.id),
+                });
+            }
+        }
+        Err(err) => {
+            host.ai_roles_error = Some(err.to_string());
+        }
+    }
+}
+
+fn draw_ai_roles_box(ui: &mut Ui, ctx: &mut ViewCtx<'_>, host: &mut StageHost) {
+    ensure_ai_roles_loaded(host);
     ctx.pal.inset_frame().show(ui, |ui| {
         ui.vertical(|ui| {
-            ui.label(
-                RichText::new("Add / Update SharedStore Connection (Local Subscription Bridge or Cloud Provider)")
-                    .size(12.0)
-                    .strong()
-                    .color(ctx.pal.accent_amber),
-            );
-            ui.horizontal_wrapped(|ui| {
-                let sel_local = ctx.state.ai.new_conn_provider == "local";
-                if action_button(
-                    ui,
-                    ctx.reg,
-                    ctx.pal,
-                    BtnSpec::label_only("ai-prov-local", "Local Loopback", "Local loopback proxy (http://127.0.0.1:8000/v1)").selected(sel_local),
-                )
-                .clicked()
-                {
-                    ctx.state.ai.new_conn_provider = "local".to_owned();
-                    ctx.state.ai.new_conn_endpoint = "http://127.0.0.1:8000/v1".to_owned();
-                    ctx.state.ai.new_conn_label = "Local Loopback Bridge".to_owned();
-                }
-                for preset in craft_ai_core::PRESETS {
-                    let btn_id = format!("ai-prov-{}", preset.key);
-                    let sel = ctx.state.ai.new_conn_provider == preset.provider;
-                    if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&btn_id, preset.name, preset.note).selected(sel)).clicked() {
-                        ctx.state.ai.new_conn_provider = preset.provider.to_owned();
-                        ctx.state.ai.new_conn_endpoint = preset.endpoint.to_owned();
-                        ctx.state.ai.new_conn_label = preset.name.to_owned();
-                    }
-                }
-            });
             ui.horizontal(|ui| {
-                ui.label(RichText::new("Conn ID").size(10.5).color(ctx.pal.text_muted));
-                text_input(ui, ctx.reg, "ai-new-conn-id", "Connection ID", &mut ctx.state.ai.new_conn_id, "local-sub", 120.0);
-                ui.label(RichText::new("Label").size(10.5).color(ctx.pal.text_muted));
-                text_input(ui, ctx.reg, "ai-new-conn-label", "Connection label", &mut ctx.state.ai.new_conn_label, "Local Subscription Bridge", 190.0);
-                ui.label(RichText::new("Keychain Ref").size(10.5).color(ctx.pal.text_muted));
-                text_input(ui, ctx.reg, "ai-new-conn-secret", "OS Keychain secret name", &mut ctx.state.ai.new_conn_secret, "(none for local)", 130.0);
-            });
-            ui.horizontal(|ui| {
-                ui.label(RichText::new("Endpoint").size(10.5).color(ctx.pal.text_muted));
-                text_input(
-                    ui,
-                    ctx.reg,
-                    "ai-new-conn-endpoint",
-                    "Loopback http://127.0.0.1:... or https://...",
-                    &mut ctx.state.ai.new_conn_endpoint,
-                    "http://127.0.0.1:8000/v1",
-                    250.0,
-                );
-                ui.label(RichText::new("Text Model").size(10.5).color(ctx.pal.text_muted));
-                text_input(ui, ctx.reg, "ai-new-text-model", "Text model", &mut ctx.state.ai.new_conn_text_model, "local-chat", 110.0);
-                ui.label(RichText::new("Image Model").size(10.5).color(ctx.pal.text_muted));
-                text_input(ui, ctx.reg, "ai-new-img-model", "Image model", &mut ctx.state.ai.new_conn_image_model, "local-image-tool", 110.0);
-            });
-            if action_button(
-                ui,
-                ctx.reg,
-                ctx.pal,
-                BtnSpec::new("ai-save-conn", "save", "Register Connection in SharedStore", "Write connection to craft-ai-core SharedStore").primary(),
-            )
-            .clicked()
-            {
-                let cid = ctx.state.ai.new_conn_id.trim().to_owned();
-                let tm = ctx.state.ai.new_conn_text_model.trim().to_owned();
-                let im = ctx.state.ai.new_conn_image_model.trim().to_owned();
-                let payload = json!({
-                    "enabled": ctx.state.ai.enabled,
-                    "register_connection": {
-                        "id": cid,
-                        "label": ctx.state.ai.new_conn_label.trim(),
-                        "provider": ctx.state.ai.new_conn_provider.trim(),
-                        "endpoint": ctx.state.ai.new_conn_endpoint.trim(),
-                        "secret_name": ctx.state.ai.new_conn_secret.trim(),
-                        "text_model": tm,
-                        "image_model": im,
+                ui.label(RichText::new("Role Bindings & Connections (craft-ai-egui)").size(12.0).strong().color(ctx.pal.accent_amber));
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if host.ai_panel.is_none()
+                        && action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("ai-add-connection", "plug", "Add Connection", "Open Craft AI ConnectionPanel"))
+                            .clicked()
+                    {
+                        match standard_connection_manager() {
+                            Ok(mgr) => host.ai_panel = Some(ConnectionPanel::new(mgr)),
+                            Err(err) => ctx.push(UiAction::ShowToast(format!("Craft AI: {err}"))),
+                        }
                     }
                 });
-                ctx.exec("ai.configure", payload, Some("Saved connection in craft-ai SharedStore"));
+            });
+            if let Some(err) = host.ai_roles_error.as_deref() {
+                ui.label(RichText::new(format!("Craft AI client unavailable: {err}")).size(11.0).color(ctx.pal.danger));
+            } else {
+                let mut picked: Option<(String, StatusAction)> = None;
+                for cached in &host.ai_roles {
+                    ui.push_id(&cached.id, |ui| {
+                        let view = StatusView {
+                            label: &cached.label,
+                            status: &cached.status,
+                            choices: &cached.choices,
+                            has_override: cached.has_override,
+                            can_add_here: true,
+                        };
+                        if let Some(act) = ai_status(ui, &view) {
+                            picked = Some((cached.id.clone(), act));
+                        }
+                    });
+                }
+                if let Some((role_id, act)) = picked {
+                    handle_ai_status_action(ctx, host, &role_id, act);
+                }
+            }
+            if let Some(panel) = &mut host.ai_panel {
+                ui.separator();
+                match panel.show(ui) {
+                    Some(PanelEvent::Saved(_)) => {
+                        host.ai_panel = None;
+                        host.ai_roles_loaded = false;
+                        ctx.exec("ai.status", json!({}), Some("Saved Craft AI connection"));
+                    }
+                    Some(PanelEvent::Closed) => {
+                        host.ai_panel = None;
+                    }
+                    None => {}
+                }
             }
         });
     });
 }
 
-fn draw_consent_ledger_box(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
+fn draw_ai_history_box(ui: &mut Ui, ctx: &mut ViewCtx<'_>, host: &mut StageHost) {
+    if !host.ai_log_loaded {
+        host.ai_log = standard_ai_client().ok().and_then(|c| c.history().ok()).unwrap_or_default();
+        host.ai_log_loaded = true;
+    }
+    let now_ms = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX));
     ctx.pal.inset_frame().show(ui, |ui| {
-        ui.horizontal_wrapped(|ui| {
-            ui.label(RichText::new("Outbound Disclosure Consent (`ConsentLedger`):").size(11.5).strong());
-            for (term, lbl) in [("session", "Allow This Session"), ("thirty_days", "Allow 30 Days"), ("until_revoked", "Allow Until Revoked")] {
-                let id = format!("ai-consent-{term}");
-                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::label_only(&id, lbl, "Record disclosure consent")).clicked() {
-                    ctx.exec("ai.consent", json!({"agree": true, "term": term}), Some("Recorded outbound AI consent"));
+        ui.label(RichText::new("Job History (craft-ai-egui)").size(12.0).strong().color(ctx.pal.accent_emerald));
+        if let Some(act) = history_view(ui, &mut host.ai_history, &host.ai_log, now_ms) {
+            match act {
+                HistoryAction::Refresh => {
+                    host.ai_log_loaded = false;
+                }
+                HistoryAction::Clear => {
+                    ctx.exec("ai.history", json!({"clear": true}), Some("Cleared Craft AI job history"));
+                    host.ai_log = Default::default();
+                }
+                HistoryAction::Export(csv) => {
+                    ui.ctx().copy_text(csv);
+                    ctx.push(UiAction::ShowToast("Copied Craft AI job history CSV".into()));
                 }
             }
-            if action_button(ui, ctx.reg, ctx.pal, BtnSpec::new("ai-consent-revoke", "trash", "Revoke", "Clear ConsentLedger")).clicked() {
-                ctx.exec("ai.consent", json!({"revoke": true}), Some("Revoked outbound AI consent"));
-            }
+        }
+    });
+}
+
+fn draw_extensions_box(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
+    let ext = ctx.state.cache.extensions.clone();
+    ctx.pal.inset_frame().show(ui, |ui| {
+        ui.horizontal(|ui| {
+            ui.label(RichText::new("Extensions (craft-ext-store)").size(12.0).strong().color(ctx.pal.accent_emerald));
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                if action_button(ui, ctx.reg, ctx.pal, BtnSpec::icon_only("options-refresh-extensions", "refresh", "Refresh installed Craft Extensions"))
+                    .clicked()
+                {
+                    ctx.exec("app.extensions", json!({}), Some("Refreshed Craft Extensions"));
+                }
+            });
         });
+        let root = ext["root"].as_str().unwrap_or("(unavailable)");
+        let generation = ext["generation"].as_u64().unwrap_or(0);
+        let active_theme = ext.pointer("/active_theme/name").and_then(Value::as_str).unwrap_or("none");
+        let c_themes = ext.pointer("/counts/themes").and_then(Value::as_u64).unwrap_or(0);
+        let c_plugins = ext.pointer("/counts/plugins").and_then(Value::as_u64).unwrap_or(0);
+        let c_resources = ext.pointer("/counts/resources").and_then(Value::as_u64).unwrap_or(0);
+        ui.label(
+            RichText::new(format!(
+                "Root: {root} · Gen {generation} · Theme: {active_theme} · Counts: {c_themes} themes, {c_plugins} plugins, {c_resources} resources"
+            ))
+            .size(10.5)
+            .color(ctx.pal.text_muted),
+        );
+        for (key, heading) in [("themes", "Themes"), ("plugins", "Plug-ins"), ("resources", "Resources")] {
+            if let Some(items) = ext[key].as_array().filter(|a| !a.is_empty()) {
+                let labels: Vec<String> =
+                    items.iter().map(|it| format!("{} ({})", it["name"].as_str().unwrap_or("?"), it["version"].as_str().unwrap_or("0"))).collect();
+                ui.label(RichText::new(format!("{heading}: {}", labels.join(", "))).size(10.5));
+            }
+        }
     });
 }
 

@@ -185,7 +185,8 @@ pub fn finalize_rendered_frame(mut res: Value, params: &Value) -> Result<Value, 
     let want_write = params.get("write").and_then(Value::as_bool).unwrap_or(false);
     let caller_gave_path = params.get("path").and_then(Value::as_str).is_some_and(|s| !s.trim().is_empty());
 
-    let frame_path = res.get("path").or_else(|| res.get("frame")).or_else(|| res.get("preview_png")).and_then(Value::as_str).map(PathBuf::from);
+    let frame_path =
+        res.get("path").or_else(|| res.get("frame")).or_else(|| res.get("preview_png")).or_else(|| res.get("png")).and_then(Value::as_str).map(PathBuf::from);
     let Some(path) = frame_path.filter(|p| p.is_file()) else {
         return Ok(res);
     };

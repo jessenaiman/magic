@@ -9,6 +9,7 @@ description: Drive Magic Studio via `magic-cli` and `magic-cli mcp` (headless wi
 
 - Build & install CLI + desktop binaries: `./install.sh --from-source`
 - Create or attach to a project: `magic-cli new [existing_project] --audio song.wav --name "Song Title"`
+- Inspect or render read-only storyboard pages (`storyboard.{status,pages,new,render,open}`): `magic-cli storyboard pages` and `magic-cli storyboard render page=0`
 - Reconcile and map tracks onto `FilmCraft`: `magic-cli --project song.magic studio map-tracks --save`
 - Start live desktop session: `magic --control 9875`
 - Attach MCP server to live window: `magic-cli mcp --connect 9875` (or `127.0.0.1:9875`)
@@ -21,8 +22,8 @@ description: Drive Magic Studio via `magic-cli` and `magic-cli mcp` (headless wi
 Consult the maintained `README.md` and `docs/` pages in `storytold/*` repositories:
 
 - **Magic Studio MCP & Control**: [`docs/mcp.md`](../../../docs/mcp.md) and [`docs/control-protocol.md`](../../../docs/control-protocol.md)
-- **Shared Libraries (`craft-libs`)**: [README.md](https://github.com/storytold/craft-libs/blob/main/README.md) · [`craft-ai-core` contract](https://github.com/storytold/craft-libs/blob/main/docs/ai-shared-layer.md)
-- **DesignCraft (`:7979`, `designcraft-cli`)**: [README.md](https://github.com/storytold/designcraft/blob/main/README.md) · [MCP](https://github.com/storytold/designcraft/blob/main/docs/mcp.md) · [Control Protocol](https://github.com/storytold/designcraft/blob/main/docs/control-protocol.md)
-- **EffectCraft (`:9877`, `effectcraft-cli`)**: [README.md](https://github.com/storytold/effectcraft/blob/main/README.md) · [Agents](https://github.com/storytold/effectcraft/blob/main/docs/agents.md) · [MCP](https://github.com/storytold/effectcraft/blob/main/docs/mcp.md) · [Control Protocol](https://github.com/storytold/effectcraft/blob/main/docs/control-protocol.md)
-- **FilmCraft (`:9876`, `filmcraft-cli`)**: [README.md](https://github.com/storytold/filmcraft/blob/main/README.md) · [Agents](https://github.com/storytold/filmcraft/blob/main/docs/agents.md) · [Control Protocol](https://github.com/storytold/filmcraft/blob/main/docs/control-protocol.md) · [Captions](https://github.com/storytold/filmcraft/blob/main/docs/captions.md) · [Transcripts](https://github.com/storytold/filmcraft/blob/main/docs/transcripts.md)
+- **Shared Libraries & Extensions (`craft-libs`, `craft-extensions`, `craft-ai-integrations`)**: [craft-libs README.md](https://github.com/storytold/craft-libs/blob/main/README.md) · [craft-extensions README.md](https://github.com/storytold/craft-extensions/blob/main/README.md) · [craft-ai-integrations README.md](https://github.com/storytold/craft-ai-integrations/blob/main/README.md)
+- **DesignCraft (`designcraft-cli`, `.designcraft` Storyboards)**: [DesignCraft README.md](https://github.com/storytold/designcraft/blob/main/README.md) · [MCP](https://github.com/storytold/designcraft/blob/main/docs/mcp.md) · [Multi-Image Placement](https://github.com/storytold/designcraft/blob/main/docs/multi-image-placement.md) · [Linked Artwork](https://github.com/storytold/designcraft/blob/main/docs/linked-artwork.md) · [Graphic Layer Options](https://github.com/storytold/designcraft/blob/main/docs/graphic-layer-options.md)
+- **EffectCraft (`effectcraft-cli`)**: [README.md](https://github.com/storytold/effectcraft/blob/main/README.md) · [Agents](https://github.com/storytold/effectcraft/blob/main/docs/agents.md) · [MCP](https://github.com/storytold/effectcraft/blob/main/docs/mcp.md)
+- **FilmCraft (`filmcraft-cli`)**: [README.md](https://github.com/storytold/filmcraft/blob/main/README.md) · [Agents](https://github.com/storytold/filmcraft/blob/main/docs/agents.md) · [Captions](https://github.com/storytold/filmcraft/blob/main/docs/captions.md) · [Transcripts](https://github.com/storytold/filmcraft/blob/main/docs/transcripts.md)
 - **AniCraft, PhotoCraft & VectorCraft**: [AniCraft README.md](https://github.com/storytold/anicraft/blob/main/README.md) · [PhotoCraft README.md](https://github.com/storytold/photocraft/blob/main/README.md) · [VectorCraft README.md](https://github.com/storytold/vectorcraft/blob/main/README.md)

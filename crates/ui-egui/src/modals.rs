@@ -5,11 +5,12 @@
 use egui::{Align, Align2, Color32, CornerRadius, Frame, Layout, Margin, RichText, ScrollArea, Sense, Stroke, StrokeKind, Ui, Vec2};
 use serde_json::json;
 
-use crate::controls::fill_card;
+use crate::StageHost;
 use crate::docking::PanelId;
 use crate::options_modal::{draw_options_window, draw_report_problem_window};
-use crate::state::{ActiveModal, UiAction, ViewCtx};
-use crate::widgets::{BtnSpec, action_button};
+use magic_view_api::controls::fill_card;
+use magic_view_api::state::{ActiveModal, UiAction, ViewCtx};
+use magic_view_api::widgets::{BtnSpec, action_button};
 
 struct FooterChipSpec<'a> {
     id: &'a str,
@@ -136,17 +137,17 @@ pub fn draw_history_panel_body(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
 }
 
 #[allow(clippy::cognitive_complexity)]
-pub fn draw_modal(egui_ctx: &egui::Context, ctx: &mut ViewCtx<'_>, modal: ActiveModal) {
+pub fn draw_modal(egui_ctx: &egui::Context, ctx: &mut ViewCtx<'_>, host: &mut StageHost, modal: ActiveModal) {
     match modal {
         ActiveModal::Preferences => {
-            if !draw_options_window(egui_ctx, ctx) {
+            if !draw_options_window(egui_ctx, ctx, host) {
                 ctx.state.active_modal = None;
                 ctx.state.ai.style_menu_open = false;
             }
             return;
         }
         ActiveModal::FontManager => {
-            if !crate::fonts_ui::draw_font_manager_window(egui_ctx, ctx) {
+            if !magic_view_api::fonts_ui::draw_font_manager_window(egui_ctx, ctx) {
                 ctx.state.active_modal = None;
             }
             return;

@@ -1,6 +1,6 @@
 # Contributing to Magic Studio
 
-Magic Studio follows the [ArtCraft contribution standards (`storytold/craft-contrib`)](https://github.com/storytold/craft-contrib/blob/main/CONTRIBUTING.md), [`docs/house-rules-core.md`](docs/house-rules-core.md), and the standard compiler/Clippy lint setup in [`Cargo.toml`](Cargo.toml).
+Magic Studio follows the [ArtCraft contribution standards (`storytold/craft-contrib`)](https://github.com/storytold/craft-contrib/blob/main/CONTRIBUTING.md), [`standards/house-rules-core.md`](https://github.com/storytold/craft-contrib/blob/main/standards/house-rules-core.md) (mirrored in [`AGENTS.md`](AGENTS.md)), and the standard compiler/Clippy lint setup in [`Cargo.toml`](Cargo.toml).
 
 ## Quality Gates (`cargo xtask ci`)
 
@@ -21,4 +21,4 @@ Every run writes stage timings and compiler/Clippy diagnostics to `target/ci-rep
 
 - **Shared `storytold/craft-libs` Dependencies**: Workspace crates depend directly on `{ git = "https://github.com/storytold/craft-libs" }` (including `craft-ai-core`) so `cargo update` and `./install.sh --from-source` track `main` cleanly.
 - **Upstream Documentation**: Link directly to live `https://github.com/storytold/<repo>` `README.md` and `docs/` pages rather than maintaining offline snapshots.
-- **Pull Requests Only**: Never push directly to `main`. Open a focused pull request into `main` with no agent attribution trailers (`docs/house-rules-core.md` Rule 8 & Rule 15).
+- **Pull Requests Only**: Never push directly to `main`. Open a focused pull request into `main` with no agent attribution trailers ([`AGENTS.md`](AGENTS.md) Rule 8 & Rule 15).

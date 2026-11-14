@@ -164,8 +164,6 @@ fn discover_project_craft_badges(dir: &Path, doc: &Value) -> Vec<&'static str> {
     }
     if dir.join("storyboard.designcraft").is_file() {
         badges.push(".designcraft");
-    } else if dir.join("storyboard.idml").is_file() {
-        badges.push(".idml");
     }
     let has_ecproj = dir.join("effects/lyrics.ecproj").is_file()
         || dir.join("effects/motion.ecproj").is_file()
@@ -216,9 +214,7 @@ fn find_character_preview(project_dir: &Path, char_dir: &Path, raw_name: &str, c
 }
 
 fn find_project_cover(project_dir: &Path, doc: &Value) -> Option<PathBuf> {
-    for rendered_dir in
-        [project_dir.join("film/frames"), project_dir.join("storyboard/slides"), project_dir.join("lettering/.preview"), project_dir.join("motion/.preview")]
-    {
+    for rendered_dir in [project_dir.join("film/frames"), project_dir.join("lettering/.preview"), project_dir.join("motion/.preview")] {
         if let Some(found) = first_image_in_tree(&rendered_dir, 1) {
             return Some(found);
         }

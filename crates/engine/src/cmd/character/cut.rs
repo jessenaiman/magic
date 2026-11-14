@@ -9,27 +9,7 @@ use serde_json::{Value, json};
 use super::{View, bad};
 use crate::{EngineError, Result, Session};
 
-fn try_photocraft_live(src: &Path, steps: &[(&str, Value)], out_pcraft: Option<&Path>) -> bool {
-    if !crate::workspace::control_probe("photocraft") || crate::workspace::control_exec("photocraft", "file.open", json!({"path": src})).is_err() {
-        return false;
-    }
-    for (op, params) in steps {
-        if crate::workspace::control_exec("photocraft", op, params.clone()).is_err() {
-            return false;
-        }
-    }
-    if let Some(pcraft) = out_pcraft
-        && crate::workspace::control_exec("photocraft", "file.saveAs", json!({"path": pcraft})).is_err()
-    {
-        return false;
-    }
-    true
-}
-
 fn try_photocraft_steps(src: &Path, steps: &[(&str, Value)], out_pcraft: Option<&Path>) -> bool {
-    if try_photocraft_live(src, steps, out_pcraft) {
-        return true;
-    }
     let Some(src_s) = src.to_str() else {
         return false;
     };
@@ -47,12 +27,12 @@ fn try_photocraft_steps(src: &Path, steps: &[(&str, Value)], out_pcraft: Option<
         && steps.iter().filter(|(op, _)| *op == "file.saveACopy").all(|(_, p)| p["path"].as_str().is_none_or(|dst| Path::new(dst).is_file()))
 }
 
-/// Execute PhotoCraft layer/image steps via host `PhotoCraft` (`--control` / `photocraft-cli`).
+/// Execute PhotoCraft layer/image steps via headless `photocraft-cli`.
 pub(crate) fn photocraft_run(src: &Path, steps: &[(&str, Value)], out_pcraft: Option<&Path>) -> Result<()> {
     if try_photocraft_steps(src, steps, out_pcraft) {
         return Ok(());
     }
-    Err(EngineError::ExternalTool("photocraft".into(), "PhotoCraft command unavailable or failed".into()))
+    Err(EngineError::ExternalTool("photocraft-cli".into(), "PhotoCraft command unavailable or failed".into()))
 }
 
 pub(crate) fn photocraft_dimensions(path: &Path) -> Result<(u32, u32)> {

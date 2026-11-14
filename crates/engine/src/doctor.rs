@@ -1,10 +1,10 @@
-//! `app.doctor` (`magic-cli app doctor`): verify host Craft applications (`DesignCraft`,
-//! `PhotoCraft`, `VectorCraft`, `EffectCraft`, `FilmCraft` via live `--control` API or `<app>-cli`),
+//! `app.doctor` (`magic-cli app doctor`): verify headless sibling Craft CLIs (`designcraft-cli`,
+//! `photocraft-cli`, `vectorcraft-cli`, `effectcraft-cli`, `anicraft-cli`, `filmcraft-cli`, `deckcraft-cli`),
 //! `craft-ai-core` configuration, and `craft-settings` health.
 
 use serde_json::{Value, json};
 
-use crate::workspace::{CRAFT_APPS, control_probe, resolve_executable_path};
+use crate::workspace::{CRAFT_APPS, resolve_executable_path};
 use crate::{Result, Session};
 
 struct Check {
@@ -35,46 +35,21 @@ impl Check {
 fn checks(s: &Session) -> Vec<Check> {
     let mut out = Vec::new();
 
-    for (app, cli, port) in CRAFT_APPS {
-        let live = control_probe(app);
+    for (app, cli) in CRAFT_APPS {
         let cli_ok = resolve_executable_path(cli).is_some();
-        if live || cli_ok {
-            out.push(Check::ok(format!("host:{app}"), format!("{app} ready (control_connected={live} on 127.0.0.1:{port}, {cli}_installed={cli_ok})")));
+        if cli_ok {
+            out.push(Check::ok(format!("host:{app}"), format!("{app} ready (`{cli}` installed)")));
         } else {
             out.push(Check::problem(
                 "warn",
                 format!("host:{app}"),
-                format!("neither `{app} --control {port}` nor `{cli}` is reachable on this host"),
-                format!("Install {app} via ArtCraft Launcher (putting `{cli}` on PATH) or start `{app} --control {port}`"),
+                format!("`{cli}` is not installed on PATH"),
+                format!("Install {app} so `{cli}` is available on PATH"),
             ));
         }
     }
 
-    let anicraft_cli_ok = resolve_executable_path("anicraft-cli").is_some();
-    if anicraft_cli_ok {
-        out.push(Check::ok("host:anicraft", "anicraft ready (anicraft-cli installed for stdio serve/mcp)"));
-    } else {
-        out.push(Check::problem(
-            "warn",
-            "host:anicraft",
-            "`anicraft-cli` is not installed on PATH",
-            "Install AniCraft (`anicraft-cli` for stdio `serve` / `mcp` / `render`) when using animated vector sprites",
-        ));
-    }
-
-    let deckcraft_cli_ok = resolve_executable_path("deckcraft-cli").is_some();
-    if deckcraft_cli_ok {
-        out.push(Check::ok("host:deckcraft", "deckcraft ready (deckcraft-cli installed for Storyboard decks)"));
-    } else {
-        out.push(Check::problem(
-            "warn",
-            "host:deckcraft",
-            "`deckcraft-cli` is not installed on PATH",
-            "Install DeckCraft (`deckcraft-cli` for Storyboard decks and presentation slide templates)",
-        ));
-    }
-
-    let craft_clis = ["designcraft-cli", "photocraft-cli", "vectorcraft-cli", "effectcraft-cli", "anicraft-cli", "filmcraft-cli", "deckcraft-cli"];
+    let craft_clis = ["designcraft-cli", "photocraft-cli", "vectorcraft-cli", "effectcraft-cli", "anicraft-cli", "filmcraft-cli"];
     let installed_clis: Vec<&str> = craft_clis.iter().copied().filter(|cli| resolve_executable_path(cli).is_some()).collect();
     out.push(Check::ok(
         "cli:discovery",
@@ -126,6 +101,12 @@ fn checks(s: &Session) -> Vec<Check> {
             format!("craft-settings ready (persistent={}, path={})", settings_report["persistent"], settings_report["path"].as_str().unwrap_or("memory")),
         ));
     }
+
+    let ext = crate::extensions::extensions_report();
+    let ext_total = ext["counts"]["total"].as_u64().unwrap_or(0);
+    let ext_gen = ext["generation"].as_u64().unwrap_or(0);
+    let ext_root = ext["root"].as_str().unwrap_or("unavailable");
+    out.push(Check::ok("extensions:craft-ext-store", format!("{ext_total} extension(s) enabled for magic (generation={ext_gen}, root={ext_root})")));
 
     out
 }

@@ -67,7 +67,6 @@ pub fn cmd_character_rig(s: &mut Session, p: &Value) -> Result<Value> {
         "ecproj": project,
         "source": photo_source,
         "comp": view.comp(),
-        "next": format!("character.action character={} view={} action=idle", view.id, view.view)
     }))
 }
 

@@ -5,22 +5,23 @@ use craft_keymap::Keymap;
 use egui::{Align, Align2, Color32, CornerRadius, FontId, Layout, Pos2, Rect, RichText, ScrollArea, Sense, Stroke, StrokeKind, Ui, Vec2};
 use serde_json::{Value, json};
 
-use crate::controls::{craft_swatch_button, fill_card, paint_local_image};
+use crate::StageHost;
 use crate::docking::{DockFrameOutcome, PanelId, show_dock_area};
-use crate::editorial::draw_persisted_style_controls;
 use crate::menus::{build_menu_bar, draw_in_window_bar, translate_menu_command};
 use crate::modals::{draw_footer_session_pills, draw_modal, draw_toast_if_active};
 use crate::options_modal::draw_command_palette_popup;
-use crate::state::{ActiveModal, PickerTarget, UiAction, ViewCtx, ViewMode};
-use crate::theme::paint_aurora_wave;
-use crate::views;
-use crate::widgets::{BtnSpec, ModeTabSpec, action_button, mode_tab, project_pill_button, status_pill, text_input};
+use magic_view_api::controls::{craft_swatch_button, fill_card, paint_local_image};
+use magic_view_api::editorial::draw_persisted_style_controls;
+use magic_view_api::state::{ActiveModal, PickerTarget, UiAction, ViewCtx, ViewMode};
+use magic_view_api::theme::paint_aurora_wave;
+use magic_view_api::widgets::{BtnSpec, ModeTabSpec, action_button, mode_tab, project_pill_button, status_pill, text_input};
 
 const CAPSULE_TABS: [ViewMode; 5] = [ViewMode::Storyboard, ViewMode::Animation, ViewMode::Design, ViewMode::Motion, ViewMode::Studio];
 
 pub fn draw_workstation(
     ui: &mut Ui,
     ctx: &mut ViewCtx<'_>,
+    host: &mut StageHost,
     keymap: &Keymap,
     show_in_window_menus: bool,
     modal_open: bool,
@@ -69,12 +70,12 @@ pub fn draw_workstation(
     let central_resp = egui::CentralPanel::default().frame(egui::Frame::new().fill(ctx.pal.bg_canvas).inner_margin(egui::Margin::same(8))).show(ui, |ui| {
         paint_aurora_wave(ui, ui.max_rect(), ctx.pal);
         if active_view == ViewMode::Home {
-            views::home::show(ui, ctx);
+            host.home_mut().show(ui, ctx);
         } else {
             if !ctx.state.ribbon_collapsed {
-                draw_active_stage_header(ui, ctx, active_view);
+                draw_active_stage_header(ui, ctx, host, active_view);
             }
-            dock_outcome = show_dock_area(ui, ctx, modal_open);
+            dock_outcome = show_dock_area(ui, ctx, host, modal_open);
         }
     });
     let (root_id, root_lbl) = active_view.root_automation_id();
@@ -85,36 +86,18 @@ pub fn draw_workstation(
         draw_command_palette_popup(ui.ctx(), ctx, cmd_search_rect);
     }
     if let Some(modal) = ctx.state.active_modal {
-        draw_modal(ui.ctx(), ctx, modal);
+        draw_modal(ui.ctx(), ctx, host, modal);
     }
     draw_toast_if_active(ui.ctx(), ctx);
 
     dock_outcome
 }
 
-fn draw_active_stage_header(ui: &mut Ui, ctx: &mut ViewCtx<'_>, active_view: ViewMode) {
-    match active_view {
-        ViewMode::Storyboard => {
-            views::storyboard::draw_stage_header(ui, ctx);
-            ui.add_space(5.0);
-        }
-        ViewMode::Animation => {
-            views::animation::draw_stage_header(ui, ctx);
-            ui.add_space(5.0);
-        }
-        ViewMode::Design => {
-            views::lyrics::draw_stage_header(ui, ctx);
-            ui.add_space(5.0);
-        }
-        ViewMode::Motion => {
-            views::motion::draw_stage_header(ui, ctx);
-            ui.add_space(5.0);
-        }
-        ViewMode::Studio => {
-            views::studio::draw_stage_header(ui, ctx);
-            ui.add_space(5.0);
-        }
-        ViewMode::Project | ViewMode::Home => {}
+fn draw_active_stage_header(ui: &mut Ui, ctx: &mut ViewCtx<'_>, host: &mut StageHost, active_view: ViewMode) {
+    let stage = host.stage_mut(active_view);
+    if stage.has_header() {
+        stage.draw_header(ui, ctx);
+        ui.add_space(5.0);
     }
 }
 
@@ -204,15 +187,7 @@ fn clamp_title(raw: &str, max_chars: usize) -> String {
 }
 
 fn storyboard_dot_color(ctx: &ViewCtx<'_>) -> Color32 {
-    let sb = &ctx.state.cache.snapshot["data"]["storyboard"];
-    let light = sb["light"].as_str().or_else(|| ctx.state.cache.storyboard_check["light"].as_str()).unwrap_or("red");
-    if sb["production_ready"].as_bool() == Some(true) || ctx.state.cache.storyboard_check["production_ready"].as_bool() == Some(true) || light == "green" {
-        ctx.pal.accent_emerald
-    } else if light == "amber" || sb["title_sections_complete"].as_bool() == Some(true) {
-        ctx.pal.accent_amber
-    } else {
-        ctx.pal.danger
-    }
+    if ctx.state.cache.storyboard_pages["exists"].as_bool() == Some(true) { ctx.pal.accent_emerald } else { ctx.pal.text_muted }
 }
 
 #[allow(clippy::cognitive_complexity)]
@@ -444,9 +419,7 @@ pub fn draw_stage_assets_panel(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
         ui.add_space(4.0);
         let active_cards = if ctx.state.assets_drawer_tab == "backgrounds" { &bg_cards } else { &char_cards };
         if active_cards.is_empty() {
-            ui.label(
-                RichText::new("No project assets in this category yet — click + Add Asset or generate via Scribbles.").size(11.0).color(ctx.pal.text_muted),
-            );
+            ui.label(RichText::new("No project assets in this category yet — click + Add Asset.").size(11.0).color(ctx.pal.text_muted));
         } else {
             ScrollArea::vertical().id_salt("stage_assets_panel_scroll").auto_shrink([false, false]).show(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
@@ -491,8 +464,7 @@ fn draw_asset_shelf_card(ui: &mut Ui, ctx: &mut ViewCtx<'_>, card: &Value) {
 fn draw_footer(ui: &mut Ui, ctx: &mut ViewCtx<'_>) {
     let has_proj = ctx.state.project_path.is_some();
     let has_song = ctx.state.song_audio_path().is_some();
-    let sb = &ctx.state.cache.snapshot["data"]["storyboard"];
-    let sb_ok = sb["production_ready"].as_bool() == Some(true);
+    let sb_ok = ctx.state.cache.storyboard_pages["exists"].as_bool() == Some(true);
     let status = &ctx.state.cache.snapshot["data"]["status"];
     let lyrics_ok = status["lyrics_ready"].as_bool().unwrap_or(has_proj);
     let chars_ok = ctx.state.cache.snapshot.pointer("/data/characters").and_then(Value::as_array).is_some_and(|c| !c.is_empty());

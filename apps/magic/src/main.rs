@@ -33,7 +33,7 @@ use craft_keymap::CommandRef;
 use craft_keymap::egui::Dispatcher;
 use egui::{Event, ViewportCommand};
 use magic_engine::{AutomationRoots, Session};
-use magic_ui_egui::{ActiveModal, AutomationRegistry, MagicPalette, UiAction, UiShellState, ViewCtx, ViewMode};
+use magic_ui_egui::{ActiveModal, AutomationRegistry, MagicPalette, StageHost, UiAction, UiShellState, ViewCtx, ViewMode};
 use serde_json::{Value, json};
 
 const CONTROL_REPLY_TIMEOUT: Duration = Duration::from_secs(60);
@@ -123,6 +123,7 @@ fn install_macos_menu(ctx: &egui::Context, initial: &UiShellState) -> Option<Mac
 pub(crate) struct MagicDesktopApp {
     pub(crate) session: Session,
     pub(crate) ui_state: UiShellState,
+    pub(crate) stage_host: StageHost,
     pub(crate) registry: AutomationRegistry,
     pub(crate) dialogs: dialogs::DialogHost,
     pub(crate) file_sync: file_sync::FileSyncMonitor,
@@ -177,7 +178,8 @@ impl MagicDesktopApp {
             true
         };
 
-        diagnostics::refresh_cached_state(&mut session, &mut ui_state, true);
+        let mut stage_host = StageHost::new();
+        diagnostics::refresh_cached_state(&mut session, &mut ui_state, &mut stage_host, true);
         if ui_state.cache.words_effects.is_null()
             && let Ok(wfx) = session.execute("words.effects", json!({}))
         {
@@ -194,6 +196,7 @@ impl MagicDesktopApp {
         Self {
             session,
             ui_state,
+            stage_host,
             registry: AutomationRegistry::default(),
             dialogs: dialogs::DialogHost::new(&cc.egui_ctx),
             file_sync,
@@ -237,7 +240,7 @@ impl MagicDesktopApp {
         };
         self.capture_query_cache(id, &result);
         if changed {
-            diagnostics::refresh_cached_state(&mut self.session, &mut self.ui_state, false);
+            diagnostics::refresh_cached_state(&mut self.session, &mut self.ui_state, &mut self.stage_host, false);
             if is_project_switch {
                 self.file_sync.seed_project(&mut self.session, &mut self.ui_state);
             } else {
@@ -255,34 +258,21 @@ impl MagicDesktopApp {
             "song.lyrics" => self.ui_state.cache.song_lyrics = result.clone(),
             "song.waveform" => self.ui_state.cache.song_waveform = result.clone(),
             "storyboard.pages" => self.ui_state.cache.storyboard_pages = result.clone(),
-            "storyboard.check" => self.ui_state.cache.storyboard_check = result.clone(),
-            "storyboard.new" | "storyboard.add_section" | "storyboard.add_element" | "storyboard.export" => {
-                if let Ok(pages) = self.session.execute("storyboard.pages", json!({"full": true})) {
+            "storyboard.new" | "storyboard.render" => {
+                if let Ok(pages) = self.session.execute("storyboard.pages", json!({})) {
                     self.ui_state.cache.storyboard_pages = pages;
                 }
-                if let Ok(chk) = self.session.execute("storyboard.check", json!({})) {
-                    self.ui_state.cache.storyboard_check = chk;
-                }
             }
-            "words.save" | "words.letter" | "motion.save" | "motion.publish" | "character.action" => {
-                let sec = match self.ui_state.effective_view() {
-                    magic_ui_egui::ViewMode::Animation => self.ui_state.animation.scrub_seconds,
-                    magic_ui_egui::ViewMode::Design => self.ui_state.lyrics.scrub_seconds,
-                    magic_ui_egui::ViewMode::Motion => self.ui_state.motion.start_sec,
-                    _ => self.ui_state.audio_time_sec,
+            "words.save" | "words.letter" | "motion.save" | "motion.publish" => {
+                let sec = {
+                    let view = self.ui_state.effective_view();
+                    let stage = self.stage_host.stage(view);
+                    if stage.has_timeline() { stage.playhead_seconds() } else { self.ui_state.audio_time_sec }
                 };
                 if let Ok(fr) = self.session.execute("video.frame", json!({"seconds": sec}))
                     && let Some(f) = fr["frame"].as_str()
                 {
                     self.ui_state.cache.last_video_frame = Some(f.to_owned());
-                }
-            }
-            "storyboard.thumbnail" => {
-                if let Some(out) = result["out"].as_str() {
-                    self.ui_state.cache.last_storyboard_thumb = Some(out.to_owned());
-                }
-                if let Ok(pages) = self.session.execute("storyboard.pages", json!({"full": true})) {
-                    self.ui_state.cache.storyboard_pages = pages;
                 }
             }
             "character.list" => self.ui_state.cache.characters = result.clone(),
@@ -316,6 +306,7 @@ impl MagicDesktopApp {
             }
             "video.list_ec_comps" => self.ui_state.cache.ec_comps = result.clone(),
             "app.doctor" => self.ui_state.cache.doctor = result.clone(),
+            "app.extensions" => self.ui_state.cache.extensions = result.clone(),
             "ai.status" | "ai.configure" => {
                 diagnostics::sync_ai_ui_from_status(&mut self.ui_state, result);
                 self.ui_state.cache.ai_status = result.clone();
@@ -340,7 +331,7 @@ impl MagicDesktopApp {
                     self.audio_player.stop(&mut self.ui_state);
                 }
                 self.ui_state.view = view;
-                self.audio_player.seek(&mut self.ui_state, seconds);
+                self.audio_player.seek(&mut self.ui_state, &mut self.stage_host, seconds);
                 if view == ViewMode::Animation
                     && let Ok(loc) = self.session.execute("animation.locate_from_studio", json!({"seconds": seconds}))
                     && loc["matched"].as_bool() == Some(true)
@@ -349,10 +340,10 @@ impl MagicDesktopApp {
                         self.ui_state.selected_character_id = Some(cid.to_owned());
                     }
                     if let Some(act) = loc["action"].as_str().filter(|a| !a.is_empty()) {
-                        self.ui_state.animation.selected_action = act.to_owned();
-                    }
-                    if let Some(local_s) = loc["local_seconds"].as_f64() {
-                        self.ui_state.animation.scrub_seconds = local_s;
+                        let local_s = loc["local_seconds"].as_f64().unwrap_or(seconds);
+                        self.stage_host.stage_mut(ViewMode::Animation).select_action_at(act, local_s);
+                    } else if let Some(local_s) = loc["local_seconds"].as_f64() {
+                        self.stage_host.stage_mut(ViewMode::Animation).set_playhead_seconds(local_s);
                     }
                 }
                 self.refresh_view_data(view);
@@ -381,10 +372,10 @@ impl MagicDesktopApp {
                 self.dialogs.open_picker(target, &title, &extensions, directory, save);
             }
             UiAction::ToggleAudio => {
-                self.audio_player.toggle(&mut self.ui_state);
+                self.audio_player.toggle(&mut self.ui_state, &mut self.stage_host);
             }
             UiAction::SeekAudio(sec) => {
-                self.audio_player.seek(&mut self.ui_state, sec);
+                self.audio_player.seek(&mut self.ui_state, &mut self.stage_host, sec);
             }
             UiAction::SnapWindow => {
                 self.ui_state.window_snapped_right = !self.ui_state.window_snapped_right;
@@ -392,8 +383,16 @@ impl MagicDesktopApp {
                 ctx.send_viewport_cmd(ViewportCommand::OuterPosition(egui::pos2(x, 0.0)));
                 self.ui_state.set_toast(now, if self.ui_state.window_snapped_right { "Snapped window right" } else { "Snapped window left" });
             }
+            UiAction::OpenNewProjectForm => {
+                self.audio_player.stop(&mut self.ui_state);
+                self.ui_state.view = ViewMode::Home;
+                self.stage_host.home_mut().open_new_form();
+                self.refresh_view_data(ViewMode::Home);
+            }
             UiAction::OpenPreferences => {
+                self.stage_host.ai_roles_loaded = false;
                 let _ = self.execute_engine(ctx, "ai.status", json!({}));
+                let _ = self.execute_engine(ctx, "app.extensions", json!({}));
                 self.ui_state.active_modal = Some(ActiveModal::Preferences);
             }
             UiAction::OpenFontManager => {
@@ -449,11 +448,8 @@ impl MagicDesktopApp {
                 }
             }
             ViewMode::Storyboard => {
-                if let Ok(pages) = self.session.execute("storyboard.pages", json!({"full": true})) {
+                if let Ok(pages) = self.session.execute("storyboard.pages", json!({})) {
                     self.ui_state.cache.storyboard_pages = pages;
-                }
-                if let Ok(chk) = self.session.execute("storyboard.check", json!({})) {
-                    self.ui_state.cache.storyboard_check = chk;
                 }
             }
             ViewMode::Animation => {
@@ -514,6 +510,25 @@ impl MagicDesktopApp {
                 } else if self.execute_engine(ctx, "file.open", json!({"path": first})).is_ok() {
                     self.ui_state.view = ViewMode::Project;
                 }
+            }
+            return;
+        }
+        if self.ui_state.effective_view() == ViewMode::Storyboard {
+            let system_dark = ctx.input(|i| i.raw.system_theme.map(|t| matches!(t, egui::Theme::Dark)));
+            let pal = MagicPalette::resolve(
+                self.ui_state.theme_mode,
+                self.ui_state.interface_style,
+                self.ui_state.accent_choice,
+                self.ui_state.high_contrast,
+                system_dark,
+            );
+            let mut emitted = Vec::new();
+            {
+                let mut view_ctx = ViewCtx { state: &mut self.ui_state, reg: &mut self.registry, pal: &pal, actions: &mut emitted };
+                self.stage_host.stage_mut(ViewMode::Storyboard).on_dropped_files(&dropped, &mut view_ctx);
+            }
+            for act in emitted {
+                self.handle_ui_action(ctx, act);
             }
             return;
         }
@@ -582,7 +597,7 @@ impl eframe::App for MagicDesktopApp {
             ctx.request_repaint_after(deadline.saturating_duration_since(Instant::now()));
         }
 
-        if self.audio_player.tick_frame(&mut self.ui_state, dt) {
+        if self.audio_player.tick_frame(&mut self.ui_state, &mut self.stage_host, dt) {
             ctx.request_repaint_after(Duration::from_millis(42));
         }
 
@@ -660,7 +675,7 @@ impl eframe::App for MagicDesktopApp {
         let dock_outcome = {
             let session_ref = &self.session;
             let mut view_ctx = ViewCtx { state: &mut self.ui_state, reg: &mut self.registry, pal: &palette, actions: &mut emitted };
-            magic_ui_egui::shell::draw_workstation(ui, &mut view_ctx, keymap::catalog_keymap(), self.in_window_menus, modal_open, |cid| {
+            magic_ui_egui::shell::draw_workstation(ui, &mut view_ctx, &mut self.stage_host, keymap::catalog_keymap(), self.in_window_menus, modal_open, |cid| {
                 magic_engine::find_command(cid).is_some_and(|spec| (spec.enabled)(session_ref).is_ok())
             })
         };

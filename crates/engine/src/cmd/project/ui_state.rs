@@ -132,7 +132,7 @@ fn build_footer_model(status: &Value, storyboard: &Value, characters_len: usize)
         summary.push("Timing Ref ✓".to_string());
     }
     if sb_exists {
-        summary.push("Deck ✓".to_string());
+        summary.push("Board ✓".to_string());
     }
     if characters_len > 0 {
         summary.push(format!("{characters_len} Cast"));

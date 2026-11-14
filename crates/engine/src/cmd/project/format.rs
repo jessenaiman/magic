@@ -257,13 +257,7 @@ impl Project {
         if out.name.trim().is_empty() {
             out.name = project_path.file_stem().and_then(|n| n.to_str()).unwrap_or("Untitled").to_owned();
         }
-        out.workshop.storyboard = if project_path.with_file_name("storyboard.idml").is_file()
-            && !project_path.with_file_name(crate::cmd::storyboard::DEFAULT_STORYBOARD_FILE).is_file()
-        {
-            "storyboard.idml".to_owned()
-        } else {
-            default_storyboard()
-        };
+        out.workshop.storyboard = default_storyboard();
         if let Some(p) = out.workshop.audio.take() {
             out.workshop.audio = Some(PathBuf::from(portable_path_string(&p, project_path)));
         }

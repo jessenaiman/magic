@@ -5,7 +5,6 @@ use std::fs;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
-pub use super::validate::cmd_words_effect_install;
 pub(crate) use super::validate::{kinetic_design, line_design, text_effect};
 use super::{
     aligned, cmd_words_read, cmd_words_save, cmd_words_studio_track, fill_untimed, invalid, printed_caption_words, studio_times, timing, word_tick,

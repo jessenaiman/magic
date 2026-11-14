@@ -30,7 +30,7 @@
   <a href="#license-and-credits"><img alt="License: Non-Resale" src="https://img.shields.io/badge/license-Non--Resale-8b5cf6?style=flat-square"></a>
   <img alt="Written in pure Rust" src="https://img.shields.io/badge/pure-Rust-6a3fd6?style=flat-square&logo=rust&logoColor=white">
   <img alt="Runs on macOS, Windows and Linux" src="https://img.shields.io/badge/runs%20on-macOS%20%7C%20Windows%20%7C%20Linux-8b5cf6?style=flat-square">
-  <a href="ROADMAP.md"><img alt="Status: alpha" src="https://img.shields.io/badge/status-alpha-6a3fd6?style=flat-square"></a>
+  <img alt="Status: alpha" src="https://img.shields.io/badge/status-alpha-6a3fd6?style=flat-square">
   <br>
   <a href="https://sonarcloud.io/project/overview?id=jessenaiman_magic"><img alt="Scanned by SonarCloud" src="https://img.shields.io/badge/Scanned_by-SonarCloud-4b9fd5?style=flat-square&logo=sonarqubecloud&logoColor=white"></a>
   <a href="https://coderabbit.ai"><img alt="Reviewed by CodeRabbit" src="https://img.shields.io/coderabbit/prs/github/jessenaiman/magic?style=flat-square&label=Reviewed%20by%20CodeRabbit&logo=coderabbit"></a>
@@ -51,7 +51,7 @@
 > games &mdash; if you make things, you're one of us. **[Come say hi on Discord](https://discord.gg/artcraft).**
 
 <p align="center">
-  <a href="#storyboard-and-scribbles">Storyboard</a> ·
+  <a href="#standalone-storyboard">Storyboard</a> ·
   <a href="#open-multi-tool-animations">Animations</a> ·
   <a href="#live-editing-views-and-studio">Live Views &amp; Studio</a> ·
   <a href="#built-for-agents">Agents</a> ·
@@ -63,14 +63,15 @@
 
 <br>
 
-Magic Studio (`magic`, `magic-cli`, `magic-tui`) is a song-driven production coordinator built on [`storytold/craft-libs`](https://github.com/storytold/craft-libs) and `eframe` / `egui` 0.37. Instead of locking artists into a closed format, every project folder holds real creative files — native [DesignCraft](https://github.com/storytold/designcraft) storyboard documents, open 2D/3D animation renders, [EffectCraft](https://github.com/storytold/effectcraft) lyric and motion compositions, and a sample-accurate [FilmCraft](https://github.com/storytold/filmcraft) multi-track sequence (`254,016,000,000` ticks per second).
+Magic Studio (`magic`, `magic-cli`) is a song-driven production coordinator built on [`storytold/craft-libs`](https://github.com/storytold/craft-libs), [`storytold/craft-extensions`](https://github.com/storytold/craft-extensions/blob/main/README.md), [`storytold/craft-ai-integrations`](https://github.com/storytold/craft-ai-integrations/blob/main/README.md), and `eframe` / `egui` 0.37. Instead of locking artists into a closed format, every project folder holds real creative files — native [DesignCraft](https://github.com/storytold/designcraft) `.designcraft` storyboard layouts, open 2D/3D animation renders, [EffectCraft](https://github.com/storytold/effectcraft) lyric and motion compositions, and a sample-accurate [FilmCraft](https://github.com/storytold/filmcraft) multi-track sequence (`254,016,000,000` ticks per second, with `A1` holding the Song Master audio track).
 
 <br>
 
-## Storyboard and Scribbles
+## Standalone Storyboard
 
-- **Creative storyboards in DesignCraft (`01 Storyboard`).** Build multi-page layouts, master templates, shapes, placed artwork and director notes in native `.designcraft`, `.idml` or `.indt` files, and export production PDFs and page PNGs through [`DesignCraft`](https://github.com/storytold/designcraft) (`designcraft --control 7979` or `designcraft-cli`).
-- **User-editable `extensions/scribbles/` with a saved-Storyboard-slide gate.** Each project carries plain, user-editable templates and prompt recipes under `extensions/scribbles/` backed by `craft-ai-core` ([`storytold/craft-libs`](https://github.com/storytold/craft-libs/blob/main/docs/ai-shared-layer.md)) for character turnarounds, style sheets and scene plates. Scribble generation and batch scene expansion are gated on saved Storyboard slides on disk, so visual generation always follows deliberate storyboard decisions rather than unreviewed prompts.
+- **Standalone `.designcraft` storyboards (`01 Storyboard`).** `01 Storyboard` is an independent [DesignCraft](https://github.com/storytold/designcraft) workspace backed by the default `storyboard.designcraft` template (`designcraft-cli`), with zero coupling to `05 Studio`.
+- **Read-only PNG page viewer & DesignCraft handoff.** View rendered pages (`magic-cli exec storyboard.pages`, `magic-cli exec storyboard.render`, `magic-cli exec storyboard.open`), copy rendered PNG paths, or open `storyboard.designcraft` directly in [DesignCraft](https://github.com/storytold/designcraft/blob/main/README.md) ([DesignCraft MCP](https://github.com/storytold/designcraft/blob/main/docs/mcp.md)).
+- **Shared extensions & standard Craft AI.** Installed themes, plug-ins, and resources load read-only from [`storytold/craft-extensions`](https://github.com/storytold/craft-extensions/blob/main/README.md) (`craft-ext-store`, `app.extensions`), while connections, model bindings, and job history use [`storytold/craft-ai-integrations`](https://github.com/storytold/craft-ai-integrations/blob/main/README.md) (`AiClient::standard`, `craft-ai-egui`) without custom sidecars.
 
 ## Open multi-tool animations
 
@@ -80,16 +81,16 @@ Magic Studio (`magic`, `magic-cli`, `magic-tui`) is a song-driven production coo
 ## Live editing views and Studio
 
 - **`03 Lyrics` (`V3` + `C1`) and `04 Motion` (`V4`).** Edit word-timed kinetic lyrics with `craft-font-catalog` and `craft-font-manager` (`FontsPanel`), keep broadcast captions (`SRT`, `WebVTT`, `TTML`, `SCC`, `MCC`, `EBU-STL`) synchronized via `craft-captions`, and author `craft-drawingml` vector shapes and text warps in live [`FilmCraft`](https://github.com/storytold/filmcraft)-aligned views.
-- **`05 Studio` with a 2-tab `Live Breakdown` & `Finishing` dock.** Built on `craft_ui::docking`, `05 Studio` pairs the composite Program Monitor and multi-track timeline (`V4` Motion, `V3` Lyrics, `V2` Animations, `V1` Storyboard, `C1` Captions, `A1` Song) with a streamlined 2-tab Studio dock:
-  - **`Live Breakdown`**: inspect and remap active clips across `V1`–`V4`, `C1` and `A1`, verify word/beat alignment, and round-trip timelines via `OTIO`, `FCPXML`, `FCP7 XML`, `EDL` and `ALE`.
-  - **`Finishing`**: grade with linear-light color wheels and waveform/vectorscope scopes, monitor real-time stereo `rmsDbfs`/`peakDbfs` levels, and render master deliverables into `exports/` through [`FilmCraft`](https://github.com/storytold/filmcraft).
+- **`05 Studio` with a 2-tab `Live Breakdown` & `Master & Export` dock.** Built on `craft_ui::docking`, `05 Studio` pairs the composite Program Monitor and multi-track timeline (`V4` Motion, `V3` Lyrics, `V2` Animations, `V1` Storyboard, `C1` Captions, `A1` Song Master) with a streamlined 2-tab Studio dock:
+  - **`Live Breakdown`** (`studioWorkspace: "matrix"`): inspect and remap active clips across `V1`–`V4`, `C1` and `A1`, sync linked `EffectCraft` comps, and jump across storyboard sections.
+  - **`Master & Export`** (`studioWorkspace: "export"`): inspect sequence readiness and `A1` Song Master health, toggle captions/GPU render options, and render preview or master deliverables into `exports/` headlessly through `filmcraft-cli`.
 
 ## Built for agents
 
-Every menu item, toolbar button, dock command and stage operation in Magic Studio is a **command** with a stable id, typed parameters and an enabled state (`magic-cli commands` lists them all). The desktop UI, **`magic-cli`**, the loopback JSON-lines control channel (**`magic --control 9875`**), the Backstage terminal viewer (**`magic-tui`**) and the **MCP server** (**`magic-cli mcp`**) all dispatch the same commands:
+Every menu item, toolbar button, dock command and stage operation in Magic Studio is a **command** with a stable id, typed parameters and an enabled state (`magic-cli commands` lists them all). The desktop UI, **`magic-cli`**, the loopback JSON-lines control channel (**`magic --control 9875`**), and the **MCP server** (**`magic-cli mcp`**) all dispatch the same commands:
 
-- **Read-only `magic://` MCP resources:** inspect live or headless state without side effects via `magic://` resource URIs (`magic://document`, `magic://storyboard`, `magic://commands`, `magic://tracks`) alongside `list_commands`, `run_command` and `run_batch`.
-- **Automatic track reconciliation (`magic-cli studio map-tracks`):** scan saved DesignCraft storyboard slides, `02 Animations` renders, `03 Lyrics` compositions and `04 Motion` cues and map them onto `FilmCraft` tracks (`V1`–`V4`, `C1`, `A1`) in one deterministic pass.
+- **Read-only `magic://` MCP resources:** inspect live or headless state without side effects via `magic://` resource URIs (`magic://project`, `magic://project/status`, `magic://recovery`, `magic://storyboard`, `magic://timeline`, `magic://bridge`) alongside `list_commands`, `run_command` and `run_batch`.
+- **Automatic track reconciliation (`magic-cli studio map-tracks`):** scan `02 Animations` renders, `03 Lyrics` compositions, `04 Motion` cues, and existing sequence assets and map them onto `FilmCraft` tracks (`V1`–`V4`, `C1`, `A1`) in one deterministic pass.
 
 ```sh
 magic --control 9875                                        # desktop app + JSON-lines control channel on 127.0.0.1:9875
@@ -99,7 +100,7 @@ magic-cli --project song.magic studio map-tracks --save     # map Storyboard, An
 ```
 
 ```json
-{"id": 1, "method": "engine.execute", "params": {"command": "studio.mapTracks", "params": {}}}
+{"id": 1, "method": "engine.execute", "params": {"command": "video.map_tracks", "params": {}}}
 {"id": 2, "method": "ui.docking", "params": {}}
 {"id": 3, "method": "ui.screenshot", "params": {"path": "studio.png"}}
 ```
@@ -187,11 +188,11 @@ And [**ArtCraft**](https://getartcraft.com/) itself, our AI image and video stud
 |---|---|
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Setup, `cargo xtask ci` (`fmt`, `clippy`, optional `MAGIC_RUN_TESTS=1`), branch and PR conventions |
 | [`AGENTS.md`](AGENTS.md) | Contributor and agent guidelines plus shared ArtCraft house rules |
-| [`docs/architecture.md`](docs/architecture.md) | Workspace crates (`magic-util`, `magic-engine`, `magic-mcp`, `magic-ui-egui`), `extensions/scribbles/`, and `craft_ui::docking` |
+| [`docs/architecture.md`](docs/architecture.md) | Isolated per-view crates (`StageView`/`HomeView`), `craft-ext-store`, standard `craft-ai-integrations`, and `craft_ui::docking` |
 | [`docs/control-protocol.md`](docs/control-protocol.md) | Loopback JSON-lines `--control 9875` protocol reference |
 | [`docs/mcp.md`](docs/mcp.md) | `magic-cli mcp` (`--connect 9875` and headless), `magic://` resources, and root confinement |
-| [`ROADMAP.md`](ROADMAP.md) · [`docs/gaps.md`](docs/gaps.md) | Alpha milestones, live multi-app integration checks, and open items |
-| [`docs/README.md`](docs/README.md) | Documentation index, brand marks, and upstream suite references |
+| [`SECURITY.md`](SECURITY.md) | Loopback control limits, CLI confinement, and vulnerability reporting |
+| [`ATTRIBUTION.md`](ATTRIBUTION.md) | Bundled icons, brand marks, and upstream Rust crate credits |
 
 ## License and credits
 

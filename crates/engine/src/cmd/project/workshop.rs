@@ -75,9 +75,7 @@ pub(crate) fn stage_body(s: &Session, stage: &str) -> String {
     match stage {
         "song" => "Stage 1 — Song. Link the song audio (`magic-cli new --audio <song>`).".to_string(),
         "transcript" => format!("Stage 2 — Transcription & Timing (`transcript.srt`).\n  magic-cli exec audio.analyze\nVideo target: {target}."),
-        "storyboard" => {
-            "Stage 3 — Creative DesignCraft Storyboard (`storyboard.designcraft` / `storyboard.idml`) & exported slides (`storyboard/slides/`).".to_string()
-        }
+        "storyboard" => "Stage 3 — Standalone DesignCraft Storyboard (`storyboard.designcraft`) & page renders (`storyboard/renders/`).".to_string(),
         _ => "Stage 4 — Video Production: Kinetic Lyrics (`words.*`), Motion (`motion.*`), Animation (`character.*`), and FilmCraft (`video.*`).".to_string(),
     }
 }
